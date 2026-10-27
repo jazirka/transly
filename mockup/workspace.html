@@ -435,6 +435,8 @@ td .term{color:#d9c3ee}
 .ide.mode-focus .main{grid-template-columns:40px 310px minmax(0,1fr)}
 .ide.mode-focus.lp-closed .main{grid-template-columns:40px minmax(0,1fr)}
 .ide.mode-table [data-lp=rows]{display:none}
+.cnt2{flex-direction:row;min-width:64px;font:12px var(--mono);color:#e6e8ec}
+.cnt2.over{color:#ff8a94;background:#43292e}
 </style>
 <div class="scroll-x"><div class="ide mode-table">
 
@@ -531,7 +533,7 @@ td .term{color:#d9c3ee}
           <button class="ib" id="b-return" title="Повернути перекладачу" hidden><svg viewBox="0 0 16 16"><path d="M6 3.5L2.5 7 6 10.5M2.5 7h7a4 4 0 0 1 0 8H8"/></svg></button>
           <span class="qab" id="qa-badge" title="Проблеми QA в рядку" hidden></span>
           <span class="grow"></span>
-          <div class="cnt2" title="Символів · слів"><span id="c-ch">0</span><b id="c-w">0</b></div>
+          <div class="cnt2" id="cnt2" title="Символів / ліміт вікна гри"><span id="c-ch">0/120</span></div>
           <button class="saveb" id="b-save" title="Підтвердити (Ctrl+Enter)"><svg viewBox="0 0 16 16"><path d="M3 2.5h8l2 2V13.5H3z"/><path d="M5.5 2.5v3h4v-3"/><circle cx="8" cy="10" r="1.6" fill="currentColor"/></svg></button>
         </div>
         <div class="qa-under" id="f-qa"></div>
@@ -732,7 +734,7 @@ function renderFocus(){
   renderList();
 }
 function meter(){
-  {const v=$('i-tr').value;$('c-ch').textContent=v.length;$('c-w').textContent=v.trim()?v.trim().split(/\s+/).length:0}
+  {const v=$('i-tr').value;$('c-ch').textContent=v.length+'/'+LIMIT;$('cnt2').classList.toggle('over',v.length>LIMIT)}
   const n=$('i-tr').value.length;
 }
 function tagPopHTML(){

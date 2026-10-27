@@ -4,6 +4,7 @@ import { $, el, esc, plural, toast } from './dom';
 import type { Ctx } from './state';
 import { importReference } from './reference';
 import { saveFile } from './save';
+import { openSpeakers } from './speakers-dialog';
 import { describe, loadSyncConfig, runSync, saveSyncConfig, syncConfigured } from './sync';
 
 /** Open a native <dialog>; it traps focus, closes on Esc and restores focus to the opener. */
@@ -33,6 +34,7 @@ export function openSettings(ctx: Ctx, onReset: () => void, onImport: () => void
       <div class="acts l"><button class="btn" type="button" id="st-terms-file-btn">Імпортувати з файлу…</button></div><input type="file" id="st-terms-file" accept=".html,.htm,.csv,.tsv,.txt,text/html,text/csv,text/plain" hidden>
       <p class="hint">Або вставте рядки «англійською, табуляція, українською»:</p><textarea id="st-terms" rows="4" aria-label="Терміни для імпорту"></textarea><button class="btn" type="button" id="st-terms-go">Імпортувати вставлені терміни</button></details>
     <details><summary>Імпорт пам’яті перекладів</summary><p class="hint">Рядки «оригінал, табуляція, переклад».</p><textarea id="st-tm" rows="5" aria-label="Пари для імпорту"></textarea><button class="btn" type="button" id="st-tm-go">Імпортувати пари</button></details>
+    <details><summary>Мовці</summary><p class="hint">Імен мовців у грі на RPG Maker MV немає. Їх можна визначити за обличчям персонажа й подією.</p><div class="acts l"><button class="btn" type="button" id="st-spk">Визначити мовців…</button></div></details>
     <details><summary>Довідкова мова</summary><p class="hint">Додайте ту саму гру іншою мовою (наприклад, російською): її переклад з’явиться під оригіналом як підказка. Рядки вирівнюються автоматично, навіть якщо в тій версії є додані чи прибрані репліки.</p>
       <p class="hint" id="rf-state">${ctx.s.saved.reference ? `Додано: ${esc(ctx.s.saved.reference.lang)}` : 'Довідки ще немає'}</p>
       <div class="grid"><label for="rf-lang">Код мови</label><input id="rf-lang" maxlength="8" value="${esc(ctx.s.saved.reference?.lang ?? 'ru')}"></div>
@@ -103,6 +105,7 @@ export function openSettings(ctx: Ctx, onReset: () => void, onImport: () => void
     ctx.invalidateTm(); ctx.persist(); ctx.render();
     toast(`Імпортовано ${plural(added, ['пару', 'пари', 'пар'])}${rejected ? `, пропущено рядків без табуляції: ${rejected}` : ''}`);
   });
+  $('#st-spk', dlg).addEventListener('click', () => { dlg.close(); openSpeakers(ctx); });
   $('#rf-go', dlg).addEventListener('click', async () => {
     const lang = ($('#rf-lang', dlg) as HTMLInputElement).value.trim().toLowerCase() || 'ru';
     try { if (await importReference(ctx, lang)) { ctx.render(); dlg.close(); } } catch (err) { toast(err instanceof Error ? err.message : 'Не вдалося прочитати папку'); }

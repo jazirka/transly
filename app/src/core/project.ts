@@ -26,6 +26,8 @@ export interface SavedProject {
   snapshot?: Record<string, Unit[]>;
   /** Same game in another language, aligned to the working language: shown to the translator as a hint. */
   reference?: { lang: string; texts: Record<string, Reference> };
+  /** Who speaks, as set by the translator: keys `face:Actor1#3` and `event:ghoul111`. */
+  speakers?: Record<string, { name: string; mt: number }>;
   /** Time the snapshot/reference last changed. The device with the larger value owns the newer copy. */
   assetsRev?: number;
 }
@@ -94,6 +96,7 @@ export function deserialize(text: string): SavedProject {
     ...(o.snapshot ? { snapshot: o.snapshot } : {}),
     ...(o.reference ? { reference: o.reference } : {}),
     ...(o.assetsRev ? { assetsRev: o.assetsRev } : {}),
+    ...(o.speakers ? { speakers: o.speakers } : {}),
   };
 }
 
@@ -120,6 +123,8 @@ export function mergeProjects(a: SavedProject, b: SavedProject, since = 0): { pr
   const snapshot = owner.snapshot ?? a.snapshot ?? b.snapshot;
   const reference = owner.reference ?? a.reference ?? b.reference;
   const assetsRev = Math.max(a.assetsRev ?? 0, b.assetsRev ?? 0);
+  const speakers: Record<string, { name: string; mt: number }> = {};
+  for (const src of [a.speakers ?? {}, b.speakers ?? {}]) for (const [k, v] of Object.entries(src)) if (v.mt > epoch && (!speakers[k] || v.mt > speakers[k]!.mt)) speakers[k] = v;
   return {
     project: {
       ...newer, resetEpoch: epoch, files, ...(snapshot ? { snapshot } : {}), ...(reference ? { reference } : {}), ...(assetsRev ? { assetsRev } : {}),

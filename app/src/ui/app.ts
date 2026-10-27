@@ -1,4 +1,4 @@
-import { Autosave, DupIndex, activeIssues, displayLength, edit, emptyProject, lengthDeviation, note, propagate, readGame, reconcile, snapshotOf, statsOf, submit, viewsFromSnapshot } from '../core';
+import { Autosave, DupIndex, activeIssues, displayLength, edit, emptyProject, lengthDeviation, note, propagate, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, viewsFromSnapshot } from '../core';
 import type { Entry, GameFile, SavedProject, Unit } from '../core';
 import { openBuild } from './build-dialog';
 import { dataDirOf, isDesktop, rememberedGameDir, reopenGameDirDesktop } from './desktop';
@@ -9,6 +9,7 @@ import type { DirHandle, PickedFile } from './folder';
 import { IdbStore, loadHandle, saveHandle } from './idb';
 import { markup } from './markup';
 import { openSettings } from './settings';
+import { openSpeakers } from './speakers-dialog';
 import { STATUS_LABEL, buildTm, shownStatus } from './state';
 import type { Ctx, Filter, Mode, State } from './state';
 import { describe as describeSync, loadSyncConfig, runSync, syncConfigured } from './sync';
@@ -144,6 +145,7 @@ export async function start(root: HTMLElement): Promise<void> {
     s, autosave,
     entries: file => (s.saved.files[file] ??= {}),
     qaOpts,
+    speaker: u => speakerOf(u, s.saved.speakers),
     view: () => s.views.find(v => v.name === s.current) ?? null,
     unit: key => unitMap.get(key),
     visible: () => visibleUnits(true),
@@ -181,9 +183,9 @@ export async function start(root: HTMLElement): Promise<void> {
   const inContext = (u: Unit, e: Entry | undefined): boolean => {
     if (s.q) {
       const q = s.q.toLowerCase();
-      if (!(u.source + ' ' + (e?.target ?? '') + ' ' + u.key + ' ' + u.speaker).toLowerCase().includes(q)) return false;
+      if (!(u.source + ' ' + (e?.target ?? '') + ' ' + u.key + ' ' + ctx.speaker(u)).toLowerCase().includes(q)) return false;
     }
-    if (s.speaker !== null && u.speaker !== s.speaker) return false;
+    if (s.speaker !== null && ctx.speaker(u) !== s.speaker) return false;
     if (s.lenFilter !== 'all') {
       if (!e?.target) return false;
       const d = lengthDeviation(u.source, e.target), tol = s.saved.settings.tolerancePct;
@@ -300,7 +302,7 @@ export async function start(root: HTMLElement): Promise<void> {
       <div class="ln" role="gridcell"><span class="num">${n}</span><input type="checkbox" class="rc" ${chk ? 'checked' : ''} aria-label="Вибрати рядок ${n}"></div>
       <div class="st" role="gridcell"><span class="sd ${st}" title="${STATUS_LABEL[st]}"></span><span class="vh">${STATUS_LABEL[st]}</span></div>
       <div role="gridcell"><span class="key" title="${esc(u.key)}">${esc(shortKey(u.key))}</span>${e?.comments?.length ? SVG.cmt : ''}</div>
-      <div class="who" role="gridcell">${esc(u.speaker)}</div>
+      <div class="who" role="gridcell">${esc(ctx.speaker(u))}</div>
       <div class="src" role="gridcell">${markup(flow(u.source), hits)}</div>
       <div class="tr ${e?.target ? '' : 'empty'}" role="gridcell" title="Двічі клікніть, щоб редагувати тут">${e?.target ? markup(flow(e.target)) : 'не перекладено'}</div>
       <div class="len ${lenCls(u, e)}" role="gridcell" title="Символів у перекладі / в оригіналі">${len}</div></div>`;
@@ -313,7 +315,7 @@ export async function start(root: HTMLElement): Promise<void> {
 
   const siHtml = (u: Unit, n: number): string => {
     const e = entryOf(u), st = shownStatus(ctx, u, e);
-    return `<div class="si ${u.key === s.cur ? 'sel' : ''}" data-key="${esc(u.key)}" role="button" tabindex="0"><span class="sd ${st}" title="${STATUS_LABEL[st]}"></span><div><div class="a"><span>${n}</span><b>${esc(u.speaker || u.kind)}</b><span>${esc(shortKey(u.key))}</span>${e?.comments?.length ? SVG.cmt : ''}</div><div class="s">${esc(flow(u.source))}</div><div class="t">${e?.target ? esc(flow(e.target)) : '—'}</div></div></div>`;
+    return `<div class="si ${u.key === s.cur ? 'sel' : ''}" data-key="${esc(u.key)}" role="button" tabindex="0"><span class="sd ${st}" title="${STATUS_LABEL[st]}"></span><div><div class="a"><span>${n}</span><b>${esc(ctx.speaker(u) || u.kind)}</b><span>${esc(shortKey(u.key))}</span>${e?.comments?.length ? SVG.cmt : ''}</div><div class="s">${esc(flow(u.source))}</div><div class="t">${e?.target ? esc(flow(e.target)) : '—'}</div></div></div>`;
   };
   const emptyHtml = '<div class="empty-state"><b>Нічого не знайдено</b><span>Немає рядків за поточним пошуком і статусом.</span><button class="btn" data-reset>Скинути фільтри</button></div>';
 
@@ -565,6 +567,7 @@ export async function start(root: HTMLElement): Promise<void> {
     'Файл': [{ t: 'Відкрити папку гри…', fn: () => void openFolder() }, { t: 'Зібрати…', fn: doBuild, sc: 'F5' }, '-', { t: 'Налаштування…', fn: openSettingsDlg }],
     'Вигляд': [{ t: 'Таблиця', fn: () => setMode('table') }, { t: 'Редагування', fn: () => setMode('edit') }, { t: 'Вичитування', fn: () => setMode('review') }],
     'Навігація': [{ t: 'Наступний рядок без перекладу', fn: () => jump('new', 1) }, { t: 'Наступна проблема QA', fn: () => jump('qa', 1) }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: '⇧⇧' }],
+    'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Налаштування…', fn: openSettingsDlg }],
     'Довідка': [{ t: 'Гарячі клавіші', fn: () => toggleKeys() }],
   };
   function jump(kind: 'new' | 'qa', dir: 1 | -1): void {
@@ -715,10 +718,11 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.closest('[data-reset]')) { s.filter = s.mode === 'review' ? 'done' : 'all'; s.q = ''; s.speaker = null; s.lenFilter = 'all'; renderAll(); return; }
     if (t.closest('#spkbtn')) {
       const v = ctx.view();
-      const names = v ? [...new Set(v.units.map(u => u.speaker))].sort((a, b) => a.localeCompare(b, 'uk')) : [];
-      showPop(t.closest<HTMLElement>('#spkbtn')!, `<div class="group">Мовець</div>${names.slice(0, 60).map(n => `<button data-spk="${esc(n)}">${esc(n || '—')}</button>`).join('') || '<div class="hint" style="padding:6px 14px">Мовців немає</div>'}`);
+      const names = v ? [...new Set(v.units.map(u => ctx.speaker(u)))].sort((a, b) => a.localeCompare(b, 'uk')) : [];
+      showPop(t.closest<HTMLElement>('#spkbtn')!, `<div class="group">Мовець</div>${names.slice(0, 60).map(n => `<button data-spk="${esc(n)}">${esc(n || 'без мовця')}</button>`).join('')}<div class="msep" role="separator"></div><button data-act="speakers">Визначити мовців…</button>`);
       return;
     }
+    if (t.closest('[data-act=speakers]')) { closePops(); openSpeakers(ctx); return; }
     const spk = t.closest<HTMLElement>('[data-spk]');
     if (spk) { s.speaker = spk.dataset.spk ?? ''; closePops(); renderAll(); return; }
     if (t.closest('#lenbtn')) { showPop(t.closest<HTMLElement>('#lenbtn')!, `<div class="group">Довжина відносно оригіналу</div>${(Object.keys(LEN_LABEL) as (keyof typeof LEN_LABEL)[]).map(k => `<button data-len="${k}">${LEN_LABEL[k]}</button>`).join('')}`); return; }

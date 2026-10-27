@@ -44,6 +44,8 @@ export interface Ctx {
   s: State;
   autosave: Autosave;
   entries(file: string): Record<string, Entry>;
+  /** Who speaks this unit (game name, or the translator's face/event mapping). */
+  speaker(u: Unit): string;
   qaOpts(): { tolerancePct: number; terms: { en: string; uk: string; alt?: string[]; qa?: boolean }[] };
   view(): FileView | null;
   unit(key: string): Unit | undefined;

@@ -9,6 +9,10 @@ export interface Unit {
   source: string;
   /** Speaker / owner label when the format provides one. */
   speaker: string;
+  /** RPG Maker: face graphic of the message (`Actor1#3`), a stable hint for who speaks. */
+  face?: string;
+  /** RPG Maker: name of the event the message belongs to (often the NPC). */
+  event?: string;
   /** Short kind label used for grouping and the Тип column. */
   kind: UnitKind;
   /** Human-readable scene path, e.g. `EV014 · Старий солдат`. */

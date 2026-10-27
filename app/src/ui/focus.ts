@@ -92,7 +92,7 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
   const st = shownStatus(ctx, u, e);
   const review = s.mode === 'review';
   const pos = list.findIndex(x => x.key === u.key);
-  $('#f-key').textContent = `${s.current!.replace(/\.[^.]+$/, '')} › ${u.context}${u.speaker ? ' › ' + u.speaker : ''} › ${u.key.replace(/^.*\.list/, 'list')}`;
+  $('#f-key').textContent = `${s.current!.replace(/\.[^.]+$/, '')} › ${u.context}${ctx.speaker(u) ? ' › ' + ctx.speaker(u) : ''} › ${u.key.replace(/^.*\.list/, 'list')}`;
   $('#f-state').innerHTML = `<span class="sd ${st}"></span>${e?.returned && e.status === 'draft' ? 'повернено на доопрацювання' : STATUS_CAP[st]}`;
   $('#f-queue').textContent = pos >= 0 ? `${pos + 1}/${list.length}` : '';
   $('#f-queue').title = pos >= 0 ? `Рядок ${pos + 1} із ${list.length} у поточному списку (з урахуванням фільтрів)` : '';
@@ -117,7 +117,7 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
   $('#b-play').hidden = !desktop;
   const all = ctx.view()?.units ?? [];
   const idx = all.findIndex(x => x.key === u.key);
-  $('#c-near').innerHTML = [-2, -1, 0, 1, 2].map(d => all[idx + d]).map((x, j) => x ? `<div class="${j === 2 ? 'me' : ''}"><span>${idx + j - 1}</span><span>${esc(x.speaker)}</span><span>${esc(x.source.length > 34 ? x.source.slice(0, 34) + '…' : x.source)}</span></div>` : '').join('');
+  $('#c-near').innerHTML = [-2, -1, 0, 1, 2].map(d => all[idx + d]).map((x, j) => x ? `<div class="${j === 2 ? 'me' : ''}"><span>${idx + j - 1}</span><span>${esc(ctx.speaker(x))}</span><span>${esc(x.source.length > 34 ? x.source.slice(0, 34) + '…' : x.source)}</span></div>` : '').join('');
   const same = ctx.dups().others(s.current!, u.key).length;
   $('#f-meta').textContent = `Тип: ${u.kind}${same ? ` · однакових рядків у грі: ${same}` : ''}`;
   $('#cm-badge').textContent = String(e?.comments?.length ?? 0);

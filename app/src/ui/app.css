@@ -52,3 +52,12 @@
 .itabs button svg{display:none}
 .ide.sz-s .itabs button svg{display:block}
 .ide.sz-s .itabs .tl{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* speaker dialog */
+.sp-list{display:flex;flex-direction:column;gap:6px;max-height:46vh;overflow:auto}
+.sp-row{display:grid;grid-template-columns:70px minmax(0,1fr) minmax(130px,200px);gap:10px;align-items:center;padding:6px 8px;border:1px solid var(--line);border-radius:var(--r2)}
+.sp-k{font-size:11px;color:var(--mute);letter-spacing:.04em;text-transform:uppercase}
+.sp-k.face{color:#d9c3ee}
+.sp-b{min-width:0}
+.sp-s{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sp-in{height:28px;padding:0 8px;border:1px solid var(--line);border-radius:var(--r2);background:var(--bg)}

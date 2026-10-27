@@ -61,7 +61,7 @@ function extractMap(json: unknown): Unit[] {
     const evId = typeof ev.id === 'number' ? ev.id : ei;
     ev.pages.forEach((page, pi) => {
       if (!isObj(page) || !Array.isArray(page.list)) return;
-      out.push(...extractList(page.list as unknown as Cmd[], `events[${ei}].pages[${pi}].list`, `EV${String(evId).padStart(3, '0')}${evName ? ' · ' + evName : ''}`));
+      out.push(...extractList(page.list as unknown as Cmd[], `events[${ei}].pages[${pi}].list`, `EV${String(evId).padStart(3, '0')}${evName ? ' · ' + evName : ''}`, evName));
     });
   });
   return out;
@@ -72,7 +72,7 @@ function extractCommon(json: unknown): Unit[] {
   const out: Unit[] = [];
   json.forEach((ev, i) => {
     if (!isObj(ev) || !Array.isArray(ev.list)) return;
-    out.push(...extractList(ev.list as unknown as Cmd[], `[${i}].list`, `Common ${i}${isStr(ev.name) && ev.name ? ' · ' + ev.name : ''}`));
+    out.push(...extractList(ev.list as unknown as Cmd[], `[${i}].list`, `Common ${i}${isStr(ev.name) && ev.name ? ' · ' + ev.name : ''}`, isStr(ev.name) ? ev.name : ''));
   });
   return out;
 }
@@ -110,7 +110,7 @@ function extractSystem(json: unknown): Unit[] {
   return out;
 }
 
-function extractList(list: Cmd[], base: string, context: string): Unit[] {
+function extractList(list: Cmd[], base: string, context: string, evName = ''): Unit[] {
   const out: Unit[] = [];
   for (let i = 0; i < list.length; i++) {
     const c = list[i];
@@ -119,7 +119,8 @@ function extractList(list: Cmd[], base: string, context: string): Unit[] {
       const { lines } = textRun(list, i + 1, 401);
       if (lines.length) {
         const speaker = isStr(c.parameters[4]) ? c.parameters[4] : '';
-        out.push({ key: `${base}[${i}]`, source: lines.join('\n'), speaker, kind: 'dialogue', context });
+        const face = isStr(c.parameters[0]) && c.parameters[0] ? `${c.parameters[0]}#${typeof c.parameters[1] === 'number' ? c.parameters[1] : 0}` : '';
+        out.push({ key: `${base}[${i}]`, source: lines.join('\n'), speaker, kind: 'dialogue', context, ...(face ? { face } : {}), ...(evName ? { event: evName } : {}) });
       }
     } else if (c.code === 105) {
       const { lines } = textRun(list, i + 1, 405);

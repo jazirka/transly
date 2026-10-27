@@ -16,3 +16,4 @@ export * from './sync';
 export * from './duplicates';
 export * from './termtable';
 export * from './reference';
+export * from './speakers';

@@ -62,3 +62,31 @@ describe('apply', () => {
     expect((list[4]!.parameters[0] as string[])[0]).toBe('Leave quietly');
   });
 });
+
+import { speakerCandidates, speakerOf } from '../src/core';
+
+describe('speakers', () => {
+  const faceMap = { events: [null, { id: 1, name: 'ghoul', pages: [{ list: [
+    cmd(101, ['Aura1', 3, 0, 2, '']), cmd(401, ['I see you.']),
+    cmd(101, ['', 0, 0, 2, 'Named']), cmd(401, ['Hi.']),
+    cmd(101, ['', 0, 0, 2, '']), cmd(401, ['Plain line.']),
+    cmd(101, ['', 0, 0, 2, '']), cmd(401, ['Another.']),
+  ] }] }] };
+  const units = extract({ name: 'Map005.json', json: faceMap });
+
+  it('keeps the face graphic and the event name on messages', () => {
+    expect(units.map(u => [u.speaker, u.face, u.event])).toEqual([['', 'Aura1#3', 'ghoul'], ['Named', undefined, 'ghoul'], ['', undefined, 'ghoul'], ['', undefined, 'ghoul']]);
+  });
+
+  it('resolves the speaker: game name, then face mapping, then event mapping', () => {
+    const map = { 'face:Aura1#3': { name: 'Марина', mt: 1 }, 'event:ghoul': { name: 'Гуль', mt: 1 } };
+    expect(units.map(u => speakerOf(u, map))).toEqual(['Марина', 'Named', 'Гуль', 'Гуль']);
+    expect(units.map(u => speakerOf(u, undefined))).toEqual(['', 'Named', '', '']);
+  });
+
+  it('lists candidates: faces first, events only when they carry enough messages', () => {
+    const c = speakerCandidates([{ name: 'Map005.json', units }], 2);
+    expect(c.map(x => [x.key, x.count])).toEqual([['face:Aura1#3', 1], ['event:ghoul', 3]]);
+    expect(speakerCandidates([{ name: 'Map005.json', units }], 5).map(x => x.key)).toEqual(['face:Aura1#3']);
+  });
+});

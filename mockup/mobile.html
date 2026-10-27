@@ -629,6 +629,14 @@ td .term{color:#d9c3ee}
 .sbtn:hover{background:rgba(255,255,255,.1);color:var(--text)}
 .no-stage .ctxrow{display:none}
 .toast{z-index:95}
+/* light translucent "glass" highlight for active / hovered tabs and buttons */
+.strip button:hover,.seg button:hover,.tab:hover:not(.on){background:rgba(255,255,255,.09);color:var(--text)}
+.strip button.on,.seg button.on:not([data-m=proof]){background:rgba(255,255,255,.14);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.22);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.seg button.on[data-m=proof]{background:rgba(255,255,255,.14);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.22)}
+.stagebar .seg button.on{background:rgba(255,255,255,.14);box-shadow:inset 0 0 0 1px rgba(255,255,255,.22)}
+.tab{border-radius:8px 8px 0 0}
+.tab.on{background:rgba(255,255,255,.1);border-bottom-color:rgba(255,255,255,.55);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
+.seg{border-color:rgba(255,255,255,.14);border-radius:8px;background:rgba(255,255,255,.04)}
 
 /* ===== mobile build: always the phone layout, in a phone-width frame on wide screens ===== */
 html{background:#121315}

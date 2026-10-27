@@ -670,6 +670,18 @@ td .term{color:#d9c3ee}
 .tab,.tab.on{box-shadow:none}
 .tab.on{background:rgba(255,255,255,.1);border-bottom-color:rgba(255,255,255,.55)}
 .menubar button:focus{outline:0}.menubar button:focus-visible{box-shadow:inset 0 0 0 1px rgba(255,255,255,.35)}
+/* ===== unified highlight system =====
+   controls (buttons, tabs, chips, pills): hover = soft glass, active = brighter glass + ring
+   list items (rows, tree, menus, results): hover = soft glass, selected = violet */
+:root{--hv:rgba(255,255,255,.09);--on-bg:rgba(255,255,255,.15);--on-ring:rgba(255,255,255,.24);--r-ctl:8px}
+.tb-ic:hover,.ib:hover,.wc button:hover,.menubar button:hover,.strip button:hover,.seg button:hover,.tab:hover:not(.on),.chip:hover,.tpill:hover,.node:hover,.si:hover,.tgrow:hover,.gr:hover,.pop button:hover,.sbtn:hover,.tab .x:hover{background:var(--hv)}
+.menubar button.on,.strip button.on,.seg button.on,.seg button.on[data-m=proof],.stagebar .seg button.on,.chip.on,.tpill[aria-expanded=true]{background:var(--on-bg);box-shadow:inset 0 0 0 1px var(--on-ring);color:#fff;border-color:transparent}
+.tab.on{background:var(--on-bg);box-shadow:none;border-bottom-color:rgba(255,255,255,.55)}
+.mi:hover,.mi.open,.mi:focus,.sd-it:hover,.sd-it.on{background:var(--sel)}
+.tb-ic,.ib,.wc button,.menubar button,.strip button,.seg button,.pop button{border-radius:var(--r-ctl)}
+.chip,.tpill{border-radius:999px}
+.tpill{border-color:rgba(255,255,255,.16)}
+.chip.on{border:1px solid transparent}
 </style>
 <div class="narrow" id="narrow" hidden><span>Вікно вужче за 1180 px: частину інтерфейсу доведеться прокручувати. Для телефона відкрийте мобільну версію.</span><button id="narrow-x" aria-label="Закрити повідомлення">✕</button></div>
 <div class="scroll-x"><div class="ide mode-table">

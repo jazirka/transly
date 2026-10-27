@@ -518,11 +518,11 @@ td .term{color:#d9c3ee}
         <div class="nav"><button id="f-prev" title="Попередній (↑)">↑</button><button id="f-next" title="Наступний (↓)">↓</button><button id="f-back" title="До таблиці (Esc)" style="width:auto;padding:0 9px">До таблиці</button></div>
       </div>
       <div>
-        <div class="lbl">Оригінал · EN <span class="r" id="f-spk"></span></div>
+        <div class="lbl">Оригінал · EN</div>
         <div class="srcbox" id="f-src"></div>
       </div>
       <div class="trblock">
-        <div class="lbl">Переклад · UK <span class="r" id="i-len"></span></div>
+        <div class="lbl">Переклад · UK</div>
         <textarea class="tr-in" id="i-tr" spellcheck="false" aria-label="Переклад"></textarea>
         <div class="edbar">
           <button class="ib" id="b-copy" title="Копіювати оригінал у переклад"><svg viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="8" height="8" rx="1"/><path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2"/></svg></button>
@@ -712,7 +712,6 @@ function renderFocus(){
   const r=rows[cur];
   $('f-state').innerHTML=`<span class="sd ${effSt(r)}"></span>${stName[effSt(r)]}`;
   $('f-key').textContent='Map042 › EV014 › '+r.k;
-  $('f-spk').textContent=r.w+' · '+r.s.length+' симв.';
   $('f-src').innerHTML=markup(r.s);
   const ta=$('i-tr');if(document.activeElement!==ta)ta.value=r.t;
   meter();
@@ -734,7 +733,7 @@ function renderFocus(){
 }
 function meter(){
   {const v=$('i-tr').value;$('c-ch').textContent=v.length;$('c-w').textContent=v.trim()?v.trim().split(/\s+/).length:0}
-  const n=$('i-tr').value.length;$('i-len').textContent=n+' / '+LIMIT;
+  const n=$('i-tr').value.length;
 }
 function tagPopHTML(){
   const all=rows.flatMap(r=>r.g),map={};all.forEach(g=>{const k=g[1];map[k]=map[k]||{t:g[0],n:0};map[k].n++});

@@ -698,6 +698,11 @@ td .term{color:#d9c3ee}
 .seg{border-radius:10px;background:none;padding:2px;gap:2px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
 .seg button{height:26px;border-radius:8px}
 .seg button.on,.seg button.on[data-m=proof],.stagebar .seg button.on{background:var(--on-bg);box-shadow:inset 0 0 0 1px var(--on-ring);color:#fff}
+/* mode switch sits flush right and fills the tab row, same tab geometry */
+.tabs .seg{margin:0 0 0 auto;align-self:flex-end;padding:0;gap:0;border-radius:0;background:none;box-shadow:none;overflow:visible}
+.tabs .seg button{height:33px;box-sizing:border-box;padding:0 14px;border-radius:8px 8px 0 0;border:1px solid transparent;border-bottom:2px solid transparent;box-shadow:none}
+.tabs .seg button.on,.tabs .seg button.on[data-m=proof]{background:var(--on-bg);color:#fff;border-color:var(--on-ring);border-bottom-color:rgba(255,255,255,.55);box-shadow:none}
+.seg kbd,.seg .cnt{display:none}
 
 /* ===== mobile build: always the phone layout, in a phone-width frame on wide screens ===== */
 html{background:#121315}

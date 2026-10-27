@@ -38,3 +38,20 @@ npm run tauri build    # installer for the current OS
 ```
 
 Linux needs `libwebkit2gtk-4.1-dev`, `build-essential`, `libssl-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`. The UI can only touch folders and the game executable picked in a native dialog; paths are checked in `src-tauri/src/lib.rs`.
+
+## Supported formats
+
+| Format | Files | Notes |
+| --- | --- | --- |
+| RPG Maker MV/MZ | `data/*.json` | dialogue, choices, scroll text, database names/descriptions, `System.json` terms |
+| gettext | `.po`, `.pot` | context and plurals; comments, header and obsolete entries are kept |
+| CSV/TSV | `.csv`, `.tsv` | columns `key`, `source`/`text`, `translation` (added when missing) |
+| Locale JSON | `en.json`, `strings.json`, `locales/*.json`… | nested strings, written back by path |
+| Ren’Py | `.rpy` | dialogue and menu choices; code, `$` lines and `python:` blocks are skipped |
+
+Control-code QA (`\C[2]`, `\V[1]`…) currently knows RPG Maker codes only; placeholders of other formats (`[name]`, `{i}`, `%s`) are not checked yet.
+
+## Glossary and reference language
+
+- Settings → Import glossary: a Google Sheets table saved as a web page (`.html`), or `.csv`/`.tsv`, with columns «Оригінал», «Переклад 1…», «Опис», «Розділ». A big dictionary is added as hints only; tick the box to enforce terms in QA.
+- Settings → Reference language: pick the same game in another language; its text is aligned line by line (even when that version added or removed lines) and shown under the original.

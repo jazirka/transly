@@ -42,6 +42,8 @@ export type Translations = Record<string, Entry>;
 export interface GameFile {
   /** File name inside the game data folder, e.g. `Map042.json`. */
   name: string;
-  /** Parsed JSON as read from the game. Never mutated by the core. */
+  /** Parsed JSON as read from the game. Never mutated by the core. `null` for text formats. */
   json: unknown;
+  /** Raw text of non-JSON formats (.po, .csv, .rpy). */
+  text?: string;
 }

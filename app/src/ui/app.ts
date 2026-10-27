@@ -1,4 +1,4 @@
-import { Autosave, DupIndex, build, check, edit, emptyProject, note, propagate, readGame, reconcile, snapshotOf, sourceChanged, statsOf, submit, viewsFromSnapshot } from '../core';
+import { Autosave, DupIndex, isRpgMakerFile, build, check, edit, emptyProject, note, propagate, readGame, reconcile, snapshotOf, sourceChanged, statsOf, submit, viewsFromSnapshot } from '../core';
 import type { Entry, GameFile, SavedProject, Status, Unit } from '../core';
 import { $, el, esc, plural, toast } from './dom';
 import { STATUS_LABEL, onEditorClick, setGlossQuery, onEditorInput, onEditorSubmit, renderEditor, send, step } from './edit';
@@ -144,7 +144,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!v) {
       box.innerHTML = s.views.length
         ? '<div class="empty"><h2>Оберіть файл</h2>Файл зліва відкриє його рядки.</div>'
-        : `<div class="empty"><h2>Відкрийте папку гри</h2>${s.phone ? 'На телефоні проєкт береться з комп’ютера: на ПК відкрийте «Налаштування → Обмін проєктом → Зберегти проєкт у файл», а тут імпортуйте цей файл у «Налаштування → Обмін проєктом».' : 'Оберіть папку <b>data</b> гри на RPG Maker (або саму папку гри). Ваш переклад зберігається в цьому браузері, файли гри не змінюються.'}${lastHandle || desktopDir ? `<p><button class="btn p" id="resume">Продовжити з папкою «${esc(lastHandle?.name ?? (desktopDir ?? '').split(/[\\/]/).filter(Boolean).pop() ?? '')}»</button></p>` : ''}</div>`;
+        : `<div class="empty"><h2>Відкрийте папку гри</h2>${s.phone ? 'На телефоні проєкт береться з комп’ютера: на ПК відкрийте «Налаштування → Обмін проєктом → Зберегти проєкт у файл», а тут імпортуйте цей файл у «Налаштування → Обмін проєктом».' : 'Оберіть папку <b>data</b> гри на RPG Maker (або саму папку гри), папку з файлами <b>.po</b>, <b>.csv</b>, <b>.rpy</b> (Ren’Py) чи JSON-локалізацією. Ваш переклад зберігається в цьому браузері, файли гри не змінюються.'}${lastHandle || desktopDir ? `<p><button class="btn p" id="resume">Продовжити з папкою «${esc(lastHandle?.name ?? (desktopDir ?? '').split(/[\\/]/).filter(Boolean).pop() ?? '')}»</button></p>` : ''}</div>`;
       return;
     }
     const filters = `<div class="filters">${FILTERS.map(([f, l]) => `<button class="chip" data-filter="${f}" aria-pressed="${s.filter === f}">${l}</button>`).join('')}
@@ -204,7 +204,7 @@ export async function start(root: HTMLElement): Promise<void> {
   }
 
   async function loadFiles(picked: PickedFile[]): Promise<void> {
-    if (!picked.length) { toast('У вибраній папці немає файлів .json'); return; }
+    if (!picked.length) { toast('У вибраній папці немає файлів, які я вмію перекладати (RPG Maker JSON, .po, .csv, .rpy)'); return; }
     $('#table').innerHTML = '<div class="empty"><h2>Читаю файли гри…</h2><div class="progress"><i id="bar"></i></div><span id="pct"></span></div>';
     const { files, failed } = await readFiles(picked, (d, t) => { $('#bar').style.width = `${(d / t) * 100}%`; $('#pct').textContent = `${d} з ${t}`; });
     const game: GameFile[] = files;
@@ -240,7 +240,7 @@ export async function start(root: HTMLElement): Promise<void> {
 
   function openBuild(): void {
     if (!s.game.length) { toast('Для збірки відкрийте папку гри: вона потрібна лише тут'); return; }
-    const desk = isDesktop() && !!dataDir;
+    const desk = isDesktop() && !!dataDir && s.game.every(f => isRpgMakerFile(f.name));
     const dlg = el('dialog', 'dlg');
     dlg.setAttribute('aria-labelledby', 'bd-t');
     dlg.innerHTML = `<form method="dialog"><h2 id="bd-t">Збірка</h2>

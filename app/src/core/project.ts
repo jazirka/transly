@@ -1,6 +1,6 @@
 import type { GlossaryTerm } from './glossary';
 import type { Reference } from './reference';
-import { extract } from './rpgmaker';
+import { extract } from './engine';
 import { merge } from './merge';
 import type { Entry, GameFile, Translations, Unit } from './model';
 

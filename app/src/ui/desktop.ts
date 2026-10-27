@@ -51,8 +51,8 @@ export async function pickExe(): Promise<string | null> {
   return exe;
 }
 
-export async function applyToGame(dataDir: string, files: { name: string; json: unknown }[]): Promise<number> {
-  return invoke<number>('apply_data', { dataDir, files: files.map(f => ({ name: f.name, content: JSON.stringify(f.json) })) });
+export async function applyToGame(dataDir: string, files: { name: string; json: unknown; text?: string }[]): Promise<number> {
+  return invoke<number>('apply_data', { dataDir, files: files.map(f => ({ name: f.name, content: f.text ?? JSON.stringify(f.json) })) });
 }
 
 export const restoreGame = (dataDir: string): Promise<number> => invoke<number>('restore_data', { dataDir });

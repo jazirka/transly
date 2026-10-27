@@ -1,6 +1,6 @@
 import { check } from './qa';
 import type { QaOptions } from './qa';
-import { apply } from './rpgmaker';
+import { apply, isTextFormat, formatOf } from './engine';
 import type { Entry, GameFile, Translations } from './model';
 import type { FileView, SavedProject } from './project';
 
@@ -14,7 +14,8 @@ export interface BuildOptions {
 
 export interface BuildResult {
   /** Changed game files, ready to write. */
-  files: { name: string; json: unknown }[];
+  /** Changed files. `text` is set for text formats (.po, .csv, .rpy); otherwise serialise `json`. */
+  files: { name: string; json: unknown; text?: string }[];
   included: number;
   /** Units that have a translation but were left out (status or QA error). */
   skipped: number;
@@ -43,7 +44,13 @@ export function build(game: GameFile[], views: FileView[], saved: SavedProject, 
       use[u.key] = e;
       out.included++;
     }
-    if (Object.keys(use).length) out.files.push({ name: v.name, json: apply(file, use) });
+    if (Object.keys(use).length) {
+      const res = apply(file, use);
+      out.files.push(isTextFormat(formatOf(file)) ? { name: v.name, json: null, text: String(res) } : { name: v.name, json: res });
+    }
   }
   return out;
 }
+
+/** Bytes-ready text of a built file. */
+export const fileText = (f: { json: unknown; text?: string }): string => f.text ?? JSON.stringify(f.json);

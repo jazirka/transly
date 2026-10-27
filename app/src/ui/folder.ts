@@ -1,8 +1,9 @@
+import { READABLE_EXTENSIONS, formatOf, isRpgMakerFile, isTextFormat } from '../core';
 import type { GameFile } from '../core';
 import { isDesktop, pickGameDirDesktop } from './desktop';
 
 /** A file chosen by the user, not read yet. */
-export interface PickedFile { name: string; path: string; read: () => Promise<string> }
+export interface PickedFile { name: string; path: string; /** Path relative to the picked folder, with `/`. */ rel?: string; read: () => Promise<string> }
 
 export type DirHandle = {
   queryPermission?(o: { mode: 'read' | 'readwrite' }): Promise<string>;
@@ -31,7 +32,7 @@ export async function pickGameFolder(input: HTMLInputElement): Promise<Picked | 
       const files = [...(input.files ?? [])];
       input.value = '';
       if (!files.length) return resolve(null);
-      resolve({ files: choose(files.map(f => ({ name: f.name, path: f.webkitRelativePath || f.name, read: () => f.text() }))), handle: null });
+      resolve({ files: choose(files.map(f => ({ name: f.name, path: f.webkitRelativePath || f.name, rel: (f.webkitRelativePath || f.name).split('/').slice(1).join('/') || f.name, read: () => f.text() }))), handle: null });
     };
     input.click();
   });
@@ -39,20 +40,31 @@ export async function pickGameFolder(input: HTMLInputElement): Promise<Picked | 
 
 async function walk(dir: DirHandle, prefix: string, out: PickedFile[], depth: number): Promise<void> {
   for await (const entry of dir.values()) {
-    if (entry.kind === 'file' && entry.name.endsWith('.json') && entry.getFile) {
+    if (entry.kind === 'file' && isReadable(entry.name) && entry.getFile) {
       const getFile = entry.getFile;
-      out.push({ name: entry.name, path: prefix + entry.name, read: async () => (await getFile()).text() });
+      out.push({ name: entry.name, path: prefix + entry.name, rel: prefix + entry.name, read: async () => (await getFile()).text() });
     } else if (entry.kind === 'directory' && depth < 3 && !/^(node_modules|\.)/.test(entry.name)) {
       await walk(entry as unknown as DirHandle, prefix + entry.name + '/', out, depth + 1);
     }
   }
 }
 
-/** Keep only the game's data folder when the user picked the game root. */
+const isReadable = (name: string): boolean => READABLE_EXTENSIONS.some(e => name.toLowerCase().endsWith(e));
+
+/**
+ * Keep files the app can translate. For RPG Maker, prefer the game's data folder when a whole game was picked.
+ * Files with the same name in different folders are told apart by their relative path.
+ */
 function choose(files: PickedFile[]): PickedFile[] {
-  const json = files.filter(f => f.name.endsWith('.json'));
-  const inData = json.filter(f => /(^|\/)data\/[^/]+$/.test(f.path));
-  return (inData.length ? inData : json).sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true }));
+  const known = files.filter(f => isReadable(f.name) && formatOf({ name: f.name }) !== null);
+  const rpg = known.filter(f => isRpgMakerFile(f.name));
+  const inData = rpg.filter(f => /(^|\/)data\/[^/]+$/.test(f.path));
+  const picked = inData.length ? inData : rpg.length ? rpg : known;
+  // RPG Maker files keep their plain names (they live in one data folder). Everything else keeps its folder
+  // structure, so a build can be dropped back over the game.
+  return picked
+    .map(f => (isRpgMakerFile(f.name) ? f : { ...f, name: f.rel ?? f.path }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true }));
 }
 
 /** Read and parse files one by one so the UI can show progress. Unreadable files are reported, not fatal. */
@@ -61,8 +73,10 @@ export async function readFiles(files: PickedFile[], onProgress: (done: number, 
   const failed: string[] = [];
   for (let i = 0; i < files.length; i++) {
     const f = files[i]!;
-    try { out.push({ name: f.name, json: JSON.parse(await f.read()) }); }
-    catch { failed.push(f.name); }
+    try {
+      const raw = await f.read();
+      out.push(isTextFormat(formatOf({ name: f.name })) ? { name: f.name, json: null, text: raw } : { name: f.name, json: JSON.parse(raw) });
+    } catch { failed.push(f.name); }
     onProgress(i + 1, files.length);
     if (i % 4 === 3) await new Promise(r => setTimeout(r));
   }

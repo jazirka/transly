@@ -21,6 +21,9 @@ const DB_FIELDS: Record<string, string[]> = {
 };
 const DB_KIND: Record<string, Unit['kind']> = { name: 'name', nickname: 'name', description: 'description', profile: 'description' };
 
+/** Does this look like one of RPG Maker MV/MZ's data files? */
+export const isRpgMakerFile = (name: string): boolean => /^Map\d+\.json$/.test(name) || name === 'CommonEvents.json' || name === 'Troops.json' || name === 'System.json' || name in DB_FIELDS;
+
 const isMap = (name: string) => /^Map\d+\.json$/.test(name);
 const isCommonEvents = (name: string) => name === 'CommonEvents.json';
 const isTroops = (name: string) => name === 'Troops.json';
@@ -31,10 +34,10 @@ const SYSTEM_ARRAYS = ['elements', 'skillTypes', 'weaponTypes', 'armorTypes', 'e
 const SYSTEM_TERMS = ['basic', 'commands', 'params'] as const;
 
 /** Strings with no letters (`\p[1]`, `...`, `---`) need no translation and only add noise. */
-const hasText = (source: string): boolean => /\p{L}/u.test(source.replace(/\\[A-Za-z]+\[\d+\]|\\[{}.|!><^$]/g, ''));
+export const hasText = (source: string): boolean => /\p{L}/u.test(source.replace(/\\[A-Za-z]+\[\d+\]|\\[{}.|!><^$]/g, ''));
 
 /** Extract every translatable unit from one game file. Unknown files yield no units. */
-export function extract(file: GameFile): Unit[] {
+export function extractRpgMaker(file: GameFile): Unit[] {
   return extractAll(file).filter(u => hasText(u.source));
 }
 
@@ -160,7 +163,7 @@ function extractDb(json: unknown, fields: string[]): Unit[] {
  * Return a deep copy of the file with translated units written back.
  * Units without a non-empty translation are left untouched.
  */
-export function apply(file: GameFile, translations: Translations): unknown {
+export function applyRpgMaker(file: GameFile, translations: Translations): unknown {
   const copy = structuredClone(file.json) as Json;
   const get = (key: string) => {
     const t = translations[key]?.target;

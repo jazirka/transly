@@ -1,7 +1,7 @@
-import { createZip } from '../core';
+import { createZip, fileText, isRpgMakerFile } from '../core';
 import type { BuildResult } from '../core';
 
-type FsDir = { getFileHandle(name: string, o: { create: boolean }): Promise<{ createWritable(): Promise<{ write(d: string | Uint8Array): Promise<void>; close(): Promise<void> }> }> };
+type FsDir = { getDirectoryHandle(name: string, o: { create: boolean }): Promise<FsDir>; getFileHandle(name: string, o: { create: boolean }): Promise<{ createWritable(): Promise<{ write(d: string | Uint8Array): Promise<void>; close(): Promise<void> }> }> };
 type SaveWindow = Window & { showDirectoryPicker?: (o?: { mode: 'readwrite' }) => Promise<FsDir> };
 
 export const canWriteFolder = (): boolean => !!(window as SaveWindow).showDirectoryPicker;
@@ -14,9 +14,13 @@ export async function writeToFolder(result: BuildResult): Promise<boolean> {
   try { dir = await w.showDirectoryPicker({ mode: 'readwrite' }); }
   catch (e) { if (e instanceof DOMException && e.name === 'AbortError') return false; throw e; }
   for (const f of result.files) {
-    const h = await dir.getFileHandle(f.name, { create: true });
+    // Names with a folder part (same file name in several folders) are written into sub-folders.
+    const parts = f.name.split('/');
+    let d = dir;
+    for (const p of parts.slice(0, -1)) d = await d.getDirectoryHandle(p, { create: true });
+    const h = await d.getFileHandle(parts[parts.length - 1]!, { create: true });
     const w2 = await h.createWritable();
-    await w2.write(JSON.stringify(f.json));
+    await w2.write(fileText(f));
     await w2.close();
   }
   return true;
@@ -25,7 +29,7 @@ export async function writeToFolder(result: BuildResult): Promise<boolean> {
 /** Download the changed files as one ZIP (works in every browser). */
 export function downloadZip(result: BuildResult, name = 'transly-build.zip'): void {
   const enc = new TextEncoder();
-  const zip = createZip(result.files.map(f => ({ name: `data/${f.name}`, data: enc.encode(JSON.stringify(f.json)) })));
+  const zip = createZip(result.files.map(f => ({ name: isRpgMakerFile(f.name) ? `data/${f.name}` : f.name, data: enc.encode(fileText(f)) })));
   const url = URL.createObjectURL(new Blob([zip as BlobPart], { type: 'application/zip' }));
   const a = document.createElement('a');
   a.href = url; a.download = name;

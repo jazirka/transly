@@ -688,12 +688,12 @@ td .term{color:#d9c3ee}
 .tpill:hover{background:rgba(255,255,255,.14)}
 .seg{border:0;background:var(--hv);border-radius:999px;padding:2px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.16)}
 .seg button{height:26px;padding:0 12px}
-.tabs{align-items:center;gap:4px;padding:0 6px}
-.tabs .tab{padding:0 4px 0 0;border-bottom:0;border-top-left-radius:999px;border-top-right-radius:999px}
-.tabs .tab:first-child{border-top-left-radius:999px}
-.tabs .tab .tb{height:28px;padding:0 6px 0 12px}
-.tabs .tab.on{background:var(--on-bg);box-shadow:inset 0 0 0 1px var(--on-ring);color:#fff}
-.tab .x{border-radius:50%}
+.tabs{align-items:flex-end;gap:0;padding:0}
+.tabs .tab{height:33px;border-radius:8px 8px 0 0;border-bottom:2px solid transparent;padding:0 4px 0 0}
+.tabs .tab:first-child{border-top-left-radius:0}
+.tabs .tab .tb{height:31px;padding:0 6px 0 8px}
+.tabs .tab.on{background:var(--on-bg);color:#fff;border-bottom-color:rgba(255,255,255,.55);box-shadow:inset 1px 1px 0 var(--on-ring),inset -1px 0 0 var(--on-ring)}
+.tab .x{border-radius:4px}
 
 /* ===== mobile build: always the phone layout, in a phone-width frame on wide screens ===== */
 html{background:#121315}

@@ -323,6 +323,51 @@ td .term{color:#d9c3ee}
 
 .tico{width:14px;height:14px;border-radius:3px;display:grid;place-items:center;font:600 7px var(--mono);background:#233a2e;color:#7fd08a}
 .tico.j{background:#3b3524;color:#e5c06a}.tico.g{background:#35294a;color:#b589d6}
+
+/* ===== v3: tool-window bar, stage switch, QA under the string ===== */
+.main{grid-template-columns:30px 250px minmax(0,1fr)}
+.ide.lp-closed .main,.ide.mode-focus.lp-closed .main{grid-template-columns:30px minmax(0,1fr)}
+.ide.lp-closed .tree{display:none}
+.ide.mode-focus .main{grid-template-columns:30px 250px minmax(0,1fr)}
+.ide.mode-focus .tree{display:flex}
+.strip{width:30px;padding:6px 0;gap:6px;align-items:stretch}
+.strip button{width:30px;height:auto;padding:12px 0;border-radius:0;writing-mode:vertical-rl;transform:rotate(180deg);font-size:11.5px;letter-spacing:.02em;color:var(--mute)}
+.strip button span{display:block}
+.strip button.on{background:#393b40;color:var(--text)}
+.strip button.on::before{left:auto;right:-0px;top:0;bottom:0;width:2px;height:auto;border-radius:0}
+.treebody[hidden]{display:none}
+.tgrow{display:flex;align-items:center;gap:8px;height:24px;padding:0 10px;cursor:pointer}
+.tgrow:hover{background:#34363a}
+.tgrow.on{background:var(--sel)}
+.tgrow .n{margin-left:auto;font:11px var(--mono);color:var(--mute)}
+.tgrow i{width:7px;height:7px;border-radius:2px;display:block;background:var(--tc)}
+.tgrow.c{--tc:var(--violet)}.tgrow.l{--tc:var(--ok)}.tgrow.i{--tc:var(--warn)}.tgrow.t{--tc:var(--info)}
+.glrow{padding:5px 10px;border-bottom:1px solid #2f3134}
+.glrow b{font-weight:500;color:#d9c3ee}.glrow span{display:block;color:var(--text)}.glrow small{color:var(--mute)}
+.stagebar{display:flex;align-items:center;gap:8px;color:var(--mute)}
+.stagebar .seg{margin:0}
+.stagebar .seg button.on{background:var(--accent);color:#fff}
+.stagebar .cnt{font:10.5px var(--mono);background:#3b3d42;border-radius:8px;padding:0 5px;color:var(--text)}
+.qa-under{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.qa-row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:5px;border:1px solid;font-size:12.5px}
+.qa-row.bad{background:#35242a;border-color:#5e2f38}
+.qa-row.warn{background:#352e20;border-color:#5a4a2a}
+.qa-row.good{background:#22302a;border-color:#2f4a3a;color:#a9d8b0}
+.qa-row .dot{width:8px;height:8px;border-radius:50%;flex:none}
+.qa-row.bad .dot{background:var(--bad)}.qa-row.warn .dot{background:var(--warn)}.qa-row.good .dot{background:var(--ok)}
+.qa-row .fix{margin-left:auto;height:22px;padding:0 9px;border-radius:4px;border:1px solid #6a5a35;background:#41381f;color:#f0d9a0;white-space:nowrap}
+.qa-row .fix:hover{background:#4d4326}
+.proof{border:1px dashed var(--line);border-radius:5px;padding:9px 12px;background:#222427}
+.proof .t{font-size:13px;color:#c8ccd3}
+.proof .chg{color:var(--warn);font-size:11px;margin-left:6px}
+.ide.mode-table.lp-closed .tree,.ide.mode-focus.lp-closed .tree{display:none}
+.ide.mode-table.lp-closed .main,.ide.mode-focus.lp-closed .main{grid-template-columns:30px minmax(0,1fr)}
+.toolbar *{white-space:nowrap}
+.toolbar{gap:6px}
+.search{width:230px;flex:none;min-width:0}
+.search kbd{display:none}
+.prog .bar{width:90px}
+.tbtn{padding:0 7px}
 </style>
 <div class="scroll-x"><div class="ide mode-table">
 
@@ -338,33 +383,34 @@ td .term{color:#d9c3ee}
     <div class="pill"><span class="dot"></span>Termina <span style="color:var(--mute)">/ uk</span> <span style="color:var(--dim)">▾</span></div>
     <div class="pill" title="Гілка перекладу">⎇ <span style="font-family:var(--mono);font-size:11.5px">main</span> <span style="color:var(--dim)">▾</span></div>
     <div class="sep"></div>
-    <button class="tbtn"><svg viewBox="0 0 16 16"><path d="M3 2.5h8l2 2V13.5H3z"/><path d="M5.5 2.5v3h4v-3M5.5 13.5v-4h5v4"/></svg>Зберегти все</button>
-    <button class="tbtn"><svg viewBox="0 0 16 16"><path d="M4 8l3 3 5-6"/></svg>Перевірити QA</button>
-    <button class="tbtn"><svg viewBox="0 0 16 16"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 2.5v2.8h2.8"/></svg>Синхронізувати з грою</button>
-    <button class="tbtn primary"><svg viewBox="0 0 16 16"><path d="M5 3l8 5-8 5z" fill="currentColor"/></svg>Зібрати й запустити</button>
+    <button class="tbtn"><svg viewBox="0 0 16 16"><path d="M3 2.5h8l2 2V13.5H3z"/><path d="M5.5 2.5v3h4v-3M5.5 13.5v-4h5v4"/></svg>Зберегти</button>
+    <button class="tbtn"><svg viewBox="0 0 16 16"><path d="M4 8l3 3 5-6"/></svg>QA</button>
+    <button class="tbtn"><svg viewBox="0 0 16 16"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 2.5v2.8h2.8"/></svg>Синхр.</button>
+    <button class="tbtn primary"><svg viewBox="0 0 16 16"><path d="M5 3l8 5-8 5z" fill="currentColor"/></svg>Запустити</button>
+    <div class="sep"></div>
+    <div class="stagebar" title="Етап роботи над файлом"><span>Етап:</span>
+      <div class="seg" id="stage"><button data-st="tr" class="on">Переклад</button><button data-st="proof">Вичитка <span class="cnt" id="proof-n"></span></button></div></div>
     <div class="sep"></div>
     <div class="prog">
       <div class="bar" title="Підтверджено 41% · Перекладено 22% · Чернетки 9%"><i class="a" style="width:41%"></i><i class="b" style="width:22%"></i><i class="c" style="width:9%"></i></div>
       <span style="font-family:var(--mono);font-size:11.5px">72% · 9 316 / 12 940</span>
     </div>
-    <div class="search"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>Знайти скрізь: рядки, ключі, сутності<kbd>⇧⇧</kbd></div>
+    <div class="search"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>Знайти скрізь…<kbd>⇧⇧</kbd></div>
   </div>
 
   <!-- main -->
   <div class="main">
-    <nav class="strip" aria-label="Панелі">
-      <button class="on" title="Проєкт"><svg viewBox="0 0 16 16"><path d="M2 4.5h4l1.2 1.5H14V12.5H2z"/></svg></button>
-      <button title="Глосарій"><svg viewBox="0 0 16 16"><path d="M3.5 2.5h8a1 1 0 0 1 1 1v10h-8a1 1 0 0 1-1-1zM5.5 5.5h5M5.5 8h5"/></svg></button>
-      <button title="Сутності"><svg viewBox="0 0 16 16"><circle cx="8" cy="5" r="2.5"/><path d="M3 13.5c.5-3 2.5-4.5 5-4.5s4.5 1.5 5 4.5"/></svg></button>
-      <button title="Коментарі"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg></button>
-      <button title="Пам'ять перекладів"><svg viewBox="0 0 16 16"><ellipse cx="8" cy="4" rx="5" ry="2"/><path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/></svg></button>
-      <div class="gap"></div>
-      <button title="Налаштування"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg></button>
+    <nav class="strip" id="strip" aria-label="Бічні панелі">
+      <button data-lp="files" class="on" title="Файли гри: дерево файлів проєкту"><span>Файли</span></button>
+      <button data-lp="tags" title="Теги: персонажі, локації, предмети"><span>Теги</span></button>
+      <button data-lp="gloss" title="Глосарій проєкту"><span>Глосарій</span></button>
     </nav>
 
-    <aside class="tree">
-      <div class="ph"><span class="grow">Проєкт</span><span class="ico" title="Згорнути все">⊟</span><span class="ico" title="Фільтр">⚲</span></div>
+    <aside class="tree" id="lpanel">
+      <div class="ph"><span class="grow" id="lp-title">Файли гри</span><span class="ico" id="lp-close" title="Сховати панель">—</span></div>
       <div class="treebody" id="tree"></div>
+      <div class="treebody" id="lp-tags" hidden></div>
+      <div class="treebody" id="lp-gloss" hidden></div>
     </aside>
 
     <section class="editor">
@@ -389,7 +435,7 @@ td .term{color:#d9c3ee}
       <div class="r"><span>Спікер ▾</span><span>Теги ▾</span><span>Довжина ▾</span><span>Колонки ▾</span></div>
     </div>
     <div class="bulk" id="bulk"><b id="bulkn">0</b> вибрано
-      <button data-bb="appr">Підтвердити</button><button data-bb="draft">Позначити чернеткою</button><button>Додати тег…</button><button>Знайти й замінити…</button><button>Застосувати з ПП</button>
+      <button data-bb="ok" id="bb-ok">Підтвердити</button><button>Додати тег…</button><button>Знайти й замінити…</button><button>Застосувати з ПП</button>
     </div>
     <div class="gridwrap"><div class="grid" id="grid"></div></div>
   </div>
@@ -421,10 +467,11 @@ td .term{color:#d9c3ee}
         <div class="meter" id="i-meter"><i></i></div>
         <div class="actions">
           <button class="btn p" id="b-save">Підтвердити <kbd>⌃↵</kbd></button>
-          <button class="btn" id="b-draft">Чернетка <kbd>⌥↵</kbd></button>
-          <button class="btn" id="b-skip">Пропустити <kbd>↓</kbd></button>
-          <button class="btn" style="margin-left:auto">Копіювати оригінал</button>
+          <button class="btn" id="b-return" hidden>Повернути перекладачу</button>
+          <span style="margin-left:auto;color:var(--mute);font-size:11px" id="f-hint">Зберігається автоматично як чернетка</span>
         </div>
+        <div class="qa-under" id="f-qa"></div>
+        <div class="proof" id="f-proof" hidden style="margin-top:10px"></div>
       </div>
       <div>
         <div class="lbl">Теги · про що цей рядок <span class="r">＋ додати</span></div>
@@ -448,7 +495,6 @@ td .term{color:#d9c3ee}
         <button class="on" data-p="s-tm">Підказки</button>
         <button data-p="s-gl">Глосарій</button>
         <button data-p="s-cm">Коментарі <span class="cnt">2</span></button>
-        <button data-p="s-qa">QA <span class="cnt" style="background:#5a2a31;color:#ffb3bb">3</span></button>
         <button data-p="s-hi">Історія</button>
       </div>
       <div class="ibody">
@@ -466,11 +512,6 @@ td .term{color:#d9c3ee}
           <div class="cm"><div class="av" style="background:#56a8f5">М</div><div><div class="h"><b>Максим</b>сьогодні, 09:02</div><p>Просто метафора, бог не згадується. Лишаємо «пам'ятає обличчя».</p></div></div>
           <textarea class="cmin" placeholder="Написати коментар… @ — згадати"></textarea>
           <div class="actions" style="margin-top:0"><button class="btn">Коментувати</button><button class="btn">Запитати уточнення</button></div>
-        </div>
-        <div class="pane" id="s-qa">
-          <div><div class="qai"><span class="sev" style="background:var(--bad)"></span><span>Перевищено довжину: 126 / 120 символів</span><span class="k">msg[5]</span></div>
-          <div class="qai"><span class="sev" style="background:var(--bad)"></span><span>Втрачено керівний код <span class="code">\C[2]</span> у перекладі</span><span class="k">msg[9]</span></div>
-          <div class="qai"><span class="sev" style="background:var(--warn)"></span><span>«Dark» перекладено як «Морок», у глосарії — «Темрява»</span><span class="k">msg[6]</span></div></div>
         </div>
         <div class="pane" id="s-hi">
           <div class="hist">
@@ -502,11 +543,11 @@ const rows=[
  {k:'msg[2]',w:'Марина',s:'Hello? Is someone there?',t:'Агов? Тут хтось є?',st:'appr',g:[]},
  {k:'msg[3]',w:'Старий солдат',s:'Keep your voice down, girl.',t:'Тихіше, дівчино.',st:'appr',g:[]},
  {k:'msg[4]',w:'Старий солдат',s:'Not many walk in through the front anymore.',t:'Тепер мало хто заходить через головні двері.',st:'done',g:[['l','Зал вартових']]},
- {k:'msg[5]',w:'Старий солдат',s:'You shouldn\'t be here, kid. The Dark remembers faces.',t:'Не повинно тебе тут бути, малий. Темрява пам\'ятає обличчя.',st:'draft',cm:1,g:[['t','Темрява']]},
- {k:'msg[6]',w:'Старий солдат',s:'Sylvian\'s gate has been shut for three winters, and nobody who goes down comes back up the same.',t:'Браму Сильвіана зачинено вже три зими, і ніхто, хто спускається вниз, не повертається таким самим, яким був раніше.',st:'qa',cm:1,g:[['c','Сильвіан'],['l','Брама Сильвіана']]},
+ {k:'msg[5]',w:'Старий солдат',s:'You shouldn\'t be here, kid. The Dark remembers faces.',t:'Не повинно тебе тут бути, малий. Морок пам\'ятає обличчя.',st:'draft',cm:1,g:[['t','Темрява']]},
+ {k:'msg[6]',w:'Старий солдат',s:'Sylvian\'s gate has been shut for three winters, and nobody who goes down comes back up the same.',t:'Браму Сильвіана зачинено вже три зими, і ніхто, хто спускається вниз, не повертається таким самим, яким був раніше, коли спускався сюди вперше.',st:'done',cm:1,g:[['c','Сильвіан'],['l','Брама Сильвіана']]},
  {k:'msg[7]',w:'Марина',s:'I have to find my brother.',t:'Мені треба знайти брата.',st:'done',g:[['c','Леві']]},
  {k:'msg[8]',w:'Старий солдат',s:'...Then take this. It\'s rusted, but it still turns.',t:'',st:'new',g:[['i','Іржавий ключ']]},
- {k:'msg[9]',w:'Старий солдат',s:'\\C[2]Rusty Key\\C[0] obtained.',t:'Отримано Іржавий ключ.',st:'qa',g:[['i','Іржавий ключ']]},
+ {k:'msg[9]',w:'Старий солдат',s:'\\C[2]Rusty Key\\C[0] obtained.',t:'Отримано Іржавий ключ.',st:'done',g:[['i','Іржавий ключ']]},
  {k:'choice[0]',w:'Вибір',s:'Go down to the cellar',t:'Спуститися в підвал',st:'done',g:[['l','Підвал']]},
  {k:'choice[1]',w:'Вибір',s:'Ask about Rher',t:'',st:'new',cm:1,g:[['c','Рер']]},
  {k:'choice[2]',w:'Вибір',s:'Leave quietly',t:'Тихо піти',st:'appr',g:[]},
@@ -523,7 +564,7 @@ const rows=[
  {k:'msg[17]',w:'Старий солдат',s:'Soul or no soul, the stairs are the same.',t:'Із душею чи без душі, а сходи ті самі.',st:'draft',g:[['t','Душа'],['l','Підвал']]}
 ];
 const gloss=[['Sylvian','Сильвіан','Божество'],['Rher','Рер','Божество'],['Dark','Темрява','Поняття'],['Soul','Душа','Механіка'],['Marina','Марина','Персонаж'],['Levi','Леві','Персонаж']];
-const stName={new:'без перекладу',draft:'чернетка',done:'перекладено',appr:'підтверджено',qa:'є проблема'};
+const stName={new:'без перекладу',draft:'чернетка',done:'чекає вичитки',appr:'вичитано',qa:'є проблема'};
 const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
 function markup(s){
   const re=new RegExp('(\\\\[A-Z]\\[\\d+\\])|\\b('+gloss.map(g=>g[0]).join('|')+')\\b','g');
@@ -535,13 +576,23 @@ function markup(s){
 }
 const tagH=(g,lg)=>`<span class="tg ${g[0]} ${lg?'lg':''}" data-tag="${g[1]}" title="${T[g[0]]} · фільтрувати за тегом">${g[1]}</span>`;
 const LIMIT=120;
+const STN={new:'без перекладу',draft:'чернетка',done:'перекладено · чекає вичитки',appr:'вичитано',qa:'є проблема'};
+let stage='tr', lp='files';
+function qaIssues(r){
+  const o=[];if(!r.t)return o;
+  if(r.t.length>LIMIT)o.push({sev:'bad',msg:`Перевищено довжину: ${r.t.length} / ${LIMIT} символів`});
+  (r.s.match(/\\[A-Z]\[\d+\]/g)||[]).forEach(c=>{if(!r.t.includes(c))o.push({sev:'bad',msg:`Втрачено керівний код ${c}`})});
+  gloss.forEach(([e,u])=>{if(new RegExp('\\b'+e+'\\b').test(r.s)&&!r.t.toLowerCase().includes(u.toLowerCase().slice(0,u.length>5?u.length-2:u.length)))o.push({sev:'warn',msg:`Термін «${e}» має бути «${u}» за глосарієм`,fix:u})});
+  return o;
+}
+const effSt=r=>(r.t&&qaIssues(r).length&&r.st!=='new')?'qa':r.st;
 let cur=5, filter='all', sortKey=null, sortDir=1, tagFilter=null, mode='table', checked=new Set();
-rows.forEach((r,i)=>r.i=i);
+rows.forEach((r,i)=>{r.i=i;r.orig=r.t});
 const $=id=>document.getElementById(id);
 
 /* tree */
 const treeData=[['d',0,'data',null,1],['f',1,'Actors.json','json',100],['f',1,'Armors.json','json',100],['f',1,'Classes.json','json',100],['f',1,'CommonEvents.json','json',38],['f',1,'Enemies.json','json',64],['f',1,'Items.json','json',91],['f',1,'Skills.json','json',77],['f',1,'States.json','json',100],['f',1,'System.json','json',55],['f',1,'Troops.json','json',12],['d',1,'maps',null,1],['f',2,'Map012.json','map',100],['f',2,'Map013.json','map',100],['f',2,'Map041.json','map',63],['f',2,'Map042.json','map',50,'cur'],['f',2,'Map043.json','map',0],['f',2,'Map044.json','map',0],['d',0,'js/plugins',null,0],['d',0,'Глосарій та ПП',null,1],['f',1,'glossary.tsv','gl',100],['f',1,'memory.tmx','gl',100]];
-$('tree').innerHTML='<div class="group">Файли гри</div>'+treeData.map(n=>{
+$('tree').innerHTML=treeData.map(n=>{
   const [t,d,nm,ic,pc,cl]=n;
   if(t==='d')return `<div class="node" style="--d:${d}"><span class="chev">${pc?'▾':'▸'}</span><span class="ic dir">▤</span><span class="nm">${nm}</span></div>`;
   const lab={json:'{}',map:'MAP',gl:'Aa'}[ic];
@@ -553,7 +604,8 @@ function vis(){
   let a=rows.filter(r=>{
     if(filter==='new'&&r.st!=='new')return false;
     if(filter==='draft'&&r.st!=='draft')return false;
-    if(filter==='qa'&&r.st!=='qa')return false;
+    if(filter==='qa'&&effSt(r)!=='qa')return false;
+    if(filter==='done'&&r.st!=='done')return false;
     if(filter==='cm'&&!r.cm)return false;
     if(tagFilter&&!r.g.some(g=>g[1]===tagFilter))return false;
     if(q&&!(r.s+r.t+r.k+r.w).toLowerCase().includes(q))return false;
@@ -563,7 +615,7 @@ function vis(){
 }
 function chipsHTML(){
   const c=(f,l,n)=>`<button class="chip ${filter===f?'on':''}" data-f="${f}">${l} <span class="n">${n}</span></button>`;
-  return c('all','Усі',rows.length)+c('new','Без перекладу',rows.filter(r=>r.st==='new').length)+c('draft','Чернетки',rows.filter(r=>r.st==='draft').length)+c('qa','Проблеми',rows.filter(r=>r.st==='qa').length)+c('cm','З коментарями',rows.filter(r=>r.cm).length);
+  return c('all','Усі',rows.length)+c('new','Без перекладу',rows.filter(r=>r.st==='new').length)+c('draft','Чернетки',rows.filter(r=>r.st==='draft').length)+c('done','Чекають вичитки',rows.filter(r=>r.st==='done').length)+c('qa','Проблеми',rows.filter(r=>effSt(r)==='qa').length)+c('cm','З коментарями',rows.filter(r=>r.cm).length);
 }
 function tagFilterHTML(){
   if(!tagFilter)return '';
@@ -577,7 +629,7 @@ function renderTable(){
   h+=a.map(r=>{const n=r.t.length;
     return `<div class="gr ${r.i===cur?'sel':''} ${checked.has(r.i)?'chk':''}" data-i="${r.i}">
       <div class="ln"><span title="Вибрати">${r.i+1}</span></div>
-      <div class="st"><span class="sd ${r.st}" title="${stName[r.st]}"></span></div>
+      <div class="st"><span class="sd ${effSt(r)}" title="${stName[effSt(r)]}"></span></div>
       <div><span class="key" title="${r.k}">${r.k}</span></div>
       <div class="who">${r.w}</div>
       <div class="src">${markup(r.s)}</div>
@@ -589,16 +641,23 @@ function renderTable(){
   $('pos').textContent='рядок '+(cur+1)+' з '+rows.length+(a.length!==rows.length?' · показано '+a.length:'');
 }
 function renderList(){
-  $('slist').innerHTML=vis().map(r=>`<div class="si ${r.i===cur?'sel':''}" data-i="${r.i}"><span class="sd ${r.st}"></span><div><div class="a"><span>${r.i+1}</span><b>${r.w}</b><span>${r.k}</span></div><div class="s">${esc(r.s)}</div><div class="t">${r.t?esc(r.t):'—'}</div></div></div>`).join('');
+  $('slist').innerHTML=vis().map(r=>`<div class="si ${r.i===cur?'sel':''}" data-i="${r.i}"><span class="sd ${effSt(r)}"></span><div><div class="a"><span>${r.i+1}</span><b>${r.w}</b><span>${r.k}</span></div><div class="s">${esc(r.s)}</div><div class="t">${r.t?esc(r.t):'—'}</div></div></div>`).join('');
 }
 function renderFocus(){
   const r=rows[cur];
-  $('f-state').innerHTML=`<span class="sd ${r.st}"></span>${stName[r.st]}`;
+  $('f-state').innerHTML=`<span class="sd ${effSt(r)}"></span>${stName[effSt(r)]}`;
   $('f-key').textContent='Map042 › EV014 › '+r.k;
   $('f-spk').textContent=r.w+' · '+r.s.length+' симв.';
   $('f-src').innerHTML=markup(r.s);
   const ta=$('i-tr');if(document.activeElement!==ta)ta.value=r.t;
   meter();
+  $('f-qa').innerHTML=(()=>{const q=qaIssues(r);if(!r.t)return '';if(!q.length)return '<div class="qa-row good"><span class="dot"></span>QA: проблем не знайдено</div>';
+    return q.map((x,n)=>`<div class="qa-row ${x.sev}"><span class="dot"></span><span>${x.msg}</span>${x.fix?`<button class="fix" data-fix="${n}">Замінити на «${x.fix}»</button>`:''}</div>`).join('')})();
+  const pf=$('f-proof');pf.hidden=stage!=='proof';
+  if(stage==='proof')pf.innerHTML=`<div class="lbl">Версія перекладача</div><div class="t">${esc(r.orig||'—')}${r.orig!==r.t?'<span class="chg">змінено вичиткою</span>':''}</div>`;
+  $('b-save').firstChild.textContent=stage==='proof'?'Затвердити ':'Підтвердити ';
+  $('b-return').hidden=stage!=='proof';
+  $('f-hint').textContent=stage==='proof'?'Ви вичитуєте: правте текст прямо в полі':'Зберігається автоматично як чернетка';
   $('f-tags').innerHTML=r.g.length?r.g.map(g=>tagH(g,1)).join(''):'<span style="color:var(--dim)">Тегів немає</span>';
   const hits=gloss.filter(([e])=>new RegExp('\\b'+e+'\\b').test(r.s));
   $('i-gl').innerHTML=hits.length?hits.map(([e,u,t])=>`<div class="gloss-row"><b>${e}</b><span class="arr">→</span><span>${u}</span><span class="t">${t}</span></div>`).join(''):'<div style="color:var(--mute)">Термінів немає</div>';
@@ -612,18 +671,39 @@ function meter(){
   const n=$('i-tr').value.length;$('i-len').textContent=n+' / '+LIMIT;
   const m=$('i-meter');m.classList.toggle('over',n>LIMIT);m.firstElementChild.style.width=Math.min(100,n/LIMIT*100)+'%';
 }
-function renderAll(){
+function renderSide(){
+  const all=rows.flatMap(r=>r.g),map={};all.forEach(g=>{const k=g[1];map[k]=map[k]||{t:g[0],n:0};map[k].n++});
+  $('lp-tags').innerHTML=['c','l','i','t'].map(t=>{const items=Object.entries(map).filter(([k,v])=>v.t===t);
+    return items.length?`<div class="group">${T[t]}</div>`+items.map(([k,v])=>`<div class="tgrow ${t} ${tagFilter===k?'on':''}" data-tagrow="${k}"><i></i>${k}<span class="n">${v.n}</span></div>`).join(''):''}).join('');
+  $('lp-gloss').innerHTML=gloss.map(([e,u,t])=>`<div class="glrow"><b>${e}</b><span>${u}</span><small>${t}</small></div>`).join('');
+  $('stage').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.st===stage));
+  $('proof-n').textContent=rows.filter(r=>r.st==='done').length;
+  const bb=$('bb-ok');if(bb)bb.textContent=stage==='proof'?'Затвердити вичитку':'Підтвердити';
+}
+function renderAll(){renderSide();
   document.querySelectorAll('.chipsHost').forEach(h=>h.innerHTML=chipsHTML());
   $('tagfilter').innerHTML=tagFilterHTML();$('tagfilter2').innerHTML=tagFilterHTML();
   renderTable();renderFocus();
-  $('st-sel').textContent='Рядок '+(cur+1)+' · '+stName[rows[cur].st];
+  $('st-sel').textContent='Рядок '+(cur+1)+' · '+stName[effSt(rows[cur])];
 }
 function select(i){cur=Math.max(0,Math.min(rows.length-1,i));renderAll();document.querySelectorAll('.gr.sel,.si.sel').forEach(el=>el.scrollIntoView({block:'nearest'}))}
-function setMode(m){mode=m;document.querySelector('.ide').className='ide mode-'+m;
+function layout(){
+  document.querySelector('.ide').className='ide mode-'+mode+(lp?'':' lp-closed');
+  document.querySelectorAll('#strip button').forEach(b=>b.classList.toggle('on',b.dataset.lp===lp));
+  $('tree').hidden=lp!=='files';$('lp-tags').hidden=lp!=='tags';$('lp-gloss').hidden=lp!=='gloss';
+  $('lp-title').textContent={files:'Файли гри',tags:'Теги · фільтр за темою',gloss:'Глосарій проєкту'}[lp]||'';
+}
+function setMode(m){mode=m;lp=m==='focus'?null:(lp||'files');layout();
   document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
   renderAll();if(m==='focus')$('i-tr').focus();else document.querySelectorAll('.gr.sel').forEach(el=>el.scrollIntoView({block:'nearest'}))}
 
 document.addEventListener('click',e=>{
+  const fx=e.target.closest('[data-fix]');if(fx){const r=rows[cur],q=qaIssues(r)[+fx.dataset.fix];
+    const g=gloss.find(x=>x[1]===q.fix);r.t=r.t.replace(/(Морок|Мороку|Мороком)/,q.fix);r.t=r.t.includes(q.fix)?r.t:r.t+' ('+q.fix+')';return renderAll()}
+  const stg=e.target.closest('#stage [data-st]');if(stg){stage=stg.dataset.st;filter=stage==='proof'?'done':'all';return renderAll()}
+  const lb=e.target.closest('#strip [data-lp]');if(lb){lp=(lp===lb.dataset.lp)?null:lb.dataset.lp;return layout()}
+  if(e.target.closest('#lp-close')){lp=null;return layout()}
+  const tgr=e.target.closest('[data-tagrow]');if(tgr){tagFilter=tagFilter===tgr.dataset.tagrow?null:tgr.dataset.tagrow;filter='all';return renderAll()}
   const sg=e.target.closest('#seg [data-m]');if(sg)return setMode(sg.dataset.m);
   if(e.target.closest('#f-back'))return setMode('table');
   if(e.target.closest('[data-cleartag]')){tagFilter=null;return renderAll()}
@@ -649,24 +729,24 @@ $('grid').addEventListener('dblclick',e=>{
   ta.addEventListener('keydown',ev=>{if(ev.key==='Enter'&&!ev.shiftKey){ev.preventDefault();ta.blur()}if(ev.key==='Escape'){ta.value=rows[i].t;ta.blur()}});
 });
 document.querySelectorAll('.qin').forEach(q=>q.addEventListener('input',e=>{document.querySelectorAll('.qin').forEach(x=>{if(x!==q)x.value=q.value});$('q').value=q.value;renderAll();q.focus()}));
-$('i-tr').addEventListener('input',e=>{const r=rows[cur];r.t=e.target.value;r.st=r.t?(r.st==='new'?'draft':r.st):'new';meter();renderTable();renderList();$('f-state').innerHTML=`<span class="sd ${r.st}"></span>${stName[r.st]}`});
-function setSt(st,adv){const r=rows[cur];if(!r.t)return;r.st=st;if(adv)cur=Math.min(rows.length-1,cur+1);renderAll()}
-$('b-save').onclick=()=>setSt('appr',true);$('b-draft').onclick=()=>setSt('draft',true);$('b-skip').onclick=()=>select(cur+1);
+$('i-tr').addEventListener('input',e=>{const r=rows[cur];r.t=e.target.value;r.st=r.t?(r.st==='new'?'draft':r.st):'new';meter();renderTable();renderList();$('f-state').innerHTML=`<span class="sd ${effSt(r)}"></span>${stName[effSt(r)]}`});
+function advance(st){const r=rows[cur];if(!r.t)return;r.st=st;cur=Math.min(rows.length-1,cur+1);renderAll()}
+const primary=()=>advance(stage==='proof'?'appr':'done');
+$('b-save').onclick=primary;$('b-return').onclick=()=>advance('draft');
 $('f-prev').onclick=()=>select(cur-1);$('f-next').onclick=()=>select(cur+1);
 document.addEventListener('keydown',e=>{
   const inEd=e.target.matches('textarea,input');
-  if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();setSt('appr',true)}
-  else if(e.altKey&&e.key==='Enter'){e.preventDefault();setSt('draft',true)}
+  if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();primary()}
   else if(e.key==='Escape'&&mode==='focus'){setMode('table')}
   else if(!inEd&&e.key==='ArrowDown'){e.preventDefault();select(cur+1)}
   else if(!inEd&&e.key==='ArrowUp'){e.preventDefault();select(cur-1)}
   else if(!inEd&&e.key==='Enter'&&mode==='table'){setMode('focus')}
 });
-document.querySelectorAll('[data-bb]').forEach(b=>b.addEventListener('click',()=>{checked.forEach(i=>{if(rows[i].t)rows[i].st=b.dataset.bb});checked.clear();renderAll()}));
+document.querySelectorAll('[data-bb]').forEach(b=>b.addEventListener('click',()=>{checked.forEach(i=>{if(rows[i].t)rows[i].st=stage==='proof'?'appr':'done'});checked.clear();renderAll()}));
 /* sidebar tabs */
 const stabs=$('stabs');stabs.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
   stabs.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
   stabs.querySelectorAll('button').forEach(x=>$(x.dataset.p).classList.toggle('on',x===b));}));
 $('gtb').innerHTML=[['Sylvian','Сильвіан','Божество'],['Rher','Рер','Божество'],['Dark','Темрява','Поняття'],['Marina','Марина','Персонаж'],['Levi','Леві','Персонаж'],['Soul','Душа','Механіка'],['Gatekeeper','Вартовий брами','Титул'],['Cellar','Підвал','Локація']].map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td style="color:var(--mute)">${r[2]}</td></tr>`).join('');
-renderAll();
+layout();renderAll();
 </script>

@@ -6,6 +6,18 @@ import type { Entry, Unit } from './model';
 export type Stage = 'translate' | 'review';
 
 const blank = (): Entry => ({ target: '', status: 'new', mt: 0 });
+const HISTORY_LIMIT = 50;
+
+/** Append a history record (immutably), keeping only the newest entries. */
+export function note(e: Entry, what: string, text: string, who: string, now: number): Entry {
+  const history = [...(e.history ?? []), { at: now, who, what, text }].slice(-HISTORY_LIMIT);
+  return { ...e, history };
+}
+
+export function addComment(e: Entry | undefined, who: string, text: string, now: number): Entry {
+  const base = e ?? blank();
+  return { ...base, mt: Math.max(base.mt, now), comments: [...(base.comments ?? []), { who, at: now, text }] };
+}
 
 /** Apply a text edit. Returns the new entry (the input is never mutated). */
 export function edit(prev: Entry | undefined, unit: Unit, text: string, stage: Stage, now: number): Entry {

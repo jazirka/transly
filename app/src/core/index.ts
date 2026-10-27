@@ -8,3 +8,5 @@ export * from './project';
 export * from './store';
 export * from './build';
 export * from './zip';
+export * from './tm';
+export * from './glossary';

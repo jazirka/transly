@@ -29,7 +29,13 @@ export interface Entry {
   orig?: string;
   /** True when a reviewer sent the unit back to the translator. */
   returned?: boolean;
+  comments?: Comment[];
+  /** Newest last; capped so a long-lived unit does not grow the project without bound. */
+  history?: HistoryItem[];
 }
+
+export interface Comment { who: string; at: number; text: string }
+export interface HistoryItem { at: number; who: string; what: string; text: string }
 
 export type Translations = Record<string, Entry>;
 

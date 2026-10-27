@@ -1,42 +1,33 @@
-import { Autosave, build, check, edit, emptyProject, readGame, statsOf, submit } from '../core';
-import type { Entry, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
+import { Autosave, build, check, edit, emptyProject, note, readGame, statsOf, submit } from '../core';
+import type { Entry, GameFile, SavedProject, Status, Unit } from '../core';
 import { $, el, esc, plural, toast } from './dom';
-import { pickGameFolder, readFiles } from './folder';
+import { STATUS_LABEL, onEditorClick, onEditorInput, onEditorSubmit, renderEditor, send, step } from './edit';
 import { canWriteFolder, downloadZip, writeToFolder } from './export';
+import { pickGameFolder, readFiles } from './folder';
 import { IdbStore } from './idb';
+import { buildTm } from './state';
+import type { Ctx, Filter, Mode, State } from './state';
 
-type Filter = 'all' | 'new' | 'draft' | 'done' | 'qa';
-const STATUS_LABEL: Record<Status, string> = { new: 'Без перекладу', draft: 'Чернетка', done: 'Очікує вичитування', appr: 'Вичитано' };
-const FILTERS: [Filter, string][] = [['all', 'Усі'], ['new', 'Без перекладу'], ['draft', 'Чернетки'], ['done', 'Очікують вичитування'], ['qa', 'Проблеми']];
-
-interface State {
-  views: FileView[];
-  saved: SavedProject;
-  current: string | null;
-  stage: Stage;
-  filter: Filter;
-  q: string;
-  saveOk: boolean;
-  game: GameFile[];
-}
+const FILTERS: [Filter, string][] = [['all', 'Усі'], ['new', 'Без перекладу'], ['draft', 'Чернетки'], ['done', 'Очікують вичитування'], ['appr', 'Вичитані'], ['qa', 'Проблеми']];
+const MODES: [Mode, string][] = [['table', 'Таблиця'], ['edit', 'Редагування'], ['review', 'Вичитування']];
 
 export async function start(root: HTMLElement): Promise<void> {
   const store = new IdbStore('default');
   let saved: SavedProject;
   try { saved = (await store.load()) ?? emptyProject('Новий проєкт'); }
   catch { saved = emptyProject('Новий проєкт'); }
-  const s: State = { views: [], saved, current: null, stage: 'translate', filter: 'all', q: '', saveOk: true, game: [] };
+  const s: State = { views: [], game: [], saved, current: null, cur: null, mode: 'table', filter: 'all', q: '', sideTab: 'hints', saveOk: true, who: 'Ви' };
   const autosave = new Autosave(store, 400, ok => { s.saveOk = ok; renderSave(); });
+  let tmCache: ReturnType<typeof buildTm> | null = null;
+  let unitMap = new Map<string, Unit>();
+
   const input = el('input');
-  input.type = 'file';
-  input.hidden = true;
-  input.setAttribute('webkitdirectory', '');
-  input.id = 'folder-input';
-  input.setAttribute('aria-label', 'Папка гри');
+  input.type = 'file'; input.hidden = true; input.id = 'folder-input';
+  input.setAttribute('webkitdirectory', ''); input.setAttribute('aria-label', 'Папка гри');
 
   root.innerHTML = `
     <header class="top"><div class="logo" aria-hidden="true">T</div><b>Transly</b><span class="grow"></span>
-      <div class="seg" role="group" aria-label="Етап"><button data-stage="translate" aria-pressed="true">Переклад</button><button data-stage="review" aria-pressed="false">Вичитування</button></div>
+      <div class="seg" role="group" aria-label="Режим">${MODES.map(([m, l]) => `<button data-mode="${m}" aria-pressed="${m === 'table'}">${l}</button>`).join('')}</div>
       <span class="save" id="save" role="status"></span>
       <button class="btn" id="build" disabled>Зібрати…</button>
       <button class="btn p" id="open">Відкрити папку гри</button></header>
@@ -44,9 +35,43 @@ export async function start(root: HTMLElement): Promise<void> {
       <main class="panel table" id="table"></main></div>`;
   root.appendChild(input);
 
-  const entries = (file: string): Record<string, Entry> => (s.saved.files[file] ??= {});
   const qaOpts = () => ({ tolerancePct: 25, terms: s.saved.terms.map(t => ({ en: t.en, uk: t.uk })) });
-  const view = () => s.views.find(v => v.name === s.current) ?? null;
+
+  const ctx: Ctx = {
+    s, autosave,
+    entries: file => (s.saved.files[file] ??= {}),
+    qaOpts,
+    view: () => s.views.find(v => v.name === s.current) ?? null,
+    unit: key => unitMap.get(key),
+    visible: () => { const v = ctx.view(); if (!v) return []; const ents = ctx.entries(v.name); return v.units.filter(u => matches(u, ents[u.key])); },
+    tm: () => (tmCache ??= buildTm(s)),
+    invalidateTm: () => { tmCache = null; },
+    persist: () => autosave.queue(s.saved),
+    render: () => renderAll(),
+    select: (key, mode) => {
+      s.cur = key;
+      if (mode) setMode(mode, false);
+      renderAll();
+      document.querySelector<HTMLElement>(s.mode === 'table' ? `.row[data-key="${CSS.escape(key)}"]` : '#ed-tr')?.scrollIntoView({ block: 'nearest' });
+      if (s.mode !== 'table') $('#ed-tr').focus();
+    },
+  };
+
+  function matches(u: Unit, e: Entry | undefined): boolean {
+    if (s.q) {
+      const q = s.q.toLowerCase();
+      if (!(u.source + ' ' + (e?.target ?? '') + ' ' + u.key + ' ' + u.speaker).toLowerCase().includes(q)) return false;
+    }
+    const st: Status = e?.status ?? 'new';
+    switch (s.filter) {
+      case 'new': return st === 'new';
+      case 'draft': return st === 'draft';
+      case 'done': return st === 'done';
+      case 'appr': return st === 'appr';
+      case 'qa': return !!e && check(u, e.target, qaOpts()).length > 0;
+      default: return true;
+    }
+  }
 
   function renderSave(): void {
     const e = $('#save');
@@ -64,21 +89,6 @@ export async function start(root: HTMLElement): Promise<void> {
     }).join('');
   }
 
-  const matches = (u: Unit, e: Entry | undefined): boolean => {
-    if (s.q) {
-      const q = s.q.toLowerCase();
-      if (!(u.source + ' ' + (e?.target ?? '') + ' ' + u.key + ' ' + u.speaker).toLowerCase().includes(q)) return false;
-    }
-    const st = e?.status ?? 'new';
-    switch (s.filter) {
-      case 'new': return st === 'new';
-      case 'draft': return st === 'draft';
-      case 'done': return st === 'done';
-      case 'qa': return !!e && check(u, e.target, qaOpts()).length > 0;
-      default: return true;
-    }
-  };
-
   function qaHtml(u: Unit, e: Entry | undefined): string {
     if (!e || !e.target) return '';
     return check(u, e.target, qaOpts()).map(i => `<div class="qa ${i.severity}">${esc(i.message)}</div>`).join('');
@@ -86,33 +96,74 @@ export async function start(root: HTMLElement): Promise<void> {
 
   function rowHtml(u: Unit, n: number, e: Entry | undefined): string {
     const st = e?.status ?? 'new';
-    const lines = Math.max(2, u.source.split('\n').length);
-    return `<div class="row" data-key="${esc(u.key)}"><div class="n">${n}</div><div class="who">${esc(u.speaker)}</div><div class="src">${esc(u.source)}</div>
-      <div class="trc"><textarea rows="${lines}" aria-label="Переклад рядка ${n}" data-key="${esc(u.key)}">${esc(e?.target ?? '')}</textarea><div class="qas">${qaHtml(u, e)}</div></div>
-      <div class="st"><span class="dot ${st}" title="${STATUS_LABEL[st]}" role="img" aria-label="${STATUS_LABEL[st]}"></span></div></div>`;
+    return `<div class="row ${u.key === s.cur ? 'sel' : ''}" data-key="${esc(u.key)}"><div class="n">${n}</div><div class="who">${esc(u.speaker)}</div><div class="src">${esc(u.source)}</div>
+      <div class="trc"><textarea rows="${Math.max(2, u.source.split('\n').length)}" aria-label="Переклад рядка ${n}" data-key="${esc(u.key)}">${esc(e?.target ?? '')}</textarea><div class="qas">${qaHtml(u, e)}</div></div>
+      <div class="st"><span class="dot ${st}" title="${STATUS_LABEL[st]}" role="img" aria-label="${STATUS_LABEL[st]}"></span><button class="ib sm" data-open="${esc(u.key)}" aria-label="Відкрити рядок ${n} у редагуванні" title="Відкрити в редагуванні">↗</button></div></div>`;
   }
 
-  function renderTable(): void {
+  function renderMain(): void {
     const box = $('#table');
-    const v = view();
+    const v = ctx.view();
     if (!v) {
       box.innerHTML = s.views.length
         ? '<div class="empty"><h2>Оберіть файл</h2>Файл зліва відкриє його рядки.</div>'
-        : `<div class="empty"><h2>Відкрийте папку гри</h2>Оберіть папку <b>data</b> гри на RPG Maker (або саму папку гри). Ваш переклад зберігається в цьому браузері, файли гри не змінюються.</div>`;
+        : '<div class="empty"><h2>Відкрийте папку гри</h2>Оберіть папку <b>data</b> гри на RPG Maker (або саму папку гри). Ваш переклад зберігається в цьому браузері, файли гри не змінюються.</div>';
       return;
     }
-    const ents = entries(v.name);
-    const shown: string[] = [];
-    v.units.forEach((u, i) => { if (matches(u, ents[u.key])) shown.push(rowHtml(u, i + 1, ents[u.key])); });
-    box.innerHTML = `<div class="phd">${esc(v.name)} · ${v.units.length} рядків</div>
-      <div class="filters">${FILTERS.map(([f, l]) => `<button class="chip" data-filter="${f}" aria-pressed="${s.filter === f}">${l}</button>`).join('')}
-        <input id="q" type="search" placeholder="Пошук у файлі" aria-label="Пошук у файлі" value="${esc(s.q)}"></div>
-      <div class="scroll" id="scroll">${shown.join('') || '<div class="empty">Нічого не знайдено</div>'}</div>`;
+    const filters = `<div class="filters">${FILTERS.map(([f, l]) => `<button class="chip" data-filter="${f}" aria-pressed="${s.filter === f}">${l}</button>`).join('')}
+        <input id="q" type="search" placeholder="Пошук у файлі" aria-label="Пошук у файлі" value="${esc(s.q)}"></div>`;
+    if (s.mode === 'table') {
+      const ents = ctx.entries(v.name);
+      const rows: string[] = [];
+      v.units.forEach((u, i) => { if (matches(u, ents[u.key])) rows.push(rowHtml(u, i + 1, ents[u.key])); });
+      box.innerHTML = `<div class="phd">${esc(v.name)} · ${plural(v.units.length, ['рядок', 'рядки', 'рядків'])}</div>${filters}<div class="scroll" id="scroll">${rows.join('') || '<div class="empty">Нічого не знайдено</div>'}</div>`;
+    } else {
+      box.innerHTML = `<div class="phd">${esc(v.name)} · ${s.mode === 'review' ? 'вичитування' : 'редагування'}</div>${filters}<div class="scroll" id="edhost"></div>`;
+      renderEditor(ctx, $('#edhost'));
+    }
   }
 
   function renderAll(): void {
-    renderTree(); renderTable(); renderSave();
+    root.querySelectorAll<HTMLElement>('[data-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === s.mode)));
+    renderTree(); renderMain(); renderSave();
     ($('#build') as HTMLButtonElement).disabled = !s.views.length;
+  }
+
+  function setMode(m: Mode, rerender = true): void {
+    if (m === s.mode) return;
+    const wasReview = s.mode === 'review';
+    s.mode = m;
+    if (m === 'review') s.filter = 'done'; else if (wasReview && s.filter === 'done') s.filter = 'all';
+    if (m !== 'table' && !ctx.visible().some(u => u.key === s.cur)) s.cur = ctx.visible()[0]?.key ?? null;
+    if (rerender) { renderAll(); if (m !== 'table' && s.cur) $('#ed-tr').focus(); }
+    else if (m !== 'table' && !s.cur) renderAll();
+  }
+
+  function selectFile(name: string): void {
+    s.current = name; s.q = ''; s.filter = s.mode === 'review' ? 'done' : 'all';
+    unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u]));
+    s.cur = s.mode === 'table' ? null : ctx.visible()[0]?.key ?? null;
+  }
+
+  function updateRow(row: HTMLElement, u: Unit, e: Entry | undefined): void {
+    const st = e?.status ?? 'new';
+    const dot = $('.dot', row);
+    dot.className = `dot ${st}`; dot.title = STATUS_LABEL[st]; dot.setAttribute('aria-label', STATUS_LABEL[st]);
+    $('.qas', row).innerHTML = qaHtml(u, e);
+  }
+
+  async function openFolder(): Promise<void> {
+    const picked = await pickGameFolder(input);
+    if (!picked) return;
+    if (!picked.length) { toast('У вибраній папці немає файлів .json'); return; }
+    $('#table').innerHTML = '<div class="empty"><h2>Читаю файли гри…</h2><div class="progress"><i id="bar"></i></div><span id="pct"></span></div>';
+    const { files, failed } = await readFiles(picked, (d, t) => { $('#bar').style.width = `${(d / t) * 100}%`; $('#pct').textContent = `${d} з ${t}`; });
+    const game: GameFile[] = files;
+    s.game = game; s.views = readGame(game); tmCache = null;
+    if (!s.views.length) { s.current = null; renderAll(); toast('У цих файлах немає тексту для перекладу'); return; }
+    if (failed.length) toast(`Не вдалося прочитати файлів: ${failed.length}`);
+    selectFile(s.views[0]!.name);
+    renderAll();
   }
 
   function openBuild(): void {
@@ -148,93 +199,77 @@ export async function start(root: HTMLElement): Promise<void> {
     dlg.showModal();
   }
 
-  function updateRow(row: HTMLElement, u: Unit, e: Entry | undefined): void {
-    const st = e?.status ?? 'new';
-    const dot = $('.dot', row);
-    dot.className = `dot ${st}`;
-    dot.title = STATUS_LABEL[st];
-    dot.setAttribute('aria-label', STATUS_LABEL[st]);
-    $('.qas', row).innerHTML = qaHtml(u, e);
-  }
-
-  function unitOf(key: string): Unit | undefined { return view()?.units.find(u => u.key === key); }
-
-  function persist(): void { autosave.queue(s.saved); }
-
-  async function openFolder(): Promise<void> {
-    const picked = await pickGameFolder(input);
-    if (!picked) return;
-    if (!picked.length) { toast('У вибраній папці немає файлів .json'); return; }
-    const box = $('#table');
-    box.innerHTML = '<div class="empty"><h2>Читаю файли гри…</h2><div class="progress"><i id="bar"></i></div><span id="pct"></span></div>';
-    const { files, failed } = await readFiles(picked, (d, t) => {
-      $('#bar').style.width = `${(d / t) * 100}%`;
-      $('#pct').textContent = `${d} з ${t}`;
-    });
-    const game: GameFile[] = files;
-    s.game = game;
-    s.views = readGame(game);
-    s.current = s.views[0]?.name ?? null;
-    if (!s.views.length) { renderAll(); toast('У цих файлах немає тексту для перекладу'); return; }
-    if (failed.length) toast(`Не вдалося прочитати файлів: ${failed.length}`);
-    renderAll();
-  }
-
   root.addEventListener('click', e => {
     const t = e.target as HTMLElement;
     if (t.closest('#open')) { void openFolder(); return; }
     if (t.closest('#build')) { openBuild(); return; }
+    const m = t.closest<HTMLElement>('[data-mode]');
+    if (m) { setMode(m.dataset.mode as Mode); return; }
     const f = t.closest<HTMLElement>('[data-file]');
-    if (f) { s.current = f.dataset.file ?? null; s.q = ''; s.filter = 'all'; renderAll(); return; }
-    const st = t.closest<HTMLElement>('[data-stage]');
-    if (st) {
-      s.stage = st.dataset.stage === 'review' ? 'review' : 'translate';
-      root.querySelectorAll<HTMLElement>('[data-stage]').forEach(b => b.setAttribute('aria-pressed', String(b === st)));
-      return;
-    }
+    if (f) { selectFile(f.dataset.file ?? ''); renderAll(); return; }
     const ch = t.closest<HTMLElement>('[data-filter]');
-    if (ch) { s.filter = ch.dataset.filter as Filter; renderTable(); }
+    if (ch) { s.filter = ch.dataset.filter as Filter; if (s.mode !== 'table' && !ctx.visible().some(u => u.key === s.cur)) s.cur = ctx.visible()[0]?.key ?? null; renderAll(); return; }
+    const op = t.closest<HTMLElement>('[data-open]');
+    if (op) { ctx.select(op.dataset.open ?? '', 'edit'); return; }
+    if (s.mode !== 'table') { if (onEditorClick(ctx, t)) return; }
+    const row = t.closest<HTMLElement>('.row');
+    if (row && s.mode === 'table' && row.dataset.key !== s.cur) {
+      document.querySelector('.row.sel')?.classList.remove('sel');
+      row.classList.add('sel'); s.cur = row.dataset.key ?? null;
+    }
+  });
+
+  root.addEventListener('dblclick', e => {
+    const row = (e.target as HTMLElement).closest<HTMLElement>('.row');
+    if (row && !(e.target instanceof HTMLTextAreaElement) && s.mode === 'table') ctx.select(row.dataset.key ?? '', 'edit');
+  });
+
+  root.addEventListener('submit', e => {
+    e.preventDefault();
+    if (onEditorSubmit(ctx, e.target as HTMLFormElement)) (e.target as HTMLFormElement).reset();
   });
 
   root.addEventListener('input', e => {
     const t = e.target as HTMLElement;
     if (t instanceof HTMLTextAreaElement && t.dataset.key) {
-      const u = unitOf(t.dataset.key);
-      const v = view();
-      if (!u || !v) return;
-      const ents = entries(v.name);
-      ents[u.key] = edit(ents[u.key], u, t.value, s.stage, Date.now());
+      if (t.id === 'ed-tr') { onEditorInput(ctx, t); return; }
+      const u = ctx.unit(t.dataset.key);
+      if (!u || !s.current) return;
+      const ents = ctx.entries(s.current);
+      ents[u.key] = edit(ents[u.key], u, t.value, 'translate', Date.now());
+      s.cur = u.key;
       updateRow(t.closest<HTMLElement>('.row')!, u, ents[u.key]);
-      persist();
+      ctx.persist(); ctx.invalidateTm();
     } else if (t.id === 'q') {
       s.q = (t as HTMLInputElement).value;
       const pos = (t as HTMLInputElement).selectionStart ?? s.q.length;
-      renderTable();
+      renderMain();
       const q = $('#q') as HTMLInputElement;
-      q.focus();
-      q.setSelectionRange(pos, pos);
+      q.focus(); q.setSelectionRange(pos, pos);
     }
   });
 
   root.addEventListener('keydown', e => {
     const t = e.target as HTMLElement;
-    if (!(t instanceof HTMLTextAreaElement) || !t.dataset.key) return;
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      const u = unitOf(t.dataset.key);
-      const v = view();
-      if (!u || !v) return;
-      const ents = entries(v.name);
-      const r = submit(ents[u.key], u, s.stage, Date.now(), { blockErrors: true, qa: qaOpts() });
-      if (!r.ok) { toast(r.reason); return; }
-      ents[u.key] = r.entry;
-      updateRow(t.closest<HTMLElement>('.row')!, u, r.entry);
-      renderTree();
-      persist();
-      const next = t.closest('.row')?.nextElementSibling?.querySelector('textarea');
-      if (next instanceof HTMLTextAreaElement) next.focus();
-      toast(s.stage === 'translate' ? 'Надіслано на вичитування' : 'Вичитано');
-    }
+    if (!(t instanceof HTMLTextAreaElement) || !t.dataset.key || !(e.key === 'Enter' && (e.ctrlKey || e.metaKey))) return;
+    e.preventDefault();
+    if (t.id === 'ed-tr') { send(ctx); return; }
+    const u = ctx.unit(t.dataset.key);
+    if (!u || !s.current) return;
+    const ents = ctx.entries(s.current);
+    const r = submit(ents[u.key], u, 'translate', Date.now(), { blockErrors: true, qa: qaOpts() });
+    if (!r.ok) { toast(r.reason); return; }
+    ents[u.key] = note(r.entry, 'надіслано на вичитування', r.entry.target, s.who, Date.now());
+    updateRow(t.closest<HTMLElement>('.row')!, u, ents[u.key]);
+    renderTree(); ctx.persist(); ctx.invalidateTm();
+    const next = t.closest('.row')?.nextElementSibling?.querySelector('textarea');
+    if (next instanceof HTMLTextAreaElement) next.focus();
+    toast('Надіслано на вичитування');
+  });
+
+  // Document-level so the shortcut still works after a re-render dropped focus to <body>.
+  document.addEventListener('keydown', e => {
+    if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && s.mode !== 'table' && !document.querySelector('dialog[open]')) { e.preventDefault(); step(ctx, e.key === 'ArrowDown' ? 1 : -1); }
   });
 
   addEventListener('beforeunload', () => { void autosave.flush(); });

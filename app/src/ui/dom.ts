@@ -14,12 +14,13 @@ export const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: Parent
   return e;
 };
 
-/** Short non-blocking message at the bottom of the window. */
+/** Short non-blocking message at the bottom of the window; several stack instead of overlapping. */
 export function toast(text: string): void {
+  let host = document.getElementById('toasts');
+  if (!host) { host = el('div', 'toasts'); host.id = 'toasts'; host.setAttribute('role', 'status'); document.body.appendChild(host); }
   const t = el('div', 'toast');
-  t.setAttribute('role', 'status');
   t.textContent = text;
-  document.body.appendChild(t);
+  host.appendChild(t);
   setTimeout(() => t.remove(), 3500);
 }
 

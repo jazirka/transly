@@ -134,8 +134,8 @@ textarea.big:focus{outline:0}
 .dlg details[open]{gap:8px}
 
 /* phone: one column, panels become drawers */
-.phone-only{display:none}
-.btn.icon{width:36px;padding:0;display:grid;place-items:center}
+.phone-only{display:none!important}
+.btn.icon{width:36px;padding:0;place-items:center}
 .scrim{display:none}
 .ltabs{display:flex;gap:4px;padding:8px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);z-index:2}
 .ltabs button{height:32px;padding:0 14px;border:1px solid transparent;border-radius:var(--r2);background:none;color:var(--mute);text-transform:uppercase;letter-spacing:.04em;font-size:12px}
@@ -149,7 +149,7 @@ textarea.big:focus{outline:0}
 .sis{overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .sit{color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (max-width:760px){
-  .phone-only{display:inline-grid}
+  .phone-only{display:inline-grid!important}
   #app .top{height:48px;gap:6px;padding:0 8px}
   #app .brand,#app .logo,#app #open,#app #build,#app #save,#app .lbl-d{display:none}
   #app .ptitle{display:block;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}

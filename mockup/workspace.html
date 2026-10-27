@@ -459,6 +459,10 @@ td .term{color:#d9c3ee}
 .keys .kr{display:flex;align-items:center;gap:4px;padding:5px 14px;font-size:12.5px}
 .keys .kr span{flex:1;margin-right:8px}
 .keys kbd{font:11px var(--mono);border:1px solid #4a4d54;border-bottom-width:2px;border-radius:4px;padding:1px 6px;background:#393b40;color:var(--text)}
+.toast{position:fixed;left:50%;bottom:44px;transform:translateX(-50%);z-index:80;display:flex;align-items:center;gap:14px;background:#33363b;border:1px solid #4a4d54;border-radius:8px;padding:9px 12px 9px 16px;box-shadow:0 10px 30px rgba(0,0,0,.5);font-size:13px}
+.toast[hidden]{display:none}
+.toast button{border:0;background:none;color:#8fb2f7;font-weight:600;cursor:pointer;padding:2px 4px}
+.toast button:hover{color:#b6cdfa}
 </style>
 <div class="scroll-x"><div class="ide mode-table">
 
@@ -616,6 +620,7 @@ td .term{color:#d9c3ee}
 </section>
 </div>
 
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <div class="pop" id="tagpop" hidden></div>
 <div class="pop keys" id="keypop" hidden>
   <div class="kh">Гарячі клавіші</div>
@@ -625,6 +630,7 @@ td .term{color:#d9c3ee}
   <div class="kr"><span>Підтвердити й далі (на вичитці: затвердити)</span><kbd>Ctrl</kbd><kbd>Enter</kbd></div>
   <div class="kr"><span>Редагувати комірку в таблиці</span><kbd>2× клік</kbd></div>
   <div class="kr"><span>Вибрати діапазон рядків</span><kbd>Shift</kbd><kbd>клік</kbd></div>
+  <div class="kr"><span>Скасувати останню дію (поза полем)</span><kbd>Ctrl</kbd><kbd>Z</kbd></div>
   <div class="kr"><span>Знайти скрізь</span><kbd>⇧</kbd><kbd>⇧</kbd></div>
 </div>
 <div class="status">
@@ -665,6 +671,8 @@ const rows=[
  {k:'msg[17]',w:'Старий солдат',s:'Soul or no soul, the stairs are the same.',t:'Із душею чи без душі, а сходи ті самі.',st:'draft',g:[['t','Душа'],['l','Підвал']]}
 ];
 const gloss=[['Sylvian','Сильвіан','Божество'],['Rher','Рер','Божество'],['Dark','Темрява','Поняття'],['Soul','Душа','Механіка'],['Marina','Марина','Персонаж'],['Levi','Леві','Персонаж']];
+const STEM={Sylvian:/сильвіан/i,Rher:/рер/i,Dark:/темряв/i,Soul:/душ/i,Marina:/марин/i,Levi:/леві/i};
+const BAD={Dark:/Морок(?:у|ом|а|і)?/};
 const stName={new:'без перекладу',draft:'чернетка',done:'чекає вичитки',appr:'вичитано',qa:'є проблема'};
 const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
 function markup(s){
@@ -683,11 +691,23 @@ function qaAll(r){
   const o=[];if(!r.t)return o;
   if(r.t.length>LIMIT)o.push({sev:'bad',msg:`Перевищено довжину: ${r.t.length} / ${LIMIT} символів`});
   (r.s.match(/\\[A-Z]\[\d+\]/g)||[]).forEach(c=>{if(!r.t.includes(c))o.push({sev:'bad',msg:`Втрачено керівний код ${c}`})});
-  gloss.forEach(([e,u])=>{if(new RegExp('\\b'+e+'\\b').test(r.s)&&!r.t.toLowerCase().includes(u.toLowerCase().slice(0,u.length>5?u.length-2:u.length)))o.push({sev:'warn',msg:`Термін «${e}» має бути «${u}» за глосарієм`,fix:u})});
+  gloss.forEach(([e,u])=>{if(new RegExp('\\b'+e+'\\b').test(r.s)&&!STEM[e].test(r.t)){const m=BAD[e]&&r.t.match(BAD[e]);o.push({sev:'warn',msg:`Термін «${e}» має бути «${u}» за глосарієм`,term:e,fix:m?u:null,bad:m?m[0]:null})}});
   return o;
 }
 const qaIssues=r=>qaAll(r).filter(x=>!(r.ign||[]).includes(x.msg));
+const stLabel=r=>(r.returned&&r.st==='draft')?'повернено на доопрацювання':stName[effSt(r)];
 const effSt=r=>(r.t&&qaIssues(r).length&&r.st!=='new')?'qa':r.st;
+const FIELDS=['t','st','returned','orig','ign'];
+let lastUndo=null,toastTimer=null;
+function snap(idx){return {cur:cur,rows:idx.map(i=>({i,v:JSON.parse(JSON.stringify(FIELDS.map(f=>rows[i][f]===undefined?null:rows[i][f])))}))}}
+function undo(){if(!lastUndo)return;const u=lastUndo;lastUndo=null;u.rows.forEach(({i,v})=>FIELDS.forEach((f,k)=>{rows[i][f]=v[k]===null?undefined:v[k]}));cur=u.cur;renderAll();toast('Дію скасовано')}
+function toast(msg,canUndo){const t=$('toast');t.innerHTML='<span></span>'+(canUndo?'<button id="toast-undo">Скасувати</button>':'');t.firstChild.textContent=msg;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true},7000)}
+/* one place that decides how a string's status changes */
+function editText(r,val){r.t=val;if(!val){r.st='new';return}
+  if(stage==='tr'){if(r.st==='new'||r.st==='done'||r.st==='appr')r.st='draft'}else if(r.st==='new')r.st='draft'}
+function submitRow(r){if(!r.t)return 'Рядок порожній';
+  if(stage==='tr'){if(r.st==='done')return 'Рядок уже очікує вичитки';if(r.st==='appr')return 'Рядок уже вичитано';r.st='done';r.orig=r.t;r.returned=false;return ''}
+  if(r.st!=='done')return 'Рядок не очікує вичитки';r.st='appr';return ''}
 let cur=5, filter='all', sortKey=null, sortDir=1, tagFilter=null, mode='table', checked=new Set();
 rows.forEach((r,i)=>{r.i=i;r.orig=r.t});
 const $=id=>document.getElementById(id);
@@ -747,14 +767,14 @@ function renderList(){
 }
 function renderFocus(){
   const r=rows[cur];
-  $('f-state').innerHTML=`<span class="sd ${effSt(r)}"></span>${stName[effSt(r)]}`;
+  $('f-state').innerHTML=`<span class="sd ${effSt(r)}"></span>${stLabel(r)}`;
   $('f-key').textContent='Map042 › EV014 › '+r.k;
   $('f-src').innerHTML=markup(r.s);
-  const ta=$('i-tr');if(document.activeElement!==ta)ta.value=r.t;
+  const ta=$('i-tr');if(document.activeElement!==ta||ta.dataset.row!==String(cur)){ta.value=r.t;ta.dataset.row=cur}
   meter();
   $('f-qa').innerHTML=(()=>{if(!r.t)return '';const q=qaIssues(r),ig=qaAll(r).filter(x=>(r.ign||[]).includes(x.msg));
     let h=!q.length&&!ig.length?'<div class="qa-row good"><span class="dot"></span>QA: проблем не знайдено</div>':(!q.length?'<div class="qa-row good"><span class="dot"></span>QA: активних проблем немає</div>':'');
-    h+=q.map((x,n)=>`<div class="qa-row ${x.sev}"><span class="dot"></span><span>${x.msg}</span>${x.fix?`<button class="fix" data-fix="${n}">Замінити на «${x.fix}»</button>`:''}<button class="ign" data-ign="${n}" title="Не вважати проблемою для цього рядка">Ігнорувати</button></div>`).join('');
+    h+=q.map((x,n)=>`<div class="qa-row ${x.sev}"><span class="dot"></span><span>${x.msg}</span>${x.fix?`<button class="fix" data-fix="${n}">Замінити «${x.bad}» на «${x.fix}»</button>`:''}<button class="ign" data-ign="${n}" title="Не вважати проблемою для цього рядка">Ігнорувати</button></div>`).join('');
     h+=ig.map((x,n)=>`<div class="qa-row muted"><span class="dot"></span><span>${x.msg}</span><span class="tagi">ігноровано</span><button class="ign" data-unign="${n}">Повернути</button></div>`).join('');
     return h})();
   const pf=$('f-proof');pf.hidden=stage!=='proof';
@@ -806,6 +826,7 @@ function setMode(m){mode=m;stage=m==='proof'?'proof':'tr';
   renderAll();if(m!=='table')$('i-tr').focus();else document.querySelectorAll('.gr.sel').forEach(el=>el.scrollIntoView({block:'nearest'}))}
 
 document.addEventListener('click',e=>{
+  if(e.target.closest('#toast-undo')){return undo()}
   const ig=e.target.closest('[data-ign]');if(ig){const r=rows[cur],x=qaIssues(r)[+ig.dataset.ign];(r.ign=r.ign||[]).push(x.msg);return renderAll()}
   const un=e.target.closest('[data-unign]');if(un){const r=rows[cur],x=qaAll(r).filter(y=>(r.ign||[]).includes(y.msg))[+un.dataset.unign];r.ign=r.ign.filter(m=>m!==x.msg);return renderAll()}
   const mn=(btn,items)=>{const p=$('tagpop'),rc=btn.getBoundingClientRect();p.innerHTML=items.map(x=>`<button>${x}</button>`).join('');p.hidden=false;p.style.left=Math.max(8,Math.min(rc.left,innerWidth-258))+'px';p.style.top=(rc.bottom+4)+'px'};
@@ -816,7 +837,7 @@ document.addEventListener('click',e=>{
   const hkb=e.target.closest('#hk');if(hkb){const p=$('keypop'),rc=hkb.getBoundingClientRect();p.hidden=!p.hidden;p.style.left=Math.max(8,Math.min(rc.right-360,innerWidth-368))+'px';p.style.top=(rc.bottom+4)+'px';return}
   const tb=e.target.closest('#tagbtn,#tagbtn2');if(tb){const p=$('tagpop'),rc=tb.getBoundingClientRect();p.hidden=!p.hidden;p.style.left=Math.max(8,Math.min(rc.left,innerWidth-258))+'px';p.style.top=(rc.bottom+4)+'px';return}
   const fx=e.target.closest('[data-fix]');if(fx){const r=rows[cur],q=qaIssues(r)[+fx.dataset.fix];
-    const g=gloss.find(x=>x[1]===q.fix);r.t=r.t.replace(/(Морок|Мороку|Мороком)/,q.fix);r.t=r.t.includes(q.fix)?r.t:r.t+' ('+q.fix+')';return renderAll()}
+    lastUndo=snap([cur]);editText(r,r.t.replace(BAD[q.term],q.fix));renderAll();return toast('Замінено «'+q.bad+'» на «'+q.fix+'»',true)}
   const lb=e.target.closest('#strip [data-lp]');if(lb){lp=(lp===lb.dataset.lp)?null:lb.dataset.lp;return layout()}
   if(e.target.closest('#lp-close')){lp=null;return layout()}
   const tgr=e.target.closest('[data-tagrow]');if(tgr){$('tagpop').hidden=true;tagFilter=tagFilter===tgr.dataset.tagrow?null:tgr.dataset.tagrow;filter='all';return renderAll()}
@@ -840,18 +861,21 @@ $('grid').addEventListener('dblclick',e=>{
   const i=+c.parentElement.dataset.i;cur=i;
   const ta=document.createElement('textarea');ta.className='cell-ed';ta.rows=2;ta.value=rows[i].t;
   c.innerHTML='';c.appendChild(ta);ta.focus();
-  const done=()=>{rows[i].t=ta.value;rows[i].st=ta.value?(rows[i].st==='new'?'draft':rows[i].st):'new';renderAll()};
+  const done=()=>{if(ta.value!==rows[i].t){lastUndo=snap([i]);editText(rows[i],ta.value)}renderAll()};
   ta.addEventListener('blur',done);
   ta.addEventListener('keydown',ev=>{if(ev.key==='Enter'&&!ev.shiftKey){ev.preventDefault();ta.blur()}if(ev.key==='Escape'){ta.value=rows[i].t;ta.blur()}});
 });
 document.querySelectorAll('.qin').forEach(q=>q.addEventListener('input',e=>{document.querySelectorAll('.qin').forEach(x=>{if(x!==q)x.value=q.value});$('q').value=q.value;renderAll();q.focus()}));
-$('i-tr').addEventListener('input',e=>{const r=rows[cur];r.t=e.target.value;r.st=r.t?(r.st==='new'?'draft':r.st):'new';meter();renderTable();renderList();$('f-state').innerHTML=`<span class="sd ${effSt(r)}"></span>${stName[effSt(r)]}`});
-function advance(st){const r=rows[cur];if(!r.t)return;r.st=st;cur=Math.min(rows.length-1,cur+1);renderAll()}
-const primary=()=>advance(stage==='proof'?'appr':'done');
-$('b-copy').onclick=()=>{const r=rows[cur];r.t=r.s;r.st=r.st==='new'?'draft':r.st;renderAll();$('i-tr').focus()};
-$('b-clear').onclick=()=>{const r=rows[cur];r.t='';r.st='new';renderAll();$('i-tr').focus()};
-$('b-code').onclick=()=>{const t=$('i-tr'),p=t.selectionStart||t.value.length;t.value=t.value.slice(0,p)+'\\C[0]'+t.value.slice(p);t.dispatchEvent(new Event('input'));t.focus()};
-$('b-save').onclick=primary;$('b-return').onclick=()=>advance('draft');
+$('i-tr').addEventListener('input',e=>{const r=rows[cur];editText(r,e.target.value);meter();renderTable();renderList();$('f-state').innerHTML=`<span class="sd ${effSt(r)}"></span>${stLabel(r)}`});
+const nextRow=()=>{cur=Math.min(rows.length-1,cur+1)};
+const primary=()=>{const r=rows[cur],n=cur+1,u=snap([cur]),why=submitRow(r);
+  if(why){return toast(why)}
+  lastUndo=u;nextRow();renderAll();toast(stage==='proof'?'Рядок '+n+' вичитано':'Рядок '+n+' готовий до вичитки',true)};
+$('b-copy').onclick=()=>{const r=rows[cur];lastUndo=snap([cur]);editText(r,r.s);renderAll();$('i-tr').focus();toast('Оригінал скопійовано в переклад',true)};
+$('b-clear').onclick=()=>{const r=rows[cur];if(!r.t)return;lastUndo=snap([cur]);editText(r,'');renderAll();$('i-tr').focus();toast('Переклад очищено',true)};
+$('b-code').onclick=()=>{const t=$('i-tr'),p=t.selectionStart==null?t.value.length:t.selectionStart;t.value=t.value.slice(0,p)+'\\C[0]'+t.value.slice(p);t.dispatchEvent(new Event('input'));t.focus();t.setSelectionRange(p+5,p+5)};
+$('b-save').onclick=primary;
+$('b-return').onclick=()=>{const r=rows[cur],n=cur+1;if(r.st!=='done')return toast('Рядок не очікує вичитки');lastUndo=snap([cur]);r.st='draft';r.returned=true;nextRow();renderAll();toast('Рядок '+n+' повернено перекладачу',true)};
 $('f-prev').onclick=()=>select(cur-1);$('f-next').onclick=()=>select(cur+1);
 document.addEventListener('keydown',e=>{
   const inEd=e.target.matches('textarea,input');
@@ -859,9 +883,10 @@ document.addEventListener('keydown',e=>{
   else if(e.key==='Escape'&&mode!=='table'){setMode('table')}
   else if(!inEd&&e.key==='ArrowDown'){e.preventDefault();select(cur+1)}
   else if(!inEd&&e.key==='ArrowUp'){e.preventDefault();select(cur-1)}
-  else if(!inEd&&e.key==='Enter'&&mode==='table'){setMode('focus')}
+  else if(!inEd&&e.key==='Enter'&&mode==='table'&&!e.target.closest('button,a,[role=button]')){e.preventDefault();setMode('focus')}
+  else if(!inEd&&(e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();undo()}
 });
-document.querySelectorAll('[data-bb]').forEach(b=>b.addEventListener('click',()=>{checked.forEach(i=>{if(rows[i].t)rows[i].st=stage==='proof'?'appr':'done'});checked.clear();renderAll()}));
+document.querySelectorAll('[data-bb]').forEach(b=>b.addEventListener('click',()=>{const idx=[...checked];lastUndo=snap(idx);let ok=0,skip=0;idx.forEach(i=>{const why=submitRow(rows[i]);why?skip++:ok++});checked.clear();renderAll();toast('Змінено '+ok+', пропущено '+skip+(skip?' (порожні або вже відправлені)':''),ok>0)}));
 /* sidebar tabs */
 const stabs=$('stabs');stabs.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
   stabs.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));

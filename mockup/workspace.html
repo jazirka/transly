@@ -413,6 +413,20 @@ td .term{color:#d9c3ee}
 .saveb svg{width:20px;height:20px;stroke-width:1.4}
 .pop button{display:block;width:100%;text-align:left;border:0;background:none;padding:6px 14px;color:var(--text)}
 .pop button:hover{background:#393b40}
+/* ===== chrome glow from the project icon, floating rounded panels ===== */
+.ide{background:
+  radial-gradient(closest-side at var(--gx,105px) var(--gy,20px),rgba(181,137,214,.55),rgba(181,137,214,.22) 55%,rgba(181,137,214,0)) 0 0/900px 100% no-repeat,
+  radial-gradient(ellipse 230px 620px at 20px 40px,rgba(181,137,214,.32),rgba(181,137,214,0)) no-repeat,
+  #25272a}
+.topbar{background:none;border-bottom:0}
+.strip{background:none;border-right:0}
+.status{background:none;border-top:0}
+.main{gap:6px;padding:0 6px 6px 0}
+.tree,.editor{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.tree{background:rgba(36,38,41,.6);backdrop-filter:blur(2px)}
+.editor{background:var(--bg)}
+.ide.lp-closed .main{padding-left:0}
+.strip button.on::before{left:-2px}
 </style>
 <div class="scroll-x"><div class="ide mode-table">
 
@@ -809,4 +823,6 @@ const stabs=$('stabs');stabs.querySelectorAll('button').forEach(b=>b.addEventLis
   stabs.querySelectorAll('button').forEach(x=>$(x.dataset.p).classList.toggle('on',x===b));}));
 $('gtb').innerHTML=[['Sylvian','Сильвіан','Божество'],['Rher','Рер','Божество'],['Dark','Темрява','Поняття'],['Marina','Марина','Персонаж'],['Levi','Леві','Персонаж'],['Soul','Душа','Механіка'],['Gatekeeper','Вартовий брами','Титул'],['Cellar','Підвал','Локація']].map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td style="color:var(--mute)">${r[2]}</td></tr>`).join('');
 layout();renderAll();
+function posGlow(){const p=document.querySelector('.tpill .pj').getBoundingClientRect(),i=document.querySelector('.ide');const r=i.getBoundingClientRect();i.style.setProperty('--gx',(p.left+p.width/2-r.left)+'px');i.style.setProperty('--gy',(p.top+p.height/2-r.top)+'px')}
+posGlow();addEventListener('resize',posGlow);if(document.fonts)document.fonts.ready.then(posGlow);
 </script>

@@ -771,6 +771,7 @@ html{background:#121315}
 .ide.sz-s #lp-rows #bulk button{height:32px}
 .ide.sz-s #bb-rep,.ide.sz-s #bb-tm{display:none}
 .ide.sz-s #lp-rows #bulk .ghost{margin-left:auto}
+.dl-acts{display:flex;flex-direction:column;gap:6px}.dl-acts .btn{height:40px;text-align:left;padding:0 14px}
 .lphint{padding:6px 14px;color:var(--mute);font-size:11.5px}
 @media (prefers-reduced-motion:reduce){.ide.sz-s .fs{transition:none}}
 </style>
@@ -805,7 +806,7 @@ html{background:#121315}
     <div class="abt"><b id="ab-title">Map042.json</b><small id="ab-sub"></small></div>
     <button class="chip on" id="ab-stage" title="Змінити етап"></button>
     <button class="ab-ic sd-open" aria-label="Пошук скрізь"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg></button>
-    <button class="ab-ic" id="ab-more" data-popbtn aria-label="Ще"><svg viewBox="0 0 16 16"><circle cx="8" cy="3.5" r=".9" fill="currentColor"/><circle cx="8" cy="8" r=".9" fill="currentColor"/><circle cx="8" cy="12.5" r=".9" fill="currentColor"/></svg></button>
+    
   </header>
 
   <!-- main -->
@@ -1802,13 +1803,17 @@ setInterval(()=>{const sy=settings.sync;if(sy.every&&Date.now()-sy.last>sy.every
   document.addEventListener('click',e=>{const t=e.target;
     const nv=t.closest('#bnav [data-nav]');
     if(nv){const n=nv.dataset.nav;if(n==='settings'){openSettings()}else{sheet=false;setLp(n==='edit'?null:n)}return}
-    if(t.closest('[data-act=hints]')){sheet=true;layout();return}
+    const ma=t.closest('#dlg [data-ma]');if(ma){const k=ma.dataset.ma;closeDialog(true);
+      if(k==='hints'){sheet=true;layout()}else if(k==='qa'){setLp('rows');filter='qa';renderAll()}else if(k==='sync')openDeviceSync();return}
     if(t.closest('#scrim')){sheet=false;layout();return}
     if(t.closest('#ab-stage')){setMode(mode==='proof'?'focus':'proof');return}
     if(t.closest('.si')){if(suppress){suppress=false;return}if(checked.size){const i=+t.closest('.si').dataset.i;checked.has(i)?checked.delete(i):checked.add(i);renderAll();return}setLp(null);return}
     const df=t.closest('[data-file]');if(df&&FILES[df.dataset.file]){setLp('rows');return}
-    if(t.closest('#ab-more')){menu($('ab-more'),[{t:'Вказівки до рядка',act:'hints'},{t:'Показати проблеми QA',act:'qa'},{t:'Синхронізація пристроїв…',act:'devsync'},{t:'Скинути демо-дані',act:'reset'}]);return}
   });
+  /* everything from the old ⋮ menu lives in Settings on the phone */
+  const baseOS=openSettings;
+  openSettings=function(){baseOS();const d=document.createElement('div');d.className='dl-acts';
+    d.innerHTML='<button class="btn" data-ma="hints">Вказівки до рядка</button><button class="btn" data-ma="qa">Показати проблеми QA</button><button class="btn" data-ma="sync">Синхронізація пристроїв…</button>';$('dlg-b').prepend(d)};
   /* long press on a row starts multi-select; further taps toggle rows */
   let suppress=false,lpT=null,lpXY=null;
   const rowsPanel=$('lp-rows');rowsPanel.insertBefore($('bulk'),rowsPanel.querySelector('.fh').nextSibling);

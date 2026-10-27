@@ -324,10 +324,10 @@ td .term{color:#d9c3ee}
 .tico.j{background:#3b3524;color:#e5c06a}.tico.g{background:#35294a;color:#b589d6}
 
 /* ===== v3: tool-window bar, stage switch, QA under the string ===== */
-.main{grid-template-columns:30px 250px minmax(0,1fr)}
-.ide.lp-closed .main,.ide.mode-focus.lp-closed .main{grid-template-columns:30px minmax(0,1fr)}
+.main{grid-template-columns:40px 250px minmax(0,1fr)}
+.ide.lp-closed .main,.ide.mode-focus.lp-closed .main{grid-template-columns:40px minmax(0,1fr)}
 .ide.lp-closed .tree{display:none}
-.ide.mode-focus .main{grid-template-columns:30px 250px minmax(0,1fr)}
+.ide.mode-focus .main{grid-template-columns:40px 250px minmax(0,1fr)}
 .ide.mode-focus .tree{display:flex}
 .strip{width:30px;padding:6px 0;gap:6px;align-items:stretch}
 .strip button{width:30px;height:auto;padding:12px 0;border-radius:0;writing-mode:vertical-rl;transform:rotate(180deg);font-size:11.5px;letter-spacing:.02em;color:var(--mute)}
@@ -360,7 +360,7 @@ td .term{color:#d9c3ee}
 .proof .t{font-size:13px;color:#c8ccd3}
 .proof .chg{color:var(--warn);font-size:11px;margin-left:6px}
 .ide.mode-table.lp-closed .tree,.ide.mode-focus.lp-closed .tree{display:none}
-.ide.mode-table.lp-closed .main,.ide.mode-focus.lp-closed .main{grid-template-columns:30px minmax(0,1fr)}
+.ide.mode-table.lp-closed .main,.ide.mode-focus.lp-closed .main{grid-template-columns:40px minmax(0,1fr)}
 .toolbar *{white-space:nowrap}
 .toolbar{gap:6px}
 .search{width:230px;flex:none;min-width:0}
@@ -374,6 +374,10 @@ td .term{color:#d9c3ee}
 .pop{position:fixed;z-index:60;width:250px;max-height:60vh;overflow:auto;background:#2f3135;border:1px solid #4a4d54;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.5);padding:4px 0}
 .pop[hidden]{display:none}
 .slist .chipsHost{flex:1 1 100%;min-width:0}
+/* icon-only tool-window bar */
+.strip{width:40px;padding:6px 0;gap:4px;align-items:center}
+.strip button{width:30px;height:30px;padding:0;border-radius:6px;writing-mode:horizontal-tb;transform:none;display:grid;place-items:center}
+.strip button.on::before{content:"";position:absolute;left:-5px;right:auto;top:7px;bottom:7px;width:3px;height:auto;border-radius:2px;background:var(--accent)}
 </style>
 <div class="scroll-x"><div class="ide mode-table">
 
@@ -407,9 +411,9 @@ td .term{color:#d9c3ee}
   <!-- main -->
   <div class="main">
     <nav class="strip" id="strip" aria-label="Бічні панелі">
-      <button data-lp="files" class="on" title="Файли гри: дерево файлів проєкту"><span>Файли</span></button>
-      <button data-lp="tags" title="Теги: персонажі, локації, предмети"><span>Теги</span></button>
-      <button data-lp="gloss" title="Глосарій проєкту"><span>Глосарій</span></button>
+      <button data-lp="files" class="on" title="Файли гри"><svg viewBox="0 0 16 16"><path d="M2 4.5h4l1.2 1.5H14V12.5H2z"/></svg></button>
+      <button data-lp="tags" title="Теги: персонажі, локації, предмети"><svg viewBox="0 0 16 16"><path d="M2.5 8.5V3h5.5l6 6-5.5 5.5z"/><circle cx="5.5" cy="6" r=".8" fill="currentColor"/></svg></button>
+      <button data-lp="gloss" title="Глосарій проєкту"><svg viewBox="0 0 16 16"><path d="M3.5 2.5h8a1 1 0 0 1 1 1v10h-8a1 1 0 0 1-1-1zM5.5 5.5h5M5.5 8h5"/></svg></button>
     </nav>
 
     <aside class="tree" id="lpanel">

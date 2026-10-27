@@ -30,8 +30,15 @@ const isSystem = (name: string) => name === 'System.json';
 const SYSTEM_ARRAYS = ['elements', 'skillTypes', 'weaponTypes', 'armorTypes', 'equipTypes'] as const;
 const SYSTEM_TERMS = ['basic', 'commands', 'params'] as const;
 
+/** Strings with no letters (`\p[1]`, `...`, `---`) need no translation and only add noise. */
+const hasText = (source: string): boolean => /\p{L}/u.test(source.replace(/\\[A-Za-z]+\[\d+\]|\\[{}.|!><^$]/g, ''));
+
 /** Extract every translatable unit from one game file. Unknown files yield no units. */
 export function extract(file: GameFile): Unit[] {
+  return extractAll(file).filter(u => hasText(u.source));
+}
+
+function extractAll(file: GameFile): Unit[] {
   if (isMap(file.name)) return extractMap(file.json);
   if (isCommonEvents(file.name)) return extractCommon(file.json);
   if (isTroops(file.name)) return extractTroops(file.json);

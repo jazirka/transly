@@ -31,9 +31,11 @@ export interface ProjectSettings {
   blockErrors: boolean;
   /** Name shown in comments and history. */
   who: string;
+  /** Copy a sent/approved translation to identical strings that have none (or wait with the same text). */
+  propagate: boolean;
 }
 
-export const DEFAULT_SETTINGS: ProjectSettings = { tolerancePct: 25, blockErrors: true, who: 'Ви' };
+export const DEFAULT_SETTINGS: ProjectSettings = { tolerancePct: 25, blockErrors: true, who: 'Ви', propagate: true };
 
 export const emptyProject = (name: string, sourceLang = 'en', targetLang = 'uk'): SavedProject => ({
   version: 1, name, sourceLang, targetLang, resetEpoch: 0, files: {}, memory: [], terms: [], settings: { ...DEFAULT_SETTINGS },

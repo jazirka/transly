@@ -172,3 +172,6 @@ textarea.big:focus{outline:0}
 }
 @media (prefers-reduced-motion:reduce){.tree,.side{transition:none}}
 .dlg .acts.l{justify-content:flex-start}
+.gamebox{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r2);background:var(--bg)}
+.gamebox p{margin:0}
+.gamebox .acts{flex-wrap:wrap}

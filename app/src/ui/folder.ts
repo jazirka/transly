@@ -1,4 +1,5 @@
 import type { GameFile } from '../core';
+import { isDesktop, pickGameDirDesktop } from './desktop';
 
 /** A file chosen by the user, not read yet. */
 export interface PickedFile { name: string; path: string; read: () => Promise<string> }
@@ -12,6 +13,7 @@ type PickerWindow = Window & { showDirectoryPicker?: () => Promise<DirHandle> };
 export interface Picked { files: PickedFile[]; handle: DirHandle | null }
 
 export async function pickGameFolder(input: HTMLInputElement): Promise<Picked | null> {
+  if (isDesktop()) { const files = await pickGameDirDesktop(); return files ? { files, handle: null } : null; }
   const w = window as PickerWindow;
   if (w.showDirectoryPicker && !input.dataset.forceInput) {
     try {

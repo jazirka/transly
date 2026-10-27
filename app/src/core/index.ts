@@ -12,3 +12,4 @@ export * from './tm';
 export * from './glossary';
 export * from './crypto';
 export * from './sync';
+export * from './duplicates';

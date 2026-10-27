@@ -1,7 +1,8 @@
-import { Autosave, build, check, edit, emptyProject, note, readGame, reconcile, snapshotOf, sourceChanged, statsOf, submit, viewsFromSnapshot } from '../core';
+import { Autosave, DupIndex, build, check, edit, emptyProject, note, propagate, readGame, reconcile, snapshotOf, sourceChanged, statsOf, submit, viewsFromSnapshot } from '../core';
 import type { Entry, GameFile, SavedProject, Status, Unit } from '../core';
 import { $, el, esc, plural, toast } from './dom';
 import { STATUS_LABEL, onEditorClick, onEditorInput, onEditorSubmit, renderEditor, send, step } from './edit';
+import { applyToGame, dataDirOf, isDesktop, launchGame, pickExe, rememberedExe, rememberedGameDir, reopenGameDirDesktop, restoreGame } from './desktop';
 import { canWriteFolder, downloadZip, writeToFolder } from './export';
 import { pickGameFolder, readFiles, reopenHandle } from './folder';
 import type { DirHandle, PickedFile } from './folder';
@@ -27,10 +28,13 @@ export async function start(root: HTMLElement): Promise<void> {
   const fromSnapshot = viewsFromSnapshot(saved);
   if (fromSnapshot.length) { s.views = fromSnapshot; s.current = fromSnapshot[0]!.name; }
   let lastHandle: (DirHandle & { name: string }) | null = null;
+  let dataDir: string | null = null;
+  const desktopDir = isDesktop() ? rememberedGameDir() : null;
   try { lastHandle = (await loadHandle('default')) as typeof lastHandle; } catch { lastHandle = null; }
   const autosave = new Autosave(store, 400, ok => { s.saveOk = ok; renderSave(); });
   let tmCache: ReturnType<typeof buildTm> | null = null;
   let unitMap = new Map<string, Unit>();
+  let dupCache: { views: State['views']; idx: DupIndex } | null = null;
 
   const input = el('input');
   input.type = 'file'; input.hidden = true; input.id = 'folder-input';
@@ -59,6 +63,7 @@ export async function start(root: HTMLElement): Promise<void> {
     visible: () => { const v = ctx.view(); if (!v) return []; const ents = ctx.entries(v.name); return v.units.filter(u => matches(u, ents[u.key])); },
     tm: () => (tmCache ??= buildTm(s)),
     invalidateTm: () => { tmCache = null; },
+    dups: () => { if (!dupCache || dupCache.views !== s.views) dupCache = { views: s.views, idx: new DupIndex(s.views) }; return dupCache.idx; },
     persist: () => autosave.queue(s.saved),
     render: () => renderAll(),
     select: (key, mode) => {
@@ -139,7 +144,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!v) {
       box.innerHTML = s.views.length
         ? '<div class="empty"><h2>Оберіть файл</h2>Файл зліва відкриє його рядки.</div>'
-        : `<div class="empty"><h2>Відкрийте папку гри</h2>${s.phone ? 'На телефоні проєкт береться з комп’ютера: на ПК відкрийте «Налаштування → Обмін проєктом → Зберегти проєкт у файл», а тут імпортуйте цей файл у «Налаштування → Обмін проєктом».' : 'Оберіть папку <b>data</b> гри на RPG Maker (або саму папку гри). Ваш переклад зберігається в цьому браузері, файли гри не змінюються.'}${lastHandle ? `<p><button class="btn p" id="resume">Продовжити з папкою «${esc(lastHandle.name)}»</button></p>` : ''}</div>`;
+        : `<div class="empty"><h2>Відкрийте папку гри</h2>${s.phone ? 'На телефоні проєкт береться з комп’ютера: на ПК відкрийте «Налаштування → Обмін проєктом → Зберегти проєкт у файл», а тут імпортуйте цей файл у «Налаштування → Обмін проєктом».' : 'Оберіть папку <b>data</b> гри на RPG Maker (або саму папку гри). Ваш переклад зберігається в цьому браузері, файли гри не змінюються.'}${lastHandle || desktopDir ? `<p><button class="btn p" id="resume">Продовжити з папкою «${esc(lastHandle?.name ?? (desktopDir ?? '').split(/[\\/]/).filter(Boolean).pop() ?? '')}»</button></p>` : ''}</div>`;
       return;
     }
     const filters = `<div class="filters">${FILTERS.map(([f, l]) => `<button class="chip" data-filter="${f}" aria-pressed="${s.filter === f}">${l}</button>`).join('')}
@@ -204,6 +209,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const { files, failed } = await readFiles(picked, (d, t) => { $('#bar').style.width = `${(d / t) * 100}%`; $('#pct').textContent = `${d} з ${t}`; });
     const game: GameFile[] = files;
     s.game = game; s.views = readGame(game); tmCache = null;
+    dataDir = isDesktop() ? dataDirOf(picked) : null;
     s.saved.snapshot = snapshotOf(s.views);
     if (!s.views.length) { s.current = null; renderAll(); toast('У цих файлах немає тексту для перекладу'); return; }
     if (failed.length) toast(`Не вдалося прочитати файлів: ${failed.length}`);
@@ -224,14 +230,15 @@ export async function start(root: HTMLElement): Promise<void> {
   }
 
   async function resume(): Promise<void> {
-    if (!lastHandle) return;
-    const files = await reopenHandle(lastHandle);
+    if (!lastHandle && !desktopDir) return;
+    const files = desktopDir ? await reopenGameDirDesktop() : await reopenHandle(lastHandle!);
     if (!files) { toast('Немає доступу до папки: оберіть її знову'); return; }
     await loadFiles(files);
   }
 
   function openBuild(): void {
     if (!s.game.length) { toast('Для збірки відкрийте папку гри: вона потрібна лише тут'); return; }
+    const desk = isDesktop() && !!dataDir;
     const dlg = el('dialog', 'dlg');
     dlg.setAttribute('aria-labelledby', 'bd-t');
     dlg.innerHTML = `<form method="dialog"><h2 id="bd-t">Збірка</h2>
@@ -239,9 +246,12 @@ export async function start(root: HTMLElement): Promise<void> {
       <label class="chk"><input type="checkbox" id="bd-appr"> Лише вичитані рядки</label>
       <label class="chk"><input type="checkbox" id="bd-block" checked> Не брати рядки з помилкою QA</label>
       <p id="bd-sum" class="sum" role="status"></p>
+      ${desk ? `<div class="gamebox"><div class="sh">Перевірка в грі</div><p class="hint">Переклад записується прямо в папку даних гри (${esc(dataDir ?? '')}). Оригінали зберігаються поруч, у папці з суфіксом «.transly-orig», і повертаються кнопкою нижче.</p>
+        <p class="hint" id="bd-exe">${rememberedExe() ? 'Файл гри: ' + esc(rememberedExe() ?? '') : 'Файл гри ще не вибрано'}</p>
+        <div class="acts l"><button class="btn p" id="bd-play" type="button">Застосувати й запустити гру</button><button class="btn" id="bd-apply" type="button">Лише застосувати</button><button class="btn" id="bd-restore" type="button">Повернути оригінали</button><button class="btn" id="bd-pickexe" type="button">Обрати файл гри…</button></div></div>` : ''}
       <div class="acts"><button class="btn" value="cancel">Закрити</button>
-        ${canWriteFolder() ? '<button class="btn p" id="bd-dir" type="button">Зібрати в папку…</button>' : ''}
-        <button class="btn ${canWriteFolder() ? '' : 'p'}" id="bd-zip" type="button">Завантажити ZIP</button></div></form>`;
+        ${canWriteFolder() && !desk ? '<button class="btn p" id="bd-dir" type="button">Зібрати в папку…</button>' : ''}
+        <button class="btn ${canWriteFolder() && !desk ? '' : desk ? '' : 'p'}" id="bd-zip" type="button">Завантажити ZIP</button></div></form>`;
     document.body.appendChild(dlg);
     const run = () => build(s.game, s.views, s.saved, { onlyApproved: ($('#bd-appr', dlg) as HTMLInputElement).checked, blockErrors: ($('#bd-block', dlg) as HTMLInputElement).checked, qa: qaOpts() });
     const sum = () => {
@@ -249,7 +259,7 @@ export async function start(root: HTMLElement): Promise<void> {
       $('#bd-sum', dlg).textContent = r.included
         ? `У збірку потрапить ${plural(r.included, ['рядок', 'рядки', 'рядків'])} у ${plural(r.files.length, ['файлі', 'файлах', 'файлах'])}. Пропущено: ${r.skipped}${r.blocked.length ? ` (з них через помилки QA: ${r.blocked.length})` : ''}.`
         : 'У збірку поки нічого не потрапить: немає надісланих на вичитування чи вичитаних рядків.';
-      dlg.querySelectorAll<HTMLButtonElement>('#bd-dir,#bd-zip').forEach(b => { b.disabled = !r.included; });
+      dlg.querySelectorAll<HTMLButtonElement>('#bd-dir,#bd-zip,#bd-play,#bd-apply').forEach(b => { b.disabled = !r.included; });
     };
     dlg.addEventListener('change', sum);
     dlg.addEventListener('close', () => dlg.remove());
@@ -258,6 +268,13 @@ export async function start(root: HTMLElement): Promise<void> {
       try {
         if (t.id === 'bd-zip') { downloadZip(run()); toast('ZIP збережено'); dlg.close(); }
         else if (t.id === 'bd-dir') { if (await writeToFolder(run())) { toast('Збірку записано в папку'); dlg.close(); } }
+        else if (t.id === 'bd-apply' || t.id === 'bd-play') {
+          const n = await applyToGame(dataDir!, run().files);
+          toast(`Записано файлів у гру: ${n}`);
+          if (t.id === 'bd-play') { await launchGame(); toast('Гру запущено'); }
+          dlg.close();
+        } else if (t.id === 'bd-restore') { toast(`Повернуто оригінальних файлів: ${await restoreGame(dataDir!)}`); }
+        else if (t.id === 'bd-pickexe') { const e = await pickExe(); if (e) $('#bd-exe', dlg).textContent = 'Файл гри: ' + e; }
       } catch (err) { toast('Не вдалося записати: ' + (err instanceof Error ? err.message : String(err))); }
     });
     sum();
@@ -335,7 +352,9 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!r.ok) { toast(r.reason); return; }
     ents[u.key] = note(r.entry, 'надіслано на вичитування', r.entry.target, s.who, Date.now());
     updateRow(t.closest<HTMLElement>('.row')!, u, ents[u.key]);
+    const same = s.saved.settings.propagate ? propagate(s.saved, ctx.dups(), s.current, u, ents[u.key]!, 'translate', Date.now(), s.who) : 0;
     renderTree(); ctx.persist(); ctx.invalidateTm();
+    if (same) { toast(`Також підставлено в ${plural(same, ['однаковий рядок', 'однакові рядки', 'однакових рядків'])}`); renderMain(); }
     const next = t.closest('.row')?.nextElementSibling?.querySelector('textarea');
     if (next instanceof HTMLTextAreaElement) next.focus();
     toast('Надіслано на вичитування');

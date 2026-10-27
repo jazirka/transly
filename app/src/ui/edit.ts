@@ -1,4 +1,4 @@
-import { addComment, check, displayLength, edit as editFn, lengthDeviation, missingCodes, note, sendBack, sourceChanged, submit, termsIn } from '../core';
+import { addComment, check, propagate, displayLength, edit as editFn, lengthDeviation, missingCodes, note, sendBack, sourceChanged, submit, termsIn } from '../core';
 import type { Entry, Unit } from '../core';
 import { $, esc, plural, toast } from './dom';
 import type { Ctx, SideTab } from './state';
@@ -51,7 +51,7 @@ export function renderEditor(ctx: Ctx, box: HTMLElement): void {
       <button class="btn p" id="ed-send" title="Ctrl+Enter">${review ? 'Затвердити' : 'Надіслати на вичитування'}</button>
     </div>
     <div id="ed-qa"></div>
-    <div class="meta">Рядок ${n} · ${esc(u.kind)}</div></section>
+    <div class="meta">Рядок ${n} · ${esc(u.kind)}${ctx.dups().others(s.current!, u.key).length ? ` · однакових рядків у грі: ${ctx.dups().others(s.current!, u.key).length}` : ''}</div></section>
     <aside class="side" aria-label="Вказівки до рядка"><div class="stabs" role="tablist">${SIDE_TABS.map(([t, l]) => `<button role="tab" data-side="${t}" aria-selected="${s.sideTab === t}">${l}${t === 'comments' && e?.comments?.length ? ` <span class="badge">${e.comments.length}</span>` : ''}</button>`).join('')}</div>
       <div class="sbody" id="ed-side"></div></aside></div>`;
   refreshStatus(ctx, box, u);
@@ -201,8 +201,9 @@ export function send(ctx: Ctx): void {
   const r = submit(ents[u.key], u, stage, Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: ctx.qaOpts() });
   if (!r.ok) { toast(r.reason); return; }
   ents[u.key] = note(r.entry, stage === 'translate' ? 'надіслано на вичитування' : 'вичитано', r.entry.target, s.who, Date.now());
+  const same = s.saved.settings.propagate ? propagate(s.saved, ctx.dups(), s.current, u, ents[u.key]!, stage, Date.now(), s.who) : 0;
   ctx.persist(); ctx.invalidateTm();
-  toast(stage === 'translate' ? 'Надіслано на вичитування' : 'Вичитано');
+  toast((stage === 'translate' ? 'Надіслано на вичитування' : 'Вичитано') + (same ? `. Також у ${plural(same, ['однаковому рядку', 'однакових рядках', 'однакових рядках'])}` : ''));
   const list = ctx.visible();
   const i = list.findIndex(x => x.key === u.key);
   const next = list[i + 1] ?? list[i];

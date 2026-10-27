@@ -22,6 +22,7 @@ export function openSettings(ctx: Ctx, onReset: () => void, onImport: () => void
     <div class="grid"><label for="st-tol">Допуск довжини перекладу відносно оригіналу, %</label><input id="st-tol" type="number" min="5" max="100" step="5" value="${st.tolerancePct}">
       <label for="st-who">Ваше ім’я в коментарях та історії</label><input id="st-who" maxlength="40" value="${st.who}"></div>
     <label class="chk"><input type="checkbox" id="st-block" ${st.blockErrors ? 'checked' : ''}> Не надсилати рядок із помилкою QA</label>
+    <label class="chk"><input type="checkbox" id="st-prop" ${st.propagate ? 'checked' : ''}> Переносити переклад в однакові рядки (інші файли теж)</label>
     <p class="hint">Довжина не обмежується: застосунок лише попереджає, коли переклад дуже відрізняється від оригіналу.</p>
     <details><summary>Імпорт глосарію</summary><p class="hint">Рядки «англійською, табуляція, українською».</p><textarea id="st-terms" rows="5" aria-label="Терміни для імпорту"></textarea><button class="btn" type="button" id="st-terms-go">Імпортувати терміни</button></details>
     <details><summary>Імпорт пам’яті перекладів</summary><p class="hint">Рядки «оригінал, табуляція, переклад».</p><textarea id="st-tm" rows="5" aria-label="Пари для імпорту"></textarea><button class="btn" type="button" id="st-tm-go">Імпортувати пари</button></details>
@@ -40,6 +41,7 @@ export function openSettings(ctx: Ctx, onReset: () => void, onImport: () => void
     if (!(v >= 5 && v <= 100)) { e.preventDefault(); toast('Допуск має бути від 5 до 100'); return; }
     st.tolerancePct = v;
     st.blockErrors = ($('#st-block', dlg) as HTMLInputElement).checked;
+    st.propagate = ($('#st-prop', dlg) as HTMLInputElement).checked;
     st.who = ($('#st-who', dlg) as HTMLInputElement).value.trim() || DEFAULT_SETTINGS.who;
     ctx.s.who = st.who;
     ctx.persist(); ctx.render(); toast('Налаштування збережено');

@@ -1,4 +1,5 @@
 import { TmIndex } from '../core';
+import type { DupIndex } from '../core';
 import type { Autosave, Entry, FileView, GameFile, SavedProject, Unit } from '../core';
 
 export type Mode = 'table' | 'edit' | 'review';
@@ -35,6 +36,7 @@ export interface Ctx {
   visible(): Unit[];
   tm(): TmIndex;
   invalidateTm(): void;
+  dups(): DupIndex;
   persist(): void;
   render(): void;
   select(key: string, mode?: Mode): void;

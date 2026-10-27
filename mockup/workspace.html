@@ -655,6 +655,10 @@ td .term{color:#d9c3ee}
 .mi:hover,.mi.open,.mi:focus{background:#3a3170}
 .msep{height:1px;margin:5px 8px;background:#43454a}
 .topbar.menu-on .prog{min-width:0}.topbar.menu-on .prog span{display:none}
+/* tree header and editor tab row share one height and surface */
+.tree .ph{height:34px;background:var(--panel);border-bottom:1px solid var(--line)}
+.tree{background:var(--bg);backdrop-filter:none}
+.tree,.editor{border-radius:10px}
 </style>
 <div class="narrow" id="narrow" hidden><span>Вікно вужче за 1180 px: частину інтерфейсу доведеться прокручувати. Для телефона відкрийте мобільну версію.</span><button id="narrow-x" aria-label="Закрити повідомлення">✕</button></div>
 <div class="scroll-x"><div class="ide mode-table">

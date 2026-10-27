@@ -23,6 +23,12 @@ export interface Entry {
   status: Status;
   /** Last modification time (ms). Used for last-writer-wins merging per unit. */
   mt: number;
+  /** Source text this translation was written against; a mismatch means the original changed in the game. */
+  src?: string;
+  /** Translator's version at the moment it was sent to review (to show what the reviewer changed). */
+  orig?: string;
+  /** True when a reviewer sent the unit back to the translator. */
+  returned?: boolean;
 }
 
 export type Translations = Record<string, Entry>;

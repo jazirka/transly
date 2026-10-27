@@ -682,6 +682,18 @@ td .term{color:#d9c3ee}
 .chip,.tpill{border-radius:999px}
 .tpill{border-color:rgba(255,255,255,.16)}
 .chip.on{border:1px solid transparent}
+/* one capsule style for mode switch, project pills and file tabs */
+.seg button,.tpill,.tabs .tab{height:28px;border-radius:999px;border:0;box-sizing:border-box}
+.tpill{padding:0 12px;background:var(--hv);box-shadow:inset 0 0 0 1px rgba(255,255,255,.16)}
+.tpill:hover{background:rgba(255,255,255,.14)}
+.seg{border:0;background:var(--hv);border-radius:999px;padding:2px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.16)}
+.seg button{height:26px;padding:0 12px}
+.tabs{align-items:center;gap:4px;padding:0 6px}
+.tabs .tab{padding:0 4px 0 0;border-bottom:0;border-top-left-radius:999px;border-top-right-radius:999px}
+.tabs .tab:first-child{border-top-left-radius:999px}
+.tabs .tab .tb{height:28px;padding:0 6px 0 12px}
+.tabs .tab.on{background:var(--on-bg);box-shadow:inset 0 0 0 1px var(--on-ring);color:#fff}
+.tab .x{border-radius:50%}
 
 /* ===== mobile build: always the phone layout, in a phone-width frame on wide screens ===== */
 html{background:#121315}

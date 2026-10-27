@@ -252,9 +252,79 @@ td .term{color:#d9c3ee}
 ::-webkit-scrollbar-thumb{background:#43454a;border-radius:5px;border:2px solid transparent;background-clip:padding-box}
 ::-webkit-scrollbar-corner{background:transparent}
 @media (prefers-reduced-motion:no-preference){.gr,.chip,.tbtn,.node{transition:background .08s}}
-</style>
+/* ===== v2: two modes (table | focus), bottom panel moved into focus sidebar, tags ===== */
+.ide{grid-template-rows:auto auto 1fr auto}
+.main{grid-template-columns:40px 250px minmax(0,1fr)}
+.ide.mode-focus .main{grid-template-columns:40px minmax(0,1fr)}
+.ide.mode-focus .tree{display:none}
+.seg{margin-left:auto;display:flex;align-self:center;margin-right:8px;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--bg)}
+.seg button{height:24px;padding:0 12px;background:none;border:0;color:var(--mute);display:flex;align-items:center;gap:6px}
+.seg button:hover{color:var(--text)}
+.seg button.on{background:#393b40;color:var(--text)}
+.seg kbd{font:10px var(--mono);color:var(--dim)}
+.seg svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.5}
+.view{display:none;flex:1;min-height:0}
+.ide.mode-table #v-table{display:flex;flex-direction:column}
+.ide.mode-focus #v-focus{display:grid}
+#v-focus{grid-template-columns:310px minmax(0,1fr) 350px}
+.grid{--cols:34px 22px 118px 100px minmax(170px,.9fr) minmax(190px,1fr) minmax(130px,.5fr) 62px;min-width:900px}
+.gr .tags,.gr .tags{display:flex;flex-wrap:wrap;gap:3px;padding-top:5px}
+.tg{display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 6px;border-radius:9px;font-size:11px;white-space:nowrap;border:1px solid transparent;cursor:pointer;background:#2f3135;color:var(--text)}
+.tg::before{content:"";width:6px;height:6px;border-radius:2px;background:var(--tc)}
+.tg:hover{border-color:var(--tc)}
+.tg.c{--tc:var(--violet)}.tg.l{--tc:var(--ok)}.tg.i{--tc:var(--warn)}.tg.t{--tc:var(--info)}
+.chipsHost{display:flex;flex-wrap:wrap;gap:6px;flex:none}
+.si>div{min-width:0}
+.tg.lg{height:22px;padding:0 9px;font-size:12px;border-radius:11px}
+.tagf{display:inline-flex;align-items:center;gap:6px}
+.tagf .x{color:var(--mute);cursor:pointer}
+/* focus: string list */
+.slist{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.slist .fh{padding:8px;display:flex;flex-direction:column;gap:6px;border-bottom:1px solid var(--line)}
+.slist .fh .fin{width:auto}
+.slist .fh .chips2{display:flex;flex-wrap:wrap;gap:4px}
+.slist .chip{height:20px;padding:0 7px;font-size:11px}
+.sl-body{overflow:auto;flex:1}
+.si{display:grid;grid-template-columns:14px 1fr;gap:8px;padding:7px 10px;border-bottom:1px solid #2f3134;cursor:default}
+.si:hover{background:#34363a}
+.si.sel{background:var(--sel)}
+.si .sd{margin-top:5px}
+.si .a{display:flex;gap:8px;color:var(--mute);font-size:11px}
+.si .a b{font-weight:500;color:var(--violet)}
+.si .a span:last-child{margin-left:auto;font-family:var(--mono)}
+.si .s{color:#c8ccd3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
+.si .t{color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* focus: center */
+.fc{background:var(--bg);overflow:auto;min-height:0;min-width:0}
+.fc-in{max-width:760px;margin:0 auto;padding:16px 22px 28px;display:flex;flex-direction:column;gap:16px}
+.fhd{display:flex;align-items:center;gap:8px}
+.fhd .k{font:12px var(--mono);color:var(--mute)}
+.fhd .nav{margin-left:auto;display:flex;gap:4px}
+.fhd .nav button{width:26px;height:24px;border:1px solid var(--line);border-radius:4px;background:#2b2d30}
+.fhd .nav button:hover{background:#393b40}
+.st-pill{display:inline-flex;align-items:center;gap:6px;height:20px;padding:0 8px;border-radius:10px;border:1px solid var(--line);color:var(--mute);font-size:11px}
+.fc .srcbox{font-size:15px;padding:12px 14px}
+.fc textarea.tr-in{font-size:15px;min-height:120px;padding:12px 14px}
+.ctxrow{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:14px}
+/* focus: sidebar */
+.fs{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.fs .itabs{padding:0;overflow:hidden}
+.fs .itabs button{padding:0 8px;white-space:nowrap}
+.fs .ibody .pane{padding:12px}
+.gt{width:100%}
+.gt td{padding:5px 6px;white-space:normal}
+.gt tr.hl td{background:#2a2540}
+.qai{display:grid;grid-template-columns:12px 1fr;gap:8px;padding:8px 0;border-bottom:1px solid #2f3134;align-items:start}
+.qai .k{grid-column:2;font:11px var(--mono);color:var(--mute)}
+.qai .sev{margin-top:5px}
+.ln span{cursor:pointer}
+.ln span:hover{color:var(--text)}
+.src .term-hit,.tr .term-hit{display:inline}
 
-<div class="scroll-x"><div class="ide">
+.tico{width:14px;height:14px;border-radius:3px;display:grid;place-items:center;font:600 7px var(--mono);background:#233a2e;color:#7fd08a}
+.tico.j{background:#3b3524;color:#e5c06a}.tico.g{background:#35294a;color:#b589d6}
+</style>
+<div class="scroll-x"><div class="ide mode-table">
 
   <!-- menu -->
   <div class="menubar">
@@ -298,98 +368,111 @@ td .term{color:#d9c3ee}
     </aside>
 
     <section class="editor">
-      <div class="tabs">
-        <div class="tab"><span class="ic json" style="width:14px;height:14px;border-radius:3px;display:grid;place-items:center;font:600 7px var(--mono);background:#233a2e;color:#7fd08a">MAP</span>Map012.json<span class="x">✕</span></div>
-        <div class="tab on"><span style="width:14px;height:14px;border-radius:3px;display:grid;place-items:center;font:600 7px var(--mono);background:#233a2e;color:#7fd08a">MAP</span>Map042.json<span class="badge">3</span><span class="x">✕</span></div>
-        <div class="tab"><span style="width:14px;height:14px;border-radius:3px;display:grid;place-items:center;font:600 7px var(--mono);background:#3b3524;color:#e5c06a">{}</span>Items.json<span class="x">✕</span></div>
-        <div class="tab"><span style="width:14px;height:14px;border-radius:3px;display:grid;place-items:center;font:600 7px var(--mono);background:#35294a;color:#b589d6">Aa</span>Глосарій<span class="x">✕</span></div>
-      </div>
-      <div class="crumbs"><span>data</span>›<span>Map042.json</span>›<span>events</span>›<b>EV014 · Старий солдат</b>
-        <span class="r" id="pos">рядок 6 з 24</span></div>
-      <div class="filters">
-        <div class="fin"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg><input id="q" placeholder="Фільтр у цьому файлі" aria-label="Фільтр"></div>
-        <button class="chip on" data-f="all">Усі <span class="n">24</span></button>
-        <button class="chip" data-f="new">Без перекладу <span class="n" id="n-new"></span></button>
-        <button class="chip" data-f="draft">Чернетки <span class="n" id="n-draft"></span></button>
-        <button class="chip" data-f="qa">Проблеми <span class="n" id="n-qa"></span></button>
-        <button class="chip" data-f="cm">З коментарями <span class="n">3</span></button>
-        <div class="r"><span>Спікер ▾</span><span>Довжина ▾</span><span>Розмітка ▾</span></div>
-      </div>
-      <div class="bulk" id="bulk"><b id="bulkn">0</b> вибрано
-        <button data-b="appr">Підтвердити</button><button data-b="draft">Позначити чернеткою</button><button>Знайти й замінити…</button><button>Застосувати з ПП</button><button>Коментар…</button>
-      </div>
-      <div class="gridwrap"><div class="grid" id="grid"></div></div>
-    </section>
+  <div class="tabs">
+    <div class="tab"><span class="tico">MAP</span>Map012.json<span class="x">✕</span></div>
+    <div class="tab on"><span class="tico">MAP</span>Map042.json<span class="badge">3</span><span class="x">✕</span></div>
+    <div class="tab"><span class="tico j">{}</span>Items.json<span class="x">✕</span></div>
+    <div class="tab"><span class="tico g">Aa</span>Глосарій<span class="x">✕</span></div>
+    <div class="seg" id="seg" role="tablist" aria-label="Режим">
+      <button data-m="table" class="on"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM2.5 7h11M6.5 3.5v9"/></svg>Таблиця</button>
+      <button data-m="focus"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM6 3.5v9M6 8h7.5"/></svg>Редактор <kbd>Enter</kbd></button>
+    </div>
+  </div>
 
-    <aside class="insp">
-      <div class="itabs" id="itabs">
-        <button class="on" data-p="p-tr">Переклад</button>
-        <button data-p="p-cx">Контекст</button>
-        <button data-p="p-cm">Коментарі <span class="cnt">2</span></button>
-        <button data-p="p-hi">Історія</button>
+  <!-- ========== TABLE MODE ========== -->
+  <div class="view" id="v-table">
+    <div class="crumbs"><span>data</span>›<span>Map042.json</span>›<span>events</span>›<b>EV014 · Старий солдат</b><span class="r" id="pos"></span></div>
+    <div class="filters">
+      <div class="fin"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg><input class="qin" id="q" placeholder="Фільтр у цьому файлі" aria-label="Фільтр"></div>
+      <span class="chipsHost" data-big="1"></span>
+      <span id="tagfilter"></span>
+      <div class="r"><span>Спікер ▾</span><span>Теги ▾</span><span>Довжина ▾</span><span>Колонки ▾</span></div>
+    </div>
+    <div class="bulk" id="bulk"><b id="bulkn">0</b> вибрано
+      <button data-bb="appr">Підтвердити</button><button data-bb="draft">Позначити чернеткою</button><button>Додати тег…</button><button>Знайти й замінити…</button><button>Застосувати з ПП</button>
+    </div>
+    <div class="gridwrap"><div class="grid" id="grid"></div></div>
+  </div>
+
+  <!-- ========== FOCUS MODE ========== -->
+  <div class="view" id="v-focus">
+    <div class="slist">
+      <div class="fh">
+        <div class="fin"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg><input class="qin" id="q2" placeholder="Пошук рядків" aria-label="Пошук"></div>
+        <div class="chips2 chipsHost"></div>
+        <span id="tagfilter2"></span>
+      </div>
+      <div class="sl-body" id="slist"></div>
+    </div>
+
+    <div class="fc"><div class="fc-in">
+      <div class="fhd">
+        <span class="st-pill" id="f-state"></span>
+        <span class="k" id="f-key"></span>
+        <div class="nav"><button id="f-prev" title="Попередній (↑)">↑</button><button id="f-next" title="Наступний (↓)">↓</button><button id="f-back" title="До таблиці (Esc)" style="width:auto;padding:0 9px">До таблиці</button></div>
+      </div>
+      <div>
+        <div class="lbl">Оригінал · EN <span class="r" id="f-spk"></span></div>
+        <div class="srcbox" id="f-src"></div>
+      </div>
+      <div>
+        <div class="lbl">Переклад · UK <span class="r" id="i-len"></span></div>
+        <textarea class="tr-in" id="i-tr" spellcheck="false" aria-label="Переклад"></textarea>
+        <div class="meter" id="i-meter"><i></i></div>
+        <div class="actions">
+          <button class="btn p" id="b-save">Підтвердити <kbd>⌃↵</kbd></button>
+          <button class="btn" id="b-draft">Чернетка <kbd>⌥↵</kbd></button>
+          <button class="btn" id="b-skip">Пропустити <kbd>↓</kbd></button>
+          <button class="btn" style="margin-left:auto">Копіювати оригінал</button>
+        </div>
+      </div>
+      <div>
+        <div class="lbl">Теги · про що цей рядок <span class="r">＋ додати</span></div>
+        <div class="chips" id="f-tags"></div>
+      </div>
+      <div class="ctxrow">
+        <div>
+          <div class="lbl">У грі</div>
+          <div class="stage"><div class="hero" style="left:36%;top:40px;background:#8a7a5c"></div><div class="hero" style="left:48%;top:56px"></div>
+            <div class="msg"><span class="nm" id="c-who"></span><div class="face"></div><span id="c-txt"></span></div></div>
+        </div>
+        <div>
+          <div class="lbl">Сусідні рядки</div>
+          <div class="ctx" id="c-near"></div>
+        </div>
+      </div>
+    </div></div>
+
+    <aside class="fs">
+      <div class="itabs" id="stabs">
+        <button class="on" data-p="s-tm">Підказки</button>
+        <button data-p="s-gl">Глосарій</button>
+        <button data-p="s-cm">Коментарі <span class="cnt">2</span></button>
+        <button data-p="s-qa">QA <span class="cnt" style="background:#5a2a31;color:#ffb3bb">3</span></button>
+        <button data-p="s-hi">Історія</button>
       </div>
       <div class="ibody">
-        <div class="pane on" id="p-tr">
-          <div>
-            <div class="lbl">Оригінал · EN <span class="r" id="i-key"></span></div>
-            <div class="srcbox" id="i-src"></div>
-            <div class="srcmeta" id="i-meta"></div>
-          </div>
-          <div>
-            <div class="lbl">Переклад · UK <span class="r" id="i-len"></span></div>
-            <textarea class="tr-in" id="i-tr" spellcheck="false" aria-label="Переклад"></textarea>
-            <div class="meter" id="i-meter"><i></i></div>
-            <div class="actions">
-              <button class="btn p" id="b-save">Підтвердити <kbd>⌃↵</kbd></button>
-              <button class="btn" id="b-draft">Чернетка <kbd>⌥↵</kbd></button>
-              <button class="btn" id="b-skip">Далі <kbd>↓</kbd></button>
-              <span style="margin-left:auto;color:var(--mute);font-size:11px" id="i-state"></span>
-            </div>
-          </div>
-          <div>
-            <div class="lbl">Глосарій у цьому рядку</div>
-            <div id="i-gl"></div>
-          </div>
-          <div>
-            <div class="lbl">Пам'ять перекладів <span class="r">3 збіги</span></div>
-            <div class="sug" id="i-tm"></div>
-          </div>
+        <div class="pane on" id="s-tm">
+          <div><div class="lbl">Глосарій у рядку</div><div id="i-gl"></div></div>
+          <div><div class="lbl">Пам'ять перекладів <span class="r">3 збіги</span></div><div id="i-tm"></div></div>
         </div>
-
-        <div class="pane" id="p-cx">
-          <div>
-            <div class="lbl">Як це виглядає в грі</div>
-            <div class="stage"><div class="hero" style="left:36%;top:40px;background:#8a7a5c"></div><div class="hero" style="left:48%;top:56px"></div>
-              <div class="msg"><span class="nm" id="c-who">Старий солдат</span><div class="face"></div><span id="c-txt"></span></div></div>
-          </div>
-          <div>
-            <div class="lbl">Сусідні рядки</div>
-            <div class="ctx" id="c-near"></div>
-          </div>
-          <div>
-            <div class="lbl">Подія</div>
-            <dl class="kv">
-              <dt>Файл</dt><dd>Map042.json</dd>
-              <dt>Подія</dt><dd>EV014 · сторінка 1</dd>
-              <dt>Умова</dt><dd>Switch 031 = ON</dd>
-              <dt>Вікно</dt><dd>4 рядки × 52 символи</dd>
-              <dt>Обличчя</dt><dd>Actor3 [2]</dd>
-            </dl>
-          </div>
-          <div>
-            <div class="lbl">Пов'язані сутності</div>
-            <div class="chips" id="c-ents"></div>
-          </div>
+        <div class="pane" id="s-gl">
+          <div class="fin" style="width:auto"><input placeholder="Пошук у глосарії" aria-label="Пошук у глосарії"></div>
+          <table class="gt"><thead><tr><th>EN</th><th>UK</th><th>Тип</th></tr></thead><tbody id="gtb"></tbody></table>
+          <button class="btn">＋ Додати термін</button>
         </div>
-
-        <div class="pane" id="p-cm">
+        <div class="pane" id="s-cm">
           <div class="cm"><div class="av" style="background:#e5a04b">О</div><div><div class="h"><b>Олена</b>вчора, 21:14</div><p>«Dark remembers» — тут про Рера чи просто метафора? Від цього залежить рід.</p></div></div>
           <div class="cm"><div class="av" style="background:#56a8f5">М</div><div><div class="h"><b>Максим</b>сьогодні, 09:02</div><p>Просто метафора, бог не згадується. Лишаємо «пам'ятає обличчя».</p></div></div>
-          <textarea class="cmin" placeholder="Написати коментар… @ — згадати, # — прив'язати сутність"></textarea>
+          <textarea class="cmin" placeholder="Написати коментар… @ — згадати"></textarea>
           <div class="actions" style="margin-top:0"><button class="btn">Коментувати</button><button class="btn">Запитати уточнення</button></div>
         </div>
-
-        <div class="pane" id="p-hi">
+        <div class="pane" id="s-qa">
+          <div><div class="qai"><span class="sev" style="background:var(--bad)"></span><span>Перевищено довжину: 126 / 120 символів</span><span class="k">msg[5]</span></div>
+          <div class="qai"><span class="sev" style="background:var(--bad)"></span><span>Втрачено керівний код <span class="code">\C[2]</span> у перекладі</span><span class="k">msg[9]</span></div>
+          <div class="qai"><span class="sev" style="background:var(--warn)"></span><span>«Dark» перекладено як «Морок», у глосарії — «Темрява»</span><span class="k">msg[6]</span></div></div>
+        </div>
+        <div class="pane" id="s-hi">
           <div class="hist">
             <div><div class="h"><b>Ви</b> · чернетка · 2 хв тому</div><div class="t">Не повинно тебе тут бути, малий. Темрява пам'ятає обличчя.</div></div>
             <div><div class="h"><b>Максим</b> · правка · вчора</div><div class="t">Тобі тут не місце, хлопче. Темрява запам'ятовує обличчя.</div></div>
@@ -399,220 +482,191 @@ td .term{color:#d9c3ee}
       </div>
     </aside>
   </div>
+</section>
+</div>
 
-  <!-- bottom -->
-  <div class="bottom" id="bottom">
-    <div class="btabs" id="btabs">
-      <button class="on" data-b="b-gl">Глосарій <span class="cnt">184</span></button>
-      <button data-b="b-en">Сутності <span class="cnt">5</span></button>
-      <button data-b="b-qa">Проблеми QA <span class="cnt bad">3</span></button>
-      <button data-b="b-fr">Знайти в проєкті</button>
-      <div class="r"><span style="font-size:11px">Для EV014</span><button id="bmin" title="Згорнути">—</button></div>
-    </div>
-    <div class="bbody">
-      <div class="bp on" id="b-gl">
-        <table><thead><tr><th>Термін (EN)</th><th>Переклад (UK)</th><th>Тип</th><th>Примітка</th><th>Використань</th><th>У файлі</th></tr></thead>
-        <tbody>
-          <tr class="hl"><td class="term">Sylvian</td><td>Сильвіан</td><td>Божество</td><td>Не відмінювати в назвах храмів</td><td class="m">212</td><td class="m">2</td></tr>
-          <tr class="hl"><td class="term">Rher</td><td>Рер</td><td>Божество</td><td>—</td><td class="m">147</td><td class="m">1</td></tr>
-          <tr class="hl"><td class="term">Dark</td><td>Темрява</td><td>Поняття</td><td>З великої, коли про сутність</td><td class="m">96</td><td class="m">3</td></tr>
-          <tr><td class="term">Marina</td><td>Марина</td><td>Персонаж</td><td>Жін. рід</td><td class="m">1 031</td><td class="m">0</td></tr>
-          <tr><td class="term">Levi</td><td>Леві</td><td>Персонаж</td><td>Не відмінюється</td><td class="m">864</td><td class="m">0</td></tr>
-          <tr><td class="term">Soul</td><td>Душа</td><td>Механіка</td><td>Не плутати з «дух»</td><td class="m">58</td><td class="m">0</td></tr>
-        </tbody></table>
-      </div>
-      <div class="bp" id="b-en">
-        <div class="ents">
-          <div class="ecard"><div class="k"><span>NPC</span><span>Actors.json #14</span></div><b>Старий солдат</b><div class="d">Зустрічається у 3 локаціях · 41 рядок</div></div>
-          <div class="ecard"><div class="k"><span>Локація</span><span>MapInfos #42</span></div><b>Зал вартових</b><div class="d">Map042.json · 24 рядки</div></div>
-          <div class="ecard"><div class="k"><span>Предмет</span><span>Items.json #88</span></div><b>Іржавий ключ</b><div class="d">Згадується в цьому діалозі</div></div>
-          <div class="ecard"><div class="k"><span>Квест / прапорець</span><span>Switch 031</span></div><b>Старий пустив у підвал</b><div class="d">Умова сторінки 1</div></div>
-        </div>
-      </div>
-      <div class="bp" id="b-qa">
-        <div class="qai"><span class="sev" style="background:var(--bad)"></span><span>Перевищено довжину: 126 / 120 символів</span><span class="k">EV014.p0.msg[5]</span></div>
-        <div class="qai"><span class="sev" style="background:var(--bad)"></span><span>Втрачено керівний код <span class="code">\C[2]</span> у перекладі</span><span class="k">EV014.p0.msg[9]</span></div>
-        <div class="qai"><span class="sev" style="background:var(--warn)"></span><span>Термін «Dark» перекладено як «Морок», у глосарії — «Темрява»</span><span class="k">EV014.p0.msg[6]</span></div>
-      </div>
-      <div class="bp" id="b-fr">
-        <div class="qai"><span class="sev" style="background:var(--info)"></span><span style="color:var(--mute)">Введіть запит у «Знайти скрізь» — шукає в оригіналах, перекладах, ключах і сутностях з регулярними виразами.</span><span class="k">⇧⇧</span></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- status -->
-  <div class="status">
-    <span class="ok">● Автозбереження: 14:32</span>
-    <span>RPG Maker MV · UTF-8 · LF</span>
-    <span class="bad">3 проблеми</span>
-    <span id="st-sel">Рядок 6</span>
-    <div class="r"><span>Файл: 12 / 24 підтверджено</span><span>Сесія: +87 рядків · 1 год 24 хв</span><span>Максим · онлайн 3</span></div>
-  </div>
+<div class="status">
+  <span class="ok">● Автозбереження: 14:32</span>
+  <span>RPG Maker MV · UTF-8 · LF</span>
+  <span class="bad">3 проблеми</span>
+  <span id="st-sel"></span>
+  <div class="r"><span>Файл: 12 / 24 підтверджено</span><span>Сесія: +87 рядків · 1 год 24 хв</span><span>Максим · онлайн 3</span></div>
+</div>
 </div></div>
 
 <script>
+const T={c:'Персонаж',l:'Локація',i:'Предмет',t:'Поняття'};
 const rows=[
- {k:'msg[0]',w:'Оповідач',s:'The hall is silent. Dust drifts through a single shaft of light.',t:'У залі тихо. Пил кружляє в єдиному промені світла.',st:'appr'},
- {k:'msg[1]',w:'Оповідач',s:'Something shifts in the dark beyond the pillars.',t:'За колонами в темряві щось ворухнулось.',st:'appr'},
- {k:'msg[2]',w:'Марина',s:'Hello? Is someone there?',t:'Агов? Тут хтось є?',st:'appr'},
- {k:'msg[3]',w:'Старий солдат',s:'Keep your voice down, girl.',t:'Тихіше, дівчино.',st:'appr'},
- {k:'msg[4]',w:'Старий солдат',s:'Not many walk in through the front anymore.',t:'Тепер мало хто заходить через головні двері.',st:'done'},
- {k:'msg[5]',w:'Старий солдат',s:'You shouldn\'t be here, kid. The Dark remembers faces.',t:'Не повинно тебе тут бути, малий. Темрява пам\'ятає обличчя.',st:'draft',cm:1},
- {k:'msg[6]',w:'Старий солдат',s:'Sylvian\'s gate has been shut for three winters, and nobody who goes down comes back up the same.',t:'Браму Сильвіана зачинено вже три зими, і ніхто, хто спускається вниз, не повертається таким самим, яким був раніше.',st:'qa',cm:1},
- {k:'msg[7]',w:'Марина',s:'I have to find my brother.',t:'Мені треба знайти брата.',st:'done'},
- {k:'msg[8]',w:'Старий солдат',s:'...Then take this. It\'s rusted, but it still turns.',t:'',st:'new'},
- {k:'msg[9]',w:'Старий солдат',s:'\\C[2]Rusty Key\\C[0] obtained.',t:'Отримано Іржавий ключ.',st:'qa'},
- {k:'choice[0]',w:'Вибір',s:'Go down to the cellar',t:'Спуститися в підвал',st:'done'},
- {k:'choice[1]',w:'Вибір',s:'Ask about Rher',t:'',st:'new',cm:1},
- {k:'choice[2]',w:'Вибір',s:'Leave quietly',t:'Тихо піти',st:'appr'},
- {k:'msg[10]',w:'Старий солдат',s:'Rher doesn\'t care for questions. Only for debts.',t:'',st:'new'},
- {k:'msg[11]',w:'Старий солдат',s:'Everyone pays eventually. Even the gods keep ledgers.',t:'Рано чи пізно платять усі. Навіть боги ведуть облікові книги.',st:'draft'},
- {k:'msg[12]',w:'Марина',s:'Then I\'ll pay what I owe.',t:'Що винна — те й віддам.',st:'draft'},
- {k:'msg[13]',w:'Оповідач',s:'The soldier turns away, as if the conversation never happened.',t:'',st:'new'},
- {k:'msg[14]',w:'Оповідач',s:'A cold draft climbs the cellar stairs.',t:'Східцями з підвалу піднімається холодний протяг.',st:'appr'},
- {k:'msg[15]',w:'Марина',s:'Levi... I hope you\'re still alive.',t:'Леві... Сподіваюсь, ти ще живий.',st:'appr'},
- {k:'name',w:'Система',s:'Old Soldier',t:'Старий солдат',st:'appr'},
- {k:'nickname',w:'Система',s:'Gatekeeper',t:'Вартовий брами',st:'done'},
- {k:'desc',w:'Система',s:'A veteran who refuses to leave his post.',t:'',st:'new'},
- {k:'msg[16]',w:'Старий солдат',s:'Don\'t come back up if you hear singing.',t:'',st:'new'},
- {k:'msg[17]',w:'Старий солдат',s:'Soul or no soul, the stairs are the same.',t:'Із душею чи без душі, а сходи ті самі.',st:'draft'}
+ {k:'msg[0]',w:'Оповідач',s:'The hall is silent. Dust drifts through a single shaft of light.',t:'У залі тихо. Пил кружляє в єдиному промені світла.',st:'appr',g:[['l','Зал вартових']]},
+ {k:'msg[1]',w:'Оповідач',s:'Something shifts in the dark beyond the pillars.',t:'За колонами в темряві щось ворухнулось.',st:'appr',g:[['l','Зал вартових']]},
+ {k:'msg[2]',w:'Марина',s:'Hello? Is someone there?',t:'Агов? Тут хтось є?',st:'appr',g:[]},
+ {k:'msg[3]',w:'Старий солдат',s:'Keep your voice down, girl.',t:'Тихіше, дівчино.',st:'appr',g:[]},
+ {k:'msg[4]',w:'Старий солдат',s:'Not many walk in through the front anymore.',t:'Тепер мало хто заходить через головні двері.',st:'done',g:[['l','Зал вартових']]},
+ {k:'msg[5]',w:'Старий солдат',s:'You shouldn\'t be here, kid. The Dark remembers faces.',t:'Не повинно тебе тут бути, малий. Темрява пам\'ятає обличчя.',st:'draft',cm:1,g:[['t','Темрява']]},
+ {k:'msg[6]',w:'Старий солдат',s:'Sylvian\'s gate has been shut for three winters, and nobody who goes down comes back up the same.',t:'Браму Сильвіана зачинено вже три зими, і ніхто, хто спускається вниз, не повертається таким самим, яким був раніше.',st:'qa',cm:1,g:[['c','Сильвіан'],['l','Брама Сильвіана']]},
+ {k:'msg[7]',w:'Марина',s:'I have to find my brother.',t:'Мені треба знайти брата.',st:'done',g:[['c','Леві']]},
+ {k:'msg[8]',w:'Старий солдат',s:'...Then take this. It\'s rusted, but it still turns.',t:'',st:'new',g:[['i','Іржавий ключ']]},
+ {k:'msg[9]',w:'Старий солдат',s:'\\C[2]Rusty Key\\C[0] obtained.',t:'Отримано Іржавий ключ.',st:'qa',g:[['i','Іржавий ключ']]},
+ {k:'choice[0]',w:'Вибір',s:'Go down to the cellar',t:'Спуститися в підвал',st:'done',g:[['l','Підвал']]},
+ {k:'choice[1]',w:'Вибір',s:'Ask about Rher',t:'',st:'new',cm:1,g:[['c','Рер']]},
+ {k:'choice[2]',w:'Вибір',s:'Leave quietly',t:'Тихо піти',st:'appr',g:[]},
+ {k:'msg[10]',w:'Старий солдат',s:'Rher doesn\'t care for questions. Only for debts.',t:'',st:'new',g:[['c','Рер']]},
+ {k:'msg[11]',w:'Старий солдат',s:'Everyone pays eventually. Even the gods keep ledgers.',t:'Рано чи пізно платять усі. Навіть боги ведуть облікові книги.',st:'draft',g:[]},
+ {k:'msg[12]',w:'Марина',s:'Then I\'ll pay what I owe.',t:'Що винна — те й віддам.',st:'draft',g:[]},
+ {k:'msg[13]',w:'Оповідач',s:'The soldier turns away, as if the conversation never happened.',t:'',st:'new',g:[['c','Старий солдат']]},
+ {k:'msg[14]',w:'Оповідач',s:'A cold draft climbs the cellar stairs.',t:'Східцями з підвалу піднімається холодний протяг.',st:'appr',g:[['l','Підвал']]},
+ {k:'msg[15]',w:'Марина',s:'Levi... I hope you\'re still alive.',t:'Леві... Сподіваюсь, ти ще живий.',st:'appr',g:[['c','Леві']]},
+ {k:'name',w:'Система',s:'Old Soldier',t:'Старий солдат',st:'appr',g:[['c','Старий солдат']]},
+ {k:'nickname',w:'Система',s:'Gatekeeper',t:'Вартовий брами',st:'done',g:[['c','Старий солдат']]},
+ {k:'desc',w:'Система',s:'A veteran who refuses to leave his post.',t:'',st:'new',g:[['c','Старий солдат']]},
+ {k:'msg[16]',w:'Старий солдат',s:'Don\'t come back up if you hear singing.',t:'',st:'new',g:[['l','Підвал']]},
+ {k:'msg[17]',w:'Старий солдат',s:'Soul or no soul, the stairs are the same.',t:'Із душею чи без душі, а сходи ті самі.',st:'draft',g:[['t','Душа'],['l','Підвал']]}
 ];
 const gloss=[['Sylvian','Сильвіан','Божество'],['Rher','Рер','Божество'],['Dark','Темрява','Поняття'],['Soul','Душа','Механіка'],['Marina','Марина','Персонаж'],['Levi','Леві','Персонаж']];
 const stName={new:'без перекладу',draft:'чернетка',done:'перекладено',appr:'підтверджено',qa:'є проблема'};
 const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
 function markup(s){
-  const terms=gloss.map(g=>g[0]).join('|');
-  const re=new RegExp('(\\\\[A-Z]\\[\\d+\\])|\\b('+terms+')\\b','g');
+  const re=new RegExp('(\\\\[A-Z]\\[\\d+\\])|\\b('+gloss.map(g=>g[0]).join('|')+')\\b','g');
   return esc(s).replace(re,(m,code,term)=>{
     if(code)return '<span class="code">'+m+'</span>';
     const g=gloss.find(x=>x[0]===term);
     return '<span class="term-hit" title="'+g[2]+': '+g[0]+' → '+g[1]+'">'+m+'</span>';
   });
 }
+const tagH=(g,lg)=>`<span class="tg ${g[0]} ${lg?'lg':''}" data-tag="${g[1]}" title="${T[g[0]]} · фільтрувати за тегом">${g[1]}</span>`;
 const LIMIT=120;
-let cur=5, filter='all', sortKey=null, sortDir=1, checked=new Set();
+let cur=5, filter='all', sortKey=null, sortDir=1, tagFilter=null, mode='table', checked=new Set();
 rows.forEach((r,i)=>r.i=i);
+const $=id=>document.getElementById(id);
 
 /* tree */
-const treeData=[
- ['d',0,'data',null,1],
- ['f',1,'Actors.json','json',100],['f',1,'Armors.json','json',100],['f',1,'Classes.json','json',100],
- ['f',1,'CommonEvents.json','json',38],['f',1,'Enemies.json','json',64],['f',1,'Items.json','json',91],['f',1,'Skills.json','json',77],['f',1,'States.json','json',100],['f',1,'System.json','json',55],['f',1,'Troops.json','json',12],
- ['d',1,'maps',null,1],
- ['f',2,'Map012.json','map',100],['f',2,'Map013.json','map',100],['f',2,'Map041.json','map',63],['f',2,'Map042.json','map',50,'cur'],['f',2,'Map043.json','map',0],['f',2,'Map044.json','map',0],
- ['d',0,'js/plugins',null,0],['d',0,'Глосарій та ПП',null,1],['f',1,'glossary.tsv','gl',100],['f',1,'memory.tmx','gl',100]
-];
-const tree=document.getElementById('tree');
-tree.innerHTML='<div class="group">Файли гри</div>'+treeData.map(n=>{
+const treeData=[['d',0,'data',null,1],['f',1,'Actors.json','json',100],['f',1,'Armors.json','json',100],['f',1,'Classes.json','json',100],['f',1,'CommonEvents.json','json',38],['f',1,'Enemies.json','json',64],['f',1,'Items.json','json',91],['f',1,'Skills.json','json',77],['f',1,'States.json','json',100],['f',1,'System.json','json',55],['f',1,'Troops.json','json',12],['d',1,'maps',null,1],['f',2,'Map012.json','map',100],['f',2,'Map013.json','map',100],['f',2,'Map041.json','map',63],['f',2,'Map042.json','map',50,'cur'],['f',2,'Map043.json','map',0],['f',2,'Map044.json','map',0],['d',0,'js/plugins',null,0],['d',0,'Глосарій та ПП',null,1],['f',1,'glossary.tsv','gl',100],['f',1,'memory.tmx','gl',100]];
+$('tree').innerHTML='<div class="group">Файли гри</div>'+treeData.map(n=>{
   const [t,d,nm,ic,pc,cl]=n;
   if(t==='d')return `<div class="node" style="--d:${d}"><span class="chev">${pc?'▾':'▸'}</span><span class="ic dir">▤</span><span class="nm">${nm}</span></div>`;
   const lab={json:'{}',map:'MAP',gl:'Aa'}[ic];
   return `<div class="node ${cl||''}" style="--d:${d}"><span class="chev"></span><span class="ic ${ic}">${lab}</span><span class="nm">${nm}</span><span class="mini"><i class="${pc==100?'f':''}" style="width:${pc}%"></i></span><span class="pc ${pc==100?'full':''}">${pc}%</span></div>`;
 }).join('');
 
-/* grid */
-const grid=document.getElementById('grid');
 function vis(){
-  const q=document.getElementById('q').value.trim().toLowerCase();
+  const q=$('q').value.trim().toLowerCase();
   let a=rows.filter(r=>{
     if(filter==='new'&&r.st!=='new')return false;
     if(filter==='draft'&&r.st!=='draft')return false;
     if(filter==='qa'&&r.st!=='qa')return false;
     if(filter==='cm'&&!r.cm)return false;
+    if(tagFilter&&!r.g.some(g=>g[1]===tagFilter))return false;
     if(q&&!(r.s+r.t+r.k+r.w).toLowerCase().includes(q))return false;
     return true;});
-  if(sortKey){a=[...a].sort((x,y)=>{const f=sortKey==='len'?x.t.length-y.t.length:String(x[sortKey]).localeCompare(String(y[sortKey]),'uk');return f*sortDir})}
+  if(sortKey)a=[...a].sort((x,y)=>{const f=sortKey==='len'?x.t.length-y.t.length:String(x[sortKey]).localeCompare(String(y[sortKey]),'uk');return f*sortDir});
   return a;
 }
-function render(){
+function chipsHTML(){
+  const c=(f,l,n)=>`<button class="chip ${filter===f?'on':''}" data-f="${f}">${l} <span class="n">${n}</span></button>`;
+  return c('all','Усі',rows.length)+c('new','Без перекладу',rows.filter(r=>r.st==='new').length)+c('draft','Чернетки',rows.filter(r=>r.st==='draft').length)+c('qa','Проблеми',rows.filter(r=>r.st==='qa').length)+c('cm','З коментарями',rows.filter(r=>r.cm).length);
+}
+function tagFilterHTML(){
+  if(!tagFilter)return '';
+  const g=rows.flatMap(r=>r.g).find(g=>g[1]===tagFilter);
+  return `<span class="chip on tagf">Тег: ${tagH(g)} <span class="x" data-cleartag="1" title="Скинути">✕</span></span>`;
+}
+function renderTable(){
   const a=vis();
-  const arrow=k=>sortKey===k?`<span class="arrow">${sortDir>0?'▲':'▼'}</span>`:'';
-  let h=`<div class="gh"><div></div><div class="s" data-s="st" title="Статус"></div><div class="s" data-s="k">Ключ ${arrow('k')}</div><div class="s" data-s="w">Спікер ${arrow('w')}</div><div>Оригінал · EN</div><div class="s" data-s="t">Переклад · UK ${arrow('t')}</div><div class="s" data-s="len" style="justify-content:flex-end;border-right:0">Довж. ${arrow('len')}</div></div>`;
-  h+=a.map(r=>{
-    const n=r.t.length, over=n>LIMIT;
+  const ar=k=>sortKey===k?`<span class="arrow">${sortDir>0?'▲':'▼'}</span>`:'';
+  let h=`<div class="gh"><div></div><div class="s" data-s="st" title="Статус"></div><div class="s" data-s="k">Ключ ${ar('k')}</div><div class="s" data-s="w">Спікер ${ar('w')}</div><div>Оригінал · EN</div><div class="s" data-s="t">Переклад · UK ${ar('t')}</div><div>Теги</div><div class="s" data-s="len" style="justify-content:flex-end;border-right:0">Довж. ${ar('len')}</div></div>`;
+  h+=a.map(r=>{const n=r.t.length;
     return `<div class="gr ${r.i===cur?'sel':''} ${checked.has(r.i)?'chk':''}" data-i="${r.i}">
-      <div class="ln"><span>${r.i+1}</span></div>
+      <div class="ln"><span title="Вибрати">${r.i+1}</span></div>
       <div class="st"><span class="sd ${r.st}" title="${stName[r.st]}"></span></div>
       <div><span class="key" title="${r.k}">${r.k}</span></div>
       <div class="who">${r.w}</div>
       <div class="src">${markup(r.s)}</div>
-      <div class="tr ${r.t?'':'empty'}">${r.t?markup(r.t):'не перекладено'}</div>
-      <div class="len ${over?'over':''}">${n?n+'/'+LIMIT:'—'}</div></div>`}).join('');
-  grid.innerHTML=h;
-  document.getElementById('n-new').textContent=rows.filter(r=>r.st==='new').length;
-  document.getElementById('n-draft').textContent=rows.filter(r=>r.st==='draft').length;
-  document.getElementById('n-qa').textContent=rows.filter(r=>r.st==='qa').length;
-  const b=document.getElementById('bulk');b.classList.toggle('show',checked.size>0);document.getElementById('bulkn').textContent=checked.size;
-  document.getElementById('pos').textContent='рядок '+(cur+1)+' з '+rows.length;
-  document.getElementById('st-sel').textContent='Рядок '+(cur+1)+' · '+stName[rows[cur].st];
+      <div class="tr ${r.t?'':'empty'}" title="Двічі клікніть, щоб редагувати тут">${r.t?markup(r.t):'не перекладено'}</div>
+      <div class="tags">${r.g.map(g=>tagH(g)).join('')}</div>
+      <div class="len ${n>LIMIT?'over':''}">${n?n+'/'+LIMIT:'—'}</div></div>`}).join('');
+  $('grid').innerHTML=h;
+  $('bulk').classList.toggle('show',checked.size>0);$('bulkn').textContent=checked.size;
+  $('pos').textContent='рядок '+(cur+1)+' з '+rows.length+(a.length!==rows.length?' · показано '+a.length:'');
 }
-function inspect(){
+function renderList(){
+  $('slist').innerHTML=vis().map(r=>`<div class="si ${r.i===cur?'sel':''}" data-i="${r.i}"><span class="sd ${r.st}"></span><div><div class="a"><span>${r.i+1}</span><b>${r.w}</b><span>${r.k}</span></div><div class="s">${esc(r.s)}</div><div class="t">${r.t?esc(r.t):'—'}</div></div></div>`).join('');
+}
+function renderFocus(){
   const r=rows[cur];
-  document.getElementById('i-key').textContent='Map042 › EV014 › '+r.k;
-  document.getElementById('i-src').innerHTML=markup(r.s);
-  const hits=gloss.filter(([e])=>new RegExp('\\b'+e+'\\b','i').test(r.s));
-  document.getElementById('i-meta').innerHTML='<span class="tag v">'+r.w+'</span><span class="tag">'+r.s.length+' симв.</span>'+(/\\[A-Z]\[/.test(r.s)?'<span class="tag w">керівні коди</span>':'')+(r.cm?'<span class="tag">💬 коментар</span>':'');
-  const ta=document.getElementById('i-tr');if(document.activeElement!==ta)ta.value=r.t;
+  $('f-state').innerHTML=`<span class="sd ${r.st}"></span>${stName[r.st]}`;
+  $('f-key').textContent='Map042 › EV014 › '+r.k;
+  $('f-spk').textContent=r.w+' · '+r.s.length+' симв.';
+  $('f-src').innerHTML=markup(r.s);
+  const ta=$('i-tr');if(document.activeElement!==ta)ta.value=r.t;
   meter();
-  document.getElementById('i-state').textContent=stName[r.st];
-  document.getElementById('i-gl').innerHTML=hits.length?hits.map(([e,u,t])=>`<div class="gloss-row"><b>${e}</b><span class="arr">→</span><span>${u}</span><span class="t">${t}</span></div>`).join(''):'<div style="color:var(--mute)">Термінів немає</div>';
+  $('f-tags').innerHTML=r.g.length?r.g.map(g=>tagH(g,1)).join(''):'<span style="color:var(--dim)">Тегів немає</span>';
+  const hits=gloss.filter(([e])=>new RegExp('\\b'+e+'\\b').test(r.s));
+  $('i-gl').innerHTML=hits.length?hits.map(([e,u,t])=>`<div class="gloss-row"><b>${e}</b><span class="arr">→</span><span>${u}</span><span class="t">${t}</span></div>`).join(''):'<div style="color:var(--mute)">Термінів немає</div>';
   const base=r.s.split(' ').slice(0,4).join(' ');
-  document.getElementById('i-tm').innerHTML=
-   `<div class="sg"><span class="pc">100%</span><div>${r.t||'Тихіше, дівчино.'}<small>Map012.json · Максим · підтверджено</small></div></div>
-    <div class="sg"><span class="pc mid">82%</span><div>${r.t?'Тобі тут не місце, хлопче.':'Не так багато хто сюди заходить.'}<small>Map041.json · «${esc(base)}…»</small></div></div>
-    <div class="sg"><span class="pc mid">64%</span><div>Темрява пам'ятає кожного.<small>CommonEvents.json · Олена</small></div></div>`;
-  document.getElementById('c-who').textContent=r.w;
-  document.getElementById('c-txt').innerHTML=markup(r.t||r.s);
-  document.getElementById('c-near').innerHTML=[-2,-1,0,1,2].map(d=>rows[cur+d]).map((x,j)=>x?`<div class="${j===2?'me':''}"><span>${x.i+1}</span><span>${x.w}</span><span>${esc(x.s.length>46?x.s.slice(0,46)+'…':x.s)}</span></div>`:'').join('');
-  document.getElementById('c-ents').innerHTML=[['Старий солдат','#b589d6'],['Зал вартових','#5fb865'],['Іржавий ключ','#e5a04b'],['Switch 031','#56a8f5']].map(([n,c])=>`<span class="ent"><i style="background:${c}"></i>${n}</span>`).join('');
+  $('i-tm').innerHTML=`<div class="sg"><span class="pc">100%</span><div>${r.t||'Тихіше, дівчино.'}<small>Map012.json · Максим · підтверджено</small></div></div><div class="sg"><span class="pc mid">82%</span><div>${r.t?'Тобі тут не місце, хлопче.':'Не так багато хто сюди заходить.'}<small>Map041.json · «${esc(base)}…»</small></div></div><div class="sg"><span class="pc mid">64%</span><div>Темрява пам'ятає кожного.<small>CommonEvents.json · Олена</small></div></div>`;
+  $('c-who').textContent=r.w;$('c-txt').innerHTML=markup(r.t||r.s);
+  $('c-near').innerHTML=[-2,-1,0,1,2].map(d=>rows[cur+d]).map((x,j)=>x?`<div class="${j===2?'me':''}"><span>${x.i+1}</span><span>${x.w}</span><span>${esc(x.s.length>34?x.s.slice(0,34)+'…':x.s)}</span></div>`:'').join('');
+  renderList();
 }
 function meter(){
-  const v=document.getElementById('i-tr').value, n=v.length;
-  document.getElementById('i-len').textContent=n+' / '+LIMIT;
-  const m=document.getElementById('i-meter');m.classList.toggle('over',n>LIMIT);m.firstElementChild.style.width=Math.min(100,n/LIMIT*100)+'%';
+  const n=$('i-tr').value.length;$('i-len').textContent=n+' / '+LIMIT;
+  const m=$('i-meter');m.classList.toggle('over',n>LIMIT);m.firstElementChild.style.width=Math.min(100,n/LIMIT*100)+'%';
 }
-function select(i){cur=Math.max(0,Math.min(rows.length-1,i));render();inspect();const el=grid.querySelector('.gr.sel');if(el)el.scrollIntoView({block:'nearest'})}
+function renderAll(){
+  document.querySelectorAll('.chipsHost').forEach(h=>h.innerHTML=chipsHTML());
+  $('tagfilter').innerHTML=tagFilterHTML();$('tagfilter2').innerHTML=tagFilterHTML();
+  renderTable();renderFocus();
+  $('st-sel').textContent='Рядок '+(cur+1)+' · '+stName[rows[cur].st];
+}
+function select(i){cur=Math.max(0,Math.min(rows.length-1,i));renderAll();document.querySelectorAll('.gr.sel,.si.sel').forEach(el=>el.scrollIntoView({block:'nearest'}))}
+function setMode(m){mode=m;document.querySelector('.ide').className='ide mode-'+m;
+  document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
+  renderAll();if(m==='focus')$('i-tr').focus();else document.querySelectorAll('.gr.sel').forEach(el=>el.scrollIntoView({block:'nearest'}))}
 
-grid.addEventListener('click',e=>{
+document.addEventListener('click',e=>{
+  const sg=e.target.closest('#seg [data-m]');if(sg)return setMode(sg.dataset.m);
+  if(e.target.closest('#f-back'))return setMode('table');
+  if(e.target.closest('[data-cleartag]')){tagFilter=null;return renderAll()}
+  const tg=e.target.closest('[data-tag]');if(tg){tagFilter=tg.dataset.tag;filter='all';return renderAll()}
+  const ch=e.target.closest('.chip[data-f]');if(ch){filter=ch.dataset.f;return renderAll()}
   const s=e.target.closest('[data-s]');
-  if(s){const k=s.dataset.s;if(sortKey===k)sortDir=-sortDir;else{sortKey=k;sortDir=1}render();return}
-  const r=e.target.closest('.gr');if(!r)return;
-  const i=+r.dataset.i;
-  if(e.target.closest('.ln')){checked.has(i)?checked.delete(i):checked.add(i);render();return}
-  if(e.shiftKey){const lo=Math.min(cur,i),hi=Math.max(cur,i);for(let x=lo;x<=hi;x++)checked.add(x);render();return}
-  select(i);
+  if(s){const k=s.dataset.s;if(sortKey===k)sortDir=-sortDir;else{sortKey=k;sortDir=1}return renderTable()}
+  const si=e.target.closest('.si');if(si)return select(+si.dataset.i);
+  const r=e.target.closest('.gr');
+  if(r){const i=+r.dataset.i;
+    if(e.target.closest('.ln')){checked.has(i)?checked.delete(i):checked.add(i);return renderTable()}
+    if(e.shiftKey){for(let x=Math.min(cur,i);x<=Math.max(cur,i);x++)checked.add(x);return renderTable()}
+    return select(i)}
 });
-document.getElementById('q').addEventListener('input',render);
-document.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>{
-  document.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));c.classList.add('on');filter=c.dataset.f;render()}));
-document.getElementById('i-tr').addEventListener('input',e=>{
-  const r=rows[cur];r.t=e.target.value;if(r.st==='new'||r.st==='appr')r.st=r.t?'draft':'new';
-  if(!r.t)r.st='new';meter();render();document.getElementById('i-state').textContent=stName[r.st]});
-function setSt(st,adv){const r=rows[cur];if(!r.t&&st!=='new')return;r.st=st;if(adv)cur=Math.min(rows.length-1,cur+1);render();inspect()}
-document.getElementById('b-save').onclick=()=>setSt('appr',true);
-document.getElementById('b-draft').onclick=()=>setSt('draft',true);
-document.getElementById('b-skip').onclick=()=>select(cur+1);
+/* inline edit in the table (double click) */
+$('grid').addEventListener('dblclick',e=>{
+  const c=e.target.closest('.gr .tr');if(!c)return;
+  const i=+c.parentElement.dataset.i;cur=i;
+  const ta=document.createElement('textarea');ta.className='cell-ed';ta.rows=2;ta.value=rows[i].t;
+  c.innerHTML='';c.appendChild(ta);ta.focus();
+  const done=()=>{rows[i].t=ta.value;rows[i].st=ta.value?(rows[i].st==='new'?'draft':rows[i].st):'new';renderAll()};
+  ta.addEventListener('blur',done);
+  ta.addEventListener('keydown',ev=>{if(ev.key==='Enter'&&!ev.shiftKey){ev.preventDefault();ta.blur()}if(ev.key==='Escape'){ta.value=rows[i].t;ta.blur()}});
+});
+document.querySelectorAll('.qin').forEach(q=>q.addEventListener('input',e=>{document.querySelectorAll('.qin').forEach(x=>{if(x!==q)x.value=q.value});$('q').value=q.value;renderAll();q.focus()}));
+$('i-tr').addEventListener('input',e=>{const r=rows[cur];r.t=e.target.value;r.st=r.t?(r.st==='new'?'draft':r.st):'new';meter();renderTable();renderList();$('f-state').innerHTML=`<span class="sd ${r.st}"></span>${stName[r.st]}`});
+function setSt(st,adv){const r=rows[cur];if(!r.t)return;r.st=st;if(adv)cur=Math.min(rows.length-1,cur+1);renderAll()}
+$('b-save').onclick=()=>setSt('appr',true);$('b-draft').onclick=()=>setSt('draft',true);$('b-skip').onclick=()=>select(cur+1);
+$('f-prev').onclick=()=>select(cur-1);$('f-next').onclick=()=>select(cur+1);
 document.addEventListener('keydown',e=>{
-  const inTa=e.target.matches('textarea,input');
+  const inEd=e.target.matches('textarea,input');
   if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();setSt('appr',true)}
   else if(e.altKey&&e.key==='Enter'){e.preventDefault();setSt('draft',true)}
-  else if(!inTa&&e.key==='ArrowDown'){e.preventDefault();select(cur+1)}
-  else if(!inTa&&e.key==='ArrowUp'){e.preventDefault();select(cur-1)}
-  else if(!inTa&&e.key==='Enter'){document.getElementById('i-tr').focus()}
+  else if(e.key==='Escape'&&mode==='focus'){setMode('table')}
+  else if(!inEd&&e.key==='ArrowDown'){e.preventDefault();select(cur+1)}
+  else if(!inEd&&e.key==='ArrowUp'){e.preventDefault();select(cur-1)}
+  else if(!inEd&&e.key==='Enter'&&mode==='table'){setMode('focus')}
 });
-document.querySelectorAll('#bulk [data-b]').forEach(b=>b.addEventListener('click',()=>{
-  checked.forEach(i=>{if(rows[i].t)rows[i].st=b.dataset.b});checked.clear();render();inspect()}));
-
-function tabs(rootId,attr){
-  const root=document.getElementById(rootId);
-  root.querySelectorAll('button[data-'+attr+']').forEach(b=>b.addEventListener('click',()=>{
-    root.querySelectorAll('button[data-'+attr+']').forEach(x=>x.classList.remove('on'));b.classList.add('on');
-    const ids=[...root.querySelectorAll('button[data-'+attr+']')].map(x=>x.dataset[attr]);
-    ids.forEach(id=>document.getElementById(id).classList.toggle('on',id===b.dataset[attr]));
-    if(rootId==='btabs')document.getElementById('bottom').classList.remove('min');
-  }));
-}
-tabs('itabs','p');tabs('btabs','b');
-document.getElementById('bmin').onclick=()=>document.getElementById('bottom').classList.toggle('min');
-render();inspect();
+document.querySelectorAll('[data-bb]').forEach(b=>b.addEventListener('click',()=>{checked.forEach(i=>{if(rows[i].t)rows[i].st=b.dataset.bb});checked.clear();renderAll()}));
+/* sidebar tabs */
+const stabs=$('stabs');stabs.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+  stabs.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+  stabs.querySelectorAll('button').forEach(x=>$(x.dataset.p).classList.toggle('on',x===b));}));
+$('gtb').innerHTML=[['Sylvian','Сильвіан','Божество'],['Rher','Рер','Божество'],['Dark','Темрява','Поняття'],['Marina','Марина','Персонаж'],['Levi','Леві','Персонаж'],['Soul','Душа','Механіка'],['Gatekeeper','Вартовий брами','Титул'],['Cellar','Підвал','Локація']].map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td style="color:var(--mute)">${r[2]}</td></tr>`).join('');
+renderAll();
 </script>

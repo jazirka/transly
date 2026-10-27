@@ -13,6 +13,8 @@ export interface Unit {
   face?: string;
   /** RPG Maker: name of the event the message belongs to (often the NPC). */
   event?: string;
+  /** RPG Maker: the developer's own label (an uppercase comment such as `MARCOH` or `SMALL_TALK`) in force at this message. */
+  note?: string;
   /** Short kind label used for grouping and the Тип column. */
   kind: UnitKind;
   /** Human-readable scene path, e.g. `EV014 · Старий солдат`. */

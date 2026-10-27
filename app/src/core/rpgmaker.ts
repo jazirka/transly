@@ -1,5 +1,11 @@
 import type { GameFile, Translations, Unit } from './model';
 
+/** What to extract beyond the standard fields. */
+export interface ExtractOptions {
+  /** Plugin commands (code 356) whose arguments are text for the player, e.g. `GabText`. */
+  pluginCommands?: string[];
+}
+
 type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
 interface Cmd { code: number; indent: number; parameters: Json[] }
 interface Page { list: Cmd[] }
@@ -37,21 +43,21 @@ const SYSTEM_TERMS = ['basic', 'commands', 'params'] as const;
 export const hasText = (source: string): boolean => /\p{L}/u.test(source.replace(/\\[A-Za-z]+\[\d+\]|\\[{}.|!><^$]/g, ''));
 
 /** Extract every translatable unit from one game file. Unknown files yield no units. */
-export function extractRpgMaker(file: GameFile): Unit[] {
-  return extractAll(file).filter(u => hasText(u.source));
+export function extractRpgMaker(file: GameFile, opts: ExtractOptions = {}): Unit[] {
+  return extractAll(file, opts).filter(u => hasText(u.source));
 }
 
-function extractAll(file: GameFile): Unit[] {
-  if (isMap(file.name)) return extractMap(file.json);
-  if (isCommonEvents(file.name)) return extractCommon(file.json);
-  if (isTroops(file.name)) return extractTroops(file.json);
+function extractAll(file: GameFile, opts: ExtractOptions): Unit[] {
+  if (isMap(file.name)) return extractMap(file.json, opts);
+  if (isCommonEvents(file.name)) return extractCommon(file.json, opts);
+  if (isTroops(file.name)) return extractTroops(file.json, opts);
   if (isSystem(file.name)) return extractSystem(file.json);
   const fields = DB_FIELDS[file.name];
   if (fields) return extractDb(file.json, fields);
   return [];
 }
 
-function extractMap(json: unknown): Unit[] {
+function extractMap(json: unknown, opts: ExtractOptions): Unit[] {
   if (!isObj(json) || !Array.isArray(json.events)) return [];
   const out: Unit[] = [];
   if (isStr(json.displayName) && json.displayName) out.push({ key: 'displayName', source: json.displayName, speaker: '', kind: 'name', context: 'Назва місцевості' });
@@ -61,29 +67,29 @@ function extractMap(json: unknown): Unit[] {
     const evId = typeof ev.id === 'number' ? ev.id : ei;
     ev.pages.forEach((page, pi) => {
       if (!isObj(page) || !Array.isArray(page.list)) return;
-      out.push(...extractList(page.list as unknown as Cmd[], `events[${ei}].pages[${pi}].list`, `EV${String(evId).padStart(3, '0')}${evName ? ' · ' + evName : ''}`, evName));
+      out.push(...extractList(page.list as unknown as Cmd[], `events[${ei}].pages[${pi}].list`, `EV${String(evId).padStart(3, '0')}${evName ? ' · ' + evName : ''}`, evName, opts));
     });
   });
   return out;
 }
 
-function extractCommon(json: unknown): Unit[] {
+function extractCommon(json: unknown, opts: ExtractOptions): Unit[] {
   if (!Array.isArray(json)) return [];
   const out: Unit[] = [];
   json.forEach((ev, i) => {
     if (!isObj(ev) || !Array.isArray(ev.list)) return;
-    out.push(...extractList(ev.list as unknown as Cmd[], `[${i}].list`, `Common ${i}${isStr(ev.name) && ev.name ? ' · ' + ev.name : ''}`, isStr(ev.name) ? ev.name : ''));
+    out.push(...extractList(ev.list as unknown as Cmd[], `[${i}].list`, `Common ${i}${isStr(ev.name) && ev.name ? ' · ' + ev.name : ''}`, isStr(ev.name) ? ev.name : '', opts));
   });
   return out;
 }
 
-function extractTroops(json: unknown): Unit[] {
+function extractTroops(json: unknown, opts: ExtractOptions): Unit[] {
   if (!Array.isArray(json)) return [];
   const out: Unit[] = [];
   json.forEach((t, i) => {
     if (!isObj(t) || !Array.isArray(t.pages)) return;
     t.pages.forEach((page, pi) => {
-      if (isObj(page) && Array.isArray(page.list)) out.push(...extractList(page.list as unknown as Cmd[], `[${i}].pages[${pi}].list`, `Бій ${i}${isStr(t.name) && t.name ? ' · ' + t.name : ''}`));
+      if (isObj(page) && Array.isArray(page.list)) out.push(...extractList(page.list as unknown as Cmd[], `[${i}].pages[${pi}].list`, `Бій ${i}${isStr(t.name) && t.name ? ' · ' + t.name : ''}`, '', opts));
     });
   });
   return out;
@@ -110,17 +116,39 @@ function extractSystem(json: unknown): Unit[] {
   return out;
 }
 
-function extractList(list: Cmd[], base: string, context: string, evName = ''): Unit[] {
+/** Developer labels in comments: `MARCOH`, `SMALL_TALK`, `START_OF_SCENE`. */
+const LABEL = /^[A-Z][A-Z0-9_ ]{2,30}$/;
+
+/**
+ * A plugin command is `Name arg arg text…`. Leading numeric arguments (`choice_text 2 Hello`) stay as they are;
+ * the rest is the text the player sees.
+ */
+export function splitPluginCommand(cmd: string): { name: string; prefix: string; text: string } {
+  const m = /^(\S+)(\s+(?:\d+\s+)*)?(.*)$/s.exec(cmd);
+  return { name: m?.[1] ?? '', prefix: m ? m[1]! + (m[2] ?? ' ') : '', text: m?.[3] ?? '' };
+}
+
+function extractList(list: Cmd[], base: string, context: string, evName = '', opts: ExtractOptions = {}): Unit[] {
   const out: Unit[] = [];
+  const plugins = new Set(opts.pluginCommands ?? []);
+  let note = '';
   for (let i = 0; i < list.length; i++) {
     const c = list[i];
     if (!c) continue;
+    if ((c.code === 108 || c.code === 408) && isStr(c.parameters[0])) {
+      const t = c.parameters[0].trim();
+      if (LABEL.test(t)) note = t;
+    }
+    if (c.code === 356 && isStr(c.parameters[0]) && plugins.size) {
+      const { name, text } = splitPluginCommand(c.parameters[0]);
+      if (plugins.has(name) && hasText(text)) out.push({ key: `${base}[${i}].cmd`, source: text, speaker: '', kind: 'message', context, ...(evName ? { event: evName } : {}) });
+    }
     if (c.code === 101) {
       const { lines } = textRun(list, i + 1, 401);
       if (lines.length) {
         const speaker = isStr(c.parameters[4]) ? c.parameters[4] : '';
         const face = isStr(c.parameters[0]) && c.parameters[0] ? `${c.parameters[0]}#${typeof c.parameters[1] === 'number' ? c.parameters[1] : 0}` : '';
-        out.push({ key: `${base}[${i}]`, source: lines.join('\n'), speaker, kind: 'dialogue', context, ...(face ? { face } : {}), ...(evName ? { event: evName } : {}) });
+        out.push({ key: `${base}[${i}]`, source: lines.join('\n'), speaker, kind: 'dialogue', context, ...(face ? { face } : {}), ...(evName ? { event: evName } : {}), ...(note ? { note } : {}) });
       }
     } else if (c.code === 105) {
       const { lines } = textRun(list, i + 1, 405);
@@ -232,6 +260,9 @@ function applyList(list: Cmd[], base: string, get: (key: string) => string | nul
       const indent = c.indent;
       const lines = t.split('\n').map((line): Cmd => ({ code: cont, indent, parameters: [line] }));
       list.splice(i + 1, end - (i + 1), ...lines);
+    } else if (c.code === 356 && isStr(c.parameters[0])) {
+      const t = get(`${base}[${i}].cmd`);
+      if (t !== null) c.parameters[0] = splitPluginCommand(c.parameters[0]).prefix + t.replace(/\s*\n\s*/g, ' ');
     } else if (c.code === 102 && Array.isArray(c.parameters[0])) {
       const opts = c.parameters[0] as Json[];
       opts.forEach((_, oi) => {
@@ -240,4 +271,18 @@ function applyList(list: Cmd[], base: string, get: (key: string) => string | nul
       });
     }
   }
+}
+
+/** Every command list of an RPG Maker file (map events, common events, troops), for scans that need raw commands. */
+export function commandLists(file: GameFile): { code: number; parameters: unknown[] }[][] {
+  const out: Cmd[][] = [];
+  const j = file.json;
+  if (isMap(file.name) && isObj(j) && Array.isArray(j.events)) {
+    for (const ev of j.events) if (isObj(ev) && Array.isArray(ev.pages)) for (const pg of ev.pages) if (isObj(pg) && Array.isArray(pg.list)) out.push(pg.list as unknown as Cmd[]);
+  } else if (isCommonEvents(file.name) && Array.isArray(j)) {
+    for (const ev of j) if (isObj(ev) && Array.isArray(ev.list)) out.push(ev.list as unknown as Cmd[]);
+  } else if (isTroops(file.name) && Array.isArray(j)) {
+    for (const t of j) if (isObj(t) && Array.isArray(t.pages)) for (const pg of t.pages) if (isObj(pg) && Array.isArray(pg.list)) out.push(pg.list as unknown as Cmd[]);
+  }
+  return out;
 }

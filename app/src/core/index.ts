@@ -17,3 +17,8 @@ export * from './duplicates';
 export * from './termtable';
 export * from './reference';
 export * from './speakers';
+export type { ExtractOptions } from './rpgmaker';
+export { splitPluginCommand } from './rpgmaker';
+export * from './plugins';
+export * from './gamenames';
+export * from './wrap';

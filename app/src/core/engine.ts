@@ -4,6 +4,7 @@ import { applyPo, extractPo } from './formats/po';
 import { applyRenpy, extractRenpy } from './formats/renpy';
 import type { GameFile, Translations, Unit } from './model';
 import { applyRpgMaker, extractRpgMaker, isRpgMakerFile } from './rpgmaker';
+import type { ExtractOptions } from './rpgmaker';
 
 export type FormatId = 'rpgmaker' | 'gettext' | 'csv' | 'locale-json' | 'renpy';
 
@@ -38,9 +39,9 @@ export function formatOf(file: Pick<GameFile, 'name'>): FormatId | null {
 export const isTextFormat = (id: FormatId | null): boolean => id === 'gettext' || id === 'csv' || id === 'renpy';
 
 /** Extract every translatable unit from one file. Unknown files yield no units. */
-export function extract(file: GameFile): Unit[] {
+export function extract(file: GameFile, opts: ExtractOptions = {}): Unit[] {
   switch (formatOf(file)) {
-    case 'rpgmaker': return extractRpgMaker({ ...file, name: base(file.name) });
+    case 'rpgmaker': return extractRpgMaker({ ...file, name: base(file.name) }, opts);
     case 'locale-json': return extractLocaleJson(file.json);
     case 'gettext': return file.text === undefined ? [] : extractPo(file.text);
     case 'csv': return file.text === undefined ? [] : extractCsv(file.text);

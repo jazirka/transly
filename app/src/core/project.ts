@@ -1,6 +1,7 @@
 import type { GlossaryTerm } from './glossary';
 import type { Reference } from './reference';
 import { extract } from './engine';
+import type { ExtractOptions } from './rpgmaker';
 import { merge } from './merge';
 import type { Entry, GameFile, Translations, Unit } from './model';
 
@@ -26,6 +27,8 @@ export interface SavedProject {
   snapshot?: Record<string, Unit[]>;
   /** Same game in another language, aligned to the working language: shown to the translator as a hint. */
   reference?: { lang: string; texts: Record<string, Reference> };
+  /** Where a file takes place (map names), for context in the tree, tabs and breadcrumbs. */
+  labels?: Record<string, string>;
   /** Who speaks, as set by the translator: keys `face:Actor1#3` and `event:ghoul111`. */
   speakers?: Record<string, { name: string; mt: number }>;
   /** Time the snapshot/reference last changed. The device with the larger value owns the newer copy. */
@@ -41,20 +44,45 @@ export interface ProjectSettings {
   who: string;
   /** Copy a sent/approved translation to identical strings that have none (or wait with the same text). */
   propagate: boolean;
+  /** Plugin commands whose arguments are player-visible text (e.g. `GabText`). */
+  pluginCommands: string[];
+  /** The plugin-text question has been shown for this project. */
+  pluginsAsked: boolean;
+  /** Longest line of a translated message, in characters; 0 = follow the longest line of the original. */
+  lineLimit: number;
 }
 
-export const DEFAULT_SETTINGS: ProjectSettings = { tolerancePct: 25, blockErrors: true, who: 'Ви', propagate: true };
+export const DEFAULT_SETTINGS: ProjectSettings = { tolerancePct: 25, blockErrors: true, who: 'Ви', propagate: true, pluginCommands: [], pluginsAsked: false, lineLimit: 0 };
 
 export const emptyProject = (name: string, sourceLang = 'en', targetLang = 'uk'): SavedProject => ({
   version: 1, name, sourceLang, targetLang, resetEpoch: 0, files: {}, memory: [], terms: [], settings: { ...DEFAULT_SETTINGS },
 });
 
-export interface FileView { name: string; units: Unit[] }
+export interface FileView { name: string; units: Unit[]; /** Place the file takes place in (map name). */ label?: string }
+
+/** Map names from MapInfos.json; the map's own `displayName` wins when it is set. */
+function mapLabels(files: GameFile[]): Map<string, string> {
+  const out = new Map<string, string>();
+  const infos = files.find(f => f.name.split('/').pop() === 'MapInfos.json')?.json;
+  const names = new Map<number, string>();
+  if (Array.isArray(infos)) for (const i of infos) if (i && typeof i === 'object' && typeof (i as { id?: unknown }).id === 'number') names.set((i as { id: number }).id, String((i as { name?: unknown }).name ?? ''));
+  for (const f of files) {
+    const m = /^Map(\d+)\.json$/.exec(f.name.split('/').pop() ?? '');
+    if (!m) continue;
+    const display = (f.json as { displayName?: unknown } | null)?.displayName;
+    const label = (typeof display === 'string' && display.trim()) || names.get(Number(m[1])) || '';
+    if (label) out.set(f.name, label);
+  }
+  return out;
+}
 
 /** Re-read the game: extract units for every file that has any. */
-export function readGame(files: GameFile[]): FileView[] {
-  return files.map(f => ({ name: f.name, units: extract(f) })).filter(v => v.units.length > 0);
+export function readGame(files: GameFile[], opts: ExtractOptions = {}): FileView[] {
+  const labels = mapLabels(files);
+  return files.map(f => ({ name: f.name, units: extract(f, opts), ...(labels.get(f.name) ? { label: labels.get(f.name)! } : {}) })).filter(v => v.units.length > 0);
 }
+
+export const labelsOf = (views: FileView[]): Record<string, string> => Object.fromEntries(views.filter(v => v.label).map(v => [v.name, v.label!]));
 
 export interface FileStats { total: number; translated: number; done: number; approved: number }
 
@@ -72,7 +100,7 @@ export function statsOf(units: Unit[], entries: Translations): FileStats {
 
 /** Views from a stored snapshot, so the project opens without the game folder. */
 export function viewsFromSnapshot(p: SavedProject): FileView[] {
-  return Object.entries(p.snapshot ?? {}).map(([name, units]) => ({ name, units })).filter(v => v.units.length > 0);
+  return Object.entries(p.snapshot ?? {}).map(([name, units]) => ({ name, units, ...(p.labels?.[name] ? { label: p.labels[name]! } : {}) })).filter(v => v.units.length > 0);
 }
 
 export const snapshotOf = (views: FileView[]): Record<string, Unit[]> => Object.fromEntries(views.map(v => [v.name, v.units]));
@@ -97,6 +125,7 @@ export function deserialize(text: string): SavedProject {
     ...(o.reference ? { reference: o.reference } : {}),
     ...(o.assetsRev ? { assetsRev: o.assetsRev } : {}),
     ...(o.speakers ? { speakers: o.speakers } : {}),
+    ...(o.labels ? { labels: o.labels } : {}),
   };
 }
 
@@ -128,6 +157,8 @@ export function mergeProjects(a: SavedProject, b: SavedProject, since = 0): { pr
   return {
     project: {
       ...newer, resetEpoch: epoch, files, ...(snapshot ? { snapshot } : {}), ...(reference ? { reference } : {}), ...(assetsRev ? { assetsRev } : {}),
+      ...(Object.keys(speakers).length ? { speakers } : {}),
+      ...(a.labels || b.labels ? { labels: { ...(b.labels ?? {}), ...(a.labels ?? {}) } } : {}),
       memory: union(a.memory, b.memory, v => v.s + '\u0001' + v.t),
       terms: union(a.terms, b.terms, v => v.en.toLowerCase()),
     },

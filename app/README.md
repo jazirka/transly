@@ -43,7 +43,7 @@ Linux needs `libwebkit2gtk-4.1-dev`, `build-essential`, `libssl-dev`, `libayatan
 
 | Format | Files | Notes |
 | --- | --- | --- |
-| RPG Maker MV/MZ | `data/*.json` | dialogue, choices, scroll text, database names/descriptions, `System.json` terms |
+| RPG Maker MV/MZ | `data/*.json` | dialogue, choices, scroll text, database names/descriptions, `System.json` terms; optionally text of plugin commands (see below) |
 | gettext | `.po`, `.pot` | context and plurals; comments, header and obsolete entries are kept |
 | CSV/TSV | `.csv`, `.tsv` | columns `key`, `source`/`text`, `translation` (added when missing) |
 | Locale JSON | `en.json`, `strings.json`, `locales/*.json`… | nested strings, written back by path |
@@ -55,3 +55,15 @@ Control-code QA (`\C[2]`, `\V[1]`…) currently knows RPG Maker codes only; plac
 
 - Settings → Import glossary: a Google Sheets table saved as a web page (`.html`), or `.csv`/`.tsv`, with columns «Оригінал», «Переклад 1…», «Опис», «Розділ». A big dictionary is added as hints only; tick the box to enforce terms in QA.
 - Settings → Reference language: pick the same game in another language; its text is aligned line by line (even when that version added or removed lines) and shown under the original.
+
+## RPG Maker extras
+
+- **Plugin command texts** (Tools → Plugin texts, offered once after the game is opened): some games show text through plugin commands (`GabText …`, `choice_text 1 …`) instead of message boxes. The game's own commands are listed with samples; the ones ticked become extra rows (`plugin[N]`). The command name and numeric arguments are kept when the translation is written back.
+- **Speakers**: MV stores no speaker names, so a speaker is taken from the game when it has one, otherwise from what the translator names once: the message's face graphic, the developer's own label in a comment right before the text (`MARCOH`), or the event. Tools → Define speakers.
+- **Location**: maps are labelled with their `displayName` or the name from `MapInfos.json` (shown in the file tree and in the row's details).
+- **Names from the game**: when a line mentions an item, skill, character or enemy from the database, the glossary hints show how that name is translated there (click to insert it).
+- **Line width**: Settings → line width (by default taken from the original's own line lengths; narrower when a face picture is shown). Too wide a line is a QA warning, and "Wrap lines" re-flows one row (or Tools → Wrap long lines for the whole file). The length of a translation is never capped.
+
+## Moving work between devices by file
+
+Settings → Exchange project through a file saves everything but the game files into one `.transly.json`. On a phone (no folder picker) use **Open files or paste JSON**: pick that file, paste its text, or pick game files (`.json`, `.po`, `.csv`, `.rpy`) directly. Imports merge row by row; the newer edit wins.

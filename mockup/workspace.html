@@ -408,11 +408,15 @@ td .term{color:#d9c3ee}
   <div class="main">
     <nav class="strip" id="strip" aria-label="Бічні панелі">
       <button data-lp="files" class="on" title="Файли гри: дерево файлів проєкту"><span>Файли</span></button>
+      <button data-lp="tags" title="Теги: персонажі, локації, предмети"><span>Теги</span></button>
+      <button data-lp="gloss" title="Глосарій проєкту"><span>Глосарій</span></button>
     </nav>
 
     <aside class="tree" id="lpanel">
       <div class="ph"><span class="grow" id="lp-title">Файли гри</span><span class="ico" id="lp-close" title="Сховати панель">—</span></div>
       <div class="treebody" id="tree"></div>
+      <div class="treebody" id="lp-tags" hidden></div>
+      <div class="treebody" id="lp-gloss" hidden></div>
     </aside>
 
     <section class="editor">
@@ -680,7 +684,8 @@ function tagPopHTML(){
     return items.length?`<div class="group">${T[t]}</div>`+items.map(([k,v])=>`<div class="tgrow ${t} ${tagFilter===k?'on':''}" data-tagrow="${k}"><i></i>${k}<span class="n">${v.n}</span></div>`).join(''):''}).join('');
 }
 function renderSide(){
-  $('tagpop').innerHTML=tagPopHTML();
+  $('tagpop').innerHTML=tagPopHTML();$('lp-tags').innerHTML=tagPopHTML();
+  $('lp-gloss').innerHTML=gloss.map(([e,u,t])=>`<div class="glrow"><b>${e}</b><span>${u}</span><small>${t}</small></div>`).join('');
   const nAppr=rows.filter(r=>r.st==='appr').length;
   document.querySelectorAll('#stage button').forEach(b=>b.classList.toggle('on',b.dataset.st===stage));
   $('proof-n').textContent=rows.filter(r=>r.st==='done').length;
@@ -696,6 +701,8 @@ function select(i){cur=Math.max(0,Math.min(rows.length-1,i));renderAll();documen
 function layout(){
   document.querySelector('.ide').className='ide mode-'+mode+(lp?' lp-open':' lp-closed');
   document.querySelectorAll('#strip button').forEach(b=>b.classList.toggle('on',b.dataset.lp===lp));
+  $('tree').hidden=lp!=='files';$('lp-tags').hidden=lp!=='tags';$('lp-gloss').hidden=lp!=='gloss';
+  $('lp-title').textContent={files:'Файли гри',tags:'Теги · фільтр за темою',gloss:'Глосарій проєкту'}[lp]||'';
   $('tagpop').hidden=true;
 }
 function setMode(m){mode=m;lp=m==='focus'?null:(lp||'files');layout();

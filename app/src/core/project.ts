@@ -17,6 +17,11 @@ export interface SavedProject {
   /** Project glossary. */
   terms: { en: string; uk: string; mt: number }[];
   settings: ProjectSettings;
+  /**
+   * Copy of the original strings as of the last time the game folder was read. Lets the app (and a phone
+   * that has no game files) open the project and translate without the folder; only building needs it.
+   */
+  snapshot?: Record<string, Unit[]>;
 }
 
 export interface ProjectSettings {
@@ -55,6 +60,13 @@ export function statsOf(units: Unit[], entries: Translations): FileStats {
   return s;
 }
 
+/** Views from a stored snapshot, so the project opens without the game folder. */
+export function viewsFromSnapshot(p: SavedProject): FileView[] {
+  return Object.entries(p.snapshot ?? {}).map(([name, units]) => ({ name, units })).filter(v => v.units.length > 0);
+}
+
+export const snapshotOf = (views: FileView[]): Record<string, Unit[]> => Object.fromEntries(views.map(v => [v.name, v.units]));
+
 export function serialize(p: SavedProject): string {
   return JSON.stringify(p);
 }
@@ -71,6 +83,7 @@ export function deserialize(text: string): SavedProject {
     version: 1, name: o.name, sourceLang: o.sourceLang ?? 'en', targetLang: o.targetLang ?? 'uk',
     resetEpoch: o.resetEpoch ?? 0, files: o.files, memory: o.memory ?? [], terms: o.terms ?? [],
     settings: { ...DEFAULT_SETTINGS, ...(o.settings ?? {}) },
+    ...(o.snapshot ? { snapshot: o.snapshot } : {}),
   };
 }
 
@@ -91,9 +104,11 @@ export function mergeProjects(a: SavedProject, b: SavedProject): { project: Save
     return [...m.values()].filter(v => v.mt > epoch);
   };
   const newer = a.resetEpoch >= b.resetEpoch ? a : b;
+  // Snapshots describe the game, not the translator's work: keep a's, let b fill in files a does not have.
+  const snapshot = a.snapshot || b.snapshot ? { ...(b.snapshot ?? {}), ...(a.snapshot ?? {}) } : undefined;
   return {
     project: {
-      ...newer, resetEpoch: epoch, files,
+      ...newer, resetEpoch: epoch, files, ...(snapshot ? { snapshot } : {}),
       memory: union(a.memory, b.memory, v => v.s + '\u0001' + v.t),
       terms: union(a.terms, b.terms, v => v.en.toLowerCase()),
     },

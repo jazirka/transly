@@ -1,4 +1,4 @@
-import { Autosave, build, check, edit, emptyProject, note, readGame, reconcile, sourceChanged, statsOf, submit } from '../core';
+import { Autosave, build, check, edit, emptyProject, note, readGame, reconcile, snapshotOf, sourceChanged, statsOf, submit, viewsFromSnapshot } from '../core';
 import type { Entry, GameFile, SavedProject, Status, Unit } from '../core';
 import { $, el, esc, plural, toast } from './dom';
 import { STATUS_LABEL, onEditorClick, onEditorInput, onEditorSubmit, renderEditor, send, step } from './edit';
@@ -19,6 +19,8 @@ export async function start(root: HTMLElement): Promise<void> {
   try { saved = (await store.load()) ?? emptyProject('Новий проєкт'); }
   catch { saved = emptyProject('Новий проєкт'); }
   const s: State = { views: [], game: [], saved, current: null, cur: null, mode: 'table', filter: 'all', q: '', sideTab: 'hints', saveOk: true, who: saved.settings.who };
+  const fromSnapshot = viewsFromSnapshot(saved);
+  if (fromSnapshot.length) { s.views = fromSnapshot; s.current = fromSnapshot[0]!.name; }
   let lastHandle: (DirHandle & { name: string }) | null = null;
   try { lastHandle = (await loadHandle('default')) as typeof lastHandle; } catch { lastHandle = null; }
   const autosave = new Autosave(store, 400, ok => { s.saveOk = ok; renderSave(); });
@@ -133,6 +135,7 @@ export async function start(root: HTMLElement): Promise<void> {
     root.querySelectorAll<HTMLElement>('[data-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === s.mode)));
     renderTree(); renderMain(); renderSave();
     ($('#build') as HTMLButtonElement).disabled = !s.views.length;
+    ($('#build') as HTMLButtonElement).title = s.game.length ? '' : 'Для збірки відкрийте папку гри';
   }
 
   function setMode(m: Mode, rerender = true): void {
@@ -164,13 +167,15 @@ export async function start(root: HTMLElement): Promise<void> {
     const { files, failed } = await readFiles(picked, (d, t) => { $('#bar').style.width = `${(d / t) * 100}%`; $('#pct').textContent = `${d} з ${t}`; });
     const game: GameFile[] = files;
     s.game = game; s.views = readGame(game); tmCache = null;
+    s.saved.snapshot = snapshotOf(s.views);
     if (!s.views.length) { s.current = null; renderAll(); toast('У цих файлах немає тексту для перекладу'); return; }
     if (failed.length) toast(`Не вдалося прочитати файлів: ${failed.length}`);
     // Originals may have changed in the game since the translation was written: send those units back to draft.
     let changed = 0;
     for (const v of s.views) { const ents = s.saved.files[v.name]; if (ents) changed += reconcile(v.units, ents, Date.now()).length; }
     if (changed) { toast(`Оригінал змінився в ${plural(changed, ['рядку', 'рядках', 'рядках'])}: їх повернуто в чернетки`); ctx.persist(); }
-    selectFile(s.views[0]!.name);
+    selectFile(s.current && s.views.some(v => v.name === s.current) ? s.current : s.views[0]!.name);
+    ctx.persist();
     renderAll();
   }
 
@@ -189,6 +194,7 @@ export async function start(root: HTMLElement): Promise<void> {
   }
 
   function openBuild(): void {
+    if (!s.game.length) { toast('Для збірки відкрийте папку гри: вона потрібна лише тут'); return; }
     const dlg = el('dialog', 'dlg');
     dlg.setAttribute('aria-labelledby', 'bd-t');
     dlg.innerHTML = `<form method="dialog"><h2 id="bd-t">Збірка</h2>
@@ -295,6 +301,8 @@ export async function start(root: HTMLElement): Promise<void> {
   document.addEventListener('keydown', e => {
     if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && s.mode !== 'table' && !document.querySelector('dialog[open]')) { e.preventDefault(); step(ctx, e.key === 'ArrowDown' ? 1 : -1); }
   });
+
+  if (s.current) unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u]));
 
   addEventListener('beforeunload', () => { void autosave.flush(); });
   renderAll();

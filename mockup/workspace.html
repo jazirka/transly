@@ -427,6 +427,14 @@ td .term{color:#d9c3ee}
 .editor{background:var(--bg)}
 .ide.lp-closed .main{padding-left:0}
 .strip button.on::before{left:-2px}
+/* rows list lives in the left tool window */
+.slist[hidden]{display:none}
+.tree .slist{flex:1;min-height:0;border:0;background:none;display:flex}
+.tree .slist[hidden]{display:none}
+#v-focus{grid-template-columns:minmax(0,1fr) 350px!important}
+.ide.mode-focus .main{grid-template-columns:40px 310px minmax(0,1fr)}
+.ide.mode-focus.lp-closed .main{grid-template-columns:40px minmax(0,1fr)}
+.ide.mode-table [data-lp=rows]{display:none}
 </style>
 <div class="scroll-x"><div class="ide mode-table">
 
@@ -456,14 +464,21 @@ td .term{color:#d9c3ee}
     <nav class="strip" id="strip" aria-label="Бічні панелі">
       <button data-lp="files" class="on" title="Файли гри"><svg viewBox="0 0 16 16"><path d="M2 4.5h4l1.2 1.5H14V12.5H2z"/></svg></button>
       <button data-lp="tags" title="Теги: персонажі, локації, предмети"><svg viewBox="0 0 16 16"><path d="M2.5 8.5V3h5.5l6 6-5.5 5.5z"/><circle cx="5.5" cy="6" r=".8" fill="currentColor"/></svg></button>
-      <button data-lp="gloss" title="Глосарій проєкту"><svg viewBox="0 0 16 16"><path d="M3.5 2.5h8a1 1 0 0 1 1 1v10h-8a1 1 0 0 1-1-1zM5.5 5.5h5M5.5 8h5"/></svg></button>
+      <button data-lp="rows" title="Рядки файлу"><svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h10"/></svg></button>
     </nav>
 
     <aside class="tree" id="lpanel">
       <div class="ph"><span class="grow" id="lp-title">Файли гри</span><span class="ico" id="lp-close" title="Сховати панель">—</span></div>
       <div class="treebody" id="tree"></div>
       <div class="treebody" id="lp-tags" hidden></div>
-      <div class="treebody" id="lp-gloss" hidden></div>
+      <div class="slist" id="lp-rows" hidden>
+      <div class="fh">
+        <div class="fin"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg><input class="qin" id="q2" placeholder="Пошук рядків" aria-label="Пошук"></div>
+        <div class="chips2"><span class="chipsHost"></span><button class="chip" id="tagbtn2">Теги ▾</button></div>
+        <span id="tagfilter2"></span>
+      </div>
+      <div class="sl-body" id="slist"></div>
+    </div>
     </aside>
 
     <section class="editor">
@@ -496,15 +511,6 @@ td .term{color:#d9c3ee}
 
   <!-- ========== FOCUS MODE ========== -->
   <div class="view" id="v-focus">
-    <div class="slist">
-      <div class="fh">
-        <div class="fin"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg><input class="qin" id="q2" placeholder="Пошук рядків" aria-label="Пошук"></div>
-        <div class="chips2"><span class="chipsHost"></span><button class="chip" id="tagbtn2">Теги ▾</button></div>
-        <span id="tagfilter2"></span>
-      </div>
-      <div class="sl-body" id="slist"></div>
-    </div>
-
     <div class="fc"><div class="fc-in">
       <div class="fhd">
         <span class="st-pill" id="f-state"></span>
@@ -518,7 +524,6 @@ td .term{color:#d9c3ee}
       <div class="trblock">
         <div class="lbl">Переклад · UK <span class="r" id="i-len"></span></div>
         <textarea class="tr-in" id="i-tr" spellcheck="false" aria-label="Переклад"></textarea>
-        <div class="meter" id="i-meter"><i></i></div>
         <div class="edbar">
           <button class="ib" id="b-copy" title="Копіювати оригінал у переклад"><svg viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="8" height="8" rx="1"/><path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2"/></svg></button>
           <button class="ib" id="b-clear" title="Очистити переклад"><svg viewBox="0 0 16 16"><path d="M3 4.5h10M6.5 4.5v-1.5h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/></svg></button>
@@ -730,7 +735,6 @@ function renderFocus(){
 function meter(){
   {const v=$('i-tr').value;$('c-ch').textContent=v.length;$('c-w').textContent=v.trim()?v.trim().split(/\s+/).length:0}
   const n=$('i-tr').value.length;$('i-len').textContent=n+' / '+LIMIT;
-  const m=$('i-meter');m.classList.toggle('over',n>LIMIT);m.firstElementChild.style.width=Math.min(100,n/LIMIT*100)+'%';
 }
 function tagPopHTML(){
   const all=rows.flatMap(r=>r.g),map={};all.forEach(g=>{const k=g[1];map[k]=map[k]||{t:g[0],n:0};map[k].n++});
@@ -738,9 +742,7 @@ function tagPopHTML(){
     return items.length?`<div class="group">${T[t]}</div>`+items.map(([k,v])=>`<div class="tgrow ${t} ${tagFilter===k?'on':''}" data-tagrow="${k}"><i></i>${k}<span class="n">${v.n}</span></div>`).join(''):''}).join('');
 }
 function renderSide(){
-  $('tagpop').innerHTML=tagPopHTML();$('lp-tags').innerHTML=tagPopHTML();
-  $('lp-gloss').innerHTML=gloss.map(([e,u,t])=>`<div class="glrow"><b>${e}</b><span>${u}</span><small>${t}</small></div>`).join('');
-  const nAppr=rows.filter(r=>r.st==='appr').length;
+  $('tagpop').innerHTML=tagPopHTML();$('lp-tags').innerHTML=tagPopHTML();  const nAppr=rows.filter(r=>r.st==='appr').length;
   $('proof-n').textContent=rows.filter(r=>r.st==='done').length;
   const bb=$('bb-ok');if(bb)bb.textContent=stage==='proof'?'Затвердити вичитку':'Підтвердити';
 }
@@ -754,13 +756,13 @@ function select(i){cur=Math.max(0,Math.min(rows.length-1,i));renderAll();documen
 function layout(){
   document.querySelector('.ide').className='ide mode-'+(mode==='table'?'table':'focus')+(lp?' lp-open':' lp-closed');
   document.querySelectorAll('#strip button').forEach(b=>b.classList.toggle('on',b.dataset.lp===lp));
-  $('tree').hidden=lp!=='files';$('lp-tags').hidden=lp!=='tags';$('lp-gloss').hidden=lp!=='gloss';
-  $('lp-title').textContent={files:'Файли гри',tags:'Теги · фільтр за темою',gloss:'Глосарій проєкту'}[lp]||'';
+  $('tree').hidden=lp!=='files';$('lp-tags').hidden=lp!=='tags';$('lp-rows').hidden=lp!=='rows';
+  $('lp-title').textContent={files:'Файли гри',tags:'Теги · фільтр за темою',rows:'Рядки · '+'Map042.json'}[lp]||'';
   $('tagpop').hidden=true;
 }
 function setMode(m){mode=m;stage=m==='proof'?'proof':'tr';
   if(m==='proof')filter='done';else if(filter==='done')filter='all';
-  lp=m==='table'?(lp||'files'):null;layout();
+  lp=m==='table'?(lp&&lp!=='rows'?lp:'files'):'rows';layout();
   document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
   renderAll();if(m!=='table')$('i-tr').focus();else document.querySelectorAll('.gr.sel').forEach(el=>el.scrollIntoView({block:'nearest'}))}
 

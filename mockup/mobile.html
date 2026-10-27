@@ -110,7 +110,8 @@ button{cursor:pointer}
 .bulk button{height:22px;padding:0 9px;border:1px solid #6a58b8;border-radius:4px;background:#3d3472;color:#ece6ff}
 .bulk button:hover{background:#4a3f8a}
 
-.gridwrap{flex:1;min-height:0;overflow:auto;position:relative}
+.gridwrap{flex:1;min-height:0;overflow:auto;position:relative;scrollbar-gutter:stable}
+.gridwrap .grid{padding-right:12px}
 .grid{--cols:34px 22px 150px 92px minmax(190px,1fr) minmax(190px,1fr) 66px;min-width:780px}
 .gh,.gr{display:grid;grid-template-columns:var(--cols);align-items:stretch}
 .gh{position:sticky;top:0;z-index:2;background:var(--panel);border-bottom:1px solid var(--line);height:26px;color:var(--mute);font-size:11px}
@@ -758,7 +759,7 @@ html{background:#121315}
           <div class="fin"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg><input class="qin" id="q" placeholder="Фільтр у цьому файлі" aria-label="Фільтр"><button class="xclr" hidden aria-label="Очистити фільтр">✕</button></div>
           <span class="chipsHost" data-big="1"></span>
           <span id="tagfilter"></span>
-          <div class="r"><button class="chip" id="spkbtn" data-popbtn>Спікер ▾</button><button class="chip" id="tagbtn" data-popbtn>Позначки ▾</button><button class="chip" id="lenbtn" data-popbtn>Довжина ▾</button><button class="chip" id="colbtn" data-popbtn>Колонки ▾</button></div>
+          <div class="r"><button class="chip" id="spkbtn" data-popbtn>Постать ▾</button><button class="chip" id="tagbtn" data-popbtn>Позначки ▾</button><button class="chip" id="lenbtn" data-popbtn>Довжина ▾</button><button class="chip" id="colbtn" data-popbtn>Колонки ▾</button></div>
         </div>
         <div class="bulk" id="bulk"><b id="bulkn">0</b><span id="bulkt"></span>
           <button id="bb-ok">Надіслати на вичитування</button><button id="bb-tag" data-popbtn>Додати позначку…</button><button id="bb-rep" data-popbtn>Знайти й замінити…</button><button id="bb-tm" title="Підставити збіг із пам’яті перекладів (від 70%) у порожні вибрані рядки">Застосувати з ПП</button><button id="bb-clear" class="ghost">Скасувати вибір</button>
@@ -816,9 +817,9 @@ html{background:#121315}
           </div>
         </div></div>
 
-        <aside class="fs" aria-label="Підказки до рядка">
+        <aside class="fs" aria-label="Вказівки до рядка">
           <div class="itabs" id="stabs" role="tablist">
-            <button class="on" role="tab" data-p="s-tm">Підказки</button>
+            <button class="on" role="tab" data-p="s-tm">Вказівки</button>
             <button role="tab" data-p="s-gl">Глосарій</button>
             <button role="tab" data-p="s-cm">Коментарі <span class="cnt" id="cm-badge">0</span></button>
             <button role="tab" data-p="s-hi">Історія</button>
@@ -850,7 +851,7 @@ html{background:#121315}
     <button data-nav="files"><svg viewBox="0 0 16 16"><path d="M2 4.5h4l1.2 1.5H14V12.5H2z"/></svg>Файли</button>
     <button data-nav="rows"><svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h10"/></svg>Рядки</button>
     <button data-nav="edit"><svg viewBox="0 0 16 16"><path d="M3 13l.7-3L10.5 3.2a1.4 1.4 0 0 1 2 2L5.7 12z"/></svg>Редагування</button>
-    <button data-nav="sheet"><svg viewBox="0 0 16 16"><path d="M3.5 3.5h9v7h-4l-2.5 2.5v-2.5h-2.5z"/></svg>Підказки</button>
+    <button data-nav="sheet"><svg viewBox="0 0 16 16"><path d="M3.5 3.5h9v7h-4l-2.5 2.5v-2.5h-2.5z"/></svg>Вказівки</button>
   </nav>
   <footer class="status">
     <span class="ok" id="sb-save"></span>
@@ -1049,7 +1050,7 @@ function tagFilterHTML(){
   const chip=(label,body,k)=>`<span class="chip on tagf">${label} ${body} <span class="x" data-clear="${k}" title="Скинути" role="button" tabindex="0" aria-label="Скинути фільтр">✕</span></span>`;
   let h='';
   if(tagFilter){const g=rows.flatMap(r=>r.g).find(g=>g[1]===tagFilter);if(g)h+=chip('Позначка:',tagH(g),'tag')}
-  if(speaker)h+=chip('Спікер:','<b>'+esc(speaker)+'</b>','speaker');
+  if(speaker)h+=chip('Постать:','<b>'+esc(speaker)+'</b>','speaker');
   if(lenFilter!=='all')h+=chip('Довжина:','<b>'+({far:'далеко від оригіналу',longer:'довші за оригінал',shorter:'коротші за оригінал'}[lenFilter])+'</b>','len');
   return h;
 }
@@ -1074,7 +1075,7 @@ function renderTable(){
   $('grid').style.setProperty('--cols',colsCSS());
   const ar=k=>sortKey===k?`<span class="arrow">${sortDir>0?'▲':'▼'}</span>`:'';
   const nSel=ids.filter(i=>checked.has(i)).length;
-  let h=`<div class="gh" role="row"><div class="gcheck" role="columnheader"><input type="checkbox" id="selall" aria-label="Вибрати всі видимі рядки" ${nSel&&nSel===ids.length?'checked':''}></div><div title="Статус" role="columnheader" class="s" data-s="st"><span class="vh">Статус</span></div><div class="s" data-s="k" role="columnheader">Ключ ${ar('k')}</div>${cols.who?`<div class="s" data-s="w" role="columnheader">Спікер ${ar('w')}</div>`:''}<div role="columnheader">Оригінал · EN</div><div class="s" data-s="t" role="columnheader">Переклад · UK ${ar('t')}</div>${cols.tags?'<div role="columnheader">Позначки</div>':''}${cols.len?`<div class="s" data-s="len" role="columnheader" title="Довжина перекладу / довжина оригіналу (без керівних кодів). Рекомендація: якнайближче до оригіналу" style="justify-content:flex-end;border-right:0">Довж. ${ar('len')}</div>`:''}</div>`;
+  let h=`<div class="gh" role="row"><div class="gcheck" role="columnheader"><input type="checkbox" id="selall" aria-label="Вибрати всі видимі рядки" ${nSel&&nSel===ids.length?'checked':''}></div><div title="Статус" role="columnheader" class="s" data-s="st"><span class="vh">Статус</span></div><div class="s" data-s="k" role="columnheader">Ключ ${ar('k')}</div>${cols.who?`<div class="s" data-s="w" role="columnheader">Постать ${ar('w')}</div>`:''}<div role="columnheader">Оригінал · EN</div><div class="s" data-s="t" role="columnheader">Переклад · UK ${ar('t')}</div>${cols.tags?'<div role="columnheader">Позначки</div>':''}${cols.len?`<div class="s" data-s="len" role="columnheader" title="Довжина перекладу / довжина оригіналу (без керівних кодів). Рекомендація: якнайближче до оригіналу" style="justify-content:flex-end;border-right:0">Довж. ${ar('len')}</div>`:''}</div>`;
   h+=a.length?a.map(rowHTML).join(''):emptyRow;
 
   $('grid').innerHTML=h;$('grid').classList.toggle('has-sel',nSel>0);
@@ -1327,9 +1328,9 @@ function bulk(){
 /* ---------- filters, columns, tags, replace, memory, terms ---------- */
 const selVis=()=>visIds().filter(i=>checked.has(i));
 const prow=(attr,label,n,on)=>`<div class="tgrow ${on?'on':''}" ${attr} role="button" tabindex="0">${label}${n===undefined?'':`<span class="n">${n}</span>`}</div>`;
-const spkHTML=()=>'<div class="group">Спікер</div>'+[...new Set(rows.map(r=>r.w))].map(w=>prow(`data-spk="${esc(w)}"`,esc(w),rows.filter(r=>r.w===w).length,speaker===w)).join('');
+const spkHTML=()=>'<div class="group">Постать</div>'+[...new Set(rows.map(r=>r.w))].map(w=>prow(`data-spk="${esc(w)}"`,esc(w),rows.filter(r=>r.w===w).length,speaker===w)).join('');
 const lenHTML=()=>'<div class="group">Довжина відносно оригіналу</div>'+[['all','Усі'],['far','Далеко від оригіналу (понад допуск)'],['longer','Довші за оригінал'],['shorter','Коротші за оригінал']].map(([k,l])=>prow(`data-len="${k}"`,l,undefined,lenFilter===k)).join('');
-const colHTML=()=>'<div class="group">Колонки</div>'+[['who','Спікер'],['tags','Позначки'],['len','Довжина']].map(([k,l])=>`<label class="prow"><input type="checkbox" data-col="${k}" ${cols[k]?'checked':''}> ${l}</label>`).join('');
+const colHTML=()=>'<div class="group">Колонки</div>'+[['who','Постать'],['tags','Позначки'],['len','Довжина']].map(([k,l])=>`<label class="prow"><input type="checkbox" data-col="${k}" ${cols[k]?'checked':''}> ${l}</label>`).join('');
 function tagChooser(kind){
   const map={};rows.flatMap(r=>r.g).forEach(g=>{map[g[1]]=map[g[1]]||g[0]});
   const have=kind==='r'?new Set(rows[cur].g.map(g=>g[1])):new Set();

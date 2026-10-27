@@ -14,6 +14,7 @@ import { openSettings } from './settings';
 import { openSpeakers } from './speakers-dialog';
 import { STATUS_LABEL, buildTm, shownStatus } from './state';
 import type { Ctx, Filter, Mode, State } from './state';
+import { publishWidget } from './android';
 import { artifactDb, describeClaude, loadClaudeConfig, runClaudeSync } from './claude';
 import { describeGithub, githubConfigured, loadGithubConfig, runGithubSync } from './github';
 import { describe as describeSync, loadSyncConfig, runSync, syncConfigured } from './sync';
@@ -393,6 +394,7 @@ export async function start(root: HTMLElement): Promise<void> {
       const ents = s.saved.files[v.name] ?? {};
       for (const u of v.units) { const e = ents[u.key]; if (!e || !e.target) continue; if (e.status === 'appr') A++; else if (e.status === 'done') D++; else if (e.status === 'draft') W++; }
     }
+    publishWidget({ name: s.saved.name, file: s.current ?? '', total, approved: A, done: D, draft: W });
     $('#pg-a').style.width = total ? `${(100 * A) / total}%` : '0';
     $('#pg-b').style.width = total ? `${(100 * D) / total}%` : '0';
     $('#pg-c').style.width = total ? `${(100 * W) / total}%` : '0';
@@ -942,6 +944,20 @@ export async function start(root: HTMLElement): Promise<void> {
   });
 
   addEventListener('beforeunload', () => { void autosave.flush(); });
+  // The Android app goes to the background without unloading the page: save what was typed.
+  document.addEventListener('visibilitychange', () => { if (document.hidden) void autosave.flush(); });
+  /** Back button: close whatever is open on top first; false when there is nothing to close. */
+  function backStep(): boolean {
+    const dlg = document.querySelector<HTMLDialogElement>('dialog[open]');
+    if (dlg) { dlg.close(); return true; }
+    if (!$('#sd').hidden) { closeSearch(); return true; }
+    if (!fpop().hidden) { closePops(); return true; }
+    if (!$('#keypop').hidden) { $('#keypop').hidden = true; return true; }
+    if (!$('#menubar').hidden) { mbToggle(false); return true; }
+    if (s.phone && (s.leftOpen || s.rightOpen)) { s.leftOpen = false; s.rightOpen = false; renderAll(); return true; }
+    return false;
+  }
+  Object.assign(window, { __back: backStep, __flush: () => autosave.flush() });
   if (s.current) { unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u])); if (s.mode !== 'table') s.cur = ctx.visible()[0]?.key ?? null; }
   renderAll();
 }

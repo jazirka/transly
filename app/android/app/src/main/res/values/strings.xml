@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Transly</string>
+    <string name="widget_desc">Прогрес перекладу: скільки рядків вичитано й що чекає на вичитування</string>
+    <string name="widget_continue">Продовжити</string>
+    <string name="widget_empty_title">Почніть переклад</string>
+    <string name="widget_empty_sub">Відкрийте застосунок і виберіть гру</string>
+</resources>

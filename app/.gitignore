@@ -2,3 +2,9 @@ node_modules/
 dist/
 *.log
 dist-single/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+# the web app is copied in at build time (see .github/workflows/android.yml)
+android/app/src/main/assets/

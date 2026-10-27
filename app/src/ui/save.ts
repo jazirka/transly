@@ -1,3 +1,4 @@
+import { androidBridge, saveViaAndroid } from './android';
 import { toast } from './dom';
 
 interface Downloads { save(r: { filename: string; data: string | Blob | ArrayBuffer | ArrayBufferView }): Promise<{ status: string }> }
@@ -9,8 +10,16 @@ async function hostDownloads(): Promise<Downloads | null> {
   catch { return null; }
 }
 
-/** Save a file for the user: through the host when there is one, otherwise a normal browser download. */
+/** Save a file for the user: through the Android app or the artifact host when there is one, otherwise a normal browser download. */
 export async function saveFile(filename: string, data: string | Blob | Uint8Array, mime = 'application/octet-stream'): Promise<boolean> {
+  // In the Android app a blob link cannot download: the app writes the file into Downloads.
+  const android = androidBridge();
+  if (android?.beginSave) {
+    const blob = data instanceof Blob ? data : new Blob([data as BlobPart], { type: mime });
+    const ok = await saveViaAndroid(android, filename, blob, mime);
+    if (!ok) toast('Не вдалося зберегти файл');
+    return ok;
+  }
   const host = await hostDownloads();
   if (host) {
     try { await host.save({ filename, data }); return true; }

@@ -88,3 +88,12 @@ Control-code QA (`\C[2]`, `\V[1]`…) currently knows RPG Maker codes only; plac
 ## Moving work between devices by file
 
 Settings → Exchange project through a file saves everything but the game files into one `.transly.json`. On a phone (no folder picker) use **Open files or paste JSON**: pick that file, paste its text, or pick game files (`.json`, `.po`, `.csv`, `.rpy`) directly. Imports merge row by row; the newer edit wins.
+
+## Android app
+
+`android/` is a small Android project that wraps the web app in a WebView, so the phone gets what a browser tab or an artifact view cannot give: the system **file chooser**, **saving to Downloads**, working **offline**, requests to GitHub / your sync server, and a **home-screen widget** in One UI's style (a large rounded card with a progress ring: approved share in the accent colour, translated share behind it, the number of approved rows, and a "continue" pill; light and dark follow the system).
+
+- The app's files are copied into the APK and served from a fixed https origin, so storage and `crypto` behave as on the web. The page talks to the app through `window.TranslyAndroid` (`src/ui/android.ts`): progress numbers for the widget, saving files in pieces, and the back button (closes dialogs and panels first).
+- Build: the GitHub Actions workflow **Android APK** builds it with the official Android SDK and uploads `transly.apk` as an artifact (Actions → the run → Artifacts). The APK is signed with the debug key, so install it by hand (allow installs from this source) and publish with your own key if you ever distribute it.
+- Locally, with the Android SDK: `npm run build`, copy `dist/*` into `android/app/src/main/assets/`, then `cd android && ./gradlew assembleRelease`.
+- Android 10 or newer.

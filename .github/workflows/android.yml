@@ -1,0 +1,64 @@
+name: Android APK
+
+# Builds the Android app (app/android): the web app is copied into the APK, so it works offline and can pick files,
+# save to Downloads and show the home-screen widget. The APK is signed with the debug key: fine for installing by hand.
+# Download it from the run's "Artifacts" section (transly-apk).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ccr-a0ee6fc6-t2at3x]
+    paths:
+      - 'app/android/**'
+      - 'app/src/**'
+      - '.github/workflows/android.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Test and build the web app
+        working-directory: app
+        run: |
+          npm ci
+          npm test
+          npm run build
+
+      - name: Put the web app into the APK
+        working-directory: app/android
+        run: |
+          mkdir -p app/src/main/assets
+          cp -r ../dist/. app/src/main/assets/
+
+      - name: Accept Android SDK licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
+      - name: Build the APK
+        working-directory: app/android
+        run: ./gradlew --no-daemon assembleRelease
+
+      - name: Collect the APK
+        run: cp app/android/app/build/outputs/apk/release/app-release.apk transly.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: transly-apk
+          path: transly.apk
+          if-no-files-found: error

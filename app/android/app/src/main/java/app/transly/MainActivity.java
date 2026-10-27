@@ -1,0 +1,225 @@
+package app.transly;
+
+import android.app.Activity;
+import android.content.ContentValues;
+import android.content.Intent;
+import android.net.Uri;
+import android.os.Bundle;
+import android.os.Environment;
+import android.provider.MediaStore;
+import android.util.Base64;
+import android.util.Log;
+import android.webkit.JavascriptInterface;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.widget.Toast;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
+
+/**
+ * Hosts the web app in a WebView. The app's files live in the APK (assets/) and are served under a fixed https origin,
+ * so the page is a secure context with its own storage, like on the web, and needs no server.
+ * What a WebView lacks is provided here: a file chooser, saving files to Downloads, back-button handling, and
+ * progress numbers for the home-screen widget.
+ */
+public class MainActivity extends Activity {
+    static final String HOST = "appassets.androidplatform.net";
+    private static final int REQ_FILES = 1;
+    private static final String TAG = "Transly";
+
+    private WebView web;
+    private ValueCallback<Uri[]> chooser;
+
+    // A file being saved to Downloads, written in pieces so a large project never sits in memory twice.
+    private OutputStream saving;
+    private Uri savingUri;
+    private String savingName;
+
+    @Override
+    protected void onCreate(Bundle state) {
+        super.onCreate(state);
+        web = new WebView(this);
+        setContentView(web);
+
+        WebSettings s = web.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        s.setAllowFileAccess(false);
+        // The sync server of a home network is often plain http.
+        s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+
+        web.addJavascriptInterface(new Bridge(), "TranslyAndroid");
+        web.setWebViewClient(new WebViewClient() {
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                return serve(request.getUrl());
+            }
+
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                Uri u = request.getUrl();
+                if (HOST.equals(u.getHost())) return false;
+                try { startActivity(new Intent(Intent.ACTION_VIEW, u)); } catch (Exception e) { Log.w(TAG, "no handler for " + u); }
+                return true;
+            }
+        });
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
+                if (chooser != null) chooser.onReceiveValue(null);
+                chooser = callback;
+                try {
+                    startActivityForResult(params.createIntent(), REQ_FILES);
+                } catch (Exception e) {
+                    chooser = null;
+                    return false;
+                }
+                return true;
+            }
+        });
+        web.loadUrl("https://" + HOST + "/index.html");
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == REQ_FILES && chooser != null) {
+            chooser.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data));
+            chooser = null;
+            return;
+        }
+        super.onActivityResult(requestCode, resultCode, data);
+    }
+
+    @Override
+    public void onBackPressed() {
+        // The page closes a dialog or a panel first; only when there is nothing to close does the app leave.
+        web.evaluateJavascript("(function(){return !!(window.__back&&window.__back())})()", v -> {
+            if (!"true".equals(v)) finish();
+        });
+    }
+
+    @Override
+    protected void onPause() {
+        // Translations are saved a moment after typing: make sure the last edit is written before the app is cached.
+        web.evaluateJavascript("window.__flush&&window.__flush()", null);
+        web.onPause();
+        super.onPause();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        web.onResume();
+    }
+
+    /** Serve the app's own files for the fixed origin; everything else goes to the network as usual. */
+    private WebResourceResponse serve(Uri uri) {
+        if (!HOST.equals(uri.getHost())) return null;
+        String path = uri.getPath() == null ? "" : uri.getPath();
+        if (path.isEmpty() || path.equals("/")) path = "/index.html";
+        path = path.substring(1);
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Cache-Control", "no-cache");
+        try {
+            InputStream in = getAssets().open(path);
+            return new WebResourceResponse(mime(path), "utf-8", 200, "OK", headers, in);
+        } catch (IOException e) {
+            return new WebResourceResponse("text/plain", "utf-8", 404, "Not Found", headers, new ByteArrayInputStream(new byte[0]));
+        }
+    }
+
+    private static String mime(String path) {
+        String p = path.toLowerCase(Locale.ROOT);
+        if (p.endsWith(".html")) return "text/html";
+        if (p.endsWith(".js") || p.endsWith(".mjs")) return "text/javascript";
+        if (p.endsWith(".css")) return "text/css";
+        if (p.endsWith(".json") || p.endsWith(".webmanifest")) return "application/json";
+        if (p.endsWith(".svg")) return "image/svg+xml";
+        if (p.endsWith(".png")) return "image/png";
+        if (p.endsWith(".ico")) return "image/x-icon";
+        if (p.endsWith(".woff2")) return "font/woff2";
+        return "application/octet-stream";
+    }
+
+    private void toast(String text) {
+        runOnUiThread(() -> Toast.makeText(MainActivity.this, text, Toast.LENGTH_LONG).show());
+    }
+
+    /** What the page can ask of the app. Called on a background thread. */
+    public final class Bridge {
+        /** Progress numbers (JSON) for the home-screen widget. */
+        @JavascriptInterface
+        public void setStats(String json) {
+            getSharedPreferences(TranslyWidget.PREFS, MODE_PRIVATE).edit().putString(TranslyWidget.KEY, json).apply();
+            TranslyWidget.refresh(MainActivity.this);
+        }
+
+        /** Start saving a file to the Downloads folder. */
+        @JavascriptInterface
+        public boolean beginSave(String name, String mime) {
+            closeSave();
+            try {
+                ContentValues v = new ContentValues();
+                v.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
+                v.put(MediaStore.MediaColumns.MIME_TYPE, mime == null || mime.isEmpty() ? "application/octet-stream" : mime);
+                v.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+                savingUri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
+                if (savingUri == null) return false;
+                saving = getContentResolver().openOutputStream(savingUri);
+                savingName = name;
+                return saving != null;
+            } catch (Exception e) {
+                Log.w(TAG, "beginSave failed", e);
+                closeSave();
+                return false;
+            }
+        }
+
+        /** One piece of the file, base64 (a multiple of 4 characters). */
+        @JavascriptInterface
+        public boolean saveChunk(String base64) {
+            if (saving == null) return false;
+            try {
+                saving.write(Base64.decode(base64, Base64.DEFAULT));
+                return true;
+            } catch (Exception e) {
+                Log.w(TAG, "saveChunk failed", e);
+                closeSave();
+                return false;
+            }
+        }
+
+        @JavascriptInterface
+        public boolean endSave() {
+            if (saving == null) return false;
+            String name = savingName;
+            boolean ok = closeSave();
+            if (ok) toast("Збережено в «Завантаження»: " + name);
+            return ok;
+        }
+    }
+
+    private boolean closeSave() {
+        boolean ok = saving != null;
+        try {
+            if (saving != null) saving.close();
+        } catch (IOException e) {
+            ok = false;
+        }
+        saving = null;
+        savingUri = null;
+        savingName = null;
+        return ok;
+    }
+}

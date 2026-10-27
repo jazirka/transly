@@ -35,7 +35,7 @@ describe('sync through a real relay', () => {
   it('PC and phone converge: snapshot goes to the phone, edits merge, newer wins, conflicts are counted', async () => {
     const keys = await deriveKeys('shared secret phrase');
     const t = httpTransport(base);
-    const pc0: SavedProject = { ...withFile(emptyProject('T'), { a: entry('pc-a', 10), b: entry('pc-b', 10) }), snapshot: { 'Map001.json': [unit('a', 'A'), unit('b', 'B')] } };
+    const pc0: SavedProject = { ...withFile(emptyProject('T'), { a: entry('pc-a', 10), b: entry('pc-b', 10) }), snapshot: { 'Map001.json': [unit('a', 'A'), unit('b', 'B')] }, assetsRev: 100, reference: { lang: 'ru', texts: { 'Map001.json': { a: 'А' } } } };
 
     const r1 = await syncOnce(t, keys, pc0);
     expect(r1).toMatchObject({ pushed: true, pulled: false, gotSnapshot: false });
@@ -44,6 +44,8 @@ describe('sync through a real relay', () => {
     const r2 = await syncOnce(t, keys, phone0);
     expect(r2.gotSnapshot).toBe(true);
     expect(r2.project.snapshot?.['Map001.json']).toHaveLength(2);
+    expect(r2.project.reference?.texts['Map001.json']).toEqual({ a: 'А' });
+    expect(r2.project.assetsRev).toBe(100);
     expect(r2.project.files['Map001.json']).toMatchObject({ a: { target: 'pc-a' } });
 
     const phone1 = withFile(r2.project, { a: entry('phone-a', 20), c: entry('phone-c', 20) });

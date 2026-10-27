@@ -2,6 +2,7 @@ import { DEFAULT_SETTINGS, deserialize, emptyProject, mergeProjects, parseDelimi
 import type { GlossaryTerm } from '../core';
 import { $, el, esc, plural, toast } from './dom';
 import type { Ctx } from './state';
+import { importReference } from './reference';
 import { describe, loadSyncConfig, runSync, saveSyncConfig, syncConfigured } from './sync';
 
 /** Open a native <dialog>; it traps focus, closes on Esc and restores focus to the opener. */
@@ -31,6 +32,10 @@ export function openSettings(ctx: Ctx, onReset: () => void, onImport: () => void
       <div class="acts l"><button class="btn" type="button" id="st-terms-file-btn">Імпортувати з файлу…</button></div><input type="file" id="st-terms-file" accept=".html,.htm,.csv,.tsv,.txt,text/html,text/csv,text/plain" hidden>
       <p class="hint">Або вставте рядки «англійською, табуляція, українською»:</p><textarea id="st-terms" rows="4" aria-label="Терміни для імпорту"></textarea><button class="btn" type="button" id="st-terms-go">Імпортувати вставлені терміни</button></details>
     <details><summary>Імпорт пам’яті перекладів</summary><p class="hint">Рядки «оригінал, табуляція, переклад».</p><textarea id="st-tm" rows="5" aria-label="Пари для імпорту"></textarea><button class="btn" type="button" id="st-tm-go">Імпортувати пари</button></details>
+    <details><summary>Довідкова мова</summary><p class="hint">Додайте ту саму гру іншою мовою (наприклад, російською): її переклад з’явиться під оригіналом як підказка. Рядки вирівнюються автоматично, навіть якщо в тій версії є додані чи прибрані репліки.</p>
+      <p class="hint" id="rf-state">${ctx.s.saved.reference ? `Додано: ${esc(ctx.s.saved.reference.lang)}` : 'Довідки ще немає'}</p>
+      <div class="grid"><label for="rf-lang">Код мови</label><input id="rf-lang" maxlength="8" value="${esc(ctx.s.saved.reference?.lang ?? 'ru')}"></div>
+      <div class="acts l"><button class="btn" type="button" id="rf-go">Обрати папку довідкової версії…</button>${ctx.s.saved.reference ? '<button class="btn" type="button" id="rf-del">Прибрати довідку</button>' : ''}</div></details>
     <details><summary>Синхронізація пристроїв</summary><p class="hint">Через ваш власний проміжний сервер (<code>node server/relay.ts</code>): він лише передає зашифровані дані й забуває їх. Без чужих хмар. Дані шифруються паролем на пристроях. Для адреси в інтернеті потрібен https.</p>
       <div class="grid"><label for="sy-url">Адреса сервера</label><input id="sy-url" type="url" placeholder="https://sync.example.com або http://192.168.0.14:7421" value="${esc(sync.url)}">
         <label for="sy-pass">Пароль синхронізації (однаковий на всіх пристроях)</label><input id="sy-pass" type="password" autocomplete="off" minlength="8" value="${esc(sync.passphrase)}">
@@ -97,6 +102,11 @@ export function openSettings(ctx: Ctx, onReset: () => void, onImport: () => void
     ctx.invalidateTm(); ctx.persist(); ctx.render();
     toast(`Імпортовано ${plural(added, ['пару', 'пари', 'пар'])}${rejected ? `, пропущено рядків без табуляції: ${rejected}` : ''}`);
   });
+  $('#rf-go', dlg).addEventListener('click', async () => {
+    const lang = ($('#rf-lang', dlg) as HTMLInputElement).value.trim().toLowerCase() || 'ru';
+    try { if (await importReference(ctx, lang)) { ctx.render(); dlg.close(); } } catch (err) { toast(err instanceof Error ? err.message : 'Не вдалося прочитати папку'); }
+  });
+  dlg.querySelector('#rf-del')?.addEventListener('click', () => { delete ctx.s.saved.reference; ctx.s.saved.assetsRev = Date.now(); ctx.persist(); ctx.render(); toast('Довідку прибрано'); dlg.close(); });
   const readSync = () => ({ ...sync, url: ($('#sy-url', dlg) as HTMLInputElement).value.trim(), passphrase: ($('#sy-pass', dlg) as HTMLInputElement).value, everyMin: Number(($('#sy-every', dlg) as HTMLSelectElement).value) });
   $('#sy-every', dlg).addEventListener('change', () => { saveSyncConfig(readSync()); toast('Налаштування синхронізації збережено'); });
   $('#sy-go', dlg).addEventListener('click', async () => {

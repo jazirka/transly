@@ -1,4 +1,5 @@
 import type { GlossaryTerm } from './glossary';
+import type { Reference } from './reference';
 import { extract } from './rpgmaker';
 import { merge } from './merge';
 import type { Entry, GameFile, Translations, Unit } from './model';
@@ -23,6 +24,10 @@ export interface SavedProject {
    * that has no game files) open the project and translate without the folder; only building needs it.
    */
   snapshot?: Record<string, Unit[]>;
+  /** Same game in another language, aligned to the working language: shown to the translator as a hint. */
+  reference?: { lang: string; texts: Record<string, Reference> };
+  /** Time the snapshot/reference last changed. The device with the larger value owns the newer copy. */
+  assetsRev?: number;
 }
 
 export interface ProjectSettings {
@@ -87,6 +92,8 @@ export function deserialize(text: string): SavedProject {
     resetEpoch: o.resetEpoch ?? 0, files: o.files, memory: o.memory ?? [], terms: o.terms ?? [],
     settings: { ...DEFAULT_SETTINGS, ...(o.settings ?? {}) },
     ...(o.snapshot ? { snapshot: o.snapshot } : {}),
+    ...(o.reference ? { reference: o.reference } : {}),
+    ...(o.assetsRev ? { assetsRev: o.assetsRev } : {}),
   };
 }
 
@@ -107,11 +114,15 @@ export function mergeProjects(a: SavedProject, b: SavedProject, since = 0): { pr
     return [...m.values()].filter(v => v.mt > epoch);
   };
   const newer = a.resetEpoch >= b.resetEpoch ? a : b;
-  // Snapshots describe the game, not the translator's work: keep a's, let b fill in files a does not have.
-  const snapshot = a.snapshot || b.snapshot ? { ...(b.snapshot ?? {}), ...(a.snapshot ?? {}) } : undefined;
+  // Snapshot and reference describe the game, not the translator's work: the side with the newer revision wins,
+  // and when only one side carries them (a lite copy from sync) they are kept.
+  const owner = (b.assetsRev ?? 0) > (a.assetsRev ?? 0) && (b.snapshot || b.reference) ? b : a;
+  const snapshot = owner.snapshot ?? a.snapshot ?? b.snapshot;
+  const reference = owner.reference ?? a.reference ?? b.reference;
+  const assetsRev = Math.max(a.assetsRev ?? 0, b.assetsRev ?? 0);
   return {
     project: {
-      ...newer, resetEpoch: epoch, files, ...(snapshot ? { snapshot } : {}),
+      ...newer, resetEpoch: epoch, files, ...(snapshot ? { snapshot } : {}), ...(reference ? { reference } : {}), ...(assetsRev ? { assetsRev } : {}),
       memory: union(a.memory, b.memory, v => v.s + '\u0001' + v.t),
       terms: union(a.terms, b.terms, v => v.en.toLowerCase()),
     },

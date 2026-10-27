@@ -210,7 +210,9 @@ export async function start(root: HTMLElement): Promise<void> {
     const game: GameFile[] = files;
     s.game = game; s.views = readGame(game); tmCache = null;
     dataDir = isDesktop() ? dataDirOf(picked) : null;
-    s.saved.snapshot = snapshotOf(s.views);
+    const snap = snapshotOf(s.views);
+    // Bump the revision only when the game's strings really changed, so other devices re-download them only then.
+    if (JSON.stringify(snap) !== JSON.stringify(s.saved.snapshot ?? null)) { s.saved.assetsRev = Date.now(); s.saved.snapshot = snap; }
     if (!s.views.length) { s.current = null; renderAll(); toast('У цих файлах немає тексту для перекладу'); return; }
     if (failed.length) toast(`Не вдалося прочитати файлів: ${failed.length}`);
     // Originals may have changed in the game since the translation was written: send those units back to draft.

@@ -15,7 +15,7 @@ export interface Picked { files: PickedFile[]; handle: DirHandle | null }
 export async function pickGameFolder(input: HTMLInputElement): Promise<Picked | null> {
   if (isDesktop()) { const files = await pickGameDirDesktop(); return files ? { files, handle: null } : null; }
   const w = window as PickerWindow;
-  if (w.showDirectoryPicker && !input.dataset.forceInput) {
+  if (w.showDirectoryPicker && !input.dataset.forceInput && !document.documentElement.dataset.forceInput) {
     try {
       const dir = await w.showDirectoryPicker();
       const out: PickedFile[] = [];

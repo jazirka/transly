@@ -31,6 +31,7 @@ const get = <T>(db: IDBDatabase, store: string, key: string): Promise<T | undefi
  */
 export class IdbStore implements ProjectStore {
   private lastSnap: SavedProject['snapshot'];
+  private lastRef: SavedProject['reference'];
   constructor(private id: string) {}
 
   async load(): Promise<SavedProject | null> {
@@ -41,24 +42,29 @@ export class IdbStore implements ProjectStore {
       const p = deserialize(text);
       const snap = await get<SavedProject['snapshot']>(db, SNAPS, this.id);
       if (snap) { p.snapshot = snap; this.lastSnap = snap; }
+      const ref = await get<SavedProject['reference']>(db, SNAPS, `${this.id}:ref`);
+      if (ref) { p.reference = ref; this.lastRef = ref; }
       return p;
     } finally { db.close(); }
   }
 
   async save(p: SavedProject): Promise<void> {
     const db = await open();
-    const { snapshot, ...rest } = p;
+    const { snapshot, reference, ...rest } = p;
     const writeSnap = snapshot !== undefined && snapshot !== this.lastSnap;
+    const writeRef = reference !== this.lastRef;
     try {
       await new Promise<void>((resolve, reject) => {
         const tx = db.transaction([STORE, SNAPS], 'readwrite');
         tx.objectStore(STORE).put(serialize(rest), this.id);
         if (writeSnap) tx.objectStore(SNAPS).put(snapshot, this.id);
+        if (writeRef) { if (reference) tx.objectStore(SNAPS).put(reference, `${this.id}:ref`); else tx.objectStore(SNAPS).delete(`${this.id}:ref`); }
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
         tx.onabort = () => reject(tx.error);
       });
       if (writeSnap) this.lastSnap = snapshot;
+      if (writeRef) this.lastRef = reference;
     } finally { db.close(); }
   }
 }

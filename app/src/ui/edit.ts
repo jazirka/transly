@@ -6,6 +6,7 @@ import type { Ctx, SideTab } from './state';
 export const STATUS_LABEL = { new: 'Без перекладу', draft: 'Чернетка', done: 'Очікує вичитування', appr: 'Вичитано' } as const;
 const SIDE_TABS: [SideTab, string][] = [['hints', 'Вказівки'], ['glossary', 'Глосарій'], ['comments', 'Коментарі'], ['history', 'Історія']];
 
+const refText = (ctx: Ctx, u: Unit): string | undefined => ctx.s.saved.reference?.texts[ctx.s.current ?? '']?.[u.key];
 let glossQuery = '';
 export const setGlossQuery = (q: string): void => { glossQuery = q; };
 const when = (t: number) => new Date(t).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -39,6 +40,7 @@ export function renderEditor(ctx: Ctx, box: HTMLElement): void {
     ${u.speaker ? `<div class="who">${esc(u.speaker)}</div>` : ''}
     <div class="lbl">Оригінал · EN</div>
     <div class="source" id="ed-src">${sourceHtml(u, [...glossary])}</div>
+    ${refText(ctx, u) ? `<div class="lbl">Довідка · ${esc((s.saved.reference?.lang ?? '').toUpperCase())}</div><div class="source ref" id="ed-ref" lang="${esc(s.saved.reference?.lang ?? '')}">${esc(refText(ctx, u) ?? '')}</div>` : ''}
     ${review ? `<div class="lbl">Версія перекладача</div><div class="source orig">${esc(e?.orig ?? '—')}${e && e.orig !== undefined && e.orig !== e.target ? '<span class="chg">змінено вичитуванням</span>' : ''}</div>` : ''}
     <div class="lbl">${review ? 'Після вичитування' : 'Переклад'} · UK</div>
     <textarea id="ed-tr" class="big" rows="${Math.max(4, u.source.split('\n').length + 1)}" aria-label="Переклад" data-key="${esc(u.key)}">${esc(e?.target ?? '')}</textarea>

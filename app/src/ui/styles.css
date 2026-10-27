@@ -177,3 +177,4 @@ textarea.big:focus{outline:0}
 .gamebox .acts{flex-wrap:wrap}
 .qatag{font:10.5px var(--mono);color:var(--warn);margin-left:4px}
 #gl-q{padding:6px 8px;border:1px solid var(--line);border-radius:var(--r2);background:var(--bg)}
+.source.ref{color:var(--mute);font-style:italic}

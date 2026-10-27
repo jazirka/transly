@@ -20,12 +20,15 @@ export interface SyncReport {
   gotSnapshot: boolean;
 }
 
-/** The translator's data without the (large, rarely changing) game snapshot. */
-const lite = (p: SavedProject): SavedProject => { const { snapshot: _s, ...rest } = p; return rest; };
+/** The translator's data without the (large, rarely changing) game snapshot and reference language. */
+const lite = (p: SavedProject): SavedProject => { const { snapshot: _s, reference: _r, ...rest } = p; return rest; };
+const assetsOf = (p: SavedProject): SavedProject => ({ ...lite(p), ...(p.snapshot ? { snapshot: p.snapshot } : {}), ...(p.reference ? { reference: p.reference } : {}) });
 
 /**
  * One round trip: download the shared copy, merge it with ours (newer edit per unit wins),
  * upload the result. Retries when another device wrote in between. The relay stores only encrypted bytes.
+ * The large game assets (original strings, reference language) travel in a separate blob and only when their
+ * revision differs, so ordinary syncs stay small.
  */
 export async function syncOnce(t: Transport, keys: SyncKeys, local: SavedProject, opts: { since?: number; maxTries?: number } = {}): Promise<SyncReport> {
   const since = opts.since ?? 0, maxTries = opts.maxTries ?? 4;
@@ -33,25 +36,32 @@ export async function syncOnce(t: Transport, keys: SyncKeys, local: SavedProject
   let gotSnapshot = false;
   let pulled = false, conflicts = 0;
 
-  // Original strings: fetch when we lack them, publish when the relay lacks them.
-  const snap = await t.get(keys.room, 'snap');
-  if (!project.snapshot && snap) {
-    const r = deserialize(await open(keys, snap.bytes));
-    if (r.snapshot) { project = { ...project, snapshot: r.snapshot }; gotSnapshot = true; }
-  } else if (project.snapshot && !snap) {
-    await t.put(keys.room, 'snap', await seal(keys, serialize({ ...lite(project), snapshot: project.snapshot })), null);
-  }
-
   for (let i = 0; i < maxTries; i++) {
     const remote = await t.get(keys.room, 'data');
     let etag: string | null = null;
+    let theirRev = 0;
     if (remote) {
       const theirs = deserialize(await open(keys, remote.bytes));
+      theirRev = theirs.assetsRev ?? 0;
       const m = mergeProjects(project, theirs, since);
       conflicts += m.conflicts.length;
-      project = { ...m.project, ...(project.snapshot ? { snapshot: project.snapshot } : {}) };
+      project = m.project;
       etag = remote.etag;
       pulled = true;
+    }
+    const myRev = local.assetsRev ?? 0;
+    if (theirRev > myRev && !gotSnapshot) {
+      // Another device has newer game assets: fetch them.
+      const snap = await t.get(keys.room, 'snap');
+      if (snap) {
+        const a = deserialize(await open(keys, snap.bytes));
+        project = { ...project, ...(a.snapshot ? { snapshot: a.snapshot } : {}), ...(a.reference ? { reference: a.reference } : {}), assetsRev: theirRev };
+        gotSnapshot = true;
+      }
+    } else if (myRev > theirRev && (project.snapshot || project.reference)) {
+      await t.put(keys.room, 'snap', await seal(keys, serialize(assetsOf(project))), null).then(async res => {
+        if (!res.ok) { const cur = await t.get(keys.room, 'snap'); await t.put(keys.room, 'snap', await seal(keys, serialize(assetsOf(project))), cur?.etag ?? null); }
+      });
     }
     const res = await t.put(keys.room, 'data', await seal(keys, serialize(lite(project))), etag);
     if (res.ok) return { project, pulled, pushed: true, conflicts, gotSnapshot };

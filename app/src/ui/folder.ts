@@ -3,18 +3,22 @@ import type { GameFile } from '../core';
 /** A file chosen by the user, not read yet. */
 export interface PickedFile { name: string; path: string; read: () => Promise<string> }
 
-type DirHandle = { name: string; values(): AsyncIterable<{ kind: 'file' | 'directory'; name: string; getFile?: () => Promise<File>; values?: () => AsyncIterable<unknown> }> };
+export type DirHandle = {
+  queryPermission?(o: { mode: 'read' | 'readwrite' }): Promise<string>;
+  requestPermission?(o: { mode: 'read' | 'readwrite' }): Promise<string>; name: string; values(): AsyncIterable<{ kind: 'file' | 'directory'; name: string; getFile?: () => Promise<File>; values?: () => AsyncIterable<unknown> }> };
 type PickerWindow = Window & { showDirectoryPicker?: () => Promise<DirHandle> };
 
 /** Prefer the File System Access API (Chromium); fall back to a hidden <input webkitdirectory>. */
-export async function pickGameFolder(input: HTMLInputElement): Promise<PickedFile[] | null> {
+export interface Picked { files: PickedFile[]; handle: DirHandle | null }
+
+export async function pickGameFolder(input: HTMLInputElement): Promise<Picked | null> {
   const w = window as PickerWindow;
   if (w.showDirectoryPicker && !input.dataset.forceInput) {
     try {
       const dir = await w.showDirectoryPicker();
       const out: PickedFile[] = [];
       await walk(dir, '', out, 0);
-      return choose(out);
+      return { files: choose(out), handle: dir };
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') return null;
       throw e;
@@ -25,7 +29,7 @@ export async function pickGameFolder(input: HTMLInputElement): Promise<PickedFil
       const files = [...(input.files ?? [])];
       input.value = '';
       if (!files.length) return resolve(null);
-      resolve(choose(files.map(f => ({ name: f.name, path: f.webkitRelativePath || f.name, read: () => f.text() }))));
+      resolve({ files: choose(files.map(f => ({ name: f.name, path: f.webkitRelativePath || f.name, read: () => f.text() }))), handle: null });
     };
     input.click();
   });
@@ -61,4 +65,14 @@ export async function readFiles(files: PickedFile[], onProgress: (done: number, 
     if (i % 4 === 3) await new Promise(r => setTimeout(r));
   }
   return { files: out, failed };
+}
+
+/** Re-read a remembered folder. Must be called from a click, because the browser may ask for permission. */
+export async function reopenHandle(handle: DirHandle): Promise<PickedFile[] | null> {
+  if (handle.queryPermission && (await handle.queryPermission({ mode: 'read' })) !== 'granted') {
+    if (!handle.requestPermission || (await handle.requestPermission({ mode: 'read' })) !== 'granted') return null;
+  }
+  const out: PickedFile[] = [];
+  await walk(handle, '', out, 0);
+  return choose(out);
 }

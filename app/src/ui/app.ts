@@ -1,10 +1,12 @@
-import { Autosave, build, check, edit, emptyProject, note, readGame, statsOf, submit } from '../core';
+import { Autosave, build, check, edit, emptyProject, note, readGame, reconcile, sourceChanged, statsOf, submit } from '../core';
 import type { Entry, GameFile, SavedProject, Status, Unit } from '../core';
 import { $, el, esc, plural, toast } from './dom';
 import { STATUS_LABEL, onEditorClick, onEditorInput, onEditorSubmit, renderEditor, send, step } from './edit';
 import { canWriteFolder, downloadZip, writeToFolder } from './export';
-import { pickGameFolder, readFiles } from './folder';
-import { IdbStore } from './idb';
+import { pickGameFolder, readFiles, reopenHandle } from './folder';
+import type { DirHandle, PickedFile } from './folder';
+import { IdbStore, loadHandle, saveHandle } from './idb';
+import { openSettings } from './settings';
 import { buildTm } from './state';
 import type { Ctx, Filter, Mode, State } from './state';
 
@@ -16,7 +18,9 @@ export async function start(root: HTMLElement): Promise<void> {
   let saved: SavedProject;
   try { saved = (await store.load()) ?? emptyProject('Новий проєкт'); }
   catch { saved = emptyProject('Новий проєкт'); }
-  const s: State = { views: [], game: [], saved, current: null, cur: null, mode: 'table', filter: 'all', q: '', sideTab: 'hints', saveOk: true, who: 'Ви' };
+  const s: State = { views: [], game: [], saved, current: null, cur: null, mode: 'table', filter: 'all', q: '', sideTab: 'hints', saveOk: true, who: saved.settings.who };
+  let lastHandle: (DirHandle & { name: string }) | null = null;
+  try { lastHandle = (await loadHandle('default')) as typeof lastHandle; } catch { lastHandle = null; }
   const autosave = new Autosave(store, 400, ok => { s.saveOk = ok; renderSave(); });
   let tmCache: ReturnType<typeof buildTm> | null = null;
   let unitMap = new Map<string, Unit>();
@@ -29,13 +33,14 @@ export async function start(root: HTMLElement): Promise<void> {
     <header class="top"><div class="logo" aria-hidden="true">T</div><b>Transly</b><span class="grow"></span>
       <div class="seg" role="group" aria-label="Режим">${MODES.map(([m, l]) => `<button data-mode="${m}" aria-pressed="${m === 'table'}">${l}</button>`).join('')}</div>
       <span class="save" id="save" role="status"></span>
+      <button class="btn" id="settings">Налаштування</button>
       <button class="btn" id="build" disabled>Зібрати…</button>
       <button class="btn p" id="open">Відкрити папку гри</button></header>
     <div class="main"><aside class="panel tree" aria-label="Файли"><div class="phd">Файли гри</div><div class="files" id="files"></div></aside>
       <main class="panel table" id="table"></main></div>`;
   root.appendChild(input);
 
-  const qaOpts = () => ({ tolerancePct: 25, terms: s.saved.terms.map(t => ({ en: t.en, uk: t.uk })) });
+  const qaOpts = () => ({ tolerancePct: s.saved.settings.tolerancePct, terms: s.saved.terms.map(t => ({ en: t.en, uk: t.uk })) });
 
   const ctx: Ctx = {
     s, autosave,
@@ -91,7 +96,8 @@ export async function start(root: HTMLElement): Promise<void> {
 
   function qaHtml(u: Unit, e: Entry | undefined): string {
     if (!e || !e.target) return '';
-    return check(u, e.target, qaOpts()).map(i => `<div class="qa ${i.severity}">${esc(i.message)}</div>`).join('');
+    const changed = sourceChanged(e, u) ? `<div class="qa warn">Оригінал змінено в грі: було «${esc(e.src ?? '')}»</div>` : '';
+    return changed + check(u, e.target, qaOpts()).map(i => `<div class="qa ${i.severity}">${esc(i.message)}</div>`).join('');
   }
 
   function rowHtml(u: Unit, n: number, e: Entry | undefined): string {
@@ -107,7 +113,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!v) {
       box.innerHTML = s.views.length
         ? '<div class="empty"><h2>Оберіть файл</h2>Файл зліва відкриє його рядки.</div>'
-        : '<div class="empty"><h2>Відкрийте папку гри</h2>Оберіть папку <b>data</b> гри на RPG Maker (або саму папку гри). Ваш переклад зберігається в цьому браузері, файли гри не змінюються.</div>';
+        : `<div class="empty"><h2>Відкрийте папку гри</h2>Оберіть папку <b>data</b> гри на RPG Maker (або саму папку гри). Ваш переклад зберігається в цьому браузері, файли гри не змінюються.${lastHandle ? `<p><button class="btn p" id="resume">Продовжити з папкою «${esc(lastHandle.name)}»</button></p>` : ''}</div>`;
       return;
     }
     const filters = `<div class="filters">${FILTERS.map(([f, l]) => `<button class="chip" data-filter="${f}" aria-pressed="${s.filter === f}">${l}</button>`).join('')}
@@ -152,9 +158,7 @@ export async function start(root: HTMLElement): Promise<void> {
     $('.qas', row).innerHTML = qaHtml(u, e);
   }
 
-  async function openFolder(): Promise<void> {
-    const picked = await pickGameFolder(input);
-    if (!picked) return;
+  async function loadFiles(picked: PickedFile[]): Promise<void> {
     if (!picked.length) { toast('У вибраній папці немає файлів .json'); return; }
     $('#table').innerHTML = '<div class="empty"><h2>Читаю файли гри…</h2><div class="progress"><i id="bar"></i></div><span id="pct"></span></div>';
     const { files, failed } = await readFiles(picked, (d, t) => { $('#bar').style.width = `${(d / t) * 100}%`; $('#pct').textContent = `${d} з ${t}`; });
@@ -162,8 +166,26 @@ export async function start(root: HTMLElement): Promise<void> {
     s.game = game; s.views = readGame(game); tmCache = null;
     if (!s.views.length) { s.current = null; renderAll(); toast('У цих файлах немає тексту для перекладу'); return; }
     if (failed.length) toast(`Не вдалося прочитати файлів: ${failed.length}`);
+    // Originals may have changed in the game since the translation was written: send those units back to draft.
+    let changed = 0;
+    for (const v of s.views) { const ents = s.saved.files[v.name]; if (ents) changed += reconcile(v.units, ents, Date.now()).length; }
+    if (changed) { toast(`Оригінал змінився в ${plural(changed, ['рядку', 'рядках', 'рядках'])}: їх повернуто в чернетки`); ctx.persist(); }
     selectFile(s.views[0]!.name);
     renderAll();
+  }
+
+  async function openFolder(): Promise<void> {
+    const picked = await pickGameFolder(input);
+    if (!picked) return;
+    if (picked.handle) { lastHandle = picked.handle as typeof lastHandle; void saveHandle('default', picked.handle).catch(() => undefined); }
+    await loadFiles(picked.files);
+  }
+
+  async function resume(): Promise<void> {
+    if (!lastHandle) return;
+    const files = await reopenHandle(lastHandle);
+    if (!files) { toast('Немає доступу до папки: оберіть її знову'); return; }
+    await loadFiles(files);
   }
 
   function openBuild(): void {
@@ -202,6 +224,8 @@ export async function start(root: HTMLElement): Promise<void> {
   root.addEventListener('click', e => {
     const t = e.target as HTMLElement;
     if (t.closest('#open')) { void openFolder(); return; }
+    if (t.closest('#resume')) { void resume(); return; }
+    if (t.closest('#settings')) { openSettings(ctx, () => { s.views.forEach(v => { s.saved.files[v.name] = {}; }); renderAll(); ctx.persist(); }); return; }
     if (t.closest('#build')) { openBuild(); return; }
     const m = t.closest<HTMLElement>('[data-mode]');
     if (m) { setMode(m.dataset.mode as Mode); return; }
@@ -257,7 +281,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const u = ctx.unit(t.dataset.key);
     if (!u || !s.current) return;
     const ents = ctx.entries(s.current);
-    const r = submit(ents[u.key], u, 'translate', Date.now(), { blockErrors: true, qa: qaOpts() });
+    const r = submit(ents[u.key], u, 'translate', Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: qaOpts() });
     if (!r.ok) { toast(r.reason); return; }
     ents[u.key] = note(r.entry, 'надіслано на вичитування', r.entry.target, s.who, Date.now());
     updateRow(t.closest<HTMLElement>('.row')!, u, ents[u.key]);

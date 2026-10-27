@@ -46,7 +46,7 @@ button{cursor:pointer}
 .row{display:grid;grid-template-columns:44px 120px minmax(0,1fr) minmax(0,1fr) 34px;gap:10px;padding:8px 12px;border-bottom:1px solid #2a2c30;content-visibility:auto;contain-intrinsic-size:auto 76px}
 .row:hover{background:#26282c}
 .row.sel{background:var(--sel)}
-.row .n{color:var(--dim);font:11px var(--mono);padding-top:3px}
+.row .n{color:var(--mute);font:11px var(--mono);padding-top:3px}
 .row .who{color:#d9c3ee;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-top:2px}
 .row .src{white-space:pre-wrap;overflow-wrap:anywhere}
 .row textarea{width:100%;min-height:44px;resize:vertical;padding:6px 8px;border:1px solid var(--line);border-radius:var(--r2);background:var(--bg);white-space:pre-wrap}
@@ -106,7 +106,7 @@ textarea.big:focus{outline:0}
 .cnt.mid{color:#f0c27a}.cnt.over{color:#ff8a94}
 .stpill{padding:2px 10px;border-radius:999px;border:1px solid var(--line);font-size:12px}
 .stpill.draft{color:var(--warn)}.stpill.done{color:var(--info)}.stpill.appr{color:var(--ok)}
-.meta{color:var(--dim);font-size:12px}
+.meta{color:var(--mute);font-size:12px}
 .side{border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-width:0}
 .stabs{display:flex;border-bottom:1px solid var(--line)}
 .stabs button{flex:1;height:34px;border:0;border-bottom:2px solid transparent;background:none;color:var(--mute);padding:0 4px;white-space:nowrap}
@@ -126,3 +126,9 @@ textarea.big:focus{outline:0}
 .form input,.form textarea{padding:6px 8px;border:1px solid var(--line);border-radius:var(--r2);background:var(--bg)}
 .ib.sm[data-open]{margin-top:2px}
 @media (max-width:900px){.edit{grid-template-columns:1fr}.side{border-left:0;border-top:1px solid var(--line)}}
+
+.dlg .grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:8px 12px;align-items:center}
+.dlg .grid input,.dlg textarea{height:30px;padding:0 8px;border:1px solid var(--line);border-radius:var(--r2);background:var(--bg)}
+.dlg textarea{height:auto;padding:8px;width:100%;font-family:var(--mono);font-size:12px}
+.dlg details{display:flex;flex-direction:column;gap:6px}.dlg summary{cursor:pointer;color:var(--mute)}
+.dlg details[open]{gap:8px}

@@ -1,4 +1,4 @@
-import { addComment, check, displayLength, edit as editFn, lengthDeviation, missingCodes, note, sendBack, submit, termsIn } from '../core';
+import { addComment, check, displayLength, edit as editFn, lengthDeviation, missingCodes, note, sendBack, sourceChanged, submit, termsIn } from '../core';
 import type { Entry, Unit } from '../core';
 import { $, esc, plural, toast } from './dom';
 import type { Ctx, SideTab } from './state';
@@ -71,7 +71,8 @@ export function refreshStatus(ctx: Ctx, box: HTMLElement, u: Unit): void {
   const cnt = $('#ed-cnt', box);
   cnt.textContent = `${displayLength(t)}/${displayLength(u.source)}`;
   cnt.className = `cnt ${lenClass(u, e)}`;
-  $('#ed-qa', box).innerHTML = t ? check(u, t, ctx.qaOpts()).map(i => `<div class="qa ${i.severity}" role="note">${esc(i.message)}</div>`).join('') : '';
+  const changed = sourceChanged(e, u) ? `<div class="qa warn" role="note">Оригінал змінено в грі після перекладу. Було: «${esc(e?.src ?? '')}». Перевірте переклад</div>` : '';
+  $('#ed-qa', box).innerHTML = changed + (t ? check(u, t, ctx.qaOpts()).map(i => `<div class="qa ${i.severity}" role="note">${esc(i.message)}</div>`).join('') : '');
   const pill = box.querySelector('.stpill');
   if (pill) { const st = e?.status ?? 'new'; pill.className = `stpill ${st}`; pill.textContent = STATUS_LABEL[st] + (e?.returned ? ' · повернуто' : ''); }
 }
@@ -197,7 +198,7 @@ export function send(ctx: Ctx): void {
   if (!u || !s.current) return;
   const ents = ctx.entries(s.current);
   const stage = s.mode === 'review' ? 'review' : 'translate';
-  const r = submit(ents[u.key], u, stage, Date.now(), { blockErrors: true, qa: ctx.qaOpts() });
+  const r = submit(ents[u.key], u, stage, Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: ctx.qaOpts() });
   if (!r.ok) { toast(r.reason); return; }
   ents[u.key] = note(r.entry, stage === 'translate' ? 'надіслано на вичитування' : 'вичитано', r.entry.target, s.who, Date.now());
   ctx.persist(); ctx.invalidateTm();

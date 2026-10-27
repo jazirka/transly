@@ -16,10 +16,22 @@ export interface SavedProject {
   memory: { s: string; t: string; mt: number }[];
   /** Project glossary. */
   terms: { en: string; uk: string; mt: number }[];
+  settings: ProjectSettings;
 }
 
+export interface ProjectSettings {
+  /** Allowed length deviation from the original, percent. Only a recommendation, never a hard limit. */
+  tolerancePct: number;
+  /** Refuse to send a unit to review while it has a QA error. */
+  blockErrors: boolean;
+  /** Name shown in comments and history. */
+  who: string;
+}
+
+export const DEFAULT_SETTINGS: ProjectSettings = { tolerancePct: 25, blockErrors: true, who: 'Ви' };
+
 export const emptyProject = (name: string, sourceLang = 'en', targetLang = 'uk'): SavedProject => ({
-  version: 1, name, sourceLang, targetLang, resetEpoch: 0, files: {}, memory: [], terms: [],
+  version: 1, name, sourceLang, targetLang, resetEpoch: 0, files: {}, memory: [], terms: [], settings: { ...DEFAULT_SETTINGS },
 });
 
 export interface FileView { name: string; units: Unit[] }
@@ -58,6 +70,7 @@ export function deserialize(text: string): SavedProject {
   return {
     version: 1, name: o.name, sourceLang: o.sourceLang ?? 'en', targetLang: o.targetLang ?? 'uk',
     resetEpoch: o.resetEpoch ?? 0, files: o.files, memory: o.memory ?? [], terms: o.terms ?? [],
+    settings: { ...DEFAULT_SETTINGS, ...(o.settings ?? {}) },
   };
 }
 

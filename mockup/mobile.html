@@ -707,29 +707,35 @@ td .term{color:#d9c3ee}
 .tree,.editor{border:1px solid rgba(255,255,255,.16);border-radius:var(--r3)}
 .tabs{border-radius:calc(var(--r3) - 1px) calc(var(--r3) - 1px) 0 0}
 .tabs .tab:first-child{border-top-left-radius:var(--r2)}
+.node .chev{width:18px;font-size:13px;color:var(--mute);line-height:1}
+.node.dir:hover .chev{color:var(--text)}
 
 /* ===== mobile build: always the phone layout, in a phone-width frame on wide screens ===== */
 html{background:#121315}
 .scroll-x{max-width:480px;margin:0 auto;overflow:hidden;transform:translateZ(0);border-inline:1px solid var(--line);background:var(--bg)}
 @media (min-width:520px){.scroll-x{height:min(100%,900px);margin-block:auto;border-radius:14px;border:1px solid var(--line)}body{display:flex;align-items:center;justify-content:center}}
 .narrow{display:none!important}
-.appbar,.bnav,.scrim{display:none}
+.appbar,.scrim{display:none}
 .ide.sz-s{min-width:0;font-size:14px;background:var(--bg)}
 .ide.sz-s .topbar,.ide.sz-s .status,.ide.sz-s .strip,.ide.sz-s .tabs,.ide.sz-s .ph,.ide.sz-s #f-back,.ide.sz-s .fhd .nav{display:none}
-.ide.sz-s .appbar{display:flex;align-items:center;gap:6px;height:52px;padding:0 8px 0 14px;background:var(--panel);border-bottom:1px solid var(--line);flex:none}
+.ide.sz-s .appbar{display:flex;align-items:center;gap:2px;height:52px;padding:0 6px;background:var(--panel);border-bottom:1px solid var(--line);flex:none}
 .appbar .abt{flex:1;min-width:0;display:flex;flex-direction:column}
 .appbar .abt b{font-weight:500;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .appbar .abt small{color:var(--mute);font-size:11.5px;white-space:nowrap}
-.ab-ic{width:40px;height:40px;border:0;background:none;border-radius:20px;display:grid;place-items:center;color:var(--text)}
-.ab-ic svg,.bnav svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
-.appbar .chip{height:30px;padding:0 12px;flex:none}
-.ide.sz-s .bnav{display:flex;flex:none;background:var(--panel);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
-.bnav button{flex:1;height:56px;border:0;background:none;color:var(--mute);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:11px}
-.bnav button.on{color:var(--text)}
-.bnav button.on svg{background:#3d3472;border-radius:12px;padding:4px;width:32px;height:24px;box-sizing:border-box;stroke:#ece6ff}
+.ab-ic{width:38px;height:40px;flex:none;border:0;background:none;border-radius:20px;display:grid;place-items:center;color:var(--text)}
+.ab-ic svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.appbar .chip{height:30px;padding:0 10px;flex:none;margin:0 4px}
+.appbar .abt{padding-left:6px}
+.ab-ic[aria-pressed=true]{background:var(--on-bg);box-shadow:inset 0 0 0 1px var(--on-ring)}
 .ide.sz-s .main{display:block;position:relative;overflow:hidden;padding:0;gap:0}
 .ide.sz-s .editor{position:absolute;inset:0;border:0;border-radius:0}
-.ide.sz-s .tree{display:none;position:absolute;inset:0;z-index:10;width:auto;border:0;border-radius:0;background:var(--bg)}
+.ide.sz-s .tree{display:none;position:fixed;top:52px;bottom:0;left:0;width:min(88%,340px);z-index:30;border:0;border-right:1px solid var(--line);border-radius:0;background:var(--bg);box-shadow:0 0 40px rgba(0,0,0,.5)}
+.mtabs{display:none}
+.ide.sz-s .mtabs{display:flex;align-items:center;gap:4px;padding:6px 8px;border-bottom:1px solid var(--line);background:var(--panel);flex:none}
+.mtabs button[data-lt]{height:34px;padding:0 14px;border:1px solid transparent;border-radius:var(--r2);background:none;color:var(--mute);font-size:13px;letter-spacing:.04em;text-transform:uppercase}
+.mtabs button[data-lt].on{background:var(--on-bg);border-color:var(--on-ring);color:#fff}
+.mtabs .ab-ic{margin-left:auto;color:var(--text)}
+.ide.sz-s.lp-open .scrim,.ide.sz-s.sheet-open .scrim{display:block;position:fixed;top:52px;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:28}
 .ide.sz-s.lp-open .tree{display:flex}
 .ide.sz-s #v-focus{display:block;height:100%;grid-template-columns:none!important}
 .ide.sz-s .fc{height:100%}
@@ -748,8 +754,15 @@ html{background:#121315}
 .ide.sz-s .saveb{width:52px;height:44px}
 .ide.sz-s .tg.lg{height:30px;padding:0 12px}
 .ide.sz-s .qa-row .fix,.ide.sz-s .qa-row .ign{height:32px}
-.ide.sz-s .fs{position:fixed;left:0;right:0;top:52px;bottom:56px;height:auto;width:auto;z-index:30;border-radius:0;border:0;display:none;background:var(--bg)}
+.ide.sz-s .fs{position:fixed;right:0;top:52px;bottom:0;width:min(92%,380px);z-index:30;border-radius:0;border:0;border-left:1px solid var(--line);display:none;flex-direction:row-reverse;background:var(--panel);box-shadow:0 0 40px rgba(0,0,0,.5)}
 .ide.sz-s.sheet-open .fs{display:flex}
+.ide.sz-s .fs .ibody{flex:1;min-width:0}
+.ide.sz-s .fs .itabs{flex-direction:column;align-items:center;gap:6px;width:56px;flex:none;padding:10px 0;border:0;border-left:1px solid var(--line);height:auto;background:var(--panel)}
+.ide.sz-s .fs .itabs button{position:relative;width:42px;height:42px;padding:0;border:1px solid transparent;border-radius:var(--r2);background:none;color:var(--mute);display:grid;place-items:center}
+.ide.sz-s .fs .itabs button.on{background:var(--on-bg);border-color:var(--on-ring);color:#fff}
+.ide.sz-s .fs .itabs button svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ide.sz-s .fs .itabs .cnt{position:absolute;top:2px;right:2px;min-width:16px;height:16px;border-radius:8px;font-size:10px}
+.ide.sz-s .fs .itabs button::after{display:none}
 .ide.sz-s .edbar{flex-wrap:wrap;row-gap:4px}
 .ide.sz-s .edbar .ib{width:40px;height:40px}
 .ide.sz-s .edbar .stepper{order:9;flex:0 0 100%;justify-content:center;margin:0}
@@ -761,10 +774,10 @@ html{background:#121315}
 .ide.sz-s .edbar .stepper .ib.sm svg{width:18px;height:18px}
 .ide.sz-s .fhd{flex-wrap:wrap;gap:4px 8px}
 .ide.sz-s .st-pill{white-space:nowrap}
-.ide.sz-s .queue{margin-left:auto}
+.ide.sz-s .node .chev{width:24px;font-size:16px}
 .ide.sz-s .tg .tx{padding:11px 12px;margin:-11px -12px -11px 2px}
 .ide.sz-s .lbl-btn{padding:9px 10px;margin:-9px -10px}
-.toast{bottom:76px}
+.toast{bottom:20px}
 .ide.sz-s #b-play,.ide.sz-s #hk{display:none}
 .ide.sz-s .si{position:relative;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .ide.sz-s #lp-rows #bulk{flex-wrap:wrap;height:auto;padding:6px 10px;gap:6px}
@@ -773,7 +786,6 @@ html{background:#121315}
 .ide.sz-s #lp-rows #bulk .ghost{margin-left:auto}
 .dl-acts{display:flex;flex-direction:column;gap:6px}.dl-acts .btn{height:40px;text-align:left;padding:0 14px}
 .lphint{padding:6px 14px;color:var(--mute);font-size:11.5px}
-@media (prefers-reduced-motion:reduce){.ide.sz-s .fs{transition:none}}
 </style>
 <div class="narrow" id="narrow" hidden><span>Вікно вужче за 1180 px: частину інтерфейсу доведеться прокручувати. Для телефона відкрийте мобільну версію.</span><button id="narrow-x" aria-label="Закрити повідомлення">✕</button></div>
 <div class="scroll-x"><div class="ide mode-table">
@@ -803,10 +815,11 @@ html{background:#121315}
   </header>
 
   <header class="appbar">
+    <button class="ab-ic" id="ab-left" aria-label="Файли й рядки" aria-pressed="false"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M6 3v10"/></svg></button>
     <div class="abt"><b id="ab-title">Map042.json</b><small id="ab-sub"></small></div>
     <button class="chip on" id="ab-stage" title="Змінити етап"></button>
-    <button class="ab-ic sd-open" aria-label="Пошук скрізь"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg></button>
-    
+    <button class="ab-ic" id="ab-right" aria-label="Вказівки, глосарій, коментарі" aria-pressed="false"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M10 3v10"/></svg></button>
+    <button class="ab-ic" id="ab-set" aria-label="Налаштування"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2"/><path d="M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M3.6 12.4l1.1-1.1M11.3 4.7l1.1-1.1"/></svg></button>
   </header>
 
   <!-- main -->
@@ -817,6 +830,7 @@ html{background:#121315}
     </nav>
 
     <aside class="tree" id="lpanel" aria-label="Бічна панель: файли, позначки, рядки">
+      <div class="mtabs" id="mtabs" role="group" aria-label="Бічна панель"><button data-lt="files">Файли</button><button data-lt="rows">Рядки</button><button class="sd-open ab-ic" aria-label="Пошук скрізь"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg></button></div>
       <div class="ph"><span class="grow" id="lp-title">Файли гри</span><span class="ico" id="lp-close" title="Сховати панель" role="button" aria-label="Сховати панель">—</span></div>
       <div class="treebody" id="tree"></div>
       <div class="slist" id="lp-rows" hidden>
@@ -935,12 +949,6 @@ html{background:#121315}
   </div>
 
   <div class="scrim" id="scrim"></div>
-  <nav class="bnav" id="bnav" aria-label="Розділи">
-    <button data-nav="files"><svg viewBox="0 0 16 16"><path d="M2 4.5h4l1.2 1.5H14V12.5H2z"/></svg>Файли</button>
-    <button data-nav="rows"><svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h10"/></svg>Рядки</button>
-    <button data-nav="edit"><svg viewBox="0 0 16 16"><path d="M3 13l.7-3L10.5 3.2a1.4 1.4 0 0 1 2 2L5.7 12z"/></svg>Редагування</button>
-    <button data-nav="settings"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2"/><path d="M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M3.6 12.4l1.1-1.1M11.3 4.7l1.1-1.1"/></svg>Налаштування</button>
-  </nav>
   <footer class="status">
     <span class="ok" id="sb-save"></span>
     <span>RPG Maker MV · UTF-8 · LF</span>
@@ -1790,30 +1798,34 @@ setInterval(renderStats,30000);
 setInterval(()=>{const sy=settings.sync;if(sy.every&&Date.now()-sy.last>sy.every*3600000&&$('dlg').hidden&&!building){toast('Автосинхронізація: '+finishSync(3,1,0)+' (демо)')}},60000);
 </script>
 <script>
-/* mobile shell on top of the shared logic */
+/* mobile shell: Crowdin-like structure. Editor page + left drawer (files/rows) + right rail drawer (hints, glossary, comments, history) */
 (function(){
   let sheet=false;
   const baseLayout=layout;
+  const RAIL={'s-tm':['Вказівки','<path d="M3 4h10M3 8h10M3 12h6"/>'],'s-gl':['Глосарій','<path d="M3.5 2.5h8a1 1 0 0 1 1 1v10H4.5a1 1 0 0 1-1-1z"/><path d="M6 5.5h4"/>'],'s-cm':['Коментарі','<path d="M3 3.5h10v7H8.5L6 13v-2.5H3z"/>'],'s-hi':['Історія','<circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.2l2 1.3"/>']};
+  document.querySelectorAll('#stabs button').forEach(b=>{const k=RAIL[b.dataset.p],cnt=b.querySelector('.cnt');b.innerHTML='<svg viewBox="0 0 16 16">'+k[1]+'</svg><span class="vh">'+k[0]+'</span>';if(cnt)b.appendChild(cnt);b.title=k[0]});
   layout=function(){baseLayout();const el=document.querySelector('.ide');el.classList.add('sz-s');el.classList.toggle('sheet-open',sheet);
-    document.querySelectorAll('#bnav button').forEach(b=>{const on=sheet?false:b.dataset.nav==='settings'?false:(b.dataset.nav==='edit'?!lp:b.dataset.nav===lp);b.classList.toggle('on',on)});
+    document.querySelectorAll('#mtabs [data-lt]').forEach(b=>{const on=b.dataset.lt===lp;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)});
+    $('ab-left').setAttribute('aria-pressed',!!lp);$('ab-right').setAttribute('aria-pressed',sheet);
     $('ab-title').textContent=curFile;$('ab-stage').textContent=stage==='proof'?'Вичитування':'Переклад';
     $('ab-sub').textContent=(stage==='proof'?'Вичитування':'Переклад')+' · '+rows.filter(r=>r.st==='appr').length+' / '+rows.length+' вичитано'};
   const baseMode=setMode;setMode=function(m){baseMode(m==='table'?'focus':m)};
-  mode='focus';stage='tr';lpOpen=false;
+  mode='focus';stage='tr';lpOpen=false;lpTab.focus='rows';lpTab.proof='rows';
   document.addEventListener('click',e=>{const t=e.target;
-    const nv=t.closest('#bnav [data-nav]');
-    if(nv){const n=nv.dataset.nav;if(n==='settings'){openSettings()}else{sheet=false;setLp(n==='edit'?null:n)}return}
+    if(t.closest('#ab-left')){sheet=false;if(lpOpen)setLp(null);else setLp(lpTab[mode]||'rows');return}
+    if(t.closest('#ab-right')){sheet=!sheet;lpOpen=false;layout();return}
+    if(t.closest('#ab-set')){openSettings();return}
+    const lt=t.closest('#mtabs [data-lt]');if(lt){setLp(lt.dataset.lt);return}
     const ma=t.closest('#dlg [data-ma]');if(ma){const k=ma.dataset.ma;closeDialog(true);
-      if(k==='hints'){sheet=true;layout()}else if(k==='qa'){setLp('rows');filter='qa';renderAll()}else if(k==='sync')openDeviceSync();return}
-    if(t.closest('#scrim')){sheet=false;layout();return}
+      if(k==='qa'){setLp('rows');filter='qa';renderAll()}else if(k==='sync')openDeviceSync();return}
+    if(t.closest('#scrim')){sheet=false;lpOpen=false;layout();return}
     if(t.closest('#ab-stage')){setMode(mode==='proof'?'focus':'proof');return}
     if(t.closest('.si')){if(suppress){suppress=false;return}if(checked.size){const i=+t.closest('.si').dataset.i;checked.has(i)?checked.delete(i):checked.add(i);renderAll();return}setLp(null);return}
     const df=t.closest('[data-file]');if(df&&FILES[df.dataset.file]){setLp('rows');return}
   });
-  /* everything from the old ⋮ menu lives in Settings on the phone */
   const baseOS=openSettings;
   openSettings=function(){baseOS();const d=document.createElement('div');d.className='dl-acts';
-    d.innerHTML='<button class="btn" data-ma="hints">Вказівки до рядка</button><button class="btn" data-ma="qa">Показати проблеми QA</button><button class="btn" data-ma="sync">Синхронізація пристроїв…</button>';$('dlg-b').prepend(d)};
+    d.innerHTML='<button class="btn" data-ma="qa">Показати проблеми QA</button><button class="btn" data-ma="sync">Синхронізація пристроїв…</button>';$('dlg-b').prepend(d)};
   /* long press on a row starts multi-select; further taps toggle rows */
   let suppress=false,lpT=null,lpXY=null;
   const rowsPanel=$('lp-rows');rowsPanel.insertBefore($('bulk'),rowsPanel.querySelector('.fh').nextSibling);

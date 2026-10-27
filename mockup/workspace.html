@@ -13,8 +13,8 @@
   --mute:#868a91;
   --dim:#5f6369;
   --accent:#8b72e8;
-  --sel:#2e436e;         /* selected row */
-  --sel-soft:#25324d;
+  --sel:#3a3170;         /* selected row */
+  --sel-soft:#2a2548;
   --ok:#5fb865; --warn:#e5a04b; --bad:#f75464; --info:#56a8f5; --violet:#b589d6;
   --ui:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
   --mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
@@ -102,13 +102,13 @@ button{cursor:pointer}
 .fin input{flex:1;min-width:0;background:none;border:0;outline:0;color:var(--text)}
 .chip{flex:none;white-space:nowrap;height:24px;padding:0 9px;border:1px solid var(--line);border-radius:12px;background:transparent;color:var(--mute);display:flex;align-items:center;gap:6px}
 .chip:hover{color:var(--text);background:#2b2d30}
-.chip.on{background:#2a3a5c;border-color:#3b5a9a;color:#c9d8f7}
+.chip.on{background:#2f2a58;border-color:#5a4a9a;color:#d9d0ff}
 .chip .n{font:10.5px var(--mono);opacity:.8}
 .filters .r{margin-left:auto;display:flex;gap:12px;align-items:center;color:var(--mute);white-space:nowrap;flex:none}
-.bulk{display:none;align-items:center;gap:8px;height:30px;padding:0 12px;background:#2a3a5c;border-bottom:1px solid #3b5a9a;flex:none;color:#c9d8f7}
+.bulk{display:none;align-items:center;gap:8px;height:30px;padding:0 12px;background:#2f2a58;border-bottom:1px solid #5a4a9a;flex:none;color:#d9d0ff}
 .bulk.show{display:flex}
-.bulk button{height:22px;padding:0 9px;border:1px solid #4a6bad;border-radius:4px;background:#30447a;color:#e6eeff}
-.bulk button:hover{background:#3a5290}
+.bulk button{height:22px;padding:0 9px;border:1px solid #6a58b8;border-radius:4px;background:#3d3472;color:#ece6ff}
+.bulk button:hover{background:#4a3f8a}
 
 .gridwrap{flex:1;min-height:0;overflow:auto;position:relative}
 .grid{--cols:34px 22px 150px 92px minmax(190px,1fr) minmax(190px,1fr) 66px;min-width:780px}
@@ -403,7 +403,7 @@ td .term{color:#d9c3ee}
 .edbar{display:flex;align-items:center;gap:4px;margin-top:8px;padding:8px 10px;background:#262a33;border:1px solid var(--line);border-radius:6px}
 .ib{width:34px;height:34px;border:0;border-radius:6px;background:none;color:#aeb4c0;display:grid;place-items:center}
 .ib[hidden]{display:none}
-.ib:hover{background:#343944;color:#fff}
+.ib:hover{background:#38354a;color:#fff}
 .ib svg{width:20px;height:20px;stroke-width:1.3}
 .qab{min-width:20px;height:20px;border-radius:10px;background:#ff6347;color:#fff;font:600 11px var(--ui);display:grid;place-items:center;padding:0 5px;margin-left:6px}
 .qab[hidden]{display:none}
@@ -505,8 +505,8 @@ td .term{color:#d9c3ee}
 .xclr[hidden]{display:none}
 .lbl-btn{margin-left:auto;border:0;background:none;color:var(--mute);font:inherit;text-transform:none;letter-spacing:0;cursor:pointer;padding:0}
 .lbl-btn:hover{color:var(--text)}
-.bulk .ghost{margin-left:auto;background:none;border-color:transparent;color:#c9d8f7}
-.bulk .ghost:hover{background:#30447a}
+.bulk .ghost{margin-left:auto;background:none;border-color:transparent;color:#d9d0ff}
+.bulk .ghost:hover{background:#3d3472}
 .node.dir{cursor:pointer}
 .status .bad{color:var(--bad)}.status .ok{color:var(--ok)}
 .hist .h{color:var(--mute)}
@@ -549,7 +549,7 @@ td .term{color:#d9c3ee}
 .tg:focus-visible,.si:focus-visible,.tgrow:focus-visible,.sg:focus-visible,.node:focus-visible,.x:focus-visible,.tx:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 :root{--sel:#263a62}
 .gr.sel .who,.si.sel .a b,.ctx .me span:nth-child(2){color:#cfb0ea}
-.seg button.on[data-m=proof]{background:#2c64d8}
+.seg button.on[data-m=proof]{background:#6a50d0}
 .seg kbd{color:var(--mute)}
 /* round 2 */
 .gr,.si{content-visibility:auto;contain-intrinsic-size:auto 44px}
@@ -558,7 +558,7 @@ td .term{color:#d9c3ee}
 .tgrow .tt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tags{min-width:0}
 .tg .tx{display:inline-block;padding:4px 6px;margin:-4px -6px -4px 0}
-.btn.p{background:#2c64d8;border-color:#3b74ea}
+.btn.p{background:#6a50d0;border-color:#9a85ee}
 .btn.p:hover{background:#3a72e6}
 .pop .group{color:var(--mute)}
 .ctx .me span:first-child{color:var(--mute)}
@@ -696,7 +696,7 @@ td .term{color:#d9c3ee}
           <div class="r"><button class="chip" id="spkbtn" data-popbtn>Спікер ▾</button><button class="chip" id="tagbtn" data-popbtn>Позначки ▾</button><button class="chip" id="lenbtn" data-popbtn>Довжина ▾</button><button class="chip" id="colbtn" data-popbtn>Колонки ▾</button></div>
         </div>
         <div class="bulk" id="bulk"><b id="bulkn">0</b><span id="bulkt"></span>
-          <button id="bb-ok">Надіслати на вичитування</button><button id="bb-tag" data-popbtn>Додати позначка…</button><button id="bb-rep" data-popbtn>Знайти й замінити…</button><button id="bb-tm" title="Підставити збіг із пам’яті перекладів (від 70%) у порожні вибрані рядки">Застосувати з ПП</button><button id="bb-clear" class="ghost">Скасувати вибір</button>
+          <button id="bb-ok">Надіслати на вичитування</button><button id="bb-tag" data-popbtn>Додати позначку…</button><button id="bb-rep" data-popbtn>Знайти й замінити…</button><button id="bb-tm" title="Підставити збіг із пам’яті перекладів (від 70%) у порожні вибрані рядки">Застосувати з ПП</button><button id="bb-clear" class="ghost">Скасувати вибір</button>
         </div>
         <div class="gridwrap"><div class="grid" id="grid" role="grid" aria-label="Рядки файлу"></div></div>
         <div class="legend-bar" aria-label="Умовні позначення">
@@ -901,7 +901,7 @@ function markup(s){
     const g=TERMS.find(x=>x.en.toLowerCase()===term.toLowerCase());
     return '<span class="term-hit" title="'+esc(T[g.type]+': '+g.en+' → '+g.uk)+'">'+m+'</span>'});
 }
-const tagH=(g,lg)=>`<span class="tg ${g[0]} ${lg?'lg':''}" data-tag="${esc(g[1])}" role="button" tabindex="0" title="${T[g[0]]} · ${esc(g[1])} · фільтрувати за позначкаом"><span class="tt">${esc(g[1])}</span>${lg?`<span class="tx" data-rmtag="${esc(g[1])}" role="button" aria-label="Прибрати позначка ${esc(g[1])}" title="Прибрати позначка з рядка">✕</span>`:''}</span>`;
+const tagH=(g,lg)=>`<span class="tg ${g[0]} ${lg?'lg':''}" data-tag="${esc(g[1])}" role="button" tabindex="0" title="${T[g[0]]} · ${esc(g[1])} · фільтрувати за позначкою"><span class="tt">${esc(g[1])}</span>${lg?`<span class="tx" data-rmtag="${esc(g[1])}" role="button" aria-label="Прибрати позначку ${esc(g[1])}" title="Прибрати позначку з рядка">✕</span>`:''}</span>`;
 const cmI='<svg class="cmi" viewBox="0 0 16 16" aria-label="Є коментарі"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>';
 /* ---------- rules: limits, QA, statuses ---------- */
 const dispLen=t=>[...t.replace(CODE,'')].length;
@@ -982,7 +982,7 @@ function tagFilterHTML(){
   return h;
 }
 /* ---------- render ---------- */
-const emptyHTML='<div class="empty-state"><b>Нічого не знайдено</b><span>Немає рядків за поточним пошуком, позначкаом і статусом.</span><button class="btn" data-reset>Скинути фільтри</button></div>';
+const emptyHTML='<div class="empty-state"><b>Нічого не знайдено</b><span>Немає рядків за поточним пошуком, позначкою і статусом.</span><button class="btn" data-reset>Скинути фільтри</button></div>';
 const colsCSS=()=>['34px','22px','110px',cols.who?'96px':'','minmax(160px,.9fr)','minmax(180px,1fr)',cols.tags?'minmax(120px,.5fr)':'',cols.len?'60px':''].filter(Boolean).join(' ');
 function rowHTML(r){const n=dispLen(r.t),rl=recLen(r);
   return `<div class="gr ${r.i===cur?'sel':''} ${checked.has(r.i)?'chk':''}" role="row" tabindex="${r.i===cur?0:-1}" aria-selected="${r.i===cur}" data-i="${r.i}">
@@ -1262,12 +1262,12 @@ function tagChooser(kind){
   const map={};rows.flatMap(r=>r.g).forEach(g=>{map[g[1]]=map[g[1]]||g[0]});
   const have=kind==='r'?new Set(rows[cur].g.map(g=>g[1])):new Set();
   const items=Object.entries(map).filter(([k])=>!have.has(k)).map(([k,t])=>`<div class="tgrow ${t}" data-${kind}tag="${esc(k)}" role="button" tabindex="0"><i></i><span class="tt">${esc(k)}</span><span class="n">${T[t]}</span></div>`).join('');
-  return `<div class="group">${kind==='r'?'Додати позначка до рядка':'Додати позначка до вибраних'}</div>${items||'<div class="hint">Усі наявні позначки вже є.</div>'}<div class="pform"><input id="nt-name" maxlength="40" placeholder="Новий позначка (до 40 символів)" aria-label="Назва нового позначкаа"><select id="nt-type" aria-label="Тип позначкаа">${Object.entries(T).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select><button class="btn p" data-newtag="${kind}">Створити й додати</button></div>`;
+  return `<div class="group">${kind==='r'?'Додати позначку до рядка':'Додати позначку до вибраних'}</div>${items||'<div class="hint">Усі наявні позначки вже є.</div>'}<div class="pform"><input id="nt-name" maxlength="40" placeholder="Нова позначка (до 40 символів)" aria-label="Назва нового позначки"><select id="nt-type" aria-label="Тип позначки">${Object.entries(T).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select><button class="btn p" data-newtag="${kind}">Створити й додати</button></div>`;
 }
 function addTagTo(idx,tag){
   const todo=idx.filter(i=>!rows[i].g.some(g=>g[1]===tag[1]));if(!todo.length)return toast('Позначка «'+tag[1]+'» уже є в усіх цих рядках');
-  lastUndo=snap(todo);todo.forEach(i=>{rows[i].g.push([tag[0],tag[1]]);note(rows[i],'позначка додано',tag[1])});closePops();renderAll();
-  toast('Позначка «'+tag[1]+'» додано: '+plural(todo.length,['рядок','рядки','рядків']),true)}
+  lastUndo=snap(todo);todo.forEach(i=>{rows[i].g.push([tag[0],tag[1]]);note(rows[i],'позначку додано',tag[1])});closePops();renderAll();
+  toast('Позначка «'+tag[1]+'» додана до: '+plural(todo.length,['рядок','рядки','рядків']),true)}
 const repHint0='Заміна діє на вибрані видимі рядки. Регістр враховується.';
 const repHTML=()=>`<div class="pform"><label>Знайти<input id="rp-find" autocomplete="off"></label><label>Замінити на<input id="rp-with" autocomplete="off"></label><div class="hint" id="rp-hint">${repHint0}</div><button class="btn p" data-dorep>Замінити</button></div>`;
 function rpHint(){const f=$('rp-find');if(!f)return;const v=f.value;let n=0,m=0;selVis().forEach(i=>{const c=rows[i].t.split(v).length-1;if(v&&c){n++;m+=c}});$('rp-hint').textContent=v?(n?`Знайдено ${plural(m,['збіг','збіги','збігів'])} у ${plural(n,['рядку','рядках','рядках'])}`:'Збігів у вибраних рядках немає'):repHint0}
@@ -1489,7 +1489,7 @@ document.addEventListener('click',e=>{
   const tbt=t.closest('[data-tab]');if(tbt){openFile(tbt.dataset.tab);return}
   if(!t.closest('.pop,[data-popbtn]'))closePops();
   const so=t.closest('[data-soon]');if(so){closePops();return toast('Недоступно в макеті: '+so.dataset.soon)}
-  const ac=t.closest('[data-act]');if(ac){closePops();if(ac.dataset.act==='reset')return resetDemo();if(ac.dataset.act==='build')return openBuild({run:true});if(ac.dataset.act==='srcsync')return openSourceSync();if(ac.dataset.act==='devsync')return openDeviceSync();if(ac.dataset.act==='qa'){mode!=='table'&&setMode('table');filter='qa';return renderAll()}}
+  const ac=t.closest('[data-act]');if(ac){closePops();if(ac.dataset.act==='reset')return resetDemo();if(ac.dataset.act==='settings')return openSettings();if(ac.dataset.act==='build')return openBuild({run:true});if(ac.dataset.act==='srcsync')return openSourceSync();if(ac.dataset.act==='devsync')return openDeviceSync();if(ac.dataset.act==='qa'){mode!=='table'&&setMode('table');filter='qa';return renderAll()}}
   if(t.closest('#hamb'))return openMainMenu(t.closest('#hamb'));
   if(t.closest('#more'))return menu(t.closest('#more'),[{t:'Показати проблеми QA',act:'qa'},{t:'Зібрати й перевірити в грі…',act:'build'},{t:'Оновити оригінал із гри…',act:'srcsync'},{t:'Синхронізація пристроїв…',act:'devsync'},{t:'Скинути демо-дані',act:'reset'}]);
   if(t.closest('#hk'))return openPop('keypop',t.closest('#hk'),'right');
@@ -1510,11 +1510,11 @@ document.addEventListener('click',e=>{
   const lnn=t.closest('[data-len]');if(lnn){lenFilter=lnn.dataset.len;closePops();return renderAll()}
   const bt=t.closest('[data-btag]');if(bt){const nm=bt.dataset.btag,ty=rows.flatMap(r=>r.g).find(g=>g[1]===nm)[0];return addTagTo(selVis(),[ty,nm])}
   const rt=t.closest('[data-rtag]');if(rt){const nm=rt.dataset.rtag,ty=rows.flatMap(r=>r.g).find(g=>g[1]===nm)[0];return addTagTo([cur],[ty,nm])}
-  const nt=t.closest('[data-newtag]');if(nt){const nm=$('nt-name').value.trim();if(!nm)return toast('Введіть назву позначкаа');if(nm.length>40)return toast('Назва позначкаа не довша за 40 символів');
+  const nt=t.closest('[data-newtag]');if(nt){const nm=$('nt-name').value.trim();if(!nm)return toast('Введіть назву позначки');if(nm.length>40)return toast('Назва позначки не довша за 40 символів');
     const ex=rows.flatMap(r=>r.g).find(g=>g[1].toLowerCase()===nm.toLowerCase());return addTagTo(nt.dataset.newtag==='r'?[cur]:selVis(),ex?[ex[0],ex[1]]:[$('nt-type').value,nm])}
   if(t.closest('[data-dorep]'))return doReplace();
   if(t.closest('[data-doterm]'))return doTerm();
-  const rmt=t.closest('[data-rmtag]');if(rmt){const r=rows[cur],nm=rmt.dataset.rmtag;lastUndo=snap([cur]);r.g=r.g.filter(g=>g[1]!==nm);note(r,'позначка прибрано',nm);renderAll();return toast('Позначка «'+nm+'» прибрано з рядка',true)}
+  const rmt=t.closest('[data-rmtag]');if(rmt){const r=rows[cur],nm=rmt.dataset.rmtag;lastUndo=snap([cur]);r.g=r.g.filter(g=>g[1]!==nm);note(r,'позначку прибрано',nm);renderAll();return toast('Позначка «'+nm+'» прибрана з рядка',true)}
   const ig=t.closest('[data-ign]');if(ig){const r=rows[cur],x=qaIssues(r)[+ig.dataset.ign];lastUndo=snap([cur]);r.ign.push(x.key);note(r,'проблему проігноровано',x.msg);renderAll();return toast('Проблему проігноровано для цього рядка',true)}
   const un=t.closest('[data-unign]');if(un){const r=rows[cur],x=qaAll(r).filter(y=>r.ign.includes(y.key))[+un.dataset.unign];r.ign=r.ign.filter(k=>k!==x.key);return renderAll()}
   const fx=t.closest('[data-fix]');if(fx){const r=rows[cur],x=qaIssues(r)[+fx.dataset.fix],g=TERMS.find(y=>y.en===x.term);
@@ -1533,7 +1533,7 @@ document.addEventListener('click',e=>{
   const tg=t.closest('[data-tag]');if(tg){tagFilter=tg.dataset.tag;return renderAll()}
   const ch=t.closest('.chip[data-f]');if(ch){if(mode==='proof')pfilter=ch.dataset.f;else filter=ch.dataset.f;return renderAll()}
   if(t.closest('#bb-ok'))return bulk();
-  if(t.closest('#bb-clear')){checked.clear();return renderTable()}
+  if(t.closest('#bb-clear')){checked.clear();return renderAll()}
   if(t.closest('#cm-add')){const ta=$('cm-in'),v=ta.value.trim();if(!v)return toast('Напишіть текст коментаря');const r=rows[cur];lastUndo=snap([cur]);r.comments.push({who:'Ви',when:'щойно',text:v});note(r,'коментар',v);ta.value='';renderAll();return}
   const s=t.closest('[data-s]');
   if(s){const k=s.dataset.s;if(sortKey!==k){sortKey=k;sortDir=1}else if(sortDir===1)sortDir=-1;else{sortKey=null;sortDir=1}return renderAll()}

@@ -396,7 +396,7 @@ td .term{color:#d9c3ee}
 .wc{display:flex;margin-left:6px;height:100%}
 .wc button{width:46px;border:0;background:none;color:#c7cad1;display:grid;place-items:center}
 .wc button:last-child:hover{background:#c42b1c}
-.topbar .prog{margin-right:10px}
+.topbar .prog{margin:0 4px}
 .seg button.on[data-m=proof]{background:var(--accent);color:#fff}
 .seg .cnt{font:10.5px var(--mono);background:#3b3d42;border-radius:8px;padding:0 5px;color:var(--text)}
 .edbar{display:flex;align-items:center;gap:4px;margin-top:8px;padding:8px 10px;background:#262a33;border:1px solid var(--line);border-radius:6px}
@@ -453,6 +453,12 @@ td .term{color:#d9c3ee}
 .strip button.on{background:#2f4678;color:#d6e2ff}
 .strip button:focus-visible{box-shadow:0 0 0 2px rgba(53,116,240,.6)}
 .strip svg{width:17px;height:17px}
+.tsep{margin:0 8px}
+.pop.keys{width:360px;padding:6px 0;max-height:none}
+.keys .kh{padding:6px 14px 8px;color:var(--mute);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+.keys .kr{display:flex;align-items:center;gap:4px;padding:5px 14px;font-size:12.5px}
+.keys .kr span{flex:1;margin-right:8px}
+.keys kbd{font:11px var(--mono);border:1px solid #4a4d54;border-bottom-width:2px;border-radius:4px;padding:1px 6px;background:#393b40;color:var(--text)}
 </style>
 <div class="scroll-x"><div class="ide mode-table">
 
@@ -467,12 +473,14 @@ td .term{color:#d9c3ee}
       <div class="bar"><i class="a" style="width:41%"></i><i class="b" style="width:22%"></i><i class="c" style="width:9%"></i></div>
       <span style="font-family:var(--mono);font-size:11.5px">72% · 9 316 / 12 940</span>
     </div>
+    <div class="tsep"></div>
     <button class="tpill run" title="Конфігурація збірки"><svg viewBox="0 0 16 16"><path d="M2.5 9l2-4.5h7L13.5 9v3h-11z"/><circle cx="5.5" cy="12" r="1"/><circle cx="10.5" cy="12" r="1"/></svg>Termina [export] <span class="dd">▾</span></button>
     <button class="tb-ic play" title="Зібрати й запустити"><svg viewBox="0 0 16 16"><path d="M4.5 2.5l9 5.5-9 5.5z" fill="currentColor" stroke="none"/></svg></button>
-    <button class="tb-ic" title="Перевірити QA"><svg viewBox="0 0 16 16"><path d="M5 3l1.2 1.2M11 3l-1.2 1.2M8 4.5a3 3 0 0 1 3 3V10a3 3 0 0 1-6 0V7.5a3 3 0 0 1 3-3zM2.5 8h2.5M11 8h2.5M3 12l2-1M13 12l-2-1"/></svg></button>
     <button class="tb-ic" id="more" title="Ще"><svg viewBox="0 0 16 16"><circle cx="8" cy="3.5" r=".9" fill="currentColor"/><circle cx="8" cy="8" r=".9" fill="currentColor"/><circle cx="8" cy="12.5" r=".9" fill="currentColor"/></svg></button>
     <div class="tsep"></div>
     <button class="tb-ic" title="Знайти скрізь (⇧⇧)"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg></button>
+    <button class="tb-ic" id="hk" title="Гарячі клавіші"><svg viewBox="0 0 16 16"><rect x="1.5" y="3.5" width="13" height="9" rx="1.8"/><path d="M4.2 6.5h.01M6.7 6.5h.01M9.3 6.5h.01M11.8 6.5h.01M4.5 9.5h7"/></svg></button>
+    <div class="tsep"></div>
     <button class="tb-ic dot" title="Налаштування"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg></button>
     <div class="wc"><button title="Згорнути"><svg viewBox="0 0 16 16"><path d="M3 8h10"/></svg></button><button title="Розгорнути"><svg viewBox="0 0 16 16"><rect x="3" y="3" width="10" height="10"/></svg></button><button title="Закрити"><svg viewBox="0 0 16 16"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg></button></div>
   </div>
@@ -609,6 +617,16 @@ td .term{color:#d9c3ee}
 </div>
 
 <div class="pop" id="tagpop" hidden></div>
+<div class="pop keys" id="keypop" hidden>
+  <div class="kh">Гарячі клавіші</div>
+  <div class="kr"><span>Відкрити рядок у редакторі</span><kbd>Enter</kbd></div>
+  <div class="kr"><span>Назад до таблиці</span><kbd>Esc</kbd></div>
+  <div class="kr"><span>Наступний / попередній рядок</span><kbd>↓</kbd><kbd>↑</kbd></div>
+  <div class="kr"><span>Підтвердити й далі (на вичитці: затвердити)</span><kbd>Ctrl</kbd><kbd>Enter</kbd></div>
+  <div class="kr"><span>Редагувати комірку в таблиці</span><kbd>2× клік</kbd></div>
+  <div class="kr"><span>Вибрати діапазон рядків</span><kbd>Shift</kbd><kbd>клік</kbd></div>
+  <div class="kr"><span>Знайти скрізь</span><kbd>⇧</kbd><kbd>⇧</kbd></div>
+</div>
 <div class="status">
   <span class="ok">● Автозбереження: 14:32</span>
   <span>RPG Maker MV · UTF-8 · LF</span>
@@ -792,8 +810,10 @@ document.addEventListener('click',e=>{
   const un=e.target.closest('[data-unign]');if(un){const r=rows[cur],x=qaAll(r).filter(y=>(r.ign||[]).includes(y.msg))[+un.dataset.unign];r.ign=r.ign.filter(m=>m!==x.msg);return renderAll()}
   const mn=(btn,items)=>{const p=$('tagpop'),rc=btn.getBoundingClientRect();p.innerHTML=items.map(x=>`<button>${x}</button>`).join('');p.hidden=false;p.style.left=Math.max(8,Math.min(rc.left,innerWidth-258))+'px';p.style.top=(rc.bottom+4)+'px'};
   const hb=e.target.closest('#hamb');if(hb){e.stopPropagation();return mn(hb,['Файл','Правка','Вигляд','Навігація','Переклад','Глосарій','QA','Інструменти','Довідка'])}
-  const mo=e.target.closest('#more');if(mo){e.stopPropagation();return mn(mo,['Зберегти все','Синхронізувати з грою','Експорт у файли гри…','Імпорт ПП…'])}
+  const mo=e.target.closest('#more');if(mo){e.stopPropagation();return mn(mo,['Перевірити QA у файлі','Зберегти все','Синхронізувати з грою','Експорт у файли гри…','Імпорт ПП…'])}
   if(!e.target.closest('#tagpop,#tagbtn,#tagbtn2'))$('tagpop').hidden=true;
+  if(!e.target.closest('#keypop,#hk'))$('keypop').hidden=true;
+  const hkb=e.target.closest('#hk');if(hkb){const p=$('keypop'),rc=hkb.getBoundingClientRect();p.hidden=!p.hidden;p.style.left=Math.max(8,Math.min(rc.right-360,innerWidth-368))+'px';p.style.top=(rc.bottom+4)+'px';return}
   const tb=e.target.closest('#tagbtn,#tagbtn2');if(tb){const p=$('tagpop'),rc=tb.getBoundingClientRect();p.hidden=!p.hidden;p.style.left=Math.max(8,Math.min(rc.left,innerWidth-258))+'px';p.style.top=(rc.bottom+4)+'px';return}
   const fx=e.target.closest('[data-fix]');if(fx){const r=rows[cur],q=qaIssues(r)[+fx.dataset.fix];
     const g=gloss.find(x=>x[1]===q.fix);r.t=r.t.replace(/(Морок|Мороку|Мороком)/,q.fix);r.t=r.t.includes(q.fix)?r.t:r.t+' ('+q.fix+')';return renderAll()}

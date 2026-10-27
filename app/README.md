@@ -28,6 +28,10 @@ Data is encrypted on the devices (AES-GCM, key from the passphrase); the relay o
 Edits are merged per string, the newer edit wins, and concurrent edits to the same string are reported.
 For addresses reachable over the internet use https (browsers block plain http from https pages).
 
+### Sync through the artifact itself (no file picker, no server)
+
+When the app runs as a Claude artifact, its shared database (`db` capability) is reachable from every device that opens the same artifact. Settings → Synchronization via Claude pushes the project; on the other device (a phone, where the artifact view cannot open a file chooser) the start screen and the "Open files" dialog offer **Get from another device**. Files are gzipped, base64-encoded and split into content-addressed chunks of at most 180 KB (a document may hold 256 KiB); chunks are written before the index, and the index changes under a short lease, so a reader never sees half a file and two devices do not overwrite each other. Same merge as the other syncs. The section appears only inside an artifact.
+
 ### Sync through your own GitHub repository
 
 Settings → Synchronization via GitHub. Create a repository (private is best) that has at least one file (a README), and a fine-grained token limited to that repository with **Contents: Read and write**. Enter `owner/name` and the token; the token stays in this browser only.

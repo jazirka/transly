@@ -2,6 +2,7 @@ import { DEFAULT_SETTINGS, emptyProject, parseDelimited, parseHtmlTable, parseTe
 import type { GlossaryTerm } from '../core';
 import { $, el, esc, plural, toast } from './dom';
 import type { Ctx } from './state';
+import { artifactDb, describeClaude, loadClaudeConfig, runClaudeSync, saveClaudeConfig } from './claude';
 import { DEFAULT_API, describeGithub, loadGithubConfig, runGithubSync, saveGithubConfig } from './github';
 import { importProjectText } from './import-dialog';
 import { importReference } from './reference';
@@ -28,6 +29,7 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
   const st = ctx.s.saved.settings;
   const sync = loadSyncConfig();
   const gh = loadGithubConfig();
+  const cl = loadClaudeConfig();
   const autoNow = st.lineLimit === 0 ? ctx.lineLimit() : 0;
   const dlg = dialog(`<form method="dialog"><h2 id="st-t">Налаштування</h2>
     <div class="grid"><label for="st-tol">Допуск довжини перекладу відносно оригіналу, %</label><input id="st-tol" type="number" min="5" max="100" step="5" value="${st.tolerancePct}">
@@ -49,6 +51,11 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
       <p class="hint" id="rf-state">${ctx.s.saved.reference ? `Додано: ${esc(ctx.s.saved.reference.lang)}` : 'Довідки ще немає'}</p>
       <div class="grid"><label for="rf-lang">Код мови</label><input id="rf-lang" maxlength="8" value="${esc(ctx.s.saved.reference?.lang ?? 'ru')}"></div>
       <div class="acts l"><button class="btn" type="button" id="rf-go">Обрати папку довідкової версії…</button>${ctx.s.saved.reference ? '<button class="btn" type="button" id="rf-del">Прибрати довідку</button>' : ''}</div></details>
+    <details id="cl-sec" hidden><summary>Синхронізація через Claude (між вашими пристроями)</summary>
+      <p class="hint">Спільна база цього артефакта працює на всіх ваших пристроях, де відкрито цей самий артефакт: ПК, телефон. Не потрібні ні файли, ні свій сервер, ні GitHub. Натисніть «Синхронізувати» тут, потім відкрийте артефакт на іншому пристрої й натисніть там те саме: приїдуть переклад, глосарій, пам’ять та оригінальні рядки гри.</p>
+      <div class="grid"><label for="cl-every">Автоматично</label><select id="cl-every">${[[0, 'Лише за кліком'], [30, 'Кожні 30 хвилин'], [180, 'Кожні 3 години'], [360, 'Кожні 6 годин']].map(([v, l]) => `<option value="${v}" ${cl.everyMin === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div class="acts l"><button class="btn p" type="button" id="cl-go">Синхронізувати через Claude зараз</button></div>
+      <p class="hint" id="cl-state" role="status">${cl.last ? 'Остання синхронізація: ' + new Date(cl.last).toLocaleString('uk-UA') : 'Ще не синхронізовано'}</p></details>
     <details><summary>Синхронізація через GitHub</summary>
       <p class="hint">Переклад зберігається у вашому репозиторії GitHub (краще приватному) звичайними файлами, а історія комітів показує, що й коли змінилося. Створіть репозиторій із файлом README, потім токен: GitHub → Settings → Developer settings → Fine-grained tokens, доступ лише до цього репозиторію, право «Contents: Read and write». Токен лишається тільки в цьому браузері й не потрапляє у файл проєкту.</p>
       <div class="grid"><label for="gh-repo">Репозиторій (власник/назва)</label><input id="gh-repo" placeholder="ivan/my-translation" autocomplete="off" spellcheck="false" value="${esc(gh.repo)}">
@@ -140,6 +147,16 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
     try { if (await importReference(ctx, lang)) { ctx.render(); dlg.close(); } } catch (err) { toast(err instanceof Error ? err.message : 'Не вдалося прочитати папку'); }
   });
   dlg.querySelector('#rf-del')?.addEventListener('click', () => { delete ctx.s.saved.reference; ctx.s.saved.assetsRev = Date.now(); ctx.persist(); ctx.render(); toast('Довідку прибрано'); dlg.close(); });
+  // The shared database exists only inside an artifact: show the section once the page knows it is there.
+  void artifactDb().then(db => { if (db) $('#cl-sec', dlg).hidden = false; });
+  $('#cl-every', dlg).addEventListener('change', e => { cl.everyMin = Number((e.target as HTMLSelectElement).value); saveClaudeConfig(cl); });
+  $('#cl-go', dlg).addEventListener('click', async () => {
+    const state = $('#cl-state', dlg), btn = $('#cl-go', dlg) as HTMLButtonElement;
+    btn.disabled = true; state.textContent = 'Синхронізую…';
+    try { const rep = await runClaudeSync(ctx, cl, onImport); state.textContent = describeClaude(rep); toast(describeClaude(rep)); }
+    catch (err) { state.textContent = err instanceof Error ? err.message : 'Не вдалося синхронізувати'; }
+    btn.disabled = false;
+  });
   const readGh = () => ({ ...gh, repo: ($('#gh-repo', dlg) as HTMLInputElement).value.trim(), token: ($('#gh-token', dlg) as HTMLInputElement).value.trim(), branch: ($('#gh-branch', dlg) as HTMLInputElement).value.trim(), dir: ($('#gh-dir', dlg) as HTMLInputElement).value.trim(), everyMin: Number(($('#gh-every', dlg) as HTMLSelectElement).value), originals: ($('#gh-orig', dlg) as HTMLInputElement).checked, api: ($('#gh-api', dlg) as HTMLInputElement).value.trim() || DEFAULT_API });
   // Everything typed here is kept at once, so closing the dialog does not lose a pasted token.
   dlg.querySelector('details:has(#gh-repo)')?.addEventListener('change', () => { const c = readGh(); if (c.repo !== gh.repo || c.branch !== gh.branch || c.dir !== gh.dir || c.api !== gh.api) c.state = { shas: {}, commit: '', assetsRev: 0 }; Object.assign(gh, c); saveGithubConfig(gh); });

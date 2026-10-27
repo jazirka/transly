@@ -76,3 +76,4 @@
 
 .adlg .sum.bad{border-color:var(--err,#c75450);color:var(--text)}
 @media (max-width:560px){.adlg .grid{grid-template-columns:1fr}.adlg .grid input,.adlg .grid select{width:100%}}
+.adlg [hidden]{display:none!important}

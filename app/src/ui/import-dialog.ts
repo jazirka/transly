@@ -1,4 +1,5 @@
 import { canonicalRpgMakerName, deserialize, formatOf, looksLikeProject, mergeProjects } from '../core';
+import { artifactDb, describeClaude, loadClaudeConfig, runClaudeSync } from './claude';
 import { $, toast } from './dom';
 import { pickFromFiles } from './folder';
 import type { Chosen, PickedFile } from './folder';
@@ -35,6 +36,8 @@ function gameName(name: string): string | null {
 export function openImport(ctx: Ctx, adopt: () => void, openGameFiles: (files: PickedFile[]) => Promise<void>): void {
   const dlg = dialog(`<form method="dialog"><h2 id="im-t">Відкрити файли</h2>
     <p class="hint">Щоб продовжити на цьому пристрої переклад із комп’ютера, на ПК виберіть «Налаштування → Обмін проєктом через файл → Зберегти проєкт у файл». Передайте файл сюди (месенджер, пошта, власний сервер) і оберіть його нижче. Або скопіюйте весь вміст файлу й вставте в поле.</p>
+    <div id="im-claude" hidden><p class="hint">У застосунку Claude вікно вибору файлів може не відкриватися. Тоді найпростіше взяти проєкт, який ви вже синхронізували з комп’ютера (там: Налаштування → Синхронізація через Claude).</p>
+      <div class="acts l"><button class="btn p" type="button" id="im-cl">Отримати з іншого пристрою (через Claude)</button></div></div>
     <div class="acts l"><button class="btn p" type="button" id="im-pick">Обрати файли…</button></div>
     <p class="hint">Можна обрати файл проєкту (<code>.transly.json</code>) і/або файли гри: <code>.json</code>, <code>.po</code>, <code>.csv</code>, <code>.rpy</code>. Файли гри додаються до відкритого проєкту.</p>
     <p class="sum" id="im-state" role="status" hidden></p>
@@ -45,7 +48,7 @@ export function openImport(ctx: Ctx, adopt: () => void, openGameFiles: (files: P
     <div class="acts"><button class="btn" value="cancel">Закрити</button></div></form>`, 'im-t');
   const box = $('#im-state', dlg);
   const say = (text: string, bad = false) => { box.hidden = !text; box.textContent = text; box.classList.toggle('bad', bad); if (bad && text) toast(text); };
-  const busy = (on: boolean) => dlg.querySelectorAll<HTMLButtonElement>('#im-pick,#im-go').forEach(b => { b.disabled = on; });
+  const busy = (on: boolean) => dlg.querySelectorAll<HTMLButtonElement>('#im-pick,#im-go,#im-cl').forEach(b => { b.disabled = on; });
   const finish = () => { if (!ctx.s.views.length) toast('У проєкті немає оригінальних рядків: на ПК відкрийте папку гри й збережіть проєкт знову'); dlg.close(); };
   const openGame = async (picked: PickedFile[]) => {
     if (!picked.length) { say(`Нічого не знайшов, що я вмію перекладати. Файли гри мають називатися як у папці data (${GAME_NAMES}) або бути .po, .csv, .rpy.`, true); return; }
@@ -53,6 +56,16 @@ export function openImport(ctx: Ctx, adopt: () => void, openGameFiles: (files: P
     await openGameFiles(picked);
   };
 
+  void artifactDb().then(db => { if (db) $('#im-claude', dlg).hidden = false; });
+  $('#im-cl', dlg).addEventListener('click', async () => {
+    busy(true); say('Отримую…');
+    try {
+      const rep = await runClaudeSync(ctx, loadClaudeConfig(), adopt);
+      toast(describeClaude(rep));
+      if (!ctx.s.views.length) { say('У спільній базі ще немає проєкту. Спершу на комп’ютері: Налаштування → Синхронізація через Claude → Синхронізувати.', true); busy(false); return; }
+      dlg.close();
+    } catch (err) { say(err instanceof Error ? err.message : 'Не вдалося синхронізувати', true); busy(false); }
+  });
   const fileInput = $('#im-file', dlg) as HTMLInputElement;
   // No `accept`: phones grey out files whose type they do not know (.json, .po), and the user could not pick them.
   $('#im-pick', dlg).addEventListener('click', () => fileInput.click());

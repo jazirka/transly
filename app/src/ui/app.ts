@@ -14,6 +14,7 @@ import { openSettings } from './settings';
 import { openSpeakers } from './speakers-dialog';
 import { STATUS_LABEL, buildTm, shownStatus } from './state';
 import type { Ctx, Filter, Mode, State } from './state';
+import { artifactDb, describeClaude, loadClaudeConfig, runClaudeSync } from './claude';
 import { describeGithub, githubConfigured, loadGithubConfig, runGithubSync } from './github';
 import { describe as describeSync, loadSyncConfig, runSync, syncConfigured } from './sync';
 
@@ -398,7 +399,7 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#pg-txt').textContent = total ? `${Math.round((100 * A) / total)}% вичитано · ${(A + D + W).toLocaleString('uk-UA')} перекладено з ${total.toLocaleString('uk-UA')}` : 'Папку гри не відкрито';
     $('#pg').title = total ? `Вичитано ${Math.round((100 * A) / total)}% · Чекає вичитування ${Math.round((100 * D) / total)}% · Чернетки ${Math.round((100 * W) / total)}% · Решта без перекладу` : '';
     const sy = loadSyncConfig();
-    const lastSync = Math.max(sy.last, loadGithubConfig().last);
+    const lastSync = Math.max(sy.last, loadGithubConfig().last, loadClaudeConfig().last);
     $('#sb-sync').textContent = lastSync ? 'Синхр.: ' + new Date(lastSync).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }) : 'Синхр.: ще не було';
     $('#sb-build').textContent = s.lastBuild ? `Збірка: ${new Date(s.lastBuild.at).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })} · ${s.lastBuild.n} рядків` : 'Збірки ще не було';
     ($('#build') as HTMLButtonElement).disabled = !s.views.length;
@@ -442,7 +443,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (v) { document.getElementById('start-empty')?.remove(); return false; }
     tv.style.display = 'none'; fv.style.display = 'none';
     const box = emptyBox();
-    box.innerHTML = `<h2>${s.phone ? 'Відкрийте файли' : 'Відкрийте папку гри'}</h2>${s.phone ? 'На телефоні проєкт береться з комп’ютера: на ПК виберіть «Налаштування → Обмін проєктом через файл → Зберегти проєкт у файл», передайте файл сюди й відкрийте його, або вставте його вміст як текст. Так само можна відкрити файли самої гри.' : 'Оберіть папку <b>data</b> гри на RPG Maker (або саму папку гри), папку з файлами <b>.po</b>, <b>.csv</b>, <b>.rpy</b> (Ren’Py) чи JSON-локалізацією. Ваш переклад зберігається в цьому браузері, файли гри не змінюються.'}${(lastHandle || desktopDir) ? `<p><button class="btn p" id="resume">Продовжити з папкою «${esc(lastHandle?.name ?? (desktopDir ?? '').split(/[\\/]/).filter(Boolean).pop() ?? '')}»</button></p>` : ''}${s.phone ? '<p><button class="btn p" id="imp2">Відкрити файли або вставити JSON…</button></p>' : '<p><button class="btn p" id="open2">Відкрити папку гри</button></p>'}`;
+    box.innerHTML = `<h2>${s.phone ? 'Відкрийте файли' : 'Відкрийте папку гри'}</h2>${s.phone ? 'На телефоні проєкт береться з комп’ютера: на ПК виберіть «Налаштування → Обмін проєктом через файл → Зберегти проєкт у файл», передайте файл сюди й відкрийте його, або вставте його вміст як текст. Так само можна відкрити файли самої гри.' : 'Оберіть папку <b>data</b> гри на RPG Maker (або саму папку гри), папку з файлами <b>.po</b>, <b>.csv</b>, <b>.rpy</b> (Ren’Py) чи JSON-локалізацією. Ваш переклад зберігається в цьому браузері, файли гри не змінюються.'}${(lastHandle || desktopDir) ? `<p><button class="btn p" id="resume">Продовжити з папкою «${esc(lastHandle?.name ?? (desktopDir ?? '').split(/[\\/]/).filter(Boolean).pop() ?? '')}»</button></p>` : ''}${s.phone ? `${claudeAvailable ? '<p><button class="btn p" id="cl2">Отримати з іншого пристрою (через Claude)</button></p>' : ''}<p><button class="btn p" id="imp2">Відкрити файли або вставити JSON…</button></p>` : '<p><button class="btn p" id="open2">Відкрити папку гри</button></p>'}`;
     return true;
   }
 
@@ -583,6 +584,10 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!files) { toast('Немає доступу до папки: оберіть її знову'); return; }
     await loadFiles(files);
   }
+
+  /** Whether the artifact's shared database is there (known a moment after start). */
+  let claudeAvailable = false;
+  void artifactDb().then(db => { if (db) { claudeAvailable = true; if (!s.views.length) renderAll(); } });
 
   function openImportDlg(): void {
     s.leftOpen = false; renderLayout();
@@ -789,6 +794,11 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.closest('#open,#open2')) { void openFolder(); return; }
     if (t.closest('#resume')) { void resume(); return; }
     if (t.closest('#imp2,#mt-open')) { openImportDlg(); return; }
+    if (t.closest('#cl2')) {
+      toast('Отримую з іншого пристрою…');
+      runClaudeSync(ctx, loadClaudeConfig(), adopt).then(r => toast(s.views.length ? describeClaude(r) : 'У спільній базі ще немає проєкту: спершу синхронізуйте на комп’ютері (Налаштування → Синхронізація через Claude)'), er => toast(er instanceof Error ? er.message : 'Не вдалося синхронізувати'));
+      return;
+    }
     if (t.closest('#settings,#ab-set,#proj-btn')) { openSettingsDlg(); return; }
     if (t.closest('#build,#run-btn,#sb-build')) { doBuild(); return; }
     if (t.closest('#sb-sync')) { openSettingsDlg(); return; }
@@ -909,6 +919,12 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!cfg.everyMin || !syncConfigured(cfg) || document.querySelector('dialog[open]')) return;
     if (Date.now() - cfg.last < cfg.everyMin * 60_000) return;
     runSync(ctx, cfg, adopt).then(r => toast(describeSync(r)), er => toast(er instanceof Error ? er.message : 'Не вдалося синхронізувати'));
+  }, 60_000);
+  setInterval(() => {
+    const cfg = loadClaudeConfig();
+    if (!cfg.everyMin || !claudeAvailable || document.querySelector('dialog[open]')) return;
+    if (Date.now() - cfg.last < cfg.everyMin * 60_000) return;
+    runClaudeSync(ctx, cfg, adopt).then(r => toast(describeClaude(r)), er => toast(er instanceof Error ? er.message : 'Не вдалося синхронізувати через Claude'));
   }, 60_000);
   setInterval(() => {
     const cfg = loadGithubConfig();

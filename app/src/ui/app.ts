@@ -39,6 +39,11 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     <button class="tb-ic" id="hamb" title="Головне меню" aria-haspopup="menu" aria-expanded="false">${SVG.menu}</button>
     <nav class="menubar" id="menubar" role="menubar" aria-label="Головне меню" hidden></nav>
     <button class="tpill" id="proj-btn" title="Налаштування проєкту"><span class="pj">T</span><span id="proj-name">Проєкт</span></button>
+    <div class="seg" id="seg" role="tablist" aria-label="Режим">
+      <button role="tab" aria-selected="true" data-m="table" class="on"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM2.5 7h11M6.5 3.5v9"/></svg>Таблиця</button>
+      <button role="tab" aria-selected="false" data-m="edit"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM6 3.5v9M6 8h7.5"/></svg>Редагування</button>
+      <button role="tab" aria-selected="false" data-m="review"><svg viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7"/></svg>Вичитування</button>
+    </div>
     <div class="grow"></div>
     <div class="prog" id="pg" title=""><div class="bar"><i class="a" id="pg-a"></i><i class="b" id="pg-b"></i><i class="c" id="pg-c"></i></div><span id="pg-txt" style="font-family:var(--mono);font-size:11.5px"></span></div>
     <div class="tsep"></div>
@@ -73,13 +78,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
       </div>
     </aside>
     <main class="editor" id="main">
-      <div class="tabs"><span class="tabs-host" id="tabs-host"></span>
-        <div class="seg" id="seg" role="tablist" aria-label="Режим">
-          <button role="tab" aria-selected="true" data-m="table" class="on"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM2.5 7h11M6.5 3.5v9"/></svg>Таблиця</button>
-          <button role="tab" aria-selected="false" data-m="edit"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM6 3.5v9M6 8h7.5"/></svg>Редагування</button>
-          <button role="tab" aria-selected="false" data-m="review"><svg viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7"/></svg>Вичитування</button>
-        </div>
-      </div>
+      <div class="tabs"><span class="tabs-host" id="tabs-host"></span></div>
       <div class="view" id="v-table">
         <div class="crumbs" id="crumbs"></div>
         <div class="filters"><div class="fin">${SVG.search}<input class="qin" id="q" placeholder="Фільтр у цьому файлі" aria-label="Фільтр"></div><span class="chipsHost" id="chips1"></span><span id="tagfilter"></span>

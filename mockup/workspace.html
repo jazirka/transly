@@ -550,6 +550,23 @@ td .term{color:#d9c3ee}
 .gr.sel .who,.si.sel .a b,.ctx .me span:nth-child(2){color:#cfb0ea}
 .seg button.on[data-m=proof]{background:#2c64d8}
 .seg kbd{color:var(--mute)}
+/* round 2 */
+.gr,.si{content-visibility:auto;contain-intrinsic-size:auto 44px}
+.tg{min-width:0;max-width:100%}
+.tg .tt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.tgrow .tt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tags{min-width:0}
+.tg .tx{display:inline-block;padding:4px 6px;margin:-4px -6px -4px 0}
+.btn.p{background:#2c64d8;border-color:#3b74ea}
+.btn.p:hover{background:#3a72e6}
+.pop .group{color:var(--mute)}
+.ctx .me span:first-child{color:var(--mute)}
+.cm p{white-space:pre-wrap;overflow-wrap:anywhere}
+.stage .msg{overflow-wrap:anywhere}
+.hist .t{overflow-wrap:anywhere}
+.empty-wrap{display:block}
+.lbl-btn{padding:4px 6px;margin:-4px -6px}
+.si .a b,.gr .who{color:#c4a3e2}
 </style>
 <div class="narrow" id="narrow" hidden>Вікно вужче за 1180 px: частину інтерфейсу доведеться прокручувати. Для телефона відкрийте мобільну версію.</div>
 <div class="scroll-x"><div class="ide mode-table">
@@ -717,11 +734,11 @@ td .term{color:#d9c3ee}
 </div></div>
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-<div class="pop" id="tagpop" hidden></div>
-<div class="pop" id="menupop" hidden></div>
-<div class="pop" id="fpop" hidden></div>
-<div class="sd-wrap" id="sd" hidden><div class="sd-box" role="dialog" aria-label="Пошук скрізь"><input id="sd-in" placeholder="Рядки, ключі, теги, терміни…" aria-label="Пошук скрізь" autocomplete="off"><div id="sd-res" role="listbox"></div><div class="sd-foot">↑↓ вибір · Enter відкрити · Esc закрити</div></div></div>
-<div class="pop keys" id="keypop" hidden>
+<div class="pop" id="tagpop" role="dialog" aria-label="Теги" hidden></div>
+<div class="pop" id="menupop" role="dialog" aria-label="Меню" hidden></div>
+<div class="pop" id="fpop" role="dialog" aria-label="Параметри" hidden></div>
+<div class="sd-wrap" id="sd" hidden><div class="sd-box" role="dialog" aria-modal="true" aria-label="Пошук скрізь"><input id="sd-in" placeholder="Рядки, ключі, теги, терміни…" aria-label="Пошук скрізь" autocomplete="off"><div id="sd-res" role="listbox" aria-label="Результати пошуку"></div><div class="sd-foot">↑↓ вибір · Enter відкрити · Esc закрити</div></div></div>
+<div class="pop keys" id="keypop" role="dialog" aria-label="Гарячі клавіші" hidden>
   <div class="kh">Гарячі клавіші</div>
   <div class="kr"><span>Відкрити рядок у редакторі</span><kbd>Enter</kbd></div>
   <div class="kr"><span>Назад до таблиці / закрити вікно / зняти вибір</span><kbd>Esc</kbd></div>
@@ -779,7 +796,7 @@ const TERMS=[
  {en:'Gatekeeper',uk:'Вартовий брами',type:'t',note:'Титул',stem:/вартов/i},
  {en:'Cellar',uk:'Підвал',type:'l',note:'',stem:/підвал/i}];
 const BASE_TERMS=TERMS.length,customTerms=[];
-function addTerm(en,uk,type,note,store){const b=uk.toLowerCase(),st=b.length>5?b.slice(0,b.length-2):b;TERMS.push({en,uk,type,note,stem:new RegExp(escRe(st),'i')});if(store)customTerms.push({en,uk,type,note})}
+function addTerm(en,uk,type,note,store,mt){const b=uk.toLowerCase(),st=b.length>5?b.slice(0,b.length-2):b;TERMS.push({en,uk,type,note,stem:new RegExp(escRe(st),'i')});if(store)customTerms.push({en,uk,type,note,mt:mt||Date.now()})}
 const TMDB=[
  {s:'Don\'t come back up if you hear singing.',t:'Не повертайся, якщо почуєш спів.',src:'Map041.json · Олена · вичитано'},
  {s:'Keep your voice down, girl.',t:'Тихіше, дівчино.',src:'Map012.json · Максим · вичитано'},
@@ -800,15 +817,17 @@ function markup(s){
     const g=TERMS.find(x=>x.en.toLowerCase()===term.toLowerCase());
     return '<span class="term-hit" title="'+T[g.type]+': '+g.en+' → '+g.uk+'">'+m+'</span>'});
 }
-const tagH=(g,lg)=>`<span class="tg ${g[0]} ${lg?'lg':''}" data-tag="${esc(g[1])}" role="button" tabindex="0" title="${T[g[0]]} · фільтрувати за тегом">${esc(g[1])}${lg?`<span class="tx" data-rmtag="${esc(g[1])}" role="button" aria-label="Прибрати тег ${esc(g[1])}" title="Прибрати тег з рядка">✕</span>`:''}</span>`;
+const tagH=(g,lg)=>`<span class="tg ${g[0]} ${lg?'lg':''}" data-tag="${esc(g[1])}" role="button" tabindex="0" title="${T[g[0]]} · ${esc(g[1])} · фільтрувати за тегом"><span class="tt">${esc(g[1])}</span>${lg?`<span class="tx" data-rmtag="${esc(g[1])}" role="button" aria-label="Прибрати тег ${esc(g[1])}" title="Прибрати тег з рядка">✕</span>`:''}</span>`;
 const cmI='<svg class="cmi" viewBox="0 0 16 16" aria-label="Є коментарі"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>';
 /* ---------- rules: limits, QA, statuses ---------- */
 const limitOf=r=>r.k.startsWith('choice')||r.k.startsWith('event.')?40:120;
 const dispLen=t=>t.replace(CODE,'').length;
-function qaAll(r){
+function qaAll(r){const key=r.t+'\u0001'+TERMS.length;if(r._qk===key)return r._qv;const v=qaCompute(r);r._qk=key;r._qv=v;return v}
+function qaCompute(r){
   const o=[];if(!r.t)return o;
   const lim=limitOf(r),n=dispLen(r.t);
   if(n>lim)o.push({key:'len',sev:'bad',msg:`Перевищено довжину: ${n} / ${lim} символів (без керівних кодів)`});
+  if(/[A-Za-z]/.test(r.s)&&r.t.trim()===r.s.trim())o.push({key:'same',sev:'warn',msg:'Переклад збігається з оригіналом'});
   [...new Set(r.s.match(CODE)||[])].forEach(c=>{if(!r.t.includes(c))o.push({key:'code:'+c,sev:'bad',msg:`Втрачено керівний код ${c}`,code:c})});
   TERMS.forEach(g=>{if(new RegExp('\\b'+escRe(g.en)+'\\b','i').test(r.s)&&!g.stem.test(r.t)){const m=g.bad&&r.t.match(g.bad);
     o.push({key:'term:'+g.en,sev:'warn',msg:`Термін «${g.en}» має бути «${g.uk}» за глосарієм`,term:g.en,fix:m?g.uk:null,bad:m?m[0]:null})}});
@@ -826,7 +845,8 @@ let lp='files',lastUndo=null,toastTimer=null,savedAt=null,storageOk=true,sess={n
 const curFilter=()=>mode==='proof'?pfilter:filter;
 const FIELDS=['t','st','returned','orig','ign','comments','hist','g'];
 const clone=x=>x===undefined?undefined:JSON.parse(JSON.stringify(x));
-function snap(idx){return {cur,rows:idx.map(i=>({i,v:FIELDS.map(f=>clone(rows[i][f]))}))}}
+let lastTypeAt=0;
+function snap(idx){return {cur,at:Date.now(),rows:idx.map(i=>({i,v:FIELDS.map(f=>clone(rows[i][f]))}))}}
 function undo(){if(!lastUndo)return toast('Нічого скасовувати');const u=lastUndo;lastUndo=null;
   u.rows.forEach(({i,v})=>FIELDS.forEach((f,k)=>{rows[i][f]=v[k]}));cur=u.cur;renderAll();toast('Дію скасовано')}
 function toast(msg,canUndo){const t=$('toast');t.innerHTML='<span></span>'+(canUndo?'<button id="toast-undo">Скасувати</button>':'');t.firstChild.textContent=msg;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true},7000)}
@@ -877,14 +897,8 @@ function tagFilterHTML(){
 /* ---------- render ---------- */
 const emptyHTML='<div class="empty-state"><b>Нічого не знайдено</b><span>Немає рядків за поточним пошуком, тегом і статусом.</span><button class="btn" data-reset>Скинути фільтри</button></div>';
 const colsCSS=()=>['34px','22px','110px',cols.who?'96px':'','minmax(160px,.9fr)','minmax(180px,1fr)',cols.tags?'minmax(120px,.5fr)':'',cols.len?'60px':''].filter(Boolean).join(' ');
-function renderTable(){
-  const a=vis(),ids=a.map(r=>r.i);
-  $('grid').style.setProperty('--cols',colsCSS());
-  const ar=k=>sortKey===k?`<span class="arrow">${sortDir>0?'▲':'▼'}</span>`:'';
-  const nSel=ids.filter(i=>checked.has(i)).length;
-  let h=`<div class="gh" role="row"><div class="gcheck" role="columnheader"><input type="checkbox" id="selall" aria-label="Вибрати всі видимі рядки" ${nSel&&nSel===ids.length?'checked':''}></div><div title="Статус" role="columnheader" class="s" data-s="st"><span class="vh">Статус</span></div><div class="s" data-s="k" role="columnheader">Ключ ${ar('k')}</div>${cols.who?`<div class="s" data-s="w" role="columnheader">Спікер ${ar('w')}</div>`:''}<div role="columnheader">Оригінал · EN</div><div class="s" data-s="t" role="columnheader">Переклад · UK ${ar('t')}</div>${cols.tags?'<div role="columnheader">Теги</div>':''}${cols.len?`<div class="s" data-s="len" role="columnheader" title="Довжина перекладу без керівних кодів / ліміт поля" style="justify-content:flex-end;border-right:0">Довж. ${ar('len')}</div>`:''}</div>`;
-  h+=a.length?a.map(r=>{const n=dispLen(r.t),lim=limitOf(r);
-    return `<div class="gr ${r.i===cur?'sel':''} ${checked.has(r.i)?'chk':''}" role="row" tabindex="${r.i===cur?0:-1}" aria-selected="${r.i===cur}" data-i="${r.i}">
+function rowHTML(r){const n=dispLen(r.t),lim=limitOf(r);
+  return `<div class="gr ${r.i===cur?'sel':''} ${checked.has(r.i)?'chk':''}" role="row" tabindex="${r.i===cur?0:-1}" aria-selected="${r.i===cur}" data-i="${r.i}">
       <div class="ln" role="gridcell"><span class="num">${r.i+1}</span><input type="checkbox" class="rc" ${checked.has(r.i)?'checked':''} aria-label="Вибрати рядок ${r.i+1}"></div>
       <div class="st" role="gridcell"><span class="sd ${effSt(r)}" title="${stLabel(r)}"></span><span class="vh">${stLabel(r)}</span></div>
       <div role="gridcell"><span class="key" title="${esc(r.k)}">${esc(r.k)}</span>${r.comments.length?cmI:''}</div>
@@ -892,7 +906,18 @@ function renderTable(){
       <div class="src" role="gridcell">${markup(r.s)}</div>
       <div class="tr ${r.t?'':'empty'}" role="gridcell" title="Двічі клікніть, щоб редагувати тут">${r.t?markup(r.t):'не перекладено'}</div>
       ${cols.tags?`<div class="tags" role="gridcell">${r.g.map(g=>tagH(g)).join('')}</div>`:''}
-      ${cols.len?`<div class="len ${n>lim?'over':''}" role="gridcell">${r.t?n+'/'+lim:'—'}</div>`:''}</div>`}).join(''):emptyHTML;
+      ${cols.len?`<div class="len ${n>lim?'over':''}" role="gridcell">${r.t?n+'/'+lim:'—'}</div>`:''}</div>`}
+const siHTML=r=>`<div class="si ${r.i===cur?'sel':''}" data-i="${r.i}" role="button" tabindex="0"><span class="sd ${effSt(r)}" title="${stLabel(r)}"></span><div><div class="a"><span>${r.i+1}</span><b>${esc(r.w)}</b><span>${esc(r.k)}</span>${r.comments.length?cmI:''}</div><div class="s">${esc(r.s)}</div><div class="t">${r.t?esc(r.t):'—'}</div></div></div>`;
+const emptyRow=`<div class="empty-wrap" role="row"><div role="gridcell">${emptyHTML}</div></div>`;
+function renderTable(){
+  const ft=focusToken();
+  const a=vis(),ids=a.map(r=>r.i);
+  $('grid').style.setProperty('--cols',colsCSS());
+  const ar=k=>sortKey===k?`<span class="arrow">${sortDir>0?'▲':'▼'}</span>`:'';
+  const nSel=ids.filter(i=>checked.has(i)).length;
+  let h=`<div class="gh" role="row"><div class="gcheck" role="columnheader"><input type="checkbox" id="selall" aria-label="Вибрати всі видимі рядки" ${nSel&&nSel===ids.length?'checked':''}></div><div title="Статус" role="columnheader" class="s" data-s="st"><span class="vh">Статус</span></div><div class="s" data-s="k" role="columnheader">Ключ ${ar('k')}</div>${cols.who?`<div class="s" data-s="w" role="columnheader">Спікер ${ar('w')}</div>`:''}<div role="columnheader">Оригінал · EN</div><div class="s" data-s="t" role="columnheader">Переклад · UK ${ar('t')}</div>${cols.tags?'<div role="columnheader">Теги</div>':''}${cols.len?`<div class="s" data-s="len" role="columnheader" title="Довжина перекладу без керівних кодів / ліміт поля" style="justify-content:flex-end;border-right:0">Довж. ${ar('len')}</div>`:''}</div>`;
+  h+=a.length?a.map(rowHTML).join(''):emptyRow;
+
   $('grid').innerHTML=h;$('grid').classList.toggle('has-sel',nSel>0);
   const all=$('selall');if(all)all.indeterminate=nSel>0&&nSel<ids.length;
   const hidden=checked.size-nSel;
@@ -900,19 +925,19 @@ function renderTable(){
   $('bulkt').textContent=' вибрано'+(hidden?` · ще ${hidden} приховано фільтром, їх дія не торкається`:'');
   const inV=ids.includes(cur);
   $('pos').textContent='рядок '+(cur+1)+' з '+rows.length+(a.length!==rows.length?' · показано '+a.length:'')+(inV?'':' · поточний поза фільтром');
+  restoreFocus(ft);
 }
 function renderList(){
   const a=vis();
-  $('slist').innerHTML=a.length?a.map(r=>`<div class="si ${r.i===cur?'sel':''}" data-i="${r.i}" role="button" tabindex="0"><span class="sd ${effSt(r)}" title="${stLabel(r)}"></span><div><div class="a"><span>${r.i+1}</span><b>${esc(r.w)}</b><span>${esc(r.k)}</span>${r.comments.length?cmI:''}</div><div class="s">${esc(r.s)}</div><div class="t">${r.t?esc(r.t):'—'}</div></div></div>`).join(''):emptyHTML;
+  $('slist').innerHTML=a.length?a.map(siHTML).join(''):emptyHTML;
 }
-function tmFor(r){
-  const W=s=>new Set((s.toLowerCase().replace(CODE,' ').match(/[a-z']+/g)||[]));
-  const A=W(r.s),pool=rows.filter(o=>o!==r&&o.t&&o.st!=='draft').map(o=>({s:o.s,t:o.t,src:'Map042.json · '+o.k})).concat(TMDB);
-  return pool.map(o=>{const B=W(o.s),it=[...A].filter(w=>B.has(w)).length,un=new Set([...A,...B]).size;return {o,sc:un?Math.round(100*it/un):0}})
-    .filter(x=>x.sc>=40).sort((a,b)=>b.sc-a.sc).slice(0,3);
-}
+const wordsOf=o=>o._w||(o._w=new Set((o.s.toLowerCase().replace(CODE,' ').match(/[a-z']+/g)||[])));
+function tmFor(r){const A=wordsOf(r);if(!A.size)return [];const out=[];
+  const test=(o,src,t)=>{const B=wordsOf(o);let it=0;for(const w of A)if(B.has(w))it++;const un=A.size+B.size-it,sc=un?Math.round(100*it/un):0;if(sc>=40)out.push({o:{s:o.s,t,src},sc})};
+  rows.forEach(o=>{if(o!==r&&o.t&&o.st!=='draft')test(o,'Map042.json · '+o.k,o.t)});TMDB.forEach(o=>test(o,o.src,o.t));
+  return out.sort((a,b)=>b.sc-a.sc).slice(0,3)}
 let tmCur=[];
-function renderFocus(){
+function renderFocus(skipList){
   const r=rows[cur],ids=visIds(),pos=ids.indexOf(cur);
   $('f-state').innerHTML=`<span class="sd ${effSt(r)}"></span>${stLabel(r)}`;
   $('f-key').textContent=r.path||('Map042 › EV014 › '+r.k);
@@ -937,20 +962,20 @@ function renderFocus(){
   $('f-tags').innerHTML=r.g.length?r.g.map(g=>tagH(g,1)).join(''):'<span style="color:var(--mute)">Тегів немає</span>';
   const hits=TERMS.filter(g=>new RegExp('\\b'+escRe(g.en)+'\\b','i').test(r.s));
   $('i-gl').innerHTML=hits.length?hits.map(g=>`<div class="gloss-row"><b>${g.en}</b><span class="arr">→</span><span>${g.uk}</span><span class="t">${T[g.type]}</span></div>`).join(''):'<div style="color:var(--mute)">Термінів немає</div>';
-  tmCur=tmFor(r);$('tm-n').textContent=tmCur.length?plural(tmCur.length,['збіг','збіги','збігів']):'';
-  $('i-tm').innerHTML=tmCur.length?tmCur.map((x,n)=>`<div class="sg" data-tm="${n}" role="button" tabindex="0" title="Підставити в переклад"><span class="pc ${x.sc>=90?'':'mid'}">${x.sc}%</span><div>${esc(x.o.t)}<small>${esc(x.o.src)} · «${esc(x.o.s.length>38?x.o.s.slice(0,38)+'…':x.o.s)}»</small></div></div>`).join(''):'<div style="color:var(--mute)">Збігів у пам’яті перекладів немає</div>';
+  if($('s-tm').classList.contains('on')){tmCur=tmFor(r);$('tm-n').textContent=tmCur.length?plural(tmCur.length,['збіг','збіги','збігів']):'';
+  $('i-tm').innerHTML=tmCur.length?tmCur.map((x,n)=>`<div class="sg" data-tm="${n}" role="button" tabindex="0" title="Підставити в переклад"><span class="pc ${x.sc>=90?'':'mid'}">${x.sc}%</span><div>${esc(x.o.t)}<small>${esc(x.o.src)} · «${esc(x.o.s.length>38?x.o.s.slice(0,38)+'…':x.o.s)}»</small></div></div>`).join(''):'<div style="color:var(--mute)">Збігів у пам’яті перекладів немає</div>'}
   $('c-who').textContent=r.w;$('c-txt').innerHTML=markup(r.t||r.s);
   $('c-near').innerHTML=[-2,-1,0,1,2].map(d=>rows[cur+d]).map((x,j)=>x?`<div class="${j===2?'me':''}"><span>${x.i+1}</span><span>${esc(x.w)}</span><span>${esc(x.s.length>34?x.s.slice(0,34)+'…':x.s)}</span></div>`:'').join('');
   $('cm-badge').textContent=r.comments.length;
   $('cm-list').innerHTML=r.comments.length?r.comments.map(c=>`<div class="cm"><div class="av" style="background:${c.who==='Ви'?'#6b9bf2':c.who==='Олена'?'#e5a04b':'#56a8f5'}">${c.who[0]}</div><div><div class="h"><b>${esc(c.who)}</b>${esc(c.when)}</div><p>${esc(c.text)}</p></div></div>`).join(''):'<div style="color:var(--mute)">До цього рядка коментарів немає.</div>';
   $('hist-list').innerHTML=r.hist.length?[...r.hist].reverse().map(x=>`<div><div class="h"><b>${esc(x.who)}</b> · ${esc(x.kind)} · ${esc(x.when)}</div>${x.text?`<div class="t">${esc(x.text)}</div>`:''}</div>`).join(''):'<div style="color:var(--mute)">Змін поки немає.</div>';
-  renderList();
+  if(!skipList)renderList();
 }
 function meter(){const t=$('i-tr').value,r=rows[cur],lim=limitOf(r),n=dispLen(t);$('c-ch').textContent=n+'/'+lim;$('cnt2').classList.toggle('over',n>lim)}
 function tagPopHTML(){
   const map={};rows.flatMap(r=>r.g).forEach(g=>{map[g[1]]=map[g[1]]||{t:g[0],n:0};map[g[1]].n++});
   return ['c','l','i','t'].map(t=>{const it=Object.entries(map).filter(([k,v])=>v.t===t);
-    return it.length?`<div class="group">${T[t]}</div>`+it.map(([k,v])=>`<div class="tgrow ${t} ${tagFilter===k?'on':''}" data-tagrow="${esc(k)}" role="button" tabindex="0"><i></i>${esc(k)}<span class="n">${v.n}</span></div>`).join(''):''}).join('');
+    return it.length?`<div class="group">${T[t]}</div>`+it.map(([k,v])=>`<div class="tgrow ${t} ${tagFilter===k?'on':''}" data-tagrow="${esc(k)}" role="button" tabindex="0"><i></i><span class="tt">${esc(k)}</span><span class="n">${v.n}</span></div>`).join(''):''}).join('');
 }
 function renderGlossary(){
   const s=$('gl-q').value.trim().toLowerCase();
@@ -973,7 +998,7 @@ function renderStats(){
   const n=rows.length,c=s=>rows.filter(r=>r.st===s).length,qa=rows.filter(r=>effSt(r)==='qa').length;
   const A=PROJECT.otherAppr+c('appr'),D=PROJECT.otherDone+c('done'),W=PROJECT.otherDraft+c('draft'),tot=PROJECT.total;
   $('pg-a').style.width=100*A/tot+'%';$('pg-b').style.width=100*D/tot+'%';$('pg-c').style.width=100*W/tot+'%';
-  $('pg-txt').textContent=Math.round(100*A/tot)+'% вичитано · '+(A+D+W).toLocaleString('uk-UA')+' / '+tot.toLocaleString('uk-UA');
+  $('pg-txt').textContent=Math.round(100*A/tot)+'% вичитано · '+(A+D+W).toLocaleString('uk-UA')+' перекладено з '+tot.toLocaleString('uk-UA');
   $('pg').title=`Вичитано ${Math.round(100*A/tot)}% · Чекає вичитки ${Math.round(100*D/tot)}% · Чернетки ${Math.round(100*W/tot)}% · Решта без перекладу`;
   $('sb-qa').textContent=qa?plural(qa,['проблема QA','проблеми QA','проблем QA']):'Проблем QA немає';$('sb-qa').className=qa?'bad':'ok';
   $('sb-file').textContent=`Файл: ${c('appr')} / ${n} вичитано · ${c('done')} чекає вичитки`;
@@ -985,6 +1010,7 @@ function renderStats(){
   $('sb-save').textContent=!storageOk?'○ Автозбереження недоступне':savedAt?'● Збережено о '+new Date(savedAt).toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'● Зміни зберігаються автоматично';
 }
 function focusToken(){const a=document.activeElement;if(!a||a===document.body)return null;
+  if(a.classList.contains('rc'))return {k:'rc',i:a.closest('.gr').dataset.i};
   if(a.classList.contains('gr'))return {k:'gr'};if(a.classList.contains('si'))return {k:'si'};
   if(a.dataset&&a.dataset.f&&a.classList.contains('chip'))return {k:'chip',h:[...document.querySelectorAll('.chipsHost')].indexOf(a.closest('.chipsHost')),f:a.dataset.f};
   if(a.dataset&&a.dataset.tag&&a.closest('#grid'))return {k:'tag',i:a.closest('.gr').dataset.i,v:a.dataset.tag};
@@ -992,8 +1018,17 @@ function focusToken(){const a=document.activeElement;if(!a||a===document.body)re
 function restoreFocus(t){if(!t)return;let n=null;
   if(t.k==='gr')n=document.querySelector(`.gr[data-i="${cur}"]`);else if(t.k==='si')n=document.querySelector(`.si[data-i="${cur}"]`);
   else if(t.k==='chip'){const h=document.querySelectorAll('.chipsHost')[t.h];n=h&&h.querySelector(`.chip[data-f="${t.f}"]`)}
+  else if(t.k==='rc'){n=document.querySelector(`.gr[data-i="${t.i}"] .rc`);if(!n||n.offsetParent===null)n=document.querySelector(`.gr[data-i="${t.i}"]`)}
   else if(t.k==='id')n=document.getElementById(t.id);
   if(n&&n!==document.activeElement)n.focus({preventScroll:true})}
+const inView=r=>inContext(r)&&matchStatus(r,curFilter());
+function renderLight(i){
+  const r=rows[i],rowEl=document.querySelector(`#grid .gr[data-i="${i}"]`),liEl=document.querySelector(`#slist .si[data-i="${i}"]`);
+  if(sortKey||(!!rowEl)!==inView(r))return renderAll();
+  if(rowEl)rowEl.outerHTML=rowHTML(r);if(liEl)liEl.outerHTML=siHTML(r);
+  document.querySelectorAll('.chipsHost').forEach(h=>h.innerHTML=chipsHTML());
+  renderFocus(true);renderTree();renderStats();scheduleSave();
+}
 function renderAll(){
   const ft=focusToken();
   $('tagpop').innerHTML=tagPopHTML();$('lp-tags').innerHTML=tagPopHTML();
@@ -1003,14 +1038,32 @@ function renderAll(){
   renderTree();renderTable();renderFocus();renderStats();scheduleSave();restoreFocus(ft);
 }
 /* ---------- persistence ---------- */
-const LS='transly-mock-v2';let saveT=null;
+const LS='transly-mock-v3';let saveT=null,resetEpoch=0;
 addEventListener('pagehide',()=>{clearTimeout(saveT);save()});
-function scheduleSave(){clearTimeout(saveT);saveT=setTimeout(save,350)}
-function save(){try{const at=Date.now();localStorage.setItem(LS,JSON.stringify({cur,at,d:rows.map(r=>({t:r.t,st:r.st,returned:r.returned,orig:r.orig,ign:r.ign,comments:r.comments,hist:r.hist,g:r.g})),terms:customTerms}));savedAt=at}catch(e){storageOk=false}renderStats()}
-function load(){try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j&&j.d&&j.d.length===rows.length){j.d.forEach((x,i)=>Object.assign(rows[i],x));(j.terms||[]).forEach(t=>addTerm(t.en,t.uk,t.type,t.note,true));cur=j.cur??cur;savedAt=j.at||null}}catch(e){storageOk=false}}
-function resetDemo(){try{localStorage.removeItem(LS)}catch(e){}
-  const s=JSON.parse(SEED);s.forEach((x,i)=>{const r=rows[i];r.t=x.t;r.st=x.st;r.orig=x.t;r.returned=false;r.ign=[];r.comments=x.comments||[];r.g=x.g;r.hist=x.t?[{who:x.st==='appr'?'Олена':'Максим',kind:x.st==='appr'?'вичитка':'переклад',when:'раніше',text:x.t}]:[]});
-  TERMS.length=BASE_TERMS;customTerms.length=0;renderGlossary();cur=5;checked.clear();lastUndo=null;savedAt=null;sess.n=0;speaker=null;lenFilter='all';renderAll();toast('Демо-дані відновлено')}
+const rowSig=r=>JSON.stringify([r.t,r.st,r.returned,r.orig,r.ign,r.comments,r.hist,r.g]);
+const rowPack=r=>({t:r.t,st:r.st,returned:r.returned,orig:r.orig,ign:r.ign,comments:r.comments,hist:r.hist,g:r.g,mt:r.mt||0});
+function seedSigs(){rows.forEach(r=>{r._seed=rowSig(r);r._sig=r._seed;r.mt=0})}
+function stamp(){const now=Date.now();rows.forEach(r=>{const sg=rowSig(r);if(sg!==r._sig){r.mt=now;r._sig=sg}})}
+function readStore(){try{const j=JSON.parse(localStorage.getItem(LS)||'null');return j&&j.v===3?j:null}catch(e){storageOk=false;return null}}
+function applySeed(){const sd=JSON.parse(SEED);sd.forEach((x,i)=>{const r=rows[i];r.t=x.t;r.st=x.st;r.orig=x.t;r.returned=false;r.ign=[];r.comments=x.comments||[];r.g=x.g;r.hist=x.t?[{who:x.st==='appr'?'Олена':'Максим',kind:x.st==='appr'?'вичитка':'переклад',when:'раніше',text:x.t}]:[];r.mt=0;r._sig=rowSig(r)});TERMS.length=BASE_TERMS;customTerms.length=0;renderGlossary()}
+function mergeStore(j){let changed=false;if(!j)return false;
+  if((j.reset||0)>resetEpoch){resetEpoch=j.reset;applySeed();changed=true}
+  const byKey=new Map(rows.map(r=>[r.k,r])),busy=document.activeElement===$('i-tr');
+  for(const [k,x] of Object.entries(j.d||{})){const r=byKey.get(k);if(!r)continue;
+    if((x.mt||0)>Math.max(r.mt||0,resetEpoch)&&!(busy&&r.i===cur)){Object.assign(r,x);r._sig=rowSig(r);changed=true}}
+  (j.terms||[]).forEach(t=>{if((t.mt||0)>resetEpoch&&!TERMS.some(y=>y.en.toLowerCase()===t.en.toLowerCase())){addTerm(t.en,t.uk,t.type,t.note,true,t.mt);changed=true}});
+  if(changed)renderGlossary();return changed}
+function scheduleSave(){clearTimeout(saveT);saveT=setTimeout(save,500)}
+function save(){try{
+  stamp();const rem=readStore();const merged=rem?mergeStore(rem):false;
+  const d={};rows.forEach(r=>{if(r.mt||r._sig!==r._seed)d[r.k]=rowPack(r)});
+  const at=Date.now();localStorage.setItem(LS,JSON.stringify({v:3,cur,at,cols,reset:resetEpoch,terms:customTerms,d}));savedAt=at;
+  if(merged){renderAll();return}
+}catch(e){storageOk=false}renderStats()}
+function load(){seedSigs();const j=readStore();if(!j)return;mergeStore(j);cur=j.cur??cur;savedAt=j.at||null;if(j.cols)Object.assign(cols,j.cols)}
+addEventListener('storage',e=>{if(e.key!==LS||!e.newValue)return;stamp();let j;try{j=JSON.parse(e.newValue)}catch(_){return}
+  if(j&&j.v===3&&mergeStore(j)){renderAll();toast('Підтягнуто зміни з іншої вкладки')}});
+function resetDemo(){resetEpoch=Date.now();applySeed();cur=5;checked.clear();lastUndo=null;savedAt=null;sess.n=0;speaker=null;lenFilter='all';renderAll();save();toast('Демо-дані відновлено')}
 /* ---------- navigation helpers ---------- */
 const scrollSel=()=>document.querySelectorAll('.gr.sel,.si.sel').forEach(el=>el.scrollIntoView({block:'nearest'}));
 function select(i,keepAnchor){cur=Math.max(0,Math.min(rows.length-1,i));if(!keepAnchor)anchor=cur;renderAll();scrollSel()}
@@ -1022,12 +1075,18 @@ function step(d){const ids=visIds();if(!ids.length)return toast('Список п
 function nextIdAfterCur(){const ids=visIds(),p=ids.indexOf(cur);return p>=0&&p<ids.length-1?ids[p+1]:(p<0&&ids.length?ids[0]:null)}
 const POPS=['tagpop','keypop','menupop','fpop'];
 const anyPop=()=>POPS.some(id=>!$(id).hidden);
-function closePops(){POPS.forEach(id=>{$(id).hidden=true})}
-function placePop(id,btn,align){const p=$(id),rc=btn.getBoundingClientRect(),w=id==='keypop'?360:id==='fpop'?290:250;p.hidden=false;
-  p.style.left=Math.max(8,Math.min(align==='right'?rc.right-w:rc.left,innerWidth-w-8))+'px';p.style.top=Math.min(rc.bottom+4,innerHeight-80)+'px'}
+let popTrigger=null;
+function closePops(){const had=POPS.some(id=>!$(id).hidden&&$(id).contains(document.activeElement));POPS.forEach(id=>{$(id).hidden=true});if(had&&popTrigger&&document.body.contains(popTrigger))popTrigger.focus({preventScroll:true})}
+function placePop(id,btn,align){const p=$(id),rc=btn.getBoundingClientRect(),w=id==='keypop'?360:id==='fpop'?290:250;p.hidden=false;popTrigger=btn;
+  p.style.left=Math.max(8,Math.min(align==='right'?rc.right-w:rc.left,innerWidth-w-8))+'px';
+  const space=innerHeight-rc.bottom-12;p.style.top='';p.style.bottom='';
+  if(space<220&&rc.top>space){p.style.top='auto';p.style.bottom=(innerHeight-rc.top+4)+'px';p.style.maxHeight=Math.max(160,rc.top-12)+'px'}
+  else{p.style.top=(rc.bottom+4)+'px';p.style.maxHeight=Math.max(160,space)+'px'}
+  focusPop(id)}
+function focusPop(id){const p=$(id),f=p.querySelector('input:not([type=checkbox]),select')||p.querySelector('[tabindex="0"],button,input');if(f)f.focus({preventScroll:true});else{p.tabIndex=-1;p.focus({preventScroll:true})}}
 function openPop(id,btn,align){const p=$(id),was=!p.hidden;closePops();if(was)return;placePop(id,btn,align)}
 let fBtn=null;
-function showF(btn,html,align){const same=!$('fpop').hidden&&fBtn===btn;closePops();if(same)return;fBtn=btn;$('fpop').innerHTML=html;placePop('fpop',btn,align);const f=$('fpop').querySelector('input:not([type=checkbox])');if(f)f.focus()}
+function showF(btn,html,align){const same=!$('fpop').hidden&&fBtn===btn;closePops();if(same)return;fBtn=btn;$('fpop').innerHTML=html;placePop('fpop',btn,align)}
 let menuBtn=null;
 function menu(btn,items){const same=!$('menupop').hidden&&menuBtn===btn;closePops();if(same)return;menuBtn=btn;$('menupop').innerHTML=items.map(x=>`<button ${x.act?`data-act="${x.act}"`:`data-soon="${esc(x.t)}"`}>${x.t}</button>`).join('');openPop('menupop',btn)}
 function layout(){
@@ -1078,8 +1137,8 @@ const colHTML=()=>'<div class="group">Колонки</div>'+[['who','Спіке�
 function tagChooser(kind){
   const map={};rows.flatMap(r=>r.g).forEach(g=>{map[g[1]]=map[g[1]]||g[0]});
   const have=kind==='r'?new Set(rows[cur].g.map(g=>g[1])):new Set();
-  const items=Object.entries(map).filter(([k])=>!have.has(k)).map(([k,t])=>`<div class="tgrow ${t}" data-${kind}tag="${esc(k)}" role="button" tabindex="0"><i></i>${esc(k)}<span class="n">${T[t]}</span></div>`).join('');
-  return `<div class="group">${kind==='r'?'Додати тег до рядка':'Додати тег до вибраних'}</div>${items||'<div class="hint">Усі наявні теги вже є.</div>'}<div class="pform"><input id="nt-name" placeholder="Новий тег" aria-label="Назва нового тега"><select id="nt-type" aria-label="Тип тега">${Object.entries(T).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select><button class="btn p" data-newtag="${kind}">Створити й додати</button></div>`;
+  const items=Object.entries(map).filter(([k])=>!have.has(k)).map(([k,t])=>`<div class="tgrow ${t}" data-${kind}tag="${esc(k)}" role="button" tabindex="0"><i></i><span class="tt">${esc(k)}</span><span class="n">${T[t]}</span></div>`).join('');
+  return `<div class="group">${kind==='r'?'Додати тег до рядка':'Додати тег до вибраних'}</div>${items||'<div class="hint">Усі наявні теги вже є.</div>'}<div class="pform"><input id="nt-name" maxlength="40" placeholder="Новий тег (до 40 символів)" aria-label="Назва нового тега"><select id="nt-type" aria-label="Тип тега">${Object.entries(T).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select><button class="btn p" data-newtag="${kind}">Створити й додати</button></div>`;
 }
 function addTagTo(idx,tag){
   const todo=idx.filter(i=>!rows[i].g.some(g=>g[1]===tag[1]));if(!todo.length)return toast('Тег «'+tag[1]+'» уже є в усіх цих рядках');
@@ -1096,14 +1155,25 @@ function bulkTM(){const idx=selVis().filter(i=>!rows[i].t);if(!idx.length)return
   if(!picks.length)return toast('Для порожніх вибраних рядків немає збігів із пам’яті від 70%');
   lastUndo=snap(picks.map(p=>p.i));picks.forEach(p=>{editText(rows[p.i],p.m.o.t);note(rows[p.i],'з пам’яті перекладів ('+p.m.sc+'%)',rows[p.i].t)});renderAll();
   toast(`Підставлено з пам’яті: ${picks.length} з ${idx.length} порожніх (збіг від 70%). Рядки позначено чернетками`,true)}
-const termHTML=()=>`<div class="pform"><label>Англійською<input id="tt-en" autocomplete="off"></label><label>Українською<input id="tt-uk" autocomplete="off"></label><label>Тип<select id="tt-type">${Object.entries(T).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Примітка<input id="tt-note" autocomplete="off"></label><button class="btn p" data-doterm>Додати термін</button></div>`;
+const termHTML=()=>`<div class="pform"><label>Англійською<input id="tt-en" maxlength="40" autocomplete="off"></label><label>Українською<input id="tt-uk" maxlength="60" autocomplete="off"></label><label>Тип<select id="tt-type">${Object.entries(T).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Примітка<input id="tt-note" maxlength="80" autocomplete="off"></label><button class="btn p" data-doterm>Додати термін</button></div>`;
 function doTerm(){const en=$('tt-en').value.trim(),uk=$('tt-uk').value.trim();if(!en||!uk)return toast('Заповніть обидва поля');
   if(TERMS.some(t=>t.en.toLowerCase()===en.toLowerCase()))return toast('Термін «'+en+'» уже є в глосарії');
   addTerm(en,uk,$('tt-type').value,$('tt-note').value.trim(),true);closePops();renderGlossary();renderAll();toast('Термін «'+en+'» додано до глосарію')}
+POPS.forEach(id=>$(id).addEventListener('keydown',e=>{
+  const p=$(id);
+  if(e.key==='Escape'){e.stopPropagation();closePops();return}
+  if(e.key==='Tab'){const f=[...p.querySelectorAll('input,select,button,[tabindex="0"]')].filter(x=>x.offsetParent!==null);if(!f.length)return;const k=f.indexOf(document.activeElement);
+    if(e.shiftKey&&k<=0){e.preventDefault();f[f.length-1].focus()}else if(!e.shiftKey&&k===f.length-1){e.preventDefault();f[0].focus()}return}
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){if(e.target.matches('input:not([type=checkbox]),select'))return;
+    const f=[...p.querySelectorAll('.tgrow,.prow input,button,.sg')].filter(x=>x.offsetParent!==null),k=f.indexOf(document.activeElement);
+    e.preventDefault();e.stopPropagation();if(f.length)f[Math.max(0,Math.min(f.length-1,k+(e.key==='ArrowDown'?1:-1)))].focus();return}
+  if(e.key==='Enter'&&e.target.matches('input:not([type=checkbox]),select')){const b=p.querySelector('.btn.p');if(b){e.preventDefault();e.stopPropagation();b.click()}}
+}));
 /* ---------- search everywhere ---------- */
 let sdSel=0,sdItems=[],lastShift=0;
-function openSearch(){closePops();$('sd').hidden=false;$('sd-in').value='';sdRender();$('sd-in').focus()}
-function closeSearch(){$('sd').hidden=true}
+let sdOpener=null;
+function openSearch(){closePops();sdOpener=document.activeElement;$('sd').hidden=false;document.querySelector('.scroll-x').inert=true;$('sd-in').value='';sdRender();$('sd-in').focus()}
+function closeSearch(){if($('sd').hidden)return;$('sd').hidden=true;document.querySelector('.scroll-x').inert=false;if(sdOpener&&document.body.contains(sdOpener))sdOpener.focus({preventScroll:true})}
 function sdRender(){
   const v=$('sd-in').value.trim().toLowerCase();sdItems=[];
   if(v){rows.forEach(r=>{if((r.s+' '+r.t+' '+r.k).toLowerCase().includes(v))sdItems.push({t:'row',r})});
@@ -1111,11 +1181,11 @@ function sdRender(){
     TERMS.filter(g=>(g.en+' '+g.uk).toLowerCase().includes(v)).forEach(g=>sdItems.push({t:'term',g}))}
   sdItems=sdItems.slice(0,14);sdSel=0;
   const kind={row:'Рядок',tag:'Тег',term:'Термін'};
-  $('sd-res').innerHTML=!v?'<div class="sd-empty">Введіть слово: шукаю в оригіналах, перекладах, ключах, тегах і глосарії.</div>':sdItems.length?sdItems.map((x,n)=>`<div class="sd-it ${n===0?'on':''}" data-sd="${n}" role="option"><span class="sd-k">${kind[x.t]}</span><span class="sd-t">${x.t==='row'?esc((x.r.k+' · '+x.r.s).slice(0,70))+(x.r.t?' → '+esc(x.r.t.slice(0,40)):''):x.t==='tag'?esc(x.n):esc(x.g.en+' → '+x.g.uk)}</span></div>`).join(''):'<div class="sd-empty">Нічого не знайдено</div>';
+  $('sd-res').innerHTML=!v?'<div class="sd-empty">Введіть слово: шукаю в оригіналах, перекладах, ключах, тегах і глосарії.</div>':sdItems.length?sdItems.map((x,n)=>`<div class="sd-it ${n===0?'on':''}" data-sd="${n}" role="option" aria-selected="${n===0}"><span class="sd-k">${kind[x.t]}</span><span class="sd-t">${x.t==='row'?esc((x.r.k+' · '+x.r.s).slice(0,70))+(x.r.t?' → '+esc(x.r.t.slice(0,40)):''):x.t==='tag'?esc(x.n):esc(x.g.en+' → '+x.g.uk)}</span></div>`).join(''):'<div class="sd-empty">Нічого не знайдено</div>';
 }
-function sdMove(d){if(!sdItems.length)return;sdSel=(sdSel+d+sdItems.length)%sdItems.length;document.querySelectorAll('.sd-it').forEach((e,n)=>e.classList.toggle('on',n===sdSel));const on=document.querySelector('.sd-it.on');on&&on.scrollIntoView({block:'nearest'})}
+function sdMove(d){if(!sdItems.length)return;sdSel=(sdSel+d+sdItems.length)%sdItems.length;document.querySelectorAll('.sd-it').forEach((e,n)=>{e.classList.toggle('on',n===sdSel);e.setAttribute('aria-selected',n===sdSel)});const on=document.querySelector('.sd-it.on');on&&on.scrollIntoView({block:'nearest'})}
 function sdGo(n){const it=sdItems[n];if(!it)return;closeSearch();
-  if(it.t==='row'){resetFilters();select(it.r.i)}
+  if(it.t==='row'){if(!visIds().includes(it.r.i)){filter='all';pfilter='all';tagFilter=null;speaker=null;lenFilter='all';q='';document.querySelectorAll('.qin').forEach(x=>x.value='');toast('Фільтри скинуто, щоб показати рядок')}select(it.r.i)}
   else if(it.t==='tag'){tagFilter=it.n;renderAll()}
   else{if(mode==='table')setMode('focus');const b=document.querySelector('#stabs [data-p=s-gl]');b&&b.click();$('gl-q').value=it.g.en;renderGlossary()}}
 /* ---------- events ---------- */
@@ -1145,7 +1215,7 @@ document.addEventListener('click',e=>{
   const lnn=t.closest('[data-len]');if(lnn){lenFilter=lnn.dataset.len;closePops();return renderAll()}
   const bt=t.closest('[data-btag]');if(bt){const nm=bt.dataset.btag,ty=rows.flatMap(r=>r.g).find(g=>g[1]===nm)[0];return addTagTo(selVis(),[ty,nm])}
   const rt=t.closest('[data-rtag]');if(rt){const nm=rt.dataset.rtag,ty=rows.flatMap(r=>r.g).find(g=>g[1]===nm)[0];return addTagTo([cur],[ty,nm])}
-  const nt=t.closest('[data-newtag]');if(nt){const nm=$('nt-name').value.trim();if(!nm)return toast('Введіть назву тега');
+  const nt=t.closest('[data-newtag]');if(nt){const nm=$('nt-name').value.trim();if(!nm)return toast('Введіть назву тега');if(nm.length>40)return toast('Назва тега не довша за 40 символів');
     const ex=rows.flatMap(r=>r.g).find(g=>g[1].toLowerCase()===nm.toLowerCase());return addTagTo(nt.dataset.newtag==='r'?[cur]:selVis(),ex?[ex[0],ex[1]]:[$('nt-type').value,nm])}
   if(t.closest('[data-dorep]'))return doReplace();
   if(t.closest('[data-doterm]'))return doTerm();
@@ -1183,13 +1253,13 @@ document.addEventListener('click',e=>{
 });
 document.querySelectorAll('.qin').forEach(el=>el.addEventListener('input',()=>{q=el.value;document.querySelectorAll('.qin').forEach(x=>{if(x!==el)x.value=q});renderAll();el.focus()}));
 $('gl-q').addEventListener('input',renderGlossary);
-document.addEventListener('change',e=>{const c=e.target.closest('[data-col]');if(c){cols[c.dataset.col]=c.checked;renderTable()}});
+document.addEventListener('change',e=>{const c=e.target.closest('[data-col]');if(c){cols[c.dataset.col]=c.checked;if(!c.checked&&((c.dataset.col==='who'&&sortKey==='w')||(c.dataset.col==='len'&&sortKey==='len')))sortKey=null;renderAll()}});
 document.addEventListener('input',e=>{if(e.target.id==='rp-find')rpHint();if(e.target.id==='sd-in')sdRender()});
-$('sd-in').addEventListener('keydown',e=>{e.stopPropagation();
+$('sd-in').addEventListener('keydown',e=>{e.stopPropagation();if(e.key==='Tab'){e.preventDefault();return}
   if(e.key==='ArrowDown'){e.preventDefault();sdMove(1)}else if(e.key==='ArrowUp'){e.preventDefault();sdMove(-1)}
   else if(e.key==='Enter'){e.preventDefault();sdGo(sdSel)}else if(e.key==='Escape'){closeSearch()}});
 const ta=$('i-tr');
-ta.addEventListener('input',()=>{const r=rows[cur];editText(r,ta.value);renderAll()});
+ta.addEventListener('input',e=>{const r=rows[cur];editText(r,ta.value);if(e.isTrusted)lastTypeAt=Date.now();renderLight(cur)});
 ta.addEventListener('change',()=>{const r=rows[cur];if(r.t!==(r.hist[r.hist.length-1]||{}).text){note(r,'правка',r.t);renderStats()}});
 $('b-copy').onclick=()=>{const r=rows[cur];lastUndo=snap([cur]);editText(r,r.s);note(r,'оригінал скопійовано',r.t);renderAll();$('i-tr').focus();toast('Оригінал скопійовано в переклад',true)};
 $('b-clear').onclick=()=>{const r=rows[cur];if(!r.t)return;lastUndo=snap([cur]);editText(r,'');note(r,'переклад очищено');renderAll();$('i-tr').focus();toast('Переклад очищено',true)};
@@ -1199,7 +1269,7 @@ $('b-return').onclick=()=>{const r=rows[cur],n=cur+1;if(r.st!=='done')return toa
 $('f-prev').onclick=()=>step(-1);$('f-next').onclick=()=>step(1);
 document.addEventListener('keydown',e=>{
   const inEd=e.target.matches('textarea,input'),onCtl=e.target.closest('button,a,[role=button]');
-  if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();if(inline===null)primary()}
+  if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){if(e.target.id==='cm-in'){e.preventDefault();$('cm-add').click();return}if(inEd&&e.target.id!=='i-tr')return;e.preventDefault();if(inline===null)primary()}
   else if(e.key==='Escape'){
     if(!$('sd').hidden)closeSearch();
     else if(anyPop())closePops();
@@ -1209,13 +1279,13 @@ document.addEventListener('keydown',e=>{
   else if(!inEd&&e.key==='ArrowDown'){e.preventDefault();step(1)}
   else if(!inEd&&e.key==='ArrowUp'){e.preventDefault();step(-1)}
   else if(!inEd&&!onCtl&&e.key==='Enter'&&mode==='table'){e.preventDefault();setMode('focus')}
-  else if(!inEd&&(e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();undo()}
+  else if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.code==='KeyZ'&&(!inEd||(e.target.id==='i-tr'&&lastUndo&&lastUndo.at>lastTypeAt))){e.preventDefault();undo()}
   else if(!inEd&&(e.key==='Enter'||e.key===' ')&&onCtl&&onCtl.matches('[role=button]')&&!onCtl.matches('button')){e.preventDefault();onCtl.click()}
   if(e.key!=='Shift')lastShift=0;
 });
 document.addEventListener('keyup',e=>{if(e.key!=='Shift')return;const now=Date.now();if(lastShift&&now-lastShift<450){lastShift=0;openSearch()}else lastShift=now});
 const stabs=$('stabs');stabs.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
-  stabs.querySelectorAll('button').forEach(x=>{x.classList.toggle('on',x===b);x.setAttribute('aria-selected',x===b);$(x.dataset.p).classList.toggle('on',x===b)})}));
+  stabs.querySelectorAll('button').forEach(x=>{x.classList.toggle('on',x===b);x.setAttribute('aria-selected',x===b);$(x.dataset.p).classList.toggle('on',x===b)});if(b.dataset.p==='s-tm')renderFocus(true)}));
 function posGlow(){const p=document.querySelector('.tpill .pj').getBoundingClientRect(),i=document.querySelector('.ide'),r=i.getBoundingClientRect();i.style.setProperty('--gx',(p.left+p.width/2-r.left)+'px');i.style.setProperty('--gy',(p.top+p.height/2-r.top)+'px')}
 function onResize(){$('narrow').hidden=innerWidth>=1180;posGlow()}
 document.documentElement.lang='uk';

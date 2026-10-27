@@ -669,6 +669,7 @@ td .term{color:#d9c3ee}
 .tab:first-child{border-top-left-radius:0}
 .tab,.tab.on{box-shadow:none}
 .tab.on{background:rgba(255,255,255,.1);border-bottom-color:rgba(255,255,255,.55)}
+.menubar button:focus{outline:0}.menubar button:focus-visible{box-shadow:inset 0 0 0 1px rgba(255,255,255,.35)}
 </style>
 <div class="narrow" id="narrow" hidden><span>Вікно вужче за 1180 px: частину інтерфейсу доведеться прокручувати. Для телефона відкрийте мобільну версію.</span><button id="narrow-x" aria-label="Закрити повідомлення">✕</button></div>
 <div class="scroll-x"><div class="ide mode-table">
@@ -1514,7 +1515,7 @@ function mbItemAt(p){let list=MENUS[mbOpen],it=null;for(const k of p.split('.'))
 function mbRun(row){const it=mbItemAt(row.dataset.mp);if(!it||it.sub)return;const f=it.fn;mbToggle(false);setTimeout(()=>f(),0)}
 function mbToggle(on){const tb=document.querySelector('.topbar'),h=$('hamb');if(on===undefined)on=$('menubar').hidden;
   if(on){closePops();if(!$('menubar').children.length)buildMenubar()}else mbClose();
-  $('menubar').hidden=!on;tb.classList.toggle('menu-on',on);h.setAttribute('aria-expanded',on);if(on){mbShow('Файл',false);const b=document.querySelector('#menubar button');b&&b.focus()}else if(document.activeElement&&document.activeElement.closest('#menubar,#mdd,#msub'))h.focus()}
+  $('menubar').hidden=!on;tb.classList.toggle('menu-on',on);h.setAttribute('aria-expanded',on);if(on){const b=document.querySelector('#menubar button');b&&b.focus({preventScroll:true})}else if(document.activeElement&&document.activeElement.closest('#menubar,#mdd,#msub'))h.focus()}
 function openMainMenu(){mbToggle()}
 document.addEventListener('mouseover',e=>{if(!mbOpen)return;const b=e.target.closest('#menubar [data-mg]');if(b&&b.dataset.mg!==mbOpen){mbShow(b.dataset.mg,false);return}
   const row=e.target.closest('#mdd .mi');if(row){if(row.dataset.mp!==mbSub)mbSubShow(row,false);return}});

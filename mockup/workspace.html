@@ -1358,7 +1358,7 @@ function runBuild(){
     const d=document.createElement('div');d.textContent='✓ '+steps[n++];$('blog').appendChild(d);dlgTimer=setTimeout(next,260)};next()}
 function openBuild(o){o=o||{};
   const sceneLbl=FILES[curFile].prefix.replace(/ › $/,'').replace(/ › /g,' · ');
-  showDialog({title:'Збірка й тест',
+  showDialog({title:'Збірка й ігрове тестування',
     html:`<p class="dl-p">Збирає переклад у файли гри й за потреби запускає гру. Зі скопійованого JSON можна перевірити, що саме піде в збірку.</p>
     <div class="bsum" id="bsum"></div>
     <label class="chk"><input type="checkbox" id="bo-appr" ${settings.cfg.includes('вичитані')?'checked':''}> Лише вичитані рядки (без тих, що чекають вичитування)</label>
@@ -1443,14 +1443,14 @@ function openGoto(){showDialog({title:'Перейти до рядка',html:`<di
 function openAbout(){showDialog({title:'Про макет Transly',html:`<p class="dl-p">Макет інтерфейсу для перекладу ігор. На комп’ютері це застосунок: переклад, збірка й запуск гри для перевірки. На телефоні це лише переклад: список рядків, редагування, коментарі.</p><p class="dl-p">Дані зберігаються в цьому браузері. Збірка, запуск гри й зв’язок між пристроями показані як демонстрація.</p>`,buttons:[{label:'Закрити',primary:true}]})}
 function openGlossaryPane(){if(mode==='table')setMode('focus');const b=document.querySelector('#stabs [data-p=s-gl]');b&&b.click()}
 const MENUS={
- 'Файл':[['Відкрити файл…',()=>openSearch()],['Збірка й тест…',()=>openBuild()],['Імпорт пам’яті перекладів…',openImport]],
+ 'Файл':[['Відкрити файл…',()=>openSearch()],['Збірка й ігрове тестування…',()=>openBuild()],['Імпорт пам’яті перекладів…',openImport]],
  'Правка':[['Скасувати останню дію',()=>undo()],['Знайти й замінити у вибраних…',()=>{if(mode!=='table')setMode('table');if(!selVis().length)return toast('Спершу виберіть рядки в таблиці');showF($('bb-rep'),repHTML())}]],
  'Вигляд':[['Таблиця',()=>setMode('table')],['Редагування',()=>setMode('focus')],['Вичитування',()=>setMode('proof')],['Показати чи сховати ліву панель',()=>setLp(lpOpen?null:lpTab[mode])]],
  'Навігація':[['Наступний рядок без перекладу',()=>jump('new',1)],['Наступна проблема QA',()=>jump('qa',1)],['Попередня проблема QA',()=>jump('qa',-1)],['Перейти до рядка…',openGoto],['Пошук скрізь…',()=>openSearch()]],
  'Переклад':[['Надіслати на вичитування / затвердити',()=>primary()],['Скопіювати оригінал',()=>$('b-copy').click()],['Очистити переклад',()=>$('b-clear').click()]],
  'Глосарій':[['Відкрити глосарій',openGlossaryPane],['Додати термін…',()=>{openGlossaryPane();setTimeout(()=>showF($('term-add'),termHTML(),'right'),0)}]],
  'QA':[['Показати рядки з проблемами',()=>{if(mode==='proof')pfilter='qa';else filter='qa';renderAll()}]],
- 'Інструменти':[['Збірка й тест…',()=>openBuild()],['Оновити оригінал із гри…',openSourceSync],['Синхронізація пристроїв…',openDeviceSync],['Імпорт пам’яті перекладів…',openImport],['Налаштування…',openSettings]],
+ 'Інструменти':[['Збірка й ігрове тестування…',()=>openBuild()],['Оновити оригінал із гри…',openSourceSync],['Синхронізація пристроїв…',openDeviceSync],['Імпорт пам’яті перекладів…',openImport],['Налаштування…',openSettings]],
  'Довідка':[['Гарячі клавіші',()=>openPop('keypop',$('hk'),'right')],['Про макет',openAbout]]};
 let menuGroup=null;
 function mainMenuHTML(g){if(!g)return Object.keys(MENUS).map(k=>`<button data-mn="${esc(k)}">${esc(k)}<span class="dd">›</span></button>`).join('');

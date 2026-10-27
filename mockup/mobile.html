@@ -639,6 +639,22 @@ td .term{color:#d9c3ee}
 .seg{border-color:rgba(255,255,255,.14);border-radius:8px;background:rgba(255,255,255,.04)}
 .seg kbd{color:#aeb4c0}
 .stepper .queue{font-family:var(--mono);min-width:48px}
+/* ===== menu bar (IntelliJ style) ===== */
+.menubar{display:flex;align-items:center;gap:0;margin-left:2px}
+.menubar[hidden]{display:none}
+.menubar button{height:28px;padding:0 10px;border:0;border-radius:7px;background:none;color:var(--text);font-size:13.5px}
+.menubar button:hover,.menubar button.on{background:rgba(255,255,255,.12)}
+.topbar.menu-on #proj-btn,.topbar.menu-on #br-btn{display:none}
+.mdd{position:fixed;z-index:70;min-width:260px;max-width:92vw;padding:6px;background:#2b2d30;border:1px solid #43454a;border-radius:12px;box-shadow:0 14px 40px rgba(0,0,0,.55)}
+.mdd[hidden]{display:none}
+#msub{z-index:71}
+.mi{display:flex;align-items:center;gap:24px;height:32px;padding:0 12px;border-radius:8px;color:var(--text);cursor:default;outline:0;white-space:nowrap}
+.mi .ml{flex:1}
+.mi .ms{color:var(--mute);font-size:12.5px}
+.mi .ma{color:var(--mute);font-size:16px}
+.mi:hover,.mi.open,.mi:focus{background:#3a3170}
+.msep{height:1px;margin:5px 8px;background:#43454a}
+.topbar.menu-on .prog{min-width:0}.topbar.menu-on .prog span{display:none}
 
 /* ===== mobile build: always the phone layout, in a phone-width frame on wide screens ===== */
 html{background:#121315}
@@ -704,7 +720,8 @@ html{background:#121315}
   <!-- main toolbar (IntelliJ new-UI style, menu collapsed under the hamburger) -->
   <header class="topbar">
     <div class="logo">T</div>
-    <button class="tb-ic" id="hamb" data-popbtn title="Головне меню"><svg viewBox="0 0 16 16"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg></button>
+    <button class="tb-ic" id="hamb" title="Головне меню" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 16 16"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg></button>
+    <nav class="menubar" id="menubar" role="menubar" aria-label="Головне меню" hidden></nav>
     <button class="tpill" id="proj-btn" data-popbtn aria-haspopup="dialog"><span class="pj">T</span><span id="proj-name">Termina</span> <span class="dd">▾</span></button>
     <button class="tpill" id="br-btn" data-popbtn aria-haspopup="dialog"><svg viewBox="0 0 16 16"><circle cx="4.5" cy="3.5" r="1.5"/><circle cx="4.5" cy="12.5" r="1.5"/><circle cx="11.5" cy="6" r="1.5"/><path d="M4.5 5v6M11.5 7.5c0 2-2.5 2.5-7 3.5"/></svg><span id="br-name">uk/main</span> <span class="dd">▾</span></button>
     <div class="grow"></div>
@@ -1535,10 +1552,45 @@ const MENUS={
  'QA':[['Показати рядки з проблемами',()=>{if(mode==='proof')pfilter='qa';else filter='qa';renderAll()}]],
  'Інструменти':[['Збірка й ігрове тестування…',()=>openBuild()],['Оновити оригінал із гри…',openSourceSync],['Синхронізація пристроїв…',openDeviceSync],['Імпорт пам’яті перекладів…',openImport],['Налаштування…',openSettings]],
  'Довідка':[['Гарячі клавіші',()=>openPop('keypop',$('hk'),'right')],['Про макет',openAbout]]};
-let menuGroup=null;
-function mainMenuHTML(g){if(!g)return Object.keys(MENUS).map(k=>`<button data-mn="${esc(k)}">${esc(k)}<span class="dd">›</span></button>`).join('');
-  return `<button data-mb class="back">‹ Назад</button><div class="group">${esc(g)}</div>`+MENUS[g].map((m,i)=>`<button data-mi="${esc(g)}|${i}">${esc(m[0])}</button>`).join('')}
-function openMainMenu(btn){const same=!$('menupop').hidden&&menuBtn===btn&&!menuGroup;closePops();if(same)return;menuBtn=btn;menuGroup=null;$('menupop').innerHTML=mainMenuHTML(null);openPop('menupop',btn)}
+/* IntelliJ-style menu bar: hamburger swaps the project pills for File/Edit/... with drop-downs and fly-outs */
+const SC={'Скасувати останню дію':'Ctrl+Z','Збірка й ігрове тестування…':'F5','Надіслати на вичитування / затвердити':'Ctrl+Enter','Відкрити файл…':'⇧⇧','Пошук скрізь…':'⇧⇧','Перейти до рядка…':'Ctrl+G'};
+(function(){const v=MENUS['Вигляд'];MENUS['Вигляд']=[{t:'Режим',sub:v.slice(0,3)},'-',v[3]];
+  const sepBefore={'Файл':'Імпорт пам’яті перекладів…','Навігація':'Перейти до рядка…','Інструменти':'Налаштування…','Правка':'Знайти й замінити у вибраних…'};
+  Object.keys(MENUS).forEach(g=>{const o=[];MENUS[g].forEach(m=>{if(m==='-')o.push(m);else if(Array.isArray(m)){if(sepBefore[g]===m[0])o.push('-');o.push({t:m[0],fn:m[1],sc:SC[m[0]]})}else if(m.sub){m.sub=m.sub.map(x=>({t:x[0],fn:x[1]}));o.push(m)}else o.push(m)});MENUS[g]=o})})();
+let mbOpen=null,mbSub=null;
+function buildMenubar(){$('menubar').innerHTML=Object.keys(MENUS).map(g=>`<button role="menuitem" aria-haspopup="menu" aria-expanded="false" data-mg="${esc(g)}">${esc(g)}</button>`).join('')}
+function mbItems(list,gi,path){return list.map((m,i)=>m==='-'?'<div class="msep" role="separator"></div>':`<div class="mi" role="menuitem" tabindex="-1" data-mp="${path}${i}" ${m.sub?'aria-haspopup="menu"':''}><span class="ml">${esc(m.t)}</span>${m.sub?'<span class="ma">›</span>':m.sc?`<span class="ms">${esc(m.sc)}</span>`:''}</div>`).join('')}
+function mbEl(id){let e=$(id);if(!e){e=document.createElement('div');e.id=id;e.className='mdd';e.setAttribute('role','menu');e.hidden=true;document.body.appendChild(e)}return e}
+function mbClose(){const dd=mbEl('mdd'),sb=mbEl('msub');dd.hidden=true;sb.hidden=true;document.querySelectorAll('#menubar button').forEach(b=>{b.classList.remove('on');b.setAttribute('aria-expanded','false')});mbOpen=null;mbSub=null}
+function mbShow(g,focusFirst){const btn=document.querySelector(`#menubar [data-mg="${CSS.escape(g)}"]`);if(!btn)return;mbClose();mbOpen=g;btn.classList.add('on');btn.setAttribute('aria-expanded','true');
+  const dd=mbEl('mdd');dd.innerHTML=mbItems(MENUS[g],g,'');dd.hidden=false;const r=btn.getBoundingClientRect();dd.style.left=Math.min(r.left,innerWidth-dd.offsetWidth-8)+'px';dd.style.top=(r.bottom+4)+'px';
+  if(focusFirst){const f=dd.querySelector('.mi');f&&f.focus()}}
+function mbSubShow(row,focusFirst){const it=mbItemAt(row.dataset.mp);const sb=mbEl('msub');if(!it||!it.sub){sb.hidden=true;mbSub=null;return}mbSub=row.dataset.mp;
+  sb.innerHTML=mbItems(it.sub,mbOpen,row.dataset.mp+'.');sb.hidden=false;const r=row.getBoundingClientRect();let x=r.right+2;if(x+sb.offsetWidth>innerWidth-8)x=r.left-sb.offsetWidth-2;sb.style.left=x+'px';sb.style.top=(r.top-4)+'px';
+  document.querySelectorAll('#mdd .mi').forEach(e=>e.classList.toggle('open',e===row));if(focusFirst){const f=sb.querySelector('.mi');f&&f.focus()}}
+function mbItemAt(p){let list=MENUS[mbOpen],it=null;for(const k of p.split('.')){it=list[+k];if(!it)return null;list=it.sub||[]}return it}
+function mbRun(row){const it=mbItemAt(row.dataset.mp);if(!it||it.sub)return;const f=it.fn;mbToggle(false);setTimeout(()=>f(),0)}
+function mbToggle(on){const tb=document.querySelector('.topbar'),h=$('hamb');if(on===undefined)on=$('menubar').hidden;
+  if(on){closePops();if(!$('menubar').children.length)buildMenubar()}else mbClose();
+  $('menubar').hidden=!on;tb.classList.toggle('menu-on',on);h.setAttribute('aria-expanded',on);if(on){mbShow('Файл',false);const b=document.querySelector('#menubar button');b&&b.focus()}else if(document.activeElement&&document.activeElement.closest('#menubar,#mdd,#msub'))h.focus()}
+function openMainMenu(){mbToggle()}
+document.addEventListener('mouseover',e=>{if(!mbOpen)return;const b=e.target.closest('#menubar [data-mg]');if(b&&b.dataset.mg!==mbOpen){mbShow(b.dataset.mg,false);return}
+  const row=e.target.closest('#mdd .mi');if(row){if(row.dataset.mp!==mbSub)mbSubShow(row,false);return}});
+document.addEventListener('keydown',e=>{
+  if(!mbOpen&&$('menubar').hidden)return;const a=document.activeElement,k=e.key,inSub=a&&a.closest('#msub'),inDd=a&&a.closest('#mdd'),inBar=a&&a.closest('#menubar');
+  const gs=Object.keys(MENUS),gi=gs.indexOf(mbOpen);
+  if(k==='Escape'){e.preventDefault();e.stopPropagation();if(inSub){const row=document.querySelector(`#mdd [data-mp="${mbSub}"]`);mbEl('msub').hidden=true;mbSub=null;row&&row.focus();return}mbToggle(false);return}
+  if(!(inBar||inDd||inSub))return;
+  if(k==='ArrowRight'||k==='ArrowLeft'){e.preventDefault();
+    if(k==='ArrowRight'&&inDd&&a.hasAttribute('aria-haspopup')){mbSubShow(a,true);return}
+    if(k==='ArrowLeft'&&inSub){const row=document.querySelector(`#mdd [data-mp="${mbSub}"]`);mbEl('msub').hidden=true;mbSub=null;row&&row.focus();return}
+    const n=gs[(gi+(k==='ArrowRight'?1:-1)+gs.length)%gs.length];mbShow(n,!!(inDd||inSub));if(inBar){const b=document.querySelector(`#menubar [data-mg="${CSS.escape(n)}"]`);b&&b.focus()}return}
+  if(k==='ArrowDown'||k==='ArrowUp'){e.preventDefault();const box=inSub?mbEl('msub'):mbEl('mdd');const its=[...box.querySelectorAll('.mi')];if(inBar){const f=its[k==='ArrowDown'?0:its.length-1];f&&f.focus();return}
+    const i=its.indexOf(a);its[(i+(k==='ArrowDown'?1:-1)+its.length)%its.length].focus();return}
+  if(k==='Enter'||k===' '){if(inBar){e.preventDefault();const f=mbEl('mdd').querySelector('.mi');f&&f.focus();return}
+    if(a.classList.contains('mi')){e.preventDefault();if(a.hasAttribute('aria-haspopup'))mbSubShow(a,true);else mbRun(a)}}
+},true);
+document.addEventListener('focusin',e=>{const a=e.target;if(a.classList&&a.classList.contains('mi'))document.querySelectorAll('.mdd .mi').forEach(x=>x.classList.toggle('kb',x===a))});
 /* ---------- top-bar pickers ---------- */
 const PROJECTS=['Termina','Fear & Hunger'],BRANCHES=['uk/main','uk/review','uk/proofread-1'],CFGS=['Termina [збірка]','Termina [збірка + запуск]','Termina [лише вичитані]'];
 const pickHTML=(title,items,cur,attr)=>`<div class="group">${title}</div>`+items.map((x,i)=>`<div class="tgrow ${x===cur?'on':''}" ${attr}="${i}" role="button" tabindex="0"><span class="tt">${esc(x)}</span>${x===cur?'<span class="n">✓</span>':''}</div>`).join('');
@@ -1565,15 +1617,15 @@ document.addEventListener('click',e=>{
   if(t.closest('#wc-max')){if(document.fullscreenElement)document.exitFullscreen();else (document.documentElement.requestFullscreen?document.documentElement.requestFullscreen():Promise.reject()).catch(()=>toast('Повноекранний режим недоступний у цьому вікні'));return}
   if(t.closest('#wc-close')){showDialog({title:'Закрити застосунок?',html:'<p class="dl-p">Це макет у вкладці браузера, тому закрити його звідси не можна. Усі правки вже збережено.</p>',buttons:[{label:'Зрозуміло',primary:true}]});return}
   if(t.closest('#cm-ask')){const ta=$('cm-in'),v=ta.value.trim();if(!v)return toast('Напишіть питання в полі коментаря');const r=rows[cur];lastUndo=snap([cur]);r.comments.push({who:'Ви',when:'щойно',text:'Питання: '+v});note(r,'запит уточнення',v);ta.value='';renderAll();toast('Питання додано до коментарів рядка');return}
-  const mn=t.closest('[data-mn]');if(mn){menuGroup=mn.dataset.mn;$('menupop').innerHTML=mainMenuHTML(menuGroup);const f=$('menupop').querySelector('button[data-mi]');f&&f.focus();return}
-  if(t.closest('[data-mb]')){menuGroup=null;$('menupop').innerHTML=mainMenuHTML(null);const f=$('menupop').querySelector('button');f&&f.focus();return}
-  const mi=t.closest('[data-mi]');if(mi){const [g,i]=mi.dataset.mi.split('|');closePops();menuGroup=null;MENUS[g][+i][1]();return}
+  const mrow=t.closest('#mdd .mi,#msub .mi');if(mrow){if(mrow.hasAttribute('aria-haspopup'))mbSubShow(mrow,false);else mbRun(mrow);return}
+  const mg=t.closest('#menubar [data-mg]');if(mg){mbOpen===mg.dataset.mg?mbClose():mbShow(mg.dataset.mg,false);return}
+  if(!t.closest('#menubar,#mdd,#msub,#hamb')&&!$('menubar').hidden)mbToggle(false);
   const ct=t.closest('[data-closetab]');if(ct){closeTab(ct.dataset.closetab);return}
   const tbt=t.closest('[data-tab]');if(tbt){openFile(tbt.dataset.tab);return}
   if(!t.closest('.pop,[data-popbtn]'))closePops();
   const so=t.closest('[data-soon]');if(so){closePops();return toast('Недоступно в макеті: '+so.dataset.soon)}
   const ac=t.closest('[data-act]');if(ac){closePops();if(ac.dataset.act==='reset')return resetDemo();if(ac.dataset.act==='settings')return openSettings();if(ac.dataset.act==='build')return openBuild({run:true});if(ac.dataset.act==='srcsync')return openSourceSync();if(ac.dataset.act==='devsync')return openDeviceSync();if(ac.dataset.act==='qa'){mode!=='table'&&setMode('table');filter='qa';return renderAll()}}
-  if(t.closest('#hamb'))return openMainMenu(t.closest('#hamb'));
+  if(t.closest('#hamb'))return mbToggle();
   if(t.closest('#more'))return menu(t.closest('#more'),[{t:'Показати проблеми QA',act:'qa'},{t:'Зібрати й перевірити в грі…',act:'build'},{t:'Оновити оригінал із гри…',act:'srcsync'},{t:'Синхронізація пристроїв…',act:'devsync'},{t:'Скинути демо-дані',act:'reset'}]);
   if(t.closest('#hk'))return openPop('keypop',t.closest('#hk'),'right');
   const tb=t.closest('#tagbtn,#tagbtn2');if(tb)return openPop('tagpop',tb);

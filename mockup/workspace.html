@@ -891,7 +891,7 @@ const stName={new:'без перекладу',draft:'чернетка',done:'ч�
 const RANK={new:0,draft:1,qa:2,done:3,appr:4};
 const PROJECT={total:12940,otherAppr:5300,otherDone:2850,otherDraft:1160};
 const CODE=/\\[A-Z]\[\d+\]/g;
-const settings={tol:25,blockErrors:true,showStage:true,project:'Termina',branch:'uk/main',cfg:'Termina [збірка]',sync:{mode:'lan',every:0,last:0}};
+const settings={tol:25,blockErrors:true,showStage:true,project:'Termina',branch:'uk/main',cfg:'Termina [збірка]',sync:{mode:'relay',server:'sync.my-home.net:7421',every:0,last:0}};
 const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
 const plural=(n,a)=>{const m=n%10,h=n%100;return n+' '+(m===1&&h!==11?a[0]:(m>=2&&m<=4&&(h<12||h>14))?a[1]:a[2])};
 function markup(s){
@@ -1406,30 +1406,30 @@ function openSettings(){
 function applySettings(){document.querySelector('.ide').classList.toggle('no-stage',!settings.showStage);$('proj-name').textContent=settings.project;$('br-name').textContent=settings.branch;$('cfg-name').textContent=settings.cfg}
 /* ---------- device sync (peer to peer, no cloud) ---------- */
 let syncRun=null;
-const syncModes={lan:'Одна Wi-Fi мережа або VPN',code:'Через код (WebRTC, без сервера)'};
+const syncModes={relay:'Власний проміжний сервер',lan:'Напряму, в одній мережі'};
 function syncLabel(){const l=settings.sync.last;return l?'Синхр.: '+new Date(l).toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'}):'Синхр.: ще не було'}
 function finishSync(up,down,conf){settings.sync.last=Date.now();renderStats();scheduleSave();return `↑ надіслано ${up}, ↓ отримано ${down}, конфліктів ${conf}`}
 function openDeviceSync(){
   const sy=settings.sync;
   showDialog({title:'Синхронізація пристроїв',
-    html:`<p class="dl-p">Без хмарного сервісу: пристрої обмінюються напряму. Один із них на хвилину запускає тимчасовий сервер і чекає відповіді від іншого. Зміни зливаються по рядках за часом правки, як між вкладками.</p>
-      <div class="dl-grid"><label for="sy-mode">Як пристрої знаходять один одного</label><select id="sy-mode">${Object.entries(syncModes).map(([k,v])=>`<option value="${k}" ${sy.mode===k?'selected':''}>${v}</option>`).join('')}</select>
+    html:`<p class="dl-p">Без хмарних сервісів: зв’язок іде через ваш власний невеликий сервер (VPS, домашній ПК чи роутер), який лише передає зміни й нічого не зберігає довше за сеанс. Також можна напряму, якщо пристрої в одній мережі: тоді тимчасовий сервер запускає один із них і чекає на відповідь іншого. Зміни зливаються по рядках за часом правки, як між вкладками.</p>
+      <div class="dl-grid"><label for="sy-mode">Як пристрої з’єднуються</label><select id="sy-mode">${Object.entries(syncModes).map(([k,v])=>`<option value="${k}" ${sy.mode===k?'selected':''}>${v}</option>`).join('')}</select>
       <label for="sy-every">Автоматично</label><select id="sy-every">${[[0,'Лише за кліком'],[3,'Раз на 3 години'],[6,'Раз на 6 годин'],[12,'Раз на 12 годин']].map(([v,l])=>`<option value="${v}" ${sy.every===v?'selected':''}>${l}</option>`).join('')}</select></div>
       <p class="hint" id="sy-note"></p>
       <div class="pair" id="sy-pair" hidden></div>
       <div class="blog" id="blog" role="log" aria-live="polite" aria-label="Хід синхронізації"></div>
       <p class="hint">Остання синхронізація: <b id="sy-last">${sy.last?new Date(sy.last).toLocaleString('uk-UA'):'ще не було'}</b></p>`,
     buttons:[{label:'Синхронізувати зараз',primary:true,id:'sy-go',fn:()=>{startSync();return true}},{label:'Закрити'}],
-    onOpen:()=>{const note=()=>{$('sy-note').textContent=$('sy-mode').value==='lan'?'Працює, коли обидва пристрої в одній мережі або через VPN. Адреса й код показуються під час синхронізації.':'Працює між різними мережами: пристрої обмінюються одноразовим кодом (його вводять на другому пристрої вручну), далі з’єднуються напряму.'};note();
+    onOpen:()=>{const note=()=>{$('sy-note').textContent=$('sy-mode').value==='relay'?'Працює з будь-яких мереж. Адресу сервера (наприклад, '+settings.sync.server+') і ключ пристроїв вводять один раз. Сервер можна підняти однією командою.':'Працює, лише коли обидва пристрої в одній мережі або VPN. Адреса й код показуються під час синхронізації.'};note();
       $('sy-mode').onchange=()=>{settings.sync.mode=$('sy-mode').value;note();scheduleSave()};$('sy-every').onchange=()=>{settings.sync.every=+$('sy-every').value;scheduleSave();toast(settings.sync.every?'Автосинхронізація: раз на '+settings.sync.every+' год':'Автосинхронізацію вимкнено')}},
     onClose:()=>{clearInterval(dlgIv);syncRun=null}})}
 function startSync(){
-  const lan=$('sy-mode').value==='lan',code=String(Math.floor(100000+Math.random()*900000)).replace(/(\d{3})(\d{3})/,'$1 $2');
+  const lan=$('sy-mode').value!=='relay',code=String(Math.floor(100000+Math.random()*900000)).replace(/(\d{3})(\d{3})/,'$1 $2');
   const pair=$('sy-pair');pair.hidden=false;
-  pair.innerHTML=lan?`<div>Код пристрою: <b>${code}</b></div><div>Адреса: <b>192.168.0.14:7421</b></div><div class="hint">Введіть код на телефоні або відскануйте QR</div>`:`<div>Одноразовий код: <b>${code}</b></div><div class="hint">Введіть цей код на другому пристрої. Обидва з’єднаються напряму.</div>`;
+  pair.innerHTML=lan?`<div>Код пристрою: <b>${code}</b></div><div>Адреса: <b>192.168.0.14:7421</b></div><div class="hint">Введіть код на телефоні або відскануйте QR</div>`:`<div>Сервер: <b>${esc(settings.sync.server)}</b></div><div>Код сеансу: <b>${code}</b></div><div class="hint">Телефон бачить той самий сервер і підключається за кодом. Дані шифруються на пристроях.</div>`;
   $('blog').innerHTML='';const go=$('sy-go');go.disabled=true;
   const log=t=>{const d=document.createElement('div');d.textContent=t;$('blog').appendChild(d)};
-  log('✓ Запущено тимчасовий сервер на цьому пристрої');
+  log(lan?'✓ Запущено тимчасовий сервер на цьому пристрої':'✓ Підключено до власного сервера');
   let left=120;const w=document.createElement('div');w.id='sy-wait';$('blog').appendChild(w);
   const tick=()=>{w.textContent='… Чекаю відповіді від телефона: '+String(Math.floor(left/60)).padStart(2,'0')+':'+String(left%60).padStart(2,'0');left--};tick();
   syncRun=setInterval(tick,1000);dlgIv=syncRun;

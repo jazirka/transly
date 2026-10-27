@@ -437,6 +437,22 @@ td .term{color:#d9c3ee}
 .ide.mode-table [data-lp=rows]{display:none}
 .cnt2{flex-direction:row;min-width:64px;font:12px var(--mono);color:#e6e8ec}
 .cnt2.over{color:#ff8a94;background:#43292e}
+.qa-row .ign{margin-left:auto;height:22px;padding:0 9px;border-radius:4px;border:1px solid var(--line);background:#2f3135;color:var(--mute);white-space:nowrap}
+.qa-row .ign:hover{color:var(--text);background:#393b40}
+.qa-row .fix+.ign{margin-left:6px}
+.qa-row.muted{background:#26282b;border-color:var(--line);color:var(--dim)}
+.qa-row.muted .dot{background:var(--dim)}
+.qa-row.muted>span:nth-child(2){text-decoration:line-through}
+.qa-row .tagi{margin-left:auto;font-size:11px;color:var(--dim)}
+.qa-row .tagi+.ign{margin-left:8px}
+/* left tool-window bar: clean icon buttons */
+.strip{gap:6px;padding-top:8px}
+.strip button{width:32px;height:32px;border-radius:8px;color:var(--mute);outline:0}
+.strip button::before,.strip button.on::before{display:none}
+.strip button:hover{background:#34363a;color:var(--text)}
+.strip button.on{background:#2f4678;color:#d6e2ff}
+.strip button:focus-visible{box-shadow:0 0 0 2px rgba(53,116,240,.6)}
+.strip svg{width:17px;height:17px}
 </style>
 <div class="scroll-x"><div class="ide mode-table">
 
@@ -645,13 +661,14 @@ const tagH=(g,lg)=>`<span class="tg ${g[0]} ${lg?'lg':''}" data-tag="${g[1]}" ti
 const LIMIT=120;
 const STN={new:'без перекладу',draft:'чернетка',done:'перекладено · чекає вичитки',appr:'вичитано',qa:'є проблема'};
 let stage='tr', lp='files';
-function qaIssues(r){
+function qaAll(r){
   const o=[];if(!r.t)return o;
   if(r.t.length>LIMIT)o.push({sev:'bad',msg:`Перевищено довжину: ${r.t.length} / ${LIMIT} символів`});
   (r.s.match(/\\[A-Z]\[\d+\]/g)||[]).forEach(c=>{if(!r.t.includes(c))o.push({sev:'bad',msg:`Втрачено керівний код ${c}`})});
   gloss.forEach(([e,u])=>{if(new RegExp('\\b'+e+'\\b').test(r.s)&&!r.t.toLowerCase().includes(u.toLowerCase().slice(0,u.length>5?u.length-2:u.length)))o.push({sev:'warn',msg:`Термін «${e}» має бути «${u}» за глосарієм`,fix:u})});
   return o;
 }
+const qaIssues=r=>qaAll(r).filter(x=>!(r.ign||[]).includes(x.msg));
 const effSt=r=>(r.t&&qaIssues(r).length&&r.st!=='new')?'qa':r.st;
 let cur=5, filter='all', sortKey=null, sortDir=1, tagFilter=null, mode='table', checked=new Set();
 rows.forEach((r,i)=>{r.i=i;r.orig=r.t});
@@ -717,8 +734,11 @@ function renderFocus(){
   $('f-src').innerHTML=markup(r.s);
   const ta=$('i-tr');if(document.activeElement!==ta)ta.value=r.t;
   meter();
-  $('f-qa').innerHTML=(()=>{const q=qaIssues(r);if(!r.t)return '';if(!q.length)return '<div class="qa-row good"><span class="dot"></span>QA: проблем не знайдено</div>';
-    return q.map((x,n)=>`<div class="qa-row ${x.sev}"><span class="dot"></span><span>${x.msg}</span>${x.fix?`<button class="fix" data-fix="${n}">Замінити на «${x.fix}»</button>`:''}</div>`).join('')})();
+  $('f-qa').innerHTML=(()=>{if(!r.t)return '';const q=qaIssues(r),ig=qaAll(r).filter(x=>(r.ign||[]).includes(x.msg));
+    let h=!q.length&&!ig.length?'<div class="qa-row good"><span class="dot"></span>QA: проблем не знайдено</div>':(!q.length?'<div class="qa-row good"><span class="dot"></span>QA: активних проблем немає</div>':'');
+    h+=q.map((x,n)=>`<div class="qa-row ${x.sev}"><span class="dot"></span><span>${x.msg}</span>${x.fix?`<button class="fix" data-fix="${n}">Замінити на «${x.fix}»</button>`:''}<button class="ign" data-ign="${n}" title="Не вважати проблемою для цього рядка">Ігнорувати</button></div>`).join('');
+    h+=ig.map((x,n)=>`<div class="qa-row muted"><span class="dot"></span><span>${x.msg}</span><span class="tagi">ігноровано</span><button class="ign" data-unign="${n}">Повернути</button></div>`).join('');
+    return h})();
   const pf=$('f-proof');pf.hidden=stage!=='proof';
   if(stage==='proof')pf.innerHTML=`<div class="lbl">Версія перекладача</div><div class="t">${esc(r.orig||'—')}${r.orig!==r.t?'<span class="chg">змінено вичиткою</span>':''}</div>`;
   $('b-save').title=stage==='proof'?'Затвердити (Ctrl+Enter)':'Підтвердити (Ctrl+Enter)';
@@ -768,6 +788,8 @@ function setMode(m){mode=m;stage=m==='proof'?'proof':'tr';
   renderAll();if(m!=='table')$('i-tr').focus();else document.querySelectorAll('.gr.sel').forEach(el=>el.scrollIntoView({block:'nearest'}))}
 
 document.addEventListener('click',e=>{
+  const ig=e.target.closest('[data-ign]');if(ig){const r=rows[cur],x=qaIssues(r)[+ig.dataset.ign];(r.ign=r.ign||[]).push(x.msg);return renderAll()}
+  const un=e.target.closest('[data-unign]');if(un){const r=rows[cur],x=qaAll(r).filter(y=>(r.ign||[]).includes(y.msg))[+un.dataset.unign];r.ign=r.ign.filter(m=>m!==x.msg);return renderAll()}
   const mn=(btn,items)=>{const p=$('tagpop'),rc=btn.getBoundingClientRect();p.innerHTML=items.map(x=>`<button>${x}</button>`).join('');p.hidden=false;p.style.left=Math.max(8,Math.min(rc.left,innerWidth-258))+'px';p.style.top=(rc.bottom+4)+'px'};
   const hb=e.target.closest('#hamb');if(hb){e.stopPropagation();return mn(hb,['Файл','Правка','Вигляд','Навігація','Переклад','Глосарій','QA','Інструменти','Довідка'])}
   const mo=e.target.closest('#more');if(mo){e.stopPropagation();return mn(mo,['Зберегти все','Синхронізувати з грою','Експорт у файли гри…','Імпорт ПП…'])}

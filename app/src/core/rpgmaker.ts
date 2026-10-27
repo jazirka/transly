@@ -29,6 +29,18 @@ const DB_KIND: Record<string, Unit['kind']> = { name: 'name', nickname: 'name', 
 
 /** Does this look like one of RPG Maker MV/MZ's data files? */
 /** MapInfos.json holds no text for players, but it names the maps (see mapLabels), so it is read along with the rest. */
+/**
+ * A game file that was copied or sent on usually comes back renamed: "Map001 (1).json", "map001.json", "Items.json.txt".
+ * Returns the name the game uses, or null when this is not an RPG Maker file at all.
+ */
+export function canonicalRpgMakerName(name: string): string | null {
+  const base = (name.split(/[\\/]/).pop() ?? name).replace(/\.(txt|bak)$/i, '').replace(/\s*\(\d+\)(?=\.[^.]*$|$)/, '');
+  const stem = base.replace(/\.json$/i, '');
+  const map = /^map(\d+)$/i.exec(stem);
+  const canon = map ? `Map${map[1]}.json` : [...Object.keys(DB_FIELDS), 'MapInfos.json', 'CommonEvents.json', 'Troops.json', 'System.json'].find(n => n.toLowerCase() === `${stem}.json`.toLowerCase());
+  return canon && isRpgMakerFile(canon) ? canon : null;
+}
+
 export const isRpgMakerFile = (name: string): boolean => /^Map\d+\.json$/.test(name) || name === 'MapInfos.json' || name === 'CommonEvents.json' || name === 'Troops.json' || name === 'System.json' || name in DB_FIELDS;
 
 const isMap = (name: string) => /^Map\d+\.json$/.test(name);

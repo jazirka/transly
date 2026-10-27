@@ -73,3 +73,5 @@
 .pl-row input{margin-top:3px;flex:none}
 .pl-b{min-width:0;line-height:1.5}
 .pl-s{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.adlg .sum.bad{border-color:var(--err,#c75450);color:var(--text)}

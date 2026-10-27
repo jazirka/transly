@@ -110,12 +110,14 @@ export function serialize(p: SavedProject): string {
 }
 
 /**
- * Cheap check on the start of a file: is this a project file (as opposed to a game's JSON)? Lets a phone take both
- * kinds from one picker without parsing a large game file twice.
+ * Is this text a project file (as opposed to a game's JSON)? Lets a phone take both kinds from one picker.
+ * The start is enough for files saved by this app; the rest is a fallback that does not depend on key order.
  */
-export function looksLikeProject(head: string): boolean {
-  const h = head.slice(0, 4000);
-  return /^\s*\{/.test(h) && /"version"\s*:\s*1\b/.test(h) && /"sourceLang"\s*:/.test(h);
+export function looksLikeProject(text: string): boolean {
+  if (!/^\s*\{/.test(text.slice(0, 64))) return false;
+  const head = text.slice(0, 4000);
+  if (/"version"\s*:\s*1\b/.test(head) && /"sourceLang"\s*:/.test(head)) return true;
+  return text.includes('"sourceLang"') && text.includes('"targetLang"') && text.includes('"resetEpoch"') && text.includes('"files"');
 }
 
 /** Parse and validate; throws a readable error for unusable input instead of loading garbage. */

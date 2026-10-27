@@ -103,3 +103,17 @@ describe('MapInfos', () => {
     expect(extract({ name: 'MapInfos.json', json: [null, { id: 1, name: 'x' }] })).toEqual([]);
   });
 });
+
+describe('renamed game files', () => {
+  it('recognises files renamed by a messenger or a download folder', async () => {
+    const { canonicalRpgMakerName: c } = await import('../src/core');
+    expect([c('Map001 (1).json'), c('map012.json'), c('Items.json.txt'), c('items.JSON'), c('CommonEvents (2).json'), c('data/Troops.json')]).toEqual(['Map001.json', 'Map012.json', 'Items.json', 'Items.json', 'CommonEvents.json', 'Troops.json']);
+    expect([c('notes.json'), c('Map.json'), c('package.json'), c('project.transly.json')]).toEqual([null, null, null, null]);
+  });
+  it('tells a project from a game file even when the keys are in another order', async () => {
+    const { looksLikeProject: l } = await import('../src/core');
+    const big = `{"files":{"a":{"k":{"target":"${'x'.repeat(6000)}"}}},"resetEpoch":0,"targetLang":"uk","sourceLang":"en","version":1,"name":"p"}`;
+    expect(l(big)).toBe(true);
+    expect(l(JSON.stringify({ displayName: '', events: [null], data: 'x'.repeat(6000) }))).toBe(false);
+  });
+});

@@ -427,13 +427,19 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#ab-sub').textContent = v ? `${s.mode === 'review' ? 'Вичитування' : 'Переклад'} · ${statsOf(v.units, ents).approved} / ${v.units.length} вичитано` : '';
   }
 
+  /** The centred message in the main area: the start screen, or the progress of reading files. */
+  function emptyBox(): HTMLElement {
+    let box = document.getElementById('start-empty');
+    if (!box) { box = el('div', 'msg-empty'); box.id = 'start-empty'; $('#main').appendChild(box); }
+    return box;
+  }
+
   function renderMainEmpty(): boolean {
     const v = ctx.view();
     const tv = $('#v-table'), fv = $('#v-focus');
     if (v) { document.getElementById('start-empty')?.remove(); return false; }
     tv.style.display = 'none'; fv.style.display = 'none';
-    let box = document.getElementById('start-empty');
-    if (!box) { box = el("div", "msg-empty"); box.id = 'start-empty'; $('#main').appendChild(box); }
+    const box = emptyBox();
     box.innerHTML = `<h2>${s.phone ? 'Відкрийте файли' : 'Відкрийте папку гри'}</h2>${s.phone ? 'На телефоні проєкт береться з комп’ютера: на ПК виберіть «Налаштування → Обмін проєктом через файл → Зберегти проєкт у файл», передайте файл сюди й відкрийте його, або вставте його вміст як текст. Так само можна відкрити файли самої гри.' : 'Оберіть папку <b>data</b> гри на RPG Maker (або саму папку гри), папку з файлами <b>.po</b>, <b>.csv</b>, <b>.rpy</b> (Ren’Py) чи JSON-локалізацією. Ваш переклад зберігається в цьому браузері, файли гри не змінюються.'}${(lastHandle || desktopDir) ? `<p><button class="btn p" id="resume">Продовжити з папкою «${esc(lastHandle?.name ?? (desktopDir ?? '').split(/[\\/]/).filter(Boolean).pop() ?? '')}»</button></p>` : ''}${s.phone ? '<p><button class="btn p" id="imp2">Відкрити файли або вставити JSON…</button></p>' : '<p><button class="btn p" id="open2">Відкрити папку гри</button></p>'}`;
     return true;
   }
@@ -486,14 +492,22 @@ export async function start(root: HTMLElement): Promise<void> {
     s.who = s.saved.settings.who; tmCache = null; ctx.persist(); renderAll();
   }
 
-  async function loadFiles(picked: PickedFile[]): Promise<void> {
+  /**
+   * Read the picked game files. With `keep`, they are added to what is already open (files with the same name are
+   * replaced) instead of replacing the whole project: a phone that opens one file must not lose the others.
+   */
+  async function loadFiles(picked: PickedFile[], keep = false): Promise<void> {
     if (!picked.length) { toast('У вибраній папці немає файлів, які я вмію перекладати (RPG Maker JSON, .po, .csv, .rpy)'); return; }
-    renderMainEmpty();
-    const box = $('#start-empty');
+    try { await loadPicked(picked, keep); }
+    catch (err) { toast(`Не вдалося відкрити файли: ${err instanceof Error ? err.message : 'невідома помилка'}`); renderAll(); }
+  }
+
+  async function loadPicked(picked: PickedFile[], keep: boolean): Promise<void> {
+    const box = emptyBox();
     box.innerHTML = '<h2>Читаю файли гри…</h2><div class="progress"><i id="bar"></i></div><span id="pct"></span>';
     $('#v-table').style.display = 'none'; $('#v-focus').style.display = 'none';
     const { files, failed } = await readFiles(picked, (d, t) => { $('#bar').style.width = `${(d / t) * 100}%`; $('#pct').textContent = `${d} з ${t}`; });
-    const reset = ingest(files);
+    const reset = ingest(files, keep);
     dataDir = isDesktop() ? dataDirOf(picked) : null;
     if (!s.views.length) { s.current = null; renderAll(); toast('У цих файлах немає тексту для перекладу'); return; }
     if (failed.length) toast(`Не вдалося прочитати файлів: ${failed.length}`);
@@ -510,9 +524,15 @@ export async function start(root: HTMLElement): Promise<void> {
    * game's strings really did, so other devices fetch them again only then. Returns how many translated rows had
    * their original changed (they go back to draft).
    */
-  function ingest(game: GameFile[]): number {
-    s.game = game;
-    s.views = readGame(game, { pluginCommands: s.saved.settings.pluginCommands });
+  function ingest(game: GameFile[], keep = false): number {
+    const fresh = readGame(game, { pluginCommands: s.saved.settings.pluginCommands });
+    if (keep) {
+      const names = new Set(game.map(g => g.name));
+      s.game = [...s.game.filter(g => !names.has(g.name)), ...game];
+      const label = new Map(s.views.map(v => [v.name, v.label]));
+      const kept = fresh.map(v => (v.label || !label.get(v.name) ? v : { ...v, label: label.get(v.name)! }));
+      s.views = [...s.views.filter(v => !names.has(v.name)), ...kept].sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true }));
+    } else { s.game = game; s.views = fresh; }
     tmCache = null;
     s.saved.labels = labelsOf(s.views);
     const snap = snapshotOf(s.views);
@@ -563,7 +583,7 @@ export async function start(root: HTMLElement): Promise<void> {
 
   function openImportDlg(): void {
     s.leftOpen = false; renderLayout();
-    openImport(ctx, adopt, loadFiles);
+    openImport(ctx, adopt, files => loadFiles(files, true));
   }
   const doBuild = () => openBuild(ctx, dataDir, n => { s.lastBuild = { at: Date.now(), n }; renderTop(); });
 

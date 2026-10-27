@@ -28,6 +28,23 @@ Data is encrypted on the devices (AES-GCM, key from the passphrase); the relay o
 Edits are merged per string, the newer edit wins, and concurrent edits to the same string are reported.
 For addresses reachable over the internet use https (browsers block plain http from https pages).
 
+### Sync through your own GitHub repository
+
+Settings → Synchronization via GitHub. Create a repository (private is best) that has at least one file (a README), and a fine-grained token limited to that repository with **Contents: Read and write**. Enter `owner/name` and the token; the token stays in this browser only.
+
+The project is stored as plain files, so the commit history shows what changed and when:
+
+```
+project.json                   glossary, memory, speakers, settings
+translations/<file>.tr.json    one file per game file: key → translation, status, comments, history
+originals/snapshot.json.gz     the game's original strings (so a phone without the game can show them)
+originals/reference.json.gz    reference-language texts
+```
+
+Each sync downloads only the files that changed, merges them per string (the newer edit wins), and pushes the result as one commit. The originals are pushed only to a **private** repository (never to a public one) and only when their revision changed. A branch that does not exist is created from the default branch; an optional folder keeps several projects in one repository. Browsers allow requests to `api.github.com` from a normal page; an embedded preview that blocks outgoing requests cannot sync. For GitHub Enterprise set the API address under "Додатково".
+
+Settings follow the newest deliberate change (a new device's defaults never replace chosen settings).
+
 ## Desktop app (Tauri)
 
 The same UI runs in a Tauri shell that adds what a browser cannot do: remember the game folder, write the translation straight into the game's `data` folder (originals are backed up once next to it, in `data.transly-orig`, and can be restored), and launch the game for testing.

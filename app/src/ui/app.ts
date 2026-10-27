@@ -14,6 +14,7 @@ import { openSettings } from './settings';
 import { openSpeakers } from './speakers-dialog';
 import { STATUS_LABEL, buildTm, shownStatus } from './state';
 import type { Ctx, Filter, Mode, State } from './state';
+import { describeGithub, githubConfigured, loadGithubConfig, runGithubSync } from './github';
 import { describe as describeSync, loadSyncConfig, runSync, syncConfigured } from './sync';
 
 const SVG = {
@@ -397,7 +398,8 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#pg-txt').textContent = total ? `${Math.round((100 * A) / total)}% вичитано · ${(A + D + W).toLocaleString('uk-UA')} перекладено з ${total.toLocaleString('uk-UA')}` : 'Папку гри не відкрито';
     $('#pg').title = total ? `Вичитано ${Math.round((100 * A) / total)}% · Чекає вичитування ${Math.round((100 * D) / total)}% · Чернетки ${Math.round((100 * W) / total)}% · Решта без перекладу` : '';
     const sy = loadSyncConfig();
-    $('#sb-sync').textContent = sy.last ? 'Синхр.: ' + new Date(sy.last).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }) : 'Синхр.: ще не було';
+    const lastSync = Math.max(sy.last, loadGithubConfig().last);
+    $('#sb-sync').textContent = lastSync ? 'Синхр.: ' + new Date(lastSync).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }) : 'Синхр.: ще не було';
     $('#sb-build').textContent = s.lastBuild ? `Збірка: ${new Date(s.lastBuild.at).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })} · ${s.lastBuild.n} рядків` : 'Збірки ще не було';
     ($('#build') as HTMLButtonElement).disabled = !s.views.length;
     ($('#run-btn') as HTMLButtonElement).disabled = !s.views.length;
@@ -549,6 +551,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const before = new Set(st.pluginCommands);
     if (names.length === before.size && names.every(n => before.has(n))) { ctx.persist(); return; }
     st.pluginCommands = names;
+    s.saved.settingsAt = Date.now();
     const total = (): number => s.views.reduce((n, v) => n + v.units.length, 0);
     const was = total();
     ingest(s.game);
@@ -906,6 +909,12 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!cfg.everyMin || !syncConfigured(cfg) || document.querySelector('dialog[open]')) return;
     if (Date.now() - cfg.last < cfg.everyMin * 60_000) return;
     runSync(ctx, cfg, adopt).then(r => toast(describeSync(r)), er => toast(er instanceof Error ? er.message : 'Не вдалося синхронізувати'));
+  }, 60_000);
+  setInterval(() => {
+    const cfg = loadGithubConfig();
+    if (!cfg.everyMin || !githubConfigured(cfg) || document.querySelector('dialog[open]')) return;
+    if (Date.now() - cfg.last < cfg.everyMin * 60_000) return;
+    runGithubSync(ctx, cfg, adopt).then(r => toast(describeGithub(r)), er => toast(er instanceof Error ? er.message : 'Не вдалося синхронізувати з GitHub'));
   }, 60_000);
 
   setInterval(renderStatus, 30_000);

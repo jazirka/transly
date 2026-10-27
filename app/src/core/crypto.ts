@@ -40,5 +40,5 @@ async function pipe(data: Uint8Array, stream: CompressionStream | DecompressionS
   const out = new Response(new Blob([data as BlobPart]).stream().pipeThrough(stream as unknown as ReadableWritablePair<Uint8Array, Uint8Array>));
   return new Uint8Array(await out.arrayBuffer());
 }
-const gzip = (d: Uint8Array) => pipe(d, new CompressionStream('gzip'));
-const gunzip = (d: Uint8Array) => pipe(d, new DecompressionStream('gzip'));
+export const gzip = (d: Uint8Array) => pipe(d, new CompressionStream('gzip'));
+export const gunzip = (d: Uint8Array) => pipe(d, new DecompressionStream('gzip'));

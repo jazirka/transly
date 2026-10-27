@@ -13,6 +13,7 @@ export * from './tm';
 export * from './glossary';
 export * from './crypto';
 export * from './sync';
+export * from './github';
 export * from './duplicates';
 export * from './termtable';
 export * from './reference';

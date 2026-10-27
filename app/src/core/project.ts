@@ -20,6 +20,8 @@ export interface SavedProject {
   /** Project glossary. */
   terms: GlossaryTerm[];
   settings: ProjectSettings;
+  /** When the settings were last changed on purpose; the newer side's settings win a merge, so a fresh device's defaults never replace chosen ones. */
+  settingsAt?: number;
   /**
    * Copy of the original strings as of the last time the game folder was read. Lets the app (and a phone
    * that has no game files) open the project and translate without the folder; only building needs it.
@@ -137,6 +139,7 @@ export function deserialize(text: string): SavedProject {
     ...(o.assetsRev ? { assetsRev: o.assetsRev } : {}),
     ...(o.speakers ? { speakers: o.speakers } : {}),
     ...(o.labels ? { labels: o.labels } : {}),
+    ...(o.settingsAt ? { settingsAt: o.settingsAt } : {}),
   };
 }
 
@@ -157,6 +160,8 @@ export function mergeProjects(a: SavedProject, b: SavedProject, since = 0): { pr
     return [...m.values()].filter(v => v.mt > epoch);
   };
   const newer = a.resetEpoch >= b.resetEpoch ? a : b;
+  const settingsFrom = (b.settingsAt ?? 0) > (a.settingsAt ?? 0) ? b : a;
+  const settingsAt = Math.max(a.settingsAt ?? 0, b.settingsAt ?? 0);
   // Snapshot and reference describe the game, not the translator's work: the side with the newer revision wins,
   // and when only one side carries them (a lite copy from sync) they are kept.
   const owner = (b.assetsRev ?? 0) > (a.assetsRev ?? 0) && (b.snapshot || b.reference) ? b : a;
@@ -167,7 +172,7 @@ export function mergeProjects(a: SavedProject, b: SavedProject, since = 0): { pr
   for (const src of [a.speakers ?? {}, b.speakers ?? {}]) for (const [k, v] of Object.entries(src)) if (v.mt > epoch && (!speakers[k] || v.mt > speakers[k]!.mt)) speakers[k] = v;
   return {
     project: {
-      ...newer, resetEpoch: epoch, files, ...(snapshot ? { snapshot } : {}), ...(reference ? { reference } : {}), ...(assetsRev ? { assetsRev } : {}),
+      ...newer, settings: { ...settingsFrom.settings, pluginsAsked: a.settings.pluginsAsked || b.settings.pluginsAsked }, ...(settingsAt ? { settingsAt } : {}), resetEpoch: epoch, files, ...(snapshot ? { snapshot } : {}), ...(reference ? { reference } : {}), ...(assetsRev ? { assetsRev } : {}),
       ...(Object.keys(speakers).length ? { speakers } : {}),
       ...(a.labels || b.labels ? { labels: { ...(b.labels ?? {}), ...(a.labels ?? {}) } } : {}),
       memory: union(a.memory, b.memory, v => v.s + '\u0001' + v.t),

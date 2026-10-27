@@ -2,6 +2,7 @@ import { DEFAULT_SETTINGS, emptyProject, parseDelimited, parseHtmlTable, parseTe
 import type { GlossaryTerm } from '../core';
 import { $, el, esc, plural, toast } from './dom';
 import type { Ctx } from './state';
+import { DEFAULT_API, describeGithub, loadGithubConfig, runGithubSync, saveGithubConfig } from './github';
 import { importProjectText } from './import-dialog';
 import { importReference } from './reference';
 import { saveFile } from './save';
@@ -26,6 +27,7 @@ export interface SettingsActions { reset: () => void; adopt: () => void; plugins
 export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugins: onPlugins, importFiles: onFiles }: SettingsActions): void {
   const st = ctx.s.saved.settings;
   const sync = loadSyncConfig();
+  const gh = loadGithubConfig();
   const autoNow = st.lineLimit === 0 ? ctx.lineLimit() : 0;
   const dlg = dialog(`<form method="dialog"><h2 id="st-t">Налаштування</h2>
     <div class="grid"><label for="st-tol">Допуск довжини перекладу відносно оригіналу, %</label><input id="st-tol" type="number" min="5" max="100" step="5" value="${st.tolerancePct}">
@@ -47,7 +49,19 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
       <p class="hint" id="rf-state">${ctx.s.saved.reference ? `Додано: ${esc(ctx.s.saved.reference.lang)}` : 'Довідки ще немає'}</p>
       <div class="grid"><label for="rf-lang">Код мови</label><input id="rf-lang" maxlength="8" value="${esc(ctx.s.saved.reference?.lang ?? 'ru')}"></div>
       <div class="acts l"><button class="btn" type="button" id="rf-go">Обрати папку довідкової версії…</button>${ctx.s.saved.reference ? '<button class="btn" type="button" id="rf-del">Прибрати довідку</button>' : ''}</div></details>
-    <details><summary>Синхронізація пристроїв</summary><p class="hint">Через ваш власний проміжний сервер (<code>node server/relay.ts</code>): він лише передає зашифровані дані й забуває їх. Без чужих хмар. Дані шифруються паролем на пристроях. Для адреси в інтернеті потрібен https.</p>
+    <details><summary>Синхронізація через GitHub</summary>
+      <p class="hint">Переклад зберігається у вашому репозиторії GitHub (краще приватному) звичайними файлами, а історія комітів показує, що й коли змінилося. Створіть репозиторій із файлом README, потім токен: GitHub → Settings → Developer settings → Fine-grained tokens, доступ лише до цього репозиторію, право «Contents: Read and write». Токен лишається тільки в цьому браузері й не потрапляє у файл проєкту.</p>
+      <div class="grid"><label for="gh-repo">Репозиторій (власник/назва)</label><input id="gh-repo" placeholder="ivan/my-translation" autocomplete="off" spellcheck="false" value="${esc(gh.repo)}">
+        <label for="gh-token">Токен доступу</label><input id="gh-token" type="password" autocomplete="off" value="${esc(gh.token)}">
+        <label for="gh-branch">Гілка (необов’язково)</label><input id="gh-branch" placeholder="основна гілка репозиторію" autocomplete="off" spellcheck="false" value="${esc(gh.branch)}">
+        <label for="gh-dir">Папка в репозиторії (необов’язково)</label><input id="gh-dir" placeholder="корінь репозиторію" autocomplete="off" spellcheck="false" value="${esc(gh.dir)}">
+        <label for="gh-every">Автоматично</label><select id="gh-every">${[[0, 'Лише за кліком'], [30, 'Кожні 30 хвилин'], [180, 'Кожні 3 години'], [360, 'Кожні 6 годин']].map(([v, l]) => `<option value="${v}" ${gh.everyMin === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      <label class="achk"><input type="checkbox" id="gh-orig" ${gh.originals ? 'checked' : ''}> Зберігати в репозиторії оригінальні рядки гри (лише для приватного; без них пристрій без гри, наприклад телефон, не покаже оригінал)</label>
+      <details><summary>Додатково</summary><div class="grid"><label for="gh-api">Адреса API (для GitHub Enterprise)</label><input id="gh-api" type="url" autocomplete="off" spellcheck="false" value="${esc(gh.api)}"></div></details>
+      <div class="acts l"><button class="btn p" type="button" id="gh-go">Синхронізувати з GitHub зараз</button></div>
+      <p class="hint" id="gh-state" role="status">${gh.last ? 'Остання синхронізація: ' + new Date(gh.last).toLocaleString('uk-UA') : 'Ще не синхронізовано'}</p>
+      <p class="hint">Якщо пише, що немає з’єднання, а інтернет є: сторінка, у якій відкрито застосунок, може забороняти запити до GitHub (так працює вбудований перегляд). Користуйтеся застосунком як сайтом або настільною версією.</p></details>
+    <details><summary>Синхронізація через власний сервер</summary><p class="hint">Через ваш власний проміжний сервер (<code>node server/relay.ts</code>): він лише передає зашифровані дані й забуває їх. Без чужих хмар. Дані шифруються паролем на пристроях. Для адреси в інтернеті потрібен https.</p>
       <div class="grid"><label for="sy-url">Адреса сервера</label><input id="sy-url" type="url" placeholder="https://sync.example.com або http://192.168.0.14:7421" value="${esc(sync.url)}">
         <label for="sy-pass">Пароль синхронізації (однаковий на всіх пристроях)</label><input id="sy-pass" type="password" autocomplete="off" minlength="8" value="${esc(sync.passphrase)}">
         <label for="sy-every">Автоматично</label><select id="sy-every">${[[0, 'Лише за кліком'], [30, 'Кожні 30 хвилин'], [180, 'Кожні 3 години'], [360, 'Кожні 6 годин']].map(([v, l]) => `<option value="${v}" ${sync.everyMin === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
@@ -70,6 +84,7 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
     if (mode === 'custom' && !(lim >= 10 && lim <= 200)) { e.preventDefault(); toast('Ширина рядка має бути від 10 до 200 символів'); return; }
     st.lineLimit = mode === 'off' ? -1 : mode === 'custom' ? Math.round(lim) : 0;
     st.who = ($('#st-who', dlg) as HTMLInputElement).value.trim() || DEFAULT_SETTINGS.who;
+    ctx.s.saved.settingsAt = Date.now();
     ctx.s.who = st.who;
     ctx.persist(); ctx.render(); toast('Налаштування збережено');
   });
@@ -125,6 +140,18 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
     try { if (await importReference(ctx, lang)) { ctx.render(); dlg.close(); } } catch (err) { toast(err instanceof Error ? err.message : 'Не вдалося прочитати папку'); }
   });
   dlg.querySelector('#rf-del')?.addEventListener('click', () => { delete ctx.s.saved.reference; ctx.s.saved.assetsRev = Date.now(); ctx.persist(); ctx.render(); toast('Довідку прибрано'); dlg.close(); });
+  const readGh = () => ({ ...gh, repo: ($('#gh-repo', dlg) as HTMLInputElement).value.trim(), token: ($('#gh-token', dlg) as HTMLInputElement).value.trim(), branch: ($('#gh-branch', dlg) as HTMLInputElement).value.trim(), dir: ($('#gh-dir', dlg) as HTMLInputElement).value.trim(), everyMin: Number(($('#gh-every', dlg) as HTMLSelectElement).value), originals: ($('#gh-orig', dlg) as HTMLInputElement).checked, api: ($('#gh-api', dlg) as HTMLInputElement).value.trim() || DEFAULT_API });
+  // Everything typed here is kept at once, so closing the dialog does not lose a pasted token.
+  dlg.querySelector('details:has(#gh-repo)')?.addEventListener('change', () => { const c = readGh(); if (c.repo !== gh.repo || c.branch !== gh.branch || c.dir !== gh.dir || c.api !== gh.api) c.state = { shas: {}, commit: '', assetsRev: 0 }; Object.assign(gh, c); saveGithubConfig(gh); });
+  $('#gh-go', dlg).addEventListener('click', async () => {
+    Object.assign(gh, readGh()); saveGithubConfig(gh);
+    const state = $('#gh-state', dlg), btn = $('#gh-go', dlg) as HTMLButtonElement;
+    if (!gh.repo || !gh.token) { state.textContent = 'Вкажіть репозиторій і токен доступу'; return; }
+    btn.disabled = true; state.textContent = 'Синхронізую…';
+    try { const rep = await runGithubSync(ctx, gh, onImport); state.textContent = describeGithub(rep); toast(describeGithub(rep)); }
+    catch (err) { state.textContent = err instanceof Error ? err.message : 'Не вдалося синхронізувати'; }
+    btn.disabled = false;
+  });
   const readSync = () => ({ ...sync, url: ($('#sy-url', dlg) as HTMLInputElement).value.trim(), passphrase: ($('#sy-pass', dlg) as HTMLInputElement).value, everyMin: Number(($('#sy-every', dlg) as HTMLSelectElement).value) });
   $('#sy-every', dlg).addEventListener('change', () => { saveSyncConfig(readSync()); toast('Налаштування синхронізації збережено'); });
   $('#sy-go', dlg).addEventListener('click', async () => {

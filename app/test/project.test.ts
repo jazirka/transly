@@ -147,3 +147,22 @@ describe('looksLikeProject', () => {
     expect(looksLikeProject('{"events":[null],"displayName":"","versionId":1}')).toBe(false);
   });
 });
+
+describe('settings in a merge', () => {
+  it('a new device\'s defaults do not replace settings chosen on another one', () => {
+    const chosen: SavedProject = { ...emptyProject('Гра'), settings: { ...emptyProject('Гра').settings, tolerancePct: 40, pluginCommands: ['GabText'] }, settingsAt: 500 };
+    const fresh = emptyProject('Гра');
+    for (const [a, b] of [[fresh, chosen], [chosen, fresh]] as const) {
+      const m = mergeProjects(a, b).project;
+      expect(m.settings.tolerancePct).toBe(40);
+      expect(m.settings.pluginCommands).toEqual(['GabText']);
+      expect(m.settingsAt).toBe(500);
+    }
+    // "already asked about plugin texts" on one device counts for all, so devices converge instead of overwriting each other
+    const asked = { ...fresh, settings: { ...fresh.settings, pluginsAsked: true } };
+    expect(mergeProjects(fresh, asked).project.settings.pluginsAsked).toBe(true);
+    expect(mergeProjects(asked, fresh).project.settings.pluginsAsked).toBe(true);
+    const later = { ...fresh, settings: { ...fresh.settings, tolerancePct: 10 }, settingsAt: 900 };
+    expect(mergeProjects(chosen, later).project.settings.tolerancePct).toBe(10);
+  });
+});

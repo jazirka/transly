@@ -637,6 +637,8 @@ td .term{color:#d9c3ee}
 .tab{border-radius:8px 8px 0 0}
 .tab.on{background:rgba(255,255,255,.1);border-bottom-color:rgba(255,255,255,.55);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
 .seg{border-color:rgba(255,255,255,.14);border-radius:8px;background:rgba(255,255,255,.04)}
+.seg kbd{color:#aeb4c0}
+.stepper .queue{font-family:var(--mono);min-width:48px}
 </style>
 <div class="narrow" id="narrow" hidden><span>Вікно вужче за 1180 px: частину інтерфейсу доведеться прокручувати. Для телефона відкрийте мобільну версію.</span><button id="narrow-x" aria-label="Закрити повідомлення">✕</button></div>
 <div class="scroll-x"><div class="ide mode-table">
@@ -1037,7 +1039,7 @@ function renderFocus(skipList){
   const r=rows[cur],ids=visIds(),pos=ids.indexOf(cur);
   $('f-state').innerHTML=`<span class="sd ${effSt(r)}"></span>${stLabel(r)}`;
   $('f-key').textContent=FILES[curFile].prefix+r.k;
-  $('f-queue').textContent=pos>=0?`${pos+1} з ${ids.length} у списку`:'';
+  $('f-queue').textContent=pos>=0?`${pos+1}/${ids.length}`:'';$('f-queue').title=pos>=0?`Рядок ${pos+1} із ${ids.length} у поточному списку (з урахуванням фільтрів)`:'';
   $('f-off').hidden=pos>=0;
   $('f-src').innerHTML=markup(r.s);
   const ta=$('i-tr');if(document.activeElement!==ta||ta.dataset.row!==String(cur)){ta.value=r.t;ta.dataset.row=cur}

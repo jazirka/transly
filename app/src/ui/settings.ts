@@ -3,6 +3,7 @@ import type { GlossaryTerm } from '../core';
 import { $, el, esc, plural, toast } from './dom';
 import type { Ctx } from './state';
 import { importReference } from './reference';
+import { saveFile } from './save';
 import { describe, loadSyncConfig, runSync, saveSyncConfig, syncConfigured } from './sync';
 
 /** Open a native <dialog>; it traps focus, closes on Esc and restores focus to the opener. */
@@ -119,14 +120,9 @@ export function openSettings(ctx: Ctx, onReset: () => void, onImport: () => void
     catch (err) { state.textContent = err instanceof Error ? err.message : 'Не вдалося синхронізувати'; }
     btn.disabled = false;
   });
-  $('#st-export', dlg).addEventListener('click', () => {
-    const blob = new Blob([serialize(ctx.s.saved)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = el('a');
-    a.href = url; a.download = `${ctx.s.saved.name.replace(/[^\p{L}\p{N}_-]+/gu, '_') || 'transly'}.transly.json`;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10_000);
-    toast('Проєкт збережено у файл');
+  $('#st-export', dlg).addEventListener('click', async () => {
+    const name = `${ctx.s.saved.name.replace(/[^\p{L}\p{N}_-]+/gu, '_') || 'transly'}.transly.json`;
+    if (await saveFile(name, serialize(ctx.s.saved), 'application/json')) toast('Проєкт збережено у файл');
   });
   const file = $('#st-file', dlg) as HTMLInputElement;
   $('#st-import', dlg).addEventListener('click', () => file.click());
@@ -142,8 +138,10 @@ export function openSettings(ctx: Ctx, onReset: () => void, onImport: () => void
       dlg.close();
     } catch (err) { toast(err instanceof Error ? err.message : 'Не вдалося прочитати файл'); }
   });
-  $('#st-reset', dlg).addEventListener('click', () => {
-    if (!confirm('Скинути проєкт? Увесь переклад, глосарій і пам’ять буде видалено.')) return;
+  let armed = false;
+  $('#st-reset', dlg).addEventListener('click', ev => {
+    // Two clicks instead of confirm(): embedded frames suppress browser dialogs.
+    if (!armed) { armed = true; (ev.currentTarget as HTMLElement).textContent = 'Так, видалити весь переклад'; return; }
     const keep = ctx.s.saved.resetEpoch;
     ctx.s.saved = { ...emptyProject(ctx.s.saved.name), resetEpoch: Math.max(keep, Date.now()) };
     ctx.invalidateTm(); onReset(); dlg.close();

@@ -1,4 +1,5 @@
 import { createZip, fileText, isRpgMakerFile } from '../core';
+import { saveFile } from './save';
 import type { BuildResult } from '../core';
 
 type FsDir = { getDirectoryHandle(name: string, o: { create: boolean }): Promise<FsDir>; getFileHandle(name: string, o: { create: boolean }): Promise<{ createWritable(): Promise<{ write(d: string | Uint8Array): Promise<void>; close(): Promise<void> }> }> };
@@ -27,12 +28,8 @@ export async function writeToFolder(result: BuildResult): Promise<boolean> {
 }
 
 /** Download the changed files as one ZIP (works in every browser). */
-export function downloadZip(result: BuildResult, name = 'transly-build.zip'): void {
+export async function downloadZip(result: BuildResult, name = 'transly-build.zip'): Promise<boolean> {
   const enc = new TextEncoder();
   const zip = createZip(result.files.map(f => ({ name: isRpgMakerFile(f.name) ? `data/${f.name}` : f.name, data: enc.encode(fileText(f)) })));
-  const url = URL.createObjectURL(new Blob([zip as BlobPart], { type: 'application/zip' }));
-  const a = document.createElement('a');
-  a.href = url; a.download = name;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  return saveFile(name, zip, 'application/zip');
 }

@@ -24,7 +24,8 @@ export async function pickGameFolder(input: HTMLInputElement): Promise<Picked | 
       return { files: choose(out), handle: dir };
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') return null;
-      throw e;
+      // Inside an embedded frame the picker is refused (SecurityError): fall back to the plain folder input.
+      if (!(e instanceof DOMException && (e.name === 'SecurityError' || e.name === 'NotAllowedError'))) throw e;
     }
   }
   return new Promise(resolve => {

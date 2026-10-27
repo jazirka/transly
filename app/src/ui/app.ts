@@ -268,7 +268,7 @@ export async function start(root: HTMLElement): Promise<void> {
     dlg.addEventListener('click', async e => {
       const t = e.target as HTMLElement;
       try {
-        if (t.id === 'bd-zip') { downloadZip(run()); toast('ZIP збережено'); dlg.close(); }
+        if (t.id === 'bd-zip') { if (await downloadZip(run())) { toast('ZIP збережено'); dlg.close(); } }
         else if (t.id === 'bd-dir') { if (await writeToFolder(run())) { toast('Збірку записано в папку'); dlg.close(); } }
         else if (t.id === 'bd-apply' || t.id === 'bd-play') {
           const n = await applyToGame(dataDir!, run().files);

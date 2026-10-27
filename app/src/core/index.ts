@@ -6,3 +6,5 @@ export * from './merge';
 export * from './workflow';
 export * from './project';
 export * from './store';
+export * from './build';
+export * from './zip';

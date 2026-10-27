@@ -1,7 +1,8 @@
-import { Autosave, check, edit, emptyProject, readGame, statsOf, submit } from '../core';
+import { Autosave, build, check, edit, emptyProject, readGame, statsOf, submit } from '../core';
 import type { Entry, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
-import { $, el, esc, toast } from './dom';
+import { $, el, esc, plural, toast } from './dom';
 import { pickGameFolder, readFiles } from './folder';
+import { canWriteFolder, downloadZip, writeToFolder } from './export';
 import { IdbStore } from './idb';
 
 type Filter = 'all' | 'new' | 'draft' | 'done' | 'qa';
@@ -16,6 +17,7 @@ interface State {
   filter: Filter;
   q: string;
   saveOk: boolean;
+  game: GameFile[];
 }
 
 export async function start(root: HTMLElement): Promise<void> {
@@ -23,7 +25,7 @@ export async function start(root: HTMLElement): Promise<void> {
   let saved: SavedProject;
   try { saved = (await store.load()) ?? emptyProject('Новий проєкт'); }
   catch { saved = emptyProject('Новий проєкт'); }
-  const s: State = { views: [], saved, current: null, stage: 'translate', filter: 'all', q: '', saveOk: true };
+  const s: State = { views: [], saved, current: null, stage: 'translate', filter: 'all', q: '', saveOk: true, game: [] };
   const autosave = new Autosave(store, 400, ok => { s.saveOk = ok; renderSave(); });
   const input = el('input');
   input.type = 'file';
@@ -36,6 +38,7 @@ export async function start(root: HTMLElement): Promise<void> {
     <header class="top"><div class="logo" aria-hidden="true">T</div><b>Transly</b><span class="grow"></span>
       <div class="seg" role="group" aria-label="Етап"><button data-stage="translate" aria-pressed="true">Переклад</button><button data-stage="review" aria-pressed="false">Вичитування</button></div>
       <span class="save" id="save" role="status"></span>
+      <button class="btn" id="build" disabled>Зібрати…</button>
       <button class="btn p" id="open">Відкрити папку гри</button></header>
     <div class="main"><aside class="panel tree" aria-label="Файли"><div class="phd">Файли гри</div><div class="files" id="files"></div></aside>
       <main class="panel table" id="table"></main></div>`;
@@ -107,7 +110,43 @@ export async function start(root: HTMLElement): Promise<void> {
       <div class="scroll" id="scroll">${shown.join('') || '<div class="empty">Нічого не знайдено</div>'}</div>`;
   }
 
-  function renderAll(): void { renderTree(); renderTable(); renderSave(); }
+  function renderAll(): void {
+    renderTree(); renderTable(); renderSave();
+    ($('#build') as HTMLButtonElement).disabled = !s.views.length;
+  }
+
+  function openBuild(): void {
+    const dlg = el('dialog', 'dlg');
+    dlg.setAttribute('aria-labelledby', 'bd-t');
+    dlg.innerHTML = `<form method="dialog"><h2 id="bd-t">Збірка</h2>
+      <p class="hint">Записує перекладені рядки в копії файлів гри. Оригінальні файли не змінюються: оберіть окрему папку або завантажте ZIP з папкою <b>data</b>.</p>
+      <label class="chk"><input type="checkbox" id="bd-appr"> Лише вичитані рядки</label>
+      <label class="chk"><input type="checkbox" id="bd-block" checked> Не брати рядки з помилкою QA</label>
+      <p id="bd-sum" class="sum" role="status"></p>
+      <div class="acts"><button class="btn" value="cancel">Закрити</button>
+        ${canWriteFolder() ? '<button class="btn p" id="bd-dir" type="button">Зібрати в папку…</button>' : ''}
+        <button class="btn ${canWriteFolder() ? '' : 'p'}" id="bd-zip" type="button">Завантажити ZIP</button></div></form>`;
+    document.body.appendChild(dlg);
+    const run = () => build(s.game, s.views, s.saved, { onlyApproved: ($('#bd-appr', dlg) as HTMLInputElement).checked, blockErrors: ($('#bd-block', dlg) as HTMLInputElement).checked, qa: qaOpts() });
+    const sum = () => {
+      const r = run();
+      $('#bd-sum', dlg).textContent = r.included
+        ? `У збірку потрапить ${plural(r.included, ['рядок', 'рядки', 'рядків'])} у ${plural(r.files.length, ['файлі', 'файлах', 'файлах'])}. Пропущено: ${r.skipped}${r.blocked.length ? ` (з них через помилки QA: ${r.blocked.length})` : ''}.`
+        : 'У збірку поки нічого не потрапить: немає надісланих на вичитування чи вичитаних рядків.';
+      dlg.querySelectorAll<HTMLButtonElement>('#bd-dir,#bd-zip').forEach(b => { b.disabled = !r.included; });
+    };
+    dlg.addEventListener('change', sum);
+    dlg.addEventListener('close', () => dlg.remove());
+    dlg.addEventListener('click', async e => {
+      const t = e.target as HTMLElement;
+      try {
+        if (t.id === 'bd-zip') { downloadZip(run()); toast('ZIP збережено'); dlg.close(); }
+        else if (t.id === 'bd-dir') { if (await writeToFolder(run())) { toast('Збірку записано в папку'); dlg.close(); } }
+      } catch (err) { toast('Не вдалося записати: ' + (err instanceof Error ? err.message : String(err))); }
+    });
+    sum();
+    dlg.showModal();
+  }
 
   function updateRow(row: HTMLElement, u: Unit, e: Entry | undefined): void {
     const st = e?.status ?? 'new';
@@ -133,6 +172,7 @@ export async function start(root: HTMLElement): Promise<void> {
       $('#pct').textContent = `${d} з ${t}`;
     });
     const game: GameFile[] = files;
+    s.game = game;
     s.views = readGame(game);
     s.current = s.views[0]?.name ?? null;
     if (!s.views.length) { renderAll(); toast('У цих файлах немає тексту для перекладу'); return; }
@@ -143,6 +183,7 @@ export async function start(root: HTMLElement): Promise<void> {
   root.addEventListener('click', e => {
     const t = e.target as HTMLElement;
     if (t.closest('#open')) { void openFolder(); return; }
+    if (t.closest('#build')) { openBuild(); return; }
     const f = t.closest<HTMLElement>('[data-file]');
     if (f) { s.current = f.dataset.file ?? null; s.q = ''; s.filter = 'all'; renderAll(); return; }
     const st = t.closest<HTMLElement>('[data-stage]');

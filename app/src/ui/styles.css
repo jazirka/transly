@@ -68,3 +68,14 @@ button{cursor:pointer}
 :focus-visible{outline:2px solid rgba(139,114,232,.7);outline-offset:1px}
 @media (max-width:760px){.tree{display:none}.row{grid-template-columns:1fr 34px}.row .n,.row .who{display:none}.row .src{grid-column:1}.row .trc{grid-column:1}}
 .file[aria-current=true] .pc{color:var(--text)}
+
+.dlg{width:min(520px,92vw);padding:0;border:1px solid #4a4d54;border-radius:var(--r3);background:#2b2d30;color:var(--text);box-shadow:0 24px 70px rgba(0,0,0,.6)}
+.dlg::backdrop{background:rgba(0,0,0,.5)}
+.dlg form{padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.dlg h2{margin:0;font-size:15px;font-weight:500}
+.dlg .hint{margin:0;color:var(--mute)}
+.dlg .sum{margin:0;padding:8px 10px;border-radius:var(--r2);background:var(--bg);border:1px solid var(--line)}
+.dlg .acts{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
+.btn:disabled{opacity:.45;cursor:default}
+.chk{display:flex;align-items:center;gap:8px}
+.chk input{accent-color:var(--accent);width:15px;height:15px}

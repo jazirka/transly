@@ -324,10 +324,10 @@ td .term{color:#d9c3ee}
 .tico.j{background:#3b3524;color:#e5c06a}.tico.g{background:#35294a;color:#b589d6}
 
 /* ===== v3: tool-window bar, stage switch, QA under the string ===== */
-.main{grid-template-columns:30px 250px minmax(0,1fr)}
-.ide.lp-closed .main,.ide.mode-focus.lp-closed .main{grid-template-columns:30px minmax(0,1fr)}
+.main{grid-template-columns:40px 250px minmax(0,1fr)}
+.ide.lp-closed .main,.ide.mode-focus.lp-closed .main{grid-template-columns:40px minmax(0,1fr)}
 .ide.lp-closed .tree{display:none}
-.ide.mode-focus .main{grid-template-columns:30px 250px minmax(0,1fr)}
+.ide.mode-focus .main{grid-template-columns:40px 250px minmax(0,1fr)}
 .ide.mode-focus .tree{display:flex}
 .strip{width:30px;padding:6px 0;gap:6px;align-items:stretch}
 .strip button{width:30px;height:auto;padding:12px 0;border-radius:0;writing-mode:vertical-rl;transform:rotate(180deg);font-size:11.5px;letter-spacing:.02em;color:var(--mute)}
@@ -360,7 +360,7 @@ td .term{color:#d9c3ee}
 .proof .t{font-size:13px;color:#c8ccd3}
 .proof .chg{color:var(--warn);font-size:11px;margin-left:6px}
 .ide.mode-table.lp-closed .tree,.ide.mode-focus.lp-closed .tree{display:none}
-.ide.mode-table.lp-closed .main,.ide.mode-focus.lp-closed .main{grid-template-columns:30px minmax(0,1fr)}
+.ide.mode-table.lp-closed .main,.ide.mode-focus.lp-closed .main{grid-template-columns:40px minmax(0,1fr)}
 .toolbar *{white-space:nowrap}
 .toolbar{gap:6px}
 .search{width:230px;flex:none;min-width:0}
@@ -368,507 +368,796 @@ td .term{color:#d9c3ee}
 .prog .bar{width:90px}
 .tbtn{padding:0 7px}
 
-/* ===== v4: adaptive shell. sz-x desktop · sz-m tablet / unfolded · sz-s phone ===== */
-.ide{display:flex;flex-direction:column;min-width:0}
-.ide.sz-x{min-width:1180px}
+/* ===== shell ===== */
+.ide{display:flex;flex-direction:column;min-width:1180px}
 .main{flex:1}
-.strip{display:flex}
-.appbar,.bnav,.scrim,.sh-h,.only-s,.only-ms{display:none}
 .pop{position:fixed;z-index:60;width:250px;max-height:60vh;overflow:auto;background:#2f3135;border:1px solid #4a4d54;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.5);padding:4px 0}
 .pop[hidden]{display:none}
-.appbar{align-items:center;gap:6px;height:52px;padding:0 8px;background:var(--panel);border-bottom:1px solid var(--line);flex:none}
-.appbar .abt{flex:1;min-width:0;display:flex;flex-direction:column;padding-left:4px}
+.slist .chipsHost{flex:1 1 100%;min-width:0}
+/* icon-only tool-window bar */
+.strip{width:40px;padding:6px 0;gap:4px;align-items:center}
+.strip button{width:30px;height:30px;padding:0;border-radius:6px;writing-mode:horizontal-tb;transform:none;display:grid;place-items:center}
+.strip button.on::before{content:"";position:absolute;left:-5px;right:auto;top:7px;bottom:7px;width:3px;height:auto;border-radius:2px;background:var(--accent)}
+/* ===== top bar & editor bar ===== */
+.menubar,.toolbar{display:none}
+.topbar{display:flex;align-items:center;gap:4px;height:40px;padding:0 0 0 10px;background:linear-gradient(90deg,rgba(181,137,214,.16),rgba(181,137,214,0) 32%),var(--panel);border-bottom:1px solid var(--line);flex:none}
+.topbar .logo{width:20px;height:20px;border-radius:5px;background:linear-gradient(135deg,#3574f0,#b589d6);display:grid;place-items:center;font:600 11px var(--mono);color:#fff;margin-right:6px}
+.topbar .grow,.edbar .grow{flex:1}
+.tb-ic{width:32px;height:30px;border:0;border-radius:6px;background:none;color:#c7cad1;display:grid;place-items:center;position:relative}
+.tb-ic:hover,.tpill:hover,.wc button:hover{background:#393b40}
+.tb-ic svg,.tpill svg,.wc svg,.ib svg,.saveb svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+.tb-ic.play{color:#5fb865}
+.tb-ic.dot::after{content:"";position:absolute;top:5px;right:6px;width:7px;height:7px;border-radius:50%;background:#e5a04b;border:1.5px solid var(--panel)}
+.tpill{height:30px;padding:0 10px;border:0;border-radius:6px;background:none;color:var(--text);display:flex;align-items:center;gap:7px;white-space:nowrap;font-size:13px}
+.tpill .pj{width:18px;height:18px;border-radius:5px;background:var(--violet);color:#1e1f22;font:600 11px var(--ui);display:grid;place-items:center}
+.tpill .dd{color:var(--mute);font-size:10px}
+.tpill.run{color:#c7cad1}
+.tsep{width:1px;height:18px;background:var(--line);margin:0 6px}
+.wc{display:flex;margin-left:6px;height:100%}
+.wc button{width:46px;border:0;background:none;color:#c7cad1;display:grid;place-items:center}
+.wc button:last-child:hover{background:#c42b1c}
+.topbar .prog{margin:0 4px}
+.seg button.on[data-m=proof]{background:var(--accent);color:#fff}
+.seg .cnt{font:10.5px var(--mono);background:#3b3d42;border-radius:8px;padding:0 5px;color:var(--text)}
+.edbar{display:flex;align-items:center;gap:4px;margin-top:8px;padding:8px 10px;background:#262a33;border:1px solid var(--line);border-radius:6px}
+.ib{width:34px;height:34px;border:0;border-radius:6px;background:none;color:#aeb4c0;display:grid;place-items:center}
+.ib[hidden]{display:none}
+.ib:hover{background:#343944;color:#fff}
+.ib svg{width:20px;height:20px;stroke-width:1.3}
+.qab{min-width:20px;height:20px;border-radius:10px;background:#ff6347;color:#fff;font:600 11px var(--ui);display:grid;place-items:center;padding:0 5px;margin-left:6px}
+.qab[hidden]{display:none}
+.cnt2{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:42px;height:36px;border-radius:5px;background:#343944;font:11.5px/1.25 var(--ui);color:#aeb4c0;padding:0 6px;margin-right:6px}
+.cnt2 b{color:#fff;font-weight:600}
+.saveb{width:38px;height:36px;border:0;border-radius:5px;background:#6b9bf2;color:#fff;display:grid;place-items:center}
+.saveb:hover{background:#7fa8f5}
+.saveb svg{width:20px;height:20px;stroke-width:1.4}
+.pop button{display:block;width:100%;text-align:left;border:0;background:none;padding:6px 14px;color:var(--text)}
+.pop button:hover{background:#393b40}
+/* ===== chrome glow from the project icon, floating rounded panels ===== */
+.ide{background:
+  radial-gradient(closest-side at var(--gx,105px) var(--gy,20px),rgba(181,137,214,.55),rgba(181,137,214,.22) 55%,rgba(181,137,214,0)) 0 0/900px 100% no-repeat,
+  radial-gradient(ellipse 230px 620px at 20px 40px,rgba(181,137,214,.32),rgba(181,137,214,0)) no-repeat,
+  #25272a}
+.topbar{background:none;border-bottom:0}
+.strip{background:none;border-right:0}
+.status{background:none;border-top:0}
+.main{gap:6px;padding:0 6px 6px 0}
+.tree,.editor{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.tree{background:rgba(36,38,41,.6);backdrop-filter:blur(2px)}
+.editor{background:var(--bg)}
+.ide.lp-closed .main{padding-left:0}
+.strip button.on::before{left:-2px}
+/* rows list lives in the left tool window */
+.slist[hidden]{display:none}
+.tree .slist{flex:1;min-height:0;border:0;background:none;display:flex}
+.tree .slist[hidden]{display:none}
+#v-focus{grid-template-columns:minmax(0,1fr) 350px!important}
+.ide.mode-focus .main{grid-template-columns:40px 310px minmax(0,1fr)}
+.ide.mode-focus.lp-closed .main{grid-template-columns:40px minmax(0,1fr)}
+.ide.mode-table [data-lp=rows]{display:none}
+.cnt2{flex-direction:row;min-width:64px;font:12px var(--mono);color:#e6e8ec}
+.cnt2.over{color:#ff8a94;background:#43292e}
+.qa-row .ign{margin-left:auto;height:22px;padding:0 9px;border-radius:4px;border:1px solid var(--line);background:#2f3135;color:var(--mute);white-space:nowrap}
+.qa-row .ign:hover{color:var(--text);background:#393b40}
+.qa-row .fix+.ign{margin-left:6px}
+.qa-row.muted{background:#26282b;border-color:var(--line);color:var(--dim)}
+.qa-row.muted .dot{background:var(--dim)}
+.qa-row.muted>span:nth-child(2){text-decoration:line-through}
+.qa-row .tagi{margin-left:auto;font-size:11px;color:var(--dim)}
+.qa-row .tagi+.ign{margin-left:8px}
+/* left tool-window bar: clean icon buttons */
+.strip{gap:6px;padding-top:8px}
+.strip button{width:32px;height:32px;border-radius:8px;color:var(--mute);outline:0}
+.strip button::before,.strip button.on::before{display:none}
+.strip button:hover{background:#34363a;color:var(--text)}
+.strip button.on{background:#2f4678;color:#d6e2ff}
+.strip button:focus-visible{box-shadow:0 0 0 2px rgba(53,116,240,.6)}
+.strip svg{width:17px;height:17px}
+.tsep{margin:0 8px}
+.pop.keys{width:360px;padding:6px 0;max-height:none}
+.keys .kh{padding:6px 14px 8px;color:var(--mute);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+.keys .kr{display:flex;align-items:center;gap:4px;padding:5px 14px;font-size:12.5px}
+.keys .kr span{flex:1;margin-right:8px}
+.keys kbd{font:11px var(--mono);border:1px solid #4a4d54;border-bottom-width:2px;border-radius:4px;padding:1px 6px;background:#393b40;color:var(--text)}
+.toast{position:fixed;left:50%;bottom:44px;transform:translateX(-50%);z-index:80;display:flex;align-items:center;gap:14px;background:#33363b;border:1px solid #4a4d54;border-radius:8px;padding:9px 12px 9px 16px;box-shadow:0 10px 30px rgba(0,0,0,.5);font-size:13px}
+.toast[hidden]{display:none}
+.toast button{border:0;background:none;color:#8fb2f7;font-weight:600;cursor:pointer;padding:2px 4px}
+.toast button:hover{color:#b6cdfa}
+
+/* ===== v3: accessibility, status shapes, selection, empty states ===== */
+:root{--mute:#a9aeb6;--dim:#8f959d}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.sd{width:10px;height:10px;flex:none;display:inline-block;box-sizing:border-box}
+.sd.new{background:transparent;border:1.5px solid var(--dim);border-radius:50%}
+.sd.draft{background:var(--warn);border:0;border-radius:2px;transform:rotate(45deg) scale(.8)}
+.sd.done{background:var(--info);border:0;border-radius:50%}
+.sd.appr{background:var(--ok) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'><path d='M2 5.2l2 2L8 3' fill='none' stroke='%23102014' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>") center/10px no-repeat;border:0;border-radius:50%;width:12px;height:12px}
+.sd.qa{background:var(--bad);border:0;border-radius:0;clip-path:polygon(50% 0,100% 100%,0 100%);width:12px;height:11px}
+.si .sd{margin-top:4px}
+.tg{height:22px;font-size:11.5px}
+.tico{font-size:9.5px;width:20px;height:16px}
+.node .ic{font-size:10px;width:22px}
+.grid{min-width:830px}
+.gcheck{justify-content:center}
+.gcheck input,.gr .ln .rc{accent-color:var(--accent);margin:0}
+.gr .ln{justify-content:center;padding:6px 0;gap:0}
+.gr .ln .num{display:block}
+.gr .ln .rc{display:none;width:15px;height:15px;margin-top:1px}
+.gr:hover .ln .num,.gr.chk .ln .num,.grid.has-sel .ln .num{display:none}
+.gr:hover .ln .rc,.gr.chk .ln .rc,.grid.has-sel .ln .rc{display:block}
+.gr .ln{cursor:pointer}
+.gr:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.cmi{width:13px;height:13px;stroke:var(--mute);fill:none;stroke-width:1.4;vertical-align:-2px;margin-left:6px;flex:none}
+.si .a .cmi{margin-left:2px}
+.legend-bar{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;padding:7px 14px;border-top:1px solid var(--line);color:var(--mute);font-size:11.5px;flex:none;background:#222427}
+.legend-bar span{display:inline-flex;align-items:center;gap:6px}
+.legend-bar .cmi{margin:0}
+.empty-state{display:flex;flex-direction:column;align-items:center;gap:8px;padding:44px 16px;color:var(--mute);text-align:center}
+.empty-state b{color:var(--text);font-size:14px;font-weight:500}
+.offlist{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:8px 12px;border:1px solid #5a4a2a;background:#352e20;border-radius:6px;color:#f0d9a0;font-size:12.5px}
+.offlist[hidden]{display:none}
+.offlist button{height:24px;padding:0 10px;border-radius:4px;border:1px solid #6a5a35;background:#41381f;color:#f0d9a0;white-space:nowrap}
+.queue{color:var(--mute);font-size:11.5px}
+.narrow{position:fixed;top:46px;left:50%;transform:translateX(-50%);z-index:90;background:#4a3d1f;border:1px solid #6a5a35;color:#f6e2ac;padding:6px 14px;border-radius:8px;font-size:12px;max-width:92vw;box-shadow:0 6px 20px rgba(0,0,0,.4)}
+.narrow[hidden]{display:none}
+.xclr{border:0;background:none;color:var(--mute);width:20px;height:20px;border-radius:10px;padding:0;flex:none}
+.xclr:hover{background:#393b40;color:var(--text)}
+.xclr[hidden]{display:none}
+.lbl-btn{margin-left:auto;border:0;background:none;color:var(--mute);font:inherit;text-transform:none;letter-spacing:0;cursor:pointer;padding:0}
+.lbl-btn:hover{color:var(--text)}
+.bulk .ghost{margin-left:auto;background:none;border-color:transparent;color:#c9d8f7}
+.bulk .ghost:hover{background:#30447a}
+.node.dir{cursor:pointer}
+.status .bad{color:var(--bad)}.status .ok{color:var(--ok)}
+.hist .h{color:var(--mute)}
+
+/* ===== mobile build: always the phone layout, in a phone-width frame on wide screens ===== */
+html{background:#121315}
+.scroll-x{max-width:480px;margin:0 auto;overflow:hidden;transform:translateZ(0);border-inline:1px solid var(--line);background:var(--bg)}
+@media (min-width:520px){.scroll-x{height:min(100%,900px);margin-block:auto;border-radius:14px;border:1px solid var(--line)}body{display:flex;align-items:center;justify-content:center}}
+.narrow{display:none!important}
+.appbar,.bnav,.scrim{display:none}
+.ide.sz-s{min-width:0;font-size:14px;background:var(--bg)}
+.ide.sz-s .topbar,.ide.sz-s .status,.ide.sz-s .strip,.ide.sz-s .tabs,.ide.sz-s .ph,.ide.sz-s #f-back,.ide.sz-s .fhd .nav{display:none}
+.ide.sz-s .appbar{display:flex;align-items:center;gap:6px;height:52px;padding:0 8px 0 14px;background:var(--panel);border-bottom:1px solid var(--line);flex:none}
+.appbar .abt{flex:1;min-width:0;display:flex;flex-direction:column}
 .appbar .abt b{font-weight:500;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .appbar .abt small{color:var(--mute);font-size:11.5px;white-space:nowrap}
 .ab-ic{width:40px;height:40px;border:0;background:none;border-radius:20px;display:grid;place-items:center;color:var(--text)}
-.ab-ic:hover{background:#393b40}
 .ab-ic svg,.bnav svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 .appbar .chip{height:30px;padding:0 12px;flex:none}
-.scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:22}
-.sh-h{align-items:center;justify-content:space-between;height:40px;padding:0 8px 0 14px;border-bottom:1px solid var(--line);flex:none;font-weight:500}
-.sh-h button{width:32px;height:32px;border:0;background:none;border-radius:16px;color:var(--mute)}
-
-/* medium: list + editor, drawers over content */
-.ide.sz-m .menubar,.ide.sz-m .toolbar,.ide.sz-m .status,.ide.sz-m .strip,
-.ide.sz-s .menubar,.ide.sz-s .toolbar,.ide.sz-s .status,.ide.sz-s .strip{display:none}
-.ide.sz-m .appbar,.ide.sz-s .appbar{display:flex}
-.ide.sz-m .main,.ide.sz-s .main{display:block;position:relative;overflow:hidden}
-.ide.sz-m .editor,.ide.sz-s .editor{position:absolute;inset:0}
-.ide.sz-m .tree{display:none;position:absolute;z-index:24;left:0;top:0;bottom:0;width:290px;box-shadow:8px 0 30px rgba(0,0,0,.45)}
-.ide.sz-m.lp-open .tree{display:flex}
-.ide.sz-m.lp-open .scrim{display:block}
-.ide.sz-m .fs,.ide.sz-s .fs{position:fixed;z-index:30;background:var(--panel);transition:transform .2s ease;box-shadow:0 0 40px rgba(0,0,0,.55)}
-.ide.sz-m .fs{top:52px;bottom:0;right:0;width:min(380px,92vw);transform:translateX(105%)}
-.ide.sz-m.sheet-open .fs,.ide.sz-s.sheet-open .fs{transform:none}
-.ide.sz-m.sheet-open .scrim,.ide.sz-s.sheet-open .scrim{display:block;z-index:28}
-.ide.sz-m .sh-h,.ide.sz-s .sh-h{display:flex}
-.ide.sz-m .only-ms{display:inline-flex;align-items:center}
-.ide.sz-m #v-focus{grid-template-columns:280px minmax(0,1fr)}
-.ide.sz-m .filters .r{display:none}
-.ide.sz-m .filters{overflow-x:auto}
-.ide.sz-m .tab:nth-child(n+4){display:none}
-@media (prefers-reduced-motion:reduce){.ide .fs{transition:none}}
-
-/* small: phone, one pane at a time + bottom navigation */
-.ide.sz-s{font-size:14px}
 .ide.sz-s .bnav{display:flex;flex:none;background:var(--panel);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
 .bnav button{flex:1;height:56px;border:0;background:none;color:var(--mute);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:11px}
 .bnav button.on{color:var(--text)}
 .bnav button.on svg{background:#2a3a5c;border-radius:12px;padding:4px;width:32px;height:24px;box-sizing:border-box;stroke:#c9d8f7}
-.ide.sz-s #ab-menu{display:none}
-.ide.sz-s .tabs{display:none}
-.ide.sz-s .tree{display:none;position:absolute;inset:0;width:auto;border:0}
-.ide.sz-s.cv-files .tree{display:flex}
-.ide.sz-s.cv-files .editor{display:none}
-.ide.sz-s .ph{display:none}
+.ide.sz-s .main{display:block;position:relative;overflow:hidden;padding:0;gap:0}
+.ide.sz-s .editor{position:absolute;inset:0;border:0;border-radius:0}
+.ide.sz-s .tree{display:none;position:absolute;inset:0;z-index:10;width:auto;border:0;border-radius:0;background:var(--bg)}
+.ide.sz-s.lp-open .tree{display:flex}
+.ide.sz-s #v-focus{display:block;height:100%;grid-template-columns:none!important}
+.ide.sz-s .fc{height:100%}
 .ide.sz-s .node{height:44px;font-size:14px}
-.ide.sz-s .node .mini{width:40px}
-.ide.sz-s #v-focus{display:block;height:100%}
-.ide.sz-s .slist{display:none;height:100%;border:0}
-.ide.sz-s.cv-list .slist{display:flex}
-.ide.sz-s .fc{display:none;height:100%}
-.ide.sz-s.cv-edit .fc{display:block}
-.ide.sz-s .fs{left:0;right:0;bottom:0;height:72%;border-radius:16px 16px 0 0;transform:translateY(105%);border-left:0}
 .ide.sz-s .si{padding:12px 14px;min-height:64px}
-.ide.sz-s .si .s{font-size:14px}
-.ide.sz-s .slist .fh .chips2{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px}
-.ide.sz-s .slist .fh .chipsHost{flex-wrap:nowrap}
+.ide.sz-s .slist .fh .chips2{flex-wrap:nowrap;overflow-x:auto}
+.ide.sz-s .slist .chipsHost{flex-wrap:nowrap;flex:none}
 .ide.sz-s .slist .chip{height:30px;padding:0 11px;font-size:12.5px;flex:none;white-space:nowrap}
 .ide.sz-s .slist .fin{height:38px}
 .ide.sz-s .fc-in{padding:12px 16px 0;gap:14px}
 .ide.sz-s .fc textarea.tr-in{font-size:16px;min-height:110px}
-.ide.sz-s .fc .srcbox{font-size:15px}
 .ide.sz-s .ctxrow{grid-template-columns:1fr}
-.ide.sz-s #f-back{display:none}
-.ide.sz-s .fhd .nav{display:none}
-.ide.sz-s .actions{position:sticky;bottom:0;z-index:5;background:var(--bg);padding:10px 0 12px;margin:0 -16px;padding-inline:16px;border-top:1px solid var(--line);flex-wrap:wrap}
-.ide.sz-s .btn{height:42px;padding:0 14px;font-size:14px}
-.ide.sz-s .only-s{display:inline-flex;align-items:center;justify-content:center;width:46px;padding:0}
-.ide.sz-s #b-save{flex:1}
-.ide.sz-s #b-return{flex:1 1 100%}
-.ide.sz-s #f-hint{display:none}
-.ide.sz-s .qa-row{flex-wrap:wrap}
-.ide.sz-s .qa-row .fix{margin-left:0;height:32px}
-.ide.sz-s .tg.lg{height:30px;padding:0 12px}
-.ide.sz-s .stage{height:170px}
-.slist .chipsHost{flex:1 1 100%;min-width:0}
 .ide.sz-s .trblock{display:contents}
-.ide.sz-s .slist .chipsHost{flex:none}
-.ide.sz-s .btn kbd{display:none}
-.ide.sz-s .qa-under,.ide.sz-s .proof{margin-top:0!important}
-/* mobile-only build: always the phone layout; on wide screens it sits in a centered phone-width frame */
-html{background:#121315}
-.scroll-x{max-width:480px;margin:0 auto;overflow:hidden;transform:translateZ(0);border-inline:1px solid var(--line);background:var(--bg)}
-@media (min-width:520px){.scroll-x{height:min(100%,900px);margin-block:auto;border-radius:14px;border:1px solid var(--line)}body{display:flex;align-items:center;justify-content:center}}
+.ide.sz-s .edbar{position:sticky;bottom:0;z-index:5;margin:0 -8px;border-radius:10px}
+.ide.sz-s .ib{width:44px;height:44px}
+.ide.sz-s .saveb{width:52px;height:44px}
+.ide.sz-s .tg.lg{height:30px;padding:0 12px}
+.ide.sz-s .qa-row{flex-wrap:wrap}
+.ide.sz-s .qa-row .fix,.ide.sz-s .qa-row .ign{height:32px}
+.ide.sz-s .fs{position:fixed;left:0;right:0;bottom:0;height:72%;z-index:30;border-radius:16px 16px 0 0;transform:translateY(105%);transition:transform .2s ease;box-shadow:0 0 40px rgba(0,0,0,.55);border-left:0}
+.ide.sz-s.sheet-open .fs{transform:none}
+.ide.sz-s.sheet-open .scrim{display:block;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:28}
+.ide.sz-s .fhd{flex-wrap:wrap;gap:4px 8px}
+.ide.sz-s .st-pill{white-space:nowrap}
+.ide.sz-s .queue{margin-left:auto}
+.toast{bottom:76px}
+@media (prefers-reduced-motion:reduce){.ide.sz-s .fs{transition:none}}
 </style>
+<div class="narrow" id="narrow" hidden>Вікно вужче за 1180 px: частину інтерфейсу доведеться прокручувати. Для телефона відкрийте мобільну версію.</div>
 <div class="scroll-x"><div class="ide mode-table">
 
-  <!-- menu -->
-  <div class="menubar">
+  <!-- main toolbar (IntelliJ new-UI style, menu collapsed under the hamburger) -->
+  <div class="topbar">
     <div class="logo">T</div>
-    <span>Файл</span><span>Правка</span><span>Вигляд</span><span>Навігація</span><span>Переклад</span><span>Глосарій</span><span>QA</span><span>Інструменти</span><span>Довідка</span>
-    <div class="title"><b>Fear &amp; Hunger: Termina</b> — EN → UK <span style="padding:0;color:var(--dim)">· sample data.json</span></div>
-  </div>
-
-  <!-- toolbar -->
-  <div class="toolbar">
-    <div class="pill"><span class="dot"></span>Termina <span style="color:var(--mute)">/ uk</span> <span style="color:var(--dim)">▾</span></div>
-    <div class="pill" title="Гілка перекладу">⎇ <span style="font-family:var(--mono);font-size:11.5px">main</span> <span style="color:var(--dim)">▾</span></div>
-    <div class="sep"></div>
-    <button class="tbtn"><svg viewBox="0 0 16 16"><path d="M3 2.5h8l2 2V13.5H3z"/><path d="M5.5 2.5v3h4v-3M5.5 13.5v-4h5v4"/></svg>Зберегти</button>
-    <button class="tbtn"><svg viewBox="0 0 16 16"><path d="M4 8l3 3 5-6"/></svg>QA</button>
-    <button class="tbtn"><svg viewBox="0 0 16 16"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 2.5v2.8h2.8"/></svg>Синхр.</button>
-    <button class="tbtn primary"><svg viewBox="0 0 16 16"><path d="M5 3l8 5-8 5z" fill="currentColor"/></svg>Запустити</button>
-    <div class="sep"></div>
-    <div class="stagebar" title="Етап роботи над файлом"><span>Етап:</span>
-      <div class="seg" id="stage"><button data-st="tr" class="on">Переклад</button><button data-st="proof">Вичитка <span class="cnt" id="proof-n"></span></button></div></div>
-    <div class="sep"></div>
-    <div class="prog">
-      <div class="bar" title="Підтверджено 41% · Перекладено 22% · Чернетки 9%"><i class="a" style="width:41%"></i><i class="b" style="width:22%"></i><i class="c" style="width:9%"></i></div>
-      <span style="font-family:var(--mono);font-size:11.5px">72% · 9 316 / 12 940</span>
+    <button class="tb-ic" id="hamb" data-popbtn title="Головне меню"><svg viewBox="0 0 16 16"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg></button>
+    <button class="tpill" data-soon="Вибір проєкту"><span class="pj">T</span>Termina <span class="dd">▾</span></button>
+    <button class="tpill" data-soon="Вибір гілки"><svg viewBox="0 0 16 16"><circle cx="4.5" cy="3.5" r="1.5"/><circle cx="4.5" cy="12.5" r="1.5"/><circle cx="11.5" cy="6" r="1.5"/><path d="M4.5 5v6M11.5 7.5c0 2-2.5 2.5-7 3.5"/></svg>uk/main <span class="dd">▾</span></button>
+    <div class="grow"></div>
+    <div class="prog" id="pg" title="">
+      <div class="bar"><i class="a" id="pg-a"></i><i class="b" id="pg-b"></i><i class="c" id="pg-c"></i></div>
+      <span id="pg-txt" style="font-family:var(--mono);font-size:11.5px"></span>
     </div>
-    <div class="search"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>Знайти скрізь…<kbd>⇧⇧</kbd></div>
+    <div class="tsep"></div>
+    <button class="tpill run" data-soon="Конфігурація збірки"><svg viewBox="0 0 16 16"><path d="M2.5 9l2-4.5h7L13.5 9v3h-11z"/><circle cx="5.5" cy="12" r="1"/><circle cx="10.5" cy="12" r="1"/></svg>Termina [export] <span class="dd">▾</span></button>
+    <button class="tb-ic play" data-soon="Зібрати й запустити" title="Зібрати й запустити"><svg viewBox="0 0 16 16"><path d="M4.5 2.5l9 5.5-9 5.5z" fill="currentColor" stroke="none"/></svg></button>
+    <button class="tb-ic" id="more" data-popbtn title="Ще"><svg viewBox="0 0 16 16"><circle cx="8" cy="3.5" r=".9" fill="currentColor"/><circle cx="8" cy="8" r=".9" fill="currentColor"/><circle cx="8" cy="12.5" r=".9" fill="currentColor"/></svg></button>
+    <div class="tsep"></div>
+    <button class="tb-ic" data-soon="Пошук скрізь" title="Знайти скрізь (⇧⇧)"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg></button>
+    <button class="tb-ic" id="hk" data-popbtn title="Гарячі клавіші"><svg viewBox="0 0 16 16"><rect x="1.5" y="3.5" width="13" height="9" rx="1.8"/><path d="M4.2 6.5h.01M6.7 6.5h.01M9.3 6.5h.01M11.8 6.5h.01M4.5 9.5h7"/></svg></button>
+    <div class="tsep"></div>
+    <button class="tb-ic dot" data-soon="Налаштування" title="Налаштування"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg></button>
+    <div class="wc"><button data-soon="Вікно" title="Згорнути"><svg viewBox="0 0 16 16"><path d="M3 8h10"/></svg></button><button data-soon="Вікно" title="Розгорнути"><svg viewBox="0 0 16 16"><rect x="3" y="3" width="10" height="10"/></svg></button><button data-soon="Вікно" title="Закрити"><svg viewBox="0 0 16 16"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg></button></div>
   </div>
 
-  <!-- compact / medium app bar (Android, tablets, narrow windows) -->
   <header class="appbar">
-    <button class="ab-ic" id="ab-menu" aria-label="Файли гри"><svg viewBox="0 0 16 16"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg></button>
     <div class="abt"><b id="ab-title">Map042.json</b><small id="ab-sub"></small></div>
     <button class="chip on" id="ab-stage" title="Змінити етап"></button>
-    <button class="ab-ic" aria-label="Пошук"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg></button>
+    <button class="ab-ic" data-soon="Пошук скрізь" aria-label="Пошук"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg></button>
+    <button class="ab-ic" id="ab-more" data-popbtn aria-label="Ще"><svg viewBox="0 0 16 16"><circle cx="8" cy="3.5" r=".9" fill="currentColor"/><circle cx="8" cy="8" r=".9" fill="currentColor"/><circle cx="8" cy="12.5" r=".9" fill="currentColor"/></svg></button>
   </header>
 
   <!-- main -->
   <div class="main">
     <nav class="strip" id="strip" aria-label="Бічні панелі">
-      <button data-lp="files" class="on" title="Файли гри: дерево файлів проєкту"><span>Файли</span></button>
+      <button data-lp="files" class="on" title="Файли гри" aria-label="Файли гри"><svg viewBox="0 0 16 16"><path d="M2 4.5h4l1.2 1.5H14V12.5H2z"/></svg></button>
+      <button data-lp="tags" title="Теги: персонажі, локації, предмети" aria-label="Теги"><svg viewBox="0 0 16 16"><path d="M2.5 8.5V3h5.5l6 6-5.5 5.5z"/><circle cx="5.5" cy="6" r=".8" fill="currentColor"/></svg></button>
+      <button data-lp="rows" title="Рядки файлу" aria-label="Рядки файлу"><svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h10"/></svg></button>
     </nav>
 
     <aside class="tree" id="lpanel">
-      <div class="ph"><span class="grow" id="lp-title">Файли гри</span><span class="ico" id="lp-close" title="Сховати панель">—</span></div>
+      <div class="ph"><span class="grow" id="lp-title">Файли гри</span><span class="ico" id="lp-close" title="Сховати панель" role="button" aria-label="Сховати панель">—</span></div>
       <div class="treebody" id="tree"></div>
+      <div class="treebody" id="lp-tags" hidden></div>
+      <div class="slist" id="lp-rows" hidden>
+        <div class="fh">
+          <div class="fin"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg><input class="qin" id="q2" placeholder="Пошук рядків" aria-label="Пошук рядків"><button class="xclr" hidden aria-label="Очистити пошук">✕</button></div>
+          <div class="chips2"><span class="chipsHost"></span><button class="chip" id="tagbtn2" data-popbtn>Теги ▾</button></div>
+          <span id="tagfilter2"></span>
+        </div>
+        <div class="sl-body" id="slist"></div>
+      </div>
     </aside>
 
     <section class="editor">
-  <div class="tabs">
-    <div class="tab"><span class="tico">MAP</span>Map012.json<span class="x">✕</span></div>
-    <div class="tab on"><span class="tico">MAP</span>Map042.json<span class="badge">3</span><span class="x">✕</span></div>
-    <div class="tab"><span class="tico j">{}</span>Items.json<span class="x">✕</span></div>
-    <div class="tab"><span class="tico g">Aa</span>Глосарій<span class="x">✕</span></div>
-    <div class="seg" id="seg" role="tablist" aria-label="Режим">
-      <button data-m="table" class="on"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM2.5 7h11M6.5 3.5v9"/></svg>Таблиця</button>
-      <button data-m="focus"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM6 3.5v9M6 8h7.5"/></svg>Редактор <kbd>Enter</kbd></button>
-    </div>
-  </div>
+      <div class="tabs">
+        <div class="tab"><span class="tico">MAP</span>Map012.json<span class="x" data-soon="Закриття вкладок" role="button" aria-label="Закрити вкладку">✕</span></div>
+        <div class="tab on"><span class="tico">MAP</span>Map042.json<span class="badge" id="tab-badge" title="Проблеми QA у файлі"></span><span class="x" data-soon="Закриття вкладок" role="button" aria-label="Закрити вкладку">✕</span></div>
+        <div class="tab"><span class="tico j">{}</span>Items.json<span class="x" data-soon="Закриття вкладок" role="button" aria-label="Закрити вкладку">✕</span></div>
+        <div class="tab"><span class="tico g">Aa</span>glossary.tsv<span class="x" data-soon="Закриття вкладок" role="button" aria-label="Закрити вкладку">✕</span></div>
+        <div class="seg" id="seg" role="tablist" aria-label="Режим">
+          <button role="tab" aria-selected="true" data-m="table" class="on"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM2.5 7h11M6.5 3.5v9"/></svg>Таблиця</button>
+          <button role="tab" aria-selected="false" data-m="focus"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM6 3.5v9M6 8h7.5"/></svg>Редактор <kbd>Enter</kbd></button>
+          <button role="tab" aria-selected="false" data-m="proof"><svg viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7"/></svg>Вичитка <span class="cnt" id="proof-n"></span></button>
+        </div>
+      </div>
 
-  <!-- ========== TABLE MODE ========== -->
-  <div class="view" id="v-table">
-    <div class="crumbs"><span>data</span>›<span>Map042.json</span>›<span>events</span>›<b>EV014 · Старий солдат</b><span class="r" id="pos"></span></div>
-    <div class="filters">
-      <div class="fin"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg><input class="qin" id="q" placeholder="Фільтр у цьому файлі" aria-label="Фільтр"></div>
-      <span class="chipsHost" data-big="1"></span>
-      <span id="tagfilter"></span>
-      <div class="r"><span>Спікер ▾</span><button class="chip" id="tagbtn">Теги ▾</button><span>Довжина ▾</span><span>Колонки ▾</span></div>
-    </div>
-    <div class="bulk" id="bulk"><b id="bulkn">0</b> вибрано
-      <button data-bb="ok" id="bb-ok">Підтвердити</button><button>Додати тег…</button><button>Знайти й замінити…</button><button>Застосувати з ПП</button>
-    </div>
-    <div class="gridwrap"><div class="grid" id="grid"></div></div>
-  </div>
+      <!-- ========== TABLE MODE ========== -->
+      <div class="view" id="v-table">
+        <div class="crumbs"><span>data</span>›<span>Map042.json</span>›<span>events</span>›<b>EV014 · Старий солдат</b><span class="r" id="pos"></span></div>
+        <div class="filters">
+          <div class="fin"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg><input class="qin" id="q" placeholder="Фільтр у цьому файлі" aria-label="Фільтр"><button class="xclr" hidden aria-label="Очистити фільтр">✕</button></div>
+          <span class="chipsHost" data-big="1"></span>
+          <span id="tagfilter"></span>
+          <div class="r"><button class="chip" data-soon="Фільтр за спікером">Спікер ▾</button><button class="chip" id="tagbtn" data-popbtn>Теги ▾</button><button class="chip" data-soon="Фільтр за довжиною">Довжина ▾</button><button class="chip" data-soon="Вибір колонок">Колонки ▾</button></div>
+        </div>
+        <div class="bulk" id="bulk"><b id="bulkn">0</b><span id="bulkt"></span>
+          <button id="bb-ok">Надіслати на вичитку</button><button data-soon="Додати тег до вибраних">Додати тег…</button><button data-soon="Знайти й замінити">Знайти й замінити…</button><button data-soon="Застосувати пам’ять перекладів">Застосувати з ПП</button><button id="bb-clear" class="ghost">Скасувати вибір</button>
+        </div>
+        <div class="gridwrap"><div class="grid" id="grid" role="grid" aria-label="Рядки файлу"></div></div>
+        <div class="legend-bar" aria-label="Умовні позначення">
+          <span><i class="sd new"></i>без перекладу</span><span><i class="sd draft"></i>чернетка</span><span><i class="sd done"></i>чекає вичитки</span><span><i class="sd appr"></i>вичитано</span><span><i class="sd qa"></i>є проблема QA</span><span><svg class="cmi" viewBox="0 0 16 16"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>коментар</span>
+        </div>
+      </div>
 
-  <!-- ========== FOCUS MODE ========== -->
-  <div class="view" id="v-focus">
-    <div class="slist">
-      <div class="fh">
-        <div class="fin"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg><input class="qin" id="q2" placeholder="Пошук рядків" aria-label="Пошук"></div>
-        <div class="chips2"><span class="chipsHost"></span><button class="chip" id="tagbtn2">Теги ▾</button></div>
-        <span id="tagfilter2"></span>
-      </div>
-      <div class="sl-body" id="slist"></div>
-    </div>
-
-    <div class="fc"><div class="fc-in">
-      <div class="fhd">
-        <span class="st-pill" id="f-state"></span>
-        <span class="k" id="f-key"></span>
-        <div class="nav"><button id="f-prev" title="Попередній (↑)">↑</button><button id="f-next" title="Наступний (↓)">↓</button><button id="f-back" title="До таблиці (Esc)" style="width:auto;padding:0 9px">До таблиці</button></div>
-      </div>
-      <div>
-        <div class="lbl">Оригінал · EN <span class="r" id="f-spk"></span></div>
-        <div class="srcbox" id="f-src"></div>
-      </div>
-      <div class="trblock">
-        <div class="lbl">Переклад · UK <span class="r" id="i-len"></span></div>
-        <textarea class="tr-in" id="i-tr" spellcheck="false" aria-label="Переклад"></textarea>
-        <div class="meter" id="i-meter"><i></i></div>
-        <div class="actions">
-          <button class="btn only-s" id="b-prev" aria-label="Попередній">↑</button><button class="btn only-s" id="b-next" aria-label="Наступний">↓</button><button class="btn p" id="b-save">Підтвердити <kbd>⌃↵</kbd></button>
-          <button class="btn" id="b-return" hidden>Повернути перекладачу</button>
-          <button class="btn only-ms" id="b-sheet">Підказки</button><span style="margin-left:auto;color:var(--mute);font-size:11px" id="f-hint">Зберігається автоматично як чернетка</span>
-        </div>
-        <div class="qa-under" id="f-qa"></div>
-        <div class="proof" id="f-proof" hidden style="margin-top:10px"></div>
-      </div>
-      <div>
-        <div class="lbl">Теги · про що цей рядок <span class="r">＋ додати</span></div>
-        <div class="chips" id="f-tags"></div>
-      </div>
-      <div class="ctxrow">
-        <div>
-          <div class="lbl">У грі</div>
-          <div class="stage"><div class="hero" style="left:36%;top:40px;background:#8a7a5c"></div><div class="hero" style="left:48%;top:56px"></div>
-            <div class="msg"><span class="nm" id="c-who"></span><div class="face"></div><span id="c-txt"></span></div></div>
-        </div>
-        <div>
-          <div class="lbl">Сусідні рядки</div>
-          <div class="ctx" id="c-near"></div>
-        </div>
-      </div>
-    </div></div>
-
-    <aside class="fs">
-      <div class="sh-h"><span>Підказки до рядка</span><button id="sh-x" aria-label="Закрити">✕</button></div>
-      <div class="itabs" id="stabs">
-        <button class="on" data-p="s-tm">Підказки</button>
-        <button data-p="s-gl">Глосарій</button>
-        <button data-p="s-cm">Коментарі <span class="cnt">2</span></button>
-        <button data-p="s-hi">Історія</button>
-      </div>
-      <div class="ibody">
-        <div class="pane on" id="s-tm">
-          <div><div class="lbl">Глосарій у рядку</div><div id="i-gl"></div></div>
-          <div><div class="lbl">Пам'ять перекладів <span class="r">3 збіги</span></div><div id="i-tm"></div></div>
-        </div>
-        <div class="pane" id="s-gl">
-          <div class="fin" style="width:auto"><input placeholder="Пошук у глосарії" aria-label="Пошук у глосарії"></div>
-          <table class="gt"><thead><tr><th>EN</th><th>UK</th><th>Тип</th></tr></thead><tbody id="gtb"></tbody></table>
-          <button class="btn">＋ Додати термін</button>
-        </div>
-        <div class="pane" id="s-cm">
-          <div class="cm"><div class="av" style="background:#e5a04b">О</div><div><div class="h"><b>Олена</b>вчора, 21:14</div><p>«Dark remembers» — тут про Рера чи просто метафора? Від цього залежить рід.</p></div></div>
-          <div class="cm"><div class="av" style="background:#56a8f5">М</div><div><div class="h"><b>Максим</b>сьогодні, 09:02</div><p>Просто метафора, бог не згадується. Лишаємо «пам'ятає обличчя».</p></div></div>
-          <textarea class="cmin" placeholder="Написати коментар… @ — згадати"></textarea>
-          <div class="actions" style="margin-top:0"><button class="btn">Коментувати</button><button class="btn">Запитати уточнення</button></div>
-        </div>
-        <div class="pane" id="s-hi">
-          <div class="hist">
-            <div><div class="h"><b>Ви</b> · чернетка · 2 хв тому</div><div class="t">Не повинно тебе тут бути, малий. Темрява пам'ятає обличчя.</div></div>
-            <div><div class="h"><b>Максим</b> · правка · вчора</div><div class="t">Тобі тут не місце, хлопче. Темрява запам'ятовує обличчя.</div></div>
-            <div><div class="h"><b>Імпорт</b> · з ПП 78% · 12 жовт.</div><div class="t">Тобі тут не місце, дитино.</div></div>
+      <!-- ========== FOCUS MODE ========== -->
+      <div class="view" id="v-focus">
+        <div class="fc"><div class="fc-in">
+          <div class="fhd">
+            <span class="st-pill" id="f-state"></span>
+            <span class="k" id="f-key"></span>
+            <span class="queue" id="f-queue" title="Позиція у списку"></span>
+            <div class="nav"><button id="f-prev" title="Попередній рядок (↑)" aria-label="Попередній рядок">↑</button><button id="f-next" title="Наступний рядок (↓)" aria-label="Наступний рядок">↓</button><button id="f-back" title="До таблиці (Esc)" style="width:auto;padding:0 9px">До таблиці</button></div>
           </div>
-        </div>
-      </div>
-    </aside>
-  </div>
-</section>
-</div>
+          <div class="offlist" id="f-off" hidden><span>Цей рядок не входить у поточний фільтр або пошук.</span><button data-reset>Показати всі рядки</button></div>
+          <div>
+            <div class="lbl">Оригінал · EN</div>
+            <div class="srcbox" id="f-src"></div>
+          </div>
+          <div class="trblock">
+            <div class="lbl">Переклад · UK</div>
+            <textarea class="tr-in" id="i-tr" spellcheck="false" aria-label="Переклад"></textarea>
+            <div class="edbar">
+              <button class="ib" id="b-copy" title="Копіювати оригінал у переклад" aria-label="Копіювати оригінал у переклад"><svg viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="8" height="8" rx="1"/><path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2"/></svg></button>
+              <button class="ib" id="b-clear" title="Очистити переклад (можна скасувати)" aria-label="Очистити переклад"><svg viewBox="0 0 16 16"><path d="M3 4.5h10M6.5 4.5v-1.5h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/></svg></button>
+              <button class="ib" id="b-code" title="Вставити керівний код: відсутній у перекладі або \C[0]" aria-label="Вставити керівний код"><svg viewBox="0 0 16 16"><path d="M6 3H3.5v10H6M10 3h2.5v10H10M8 5v6"/></svg></button>
+              <button class="ib" id="b-return" title="Повернути перекладачу" aria-label="Повернути перекладачу" hidden><svg viewBox="0 0 16 16"><path d="M6 3.5L2.5 7 6 10.5M2.5 7h7a4 4 0 0 1 0 8H8"/></svg></button>
+              <span class="qab" id="qa-badge" title="Активні проблеми QA в рядку" hidden></span>
+              <span class="grow"></span>
+              <div class="cnt2" id="cnt2" title="Довжина без керівних кодів / ліміт цього поля"><span id="c-ch">0/120</span></div>
+              <button class="saveb" id="b-save" aria-label="Надіслати на вичитку"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3.2L13 4.8"/></svg></button>
+            </div>
+            <div class="qa-under" id="f-qa"></div>
+            <div class="proof" id="f-proof" hidden style="margin-top:10px"></div>
+          </div>
+          <div>
+            <div class="lbl">Теги · про що цей рядок <button class="lbl-btn" data-soon="Додавання тегів">＋ додати</button></div>
+            <div class="chips" id="f-tags"></div>
+          </div>
+          <div class="ctxrow">
+            <div>
+              <div class="lbl">У грі</div>
+              <div class="stage"><div class="hero" style="left:36%;top:40px;background:#8a7a5c"></div><div class="hero" style="left:48%;top:56px"></div>
+                <div class="msg"><span class="nm" id="c-who"></span><div class="face"></div><span id="c-txt"></span></div></div>
+            </div>
+            <div>
+              <div class="lbl">Сусідні рядки</div>
+              <div class="ctx" id="c-near"></div>
+            </div>
+          </div>
+        </div></div>
 
-<div class="scrim" id="scrim"></div>
-<div class="pop" id="tagpop" hidden></div>
-<nav class="bnav" id="bnav" aria-label="Розділи">
-  <button data-cv="files"><svg viewBox="0 0 16 16"><path d="M2 4.5h4l1.2 1.5H14V12.5H2z"/></svg>Файли</button>
-  <button data-cv="list"><svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h10"/></svg>Рядки</button>
-  <button data-cv="edit"><svg viewBox="0 0 16 16"><path d="M3 13l.7-3L10.5 3.2a1.4 1.4 0 0 1 2 2L5.7 12z"/></svg>Редактор</button>
-  <button data-cv="more"><svg viewBox="0 0 16 16"><path d="M3.5 3.5h9v7h-4l-2.5 2.5v-2.5h-2.5z"/></svg>Підказки</button>
-</nav>
-<div class="status">
-  <span class="ok">● Автозбереження: 14:32</span>
-  <span>RPG Maker MV · UTF-8 · LF</span>
-  <span class="bad">3 проблеми</span>
-  <span id="st-sel"></span>
-  <div class="r"><span>Файл: 12 / 24 підтверджено</span><span>Сесія: +87 рядків · 1 год 24 хв</span><span>Максим · онлайн 3</span></div>
-</div>
+        <aside class="fs">
+          <div class="itabs" id="stabs" role="tablist">
+            <button class="on" role="tab" data-p="s-tm">Підказки</button>
+            <button role="tab" data-p="s-gl">Глосарій</button>
+            <button role="tab" data-p="s-cm">Коментарі <span class="cnt" id="cm-badge">0</span></button>
+            <button role="tab" data-p="s-hi">Історія</button>
+          </div>
+          <div class="ibody">
+            <div class="pane on" id="s-tm">
+              <div><div class="lbl">Глосарій у рядку</div><div id="i-gl"></div></div>
+              <div><div class="lbl">Пам’ять перекладів <span class="r" id="tm-n"></span></div><div id="i-tm"></div></div>
+            </div>
+            <div class="pane" id="s-gl">
+              <div class="fin" style="width:auto"><input id="gl-q" placeholder="Пошук у глосарії" aria-label="Пошук у глосарії"></div>
+              <table class="gt"><thead><tr><th>EN</th><th>UK</th><th>Тип</th></tr></thead><tbody id="gtb"></tbody></table>
+              <button class="btn" data-soon="Додавання термінів">＋ Додати термін</button>
+            </div>
+            <div class="pane" id="s-cm">
+              <div id="cm-list" style="display:flex;flex-direction:column;gap:12px"></div>
+              <textarea class="cmin" id="cm-in" placeholder="Написати коментар до цього рядка…" aria-label="Коментар"></textarea>
+              <div class="actions" style="margin-top:0"><button class="btn" id="cm-add">Коментувати</button><button class="btn" data-soon="Запит уточнення">Запитати уточнення</button></div>
+            </div>
+            <div class="pane" id="s-hi"><div class="hist" id="hist-list"></div></div>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </div>
+
+  <div class="scrim" id="scrim"></div>
+  <nav class="bnav" id="bnav" aria-label="Розділи">
+    <button data-nav="files"><svg viewBox="0 0 16 16"><path d="M2 4.5h4l1.2 1.5H14V12.5H2z"/></svg>Файли</button>
+    <button data-nav="rows"><svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h10"/></svg>Рядки</button>
+    <button data-nav="edit"><svg viewBox="0 0 16 16"><path d="M3 13l.7-3L10.5 3.2a1.4 1.4 0 0 1 2 2L5.7 12z"/></svg>Редактор</button>
+    <button data-nav="sheet"><svg viewBox="0 0 16 16"><path d="M3.5 3.5h9v7h-4l-2.5 2.5v-2.5h-2.5z"/></svg>Підказки</button>
+  </nav>
+  <div class="status">
+    <span class="ok" id="sb-save"></span>
+    <span>RPG Maker MV · UTF-8 · LF</span>
+    <span id="sb-qa"></span>
+    <span id="st-sel"></span>
+    <div class="r"><span id="sb-file"></span><span id="sb-sess"></span><span>Максим · онлайн 3</span></div>
+  </div>
 </div></div>
 
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<div class="pop" id="tagpop" hidden></div>
+<div class="pop" id="menupop" hidden></div>
+<div class="pop keys" id="keypop" hidden>
+  <div class="kh">Гарячі клавіші</div>
+  <div class="kr"><span>Відкрити рядок у редакторі</span><kbd>Enter</kbd></div>
+  <div class="kr"><span>Назад до таблиці / закрити вікно / зняти вибір</span><kbd>Esc</kbd></div>
+  <div class="kr"><span>Наступний / попередній рядок зі списку</span><kbd>↓</kbd><kbd>↑</kbd></div>
+  <div class="kr"><span>Надіслати на вичитку / затвердити й далі</span><kbd>Ctrl</kbd><kbd>Enter</kbd></div>
+  <div class="kr"><span>Скасувати останню дію (поза полем)</span><kbd>Ctrl</kbd><kbd>Z</kbd></div>
+  <div class="kr"><span>Редагувати комірку в таблиці</span><kbd>2× клік</kbd></div>
+  <div class="kr"><span>Вибрати діапазон видимих рядків</span><kbd>Shift</kbd><kbd>клік</kbd></div>
+  <div class="kr"><span>Знайти скрізь (поки недоступно)</span><kbd>⇧</kbd><kbd>⇧</kbd></div>
+</div>
 <script>
+const $=id=>document.getElementById(id);
 const T={c:'Персонаж',l:'Локація',i:'Предмет',t:'Поняття'};
-const rows=[
+/* ---------- data ---------- */
+const ROWS=[
  {k:'msg[0]',w:'Оповідач',s:'The hall is silent. Dust drifts through a single shaft of light.',t:'У залі тихо. Пил кружляє в єдиному промені світла.',st:'appr',g:[['l','Зал вартових']]},
  {k:'msg[1]',w:'Оповідач',s:'Something shifts in the dark beyond the pillars.',t:'За колонами в темряві щось ворухнулось.',st:'appr',g:[['l','Зал вартових']]},
  {k:'msg[2]',w:'Марина',s:'Hello? Is someone there?',t:'Агов? Тут хтось є?',st:'appr',g:[]},
  {k:'msg[3]',w:'Старий солдат',s:'Keep your voice down, girl.',t:'Тихіше, дівчино.',st:'appr',g:[]},
  {k:'msg[4]',w:'Старий солдат',s:'Not many walk in through the front anymore.',t:'Тепер мало хто заходить через головні двері.',st:'done',g:[['l','Зал вартових']]},
- {k:'msg[5]',w:'Старий солдат',s:'You shouldn\'t be here, kid. The Dark remembers faces.',t:'Не повинно тебе тут бути, малий. Морок пам\'ятає обличчя.',st:'draft',cm:1,g:[['t','Темрява']]},
- {k:'msg[6]',w:'Старий солдат',s:'Sylvian\'s gate has been shut for three winters, and nobody who goes down comes back up the same.',t:'Браму Сильвіана зачинено вже три зими, і ніхто, хто спускається вниз, не повертається таким самим, яким був раніше, коли спускався сюди вперше.',st:'done',cm:1,g:[['c','Сильвіан'],['l','Брама Сильвіана']]},
+ {k:'msg[5]',w:'Старий солдат',s:'You shouldn\'t be here, kid. The Dark remembers faces.',t:'Тобі тут не місце, малий. Морок пам\'ятає обличчя.',st:'draft',g:[['t','Темрява']],
+  comments:[{who:'Олена',when:'вчора, 21:14',text:'«Dark remembers» — тут про Рера чи просто метафора? Від цього залежить рід.'},{who:'Максим',when:'сьогодні, 09:02',text:'Просто метафора, бог не згадується. Лишаємо «пам\'ятає обличчя».'}]},
+ {k:'msg[6]',w:'Старий солдат',s:'Sylvian\'s gate has been shut for three winters, and nobody who goes down comes back up the same.',t:'Браму Сильвіана зачинено вже три зими, і ніхто, хто спускається вниз, не повертається таким самим, яким був раніше, коли спускався сюди вперше.',st:'done',g:[['c','Сильвіан'],['l','Брама Сильвіана']],
+  comments:[{who:'Максим',when:'3 дні тому',text:'Речення задовге для вікна. Можна розбити на два повідомлення.'}]},
  {k:'msg[7]',w:'Марина',s:'I have to find my brother.',t:'Мені треба знайти брата.',st:'done',g:[['c','Леві']]},
  {k:'msg[8]',w:'Старий солдат',s:'...Then take this. It\'s rusted, but it still turns.',t:'',st:'new',g:[['i','Іржавий ключ']]},
  {k:'msg[9]',w:'Старий солдат',s:'\\C[2]Rusty Key\\C[0] obtained.',t:'Отримано Іржавий ключ.',st:'done',g:[['i','Іржавий ключ']]},
  {k:'choice[0]',w:'Вибір',s:'Go down to the cellar',t:'Спуститися в підвал',st:'done',g:[['l','Підвал']]},
- {k:'choice[1]',w:'Вибір',s:'Ask about Rher',t:'',st:'new',cm:1,g:[['c','Рер']]},
+ {k:'choice[1]',w:'Вибір',s:'Ask about Rher',t:'',st:'new',g:[['c','Рер']],comments:[{who:'Олена',when:'2 дні тому',text:'Уточнити, чи знає гравець на цьому етапі, хто такий Рер.'}]},
  {k:'choice[2]',w:'Вибір',s:'Leave quietly',t:'Тихо піти',st:'appr',g:[]},
  {k:'msg[10]',w:'Старий солдат',s:'Rher doesn\'t care for questions. Only for debts.',t:'',st:'new',g:[['c','Рер']]},
  {k:'msg[11]',w:'Старий солдат',s:'Everyone pays eventually. Even the gods keep ledgers.',t:'Рано чи пізно платять усі. Навіть боги ведуть облікові книги.',st:'draft',g:[]},
  {k:'msg[12]',w:'Марина',s:'Then I\'ll pay what I owe.',t:'Що винна — те й віддам.',st:'draft',g:[]},
  {k:'msg[13]',w:'Оповідач',s:'The soldier turns away, as if the conversation never happened.',t:'',st:'new',g:[['c','Старий солдат']]},
  {k:'msg[14]',w:'Оповідач',s:'A cold draft climbs the cellar stairs.',t:'Східцями з підвалу піднімається холодний протяг.',st:'appr',g:[['l','Підвал']]},
- {k:'msg[15]',w:'Марина',s:'Levi... I hope you\'re still alive.',t:'Леві... Сподіваюсь, ти ще живий.',st:'appr',g:[['c','Леві']]},
- {k:'name',w:'Система',s:'Old Soldier',t:'Старий солдат',st:'appr',g:[['c','Старий солдат']]},
- {k:'nickname',w:'Система',s:'Gatekeeper',t:'Вартовий брами',st:'done',g:[['c','Старий солдат']]},
- {k:'desc',w:'Система',s:'A veteran who refuses to leave his post.',t:'',st:'new',g:[['c','Старий солдат']]},
+ {k:'msg[15]',w:'Марина',s:'Levi... I hope you\'re still alive.',t:'Леві... Сподіваюся, ти ще живий.',st:'appr',g:[['c','Леві']]},
+ {k:'event.name',w:'Подія',s:'Old Soldier',t:'Старий солдат',st:'appr',g:[['c','Старий солдат']]},
+ {k:'event.note',w:'Подія',s:'Gatekeeper',t:'Вартовий брами',st:'done',g:[['c','Старий солдат']]},
+ {k:'msg[18]',w:'Оповідач',s:'He has stood at this post longer than anyone remembers.',t:'',st:'new',g:[['c','Старий солдат']]},
  {k:'msg[16]',w:'Старий солдат',s:'Don\'t come back up if you hear singing.',t:'',st:'new',g:[['l','Підвал']]},
  {k:'msg[17]',w:'Старий солдат',s:'Soul or no soul, the stairs are the same.',t:'Із душею чи без душі, а сходи ті самі.',st:'draft',g:[['t','Душа'],['l','Підвал']]}
 ];
-const gloss=[['Sylvian','Сильвіан','Божество'],['Rher','Рер','Божество'],['Dark','Темрява','Поняття'],['Soul','Душа','Механіка'],['Marina','Марина','Персонаж'],['Levi','Леві','Персонаж']];
-const stName={new:'без перекладу',draft:'чернетка',done:'чекає вичитки',appr:'вичитано',qa:'є проблема'};
-const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+const SEED=JSON.stringify(ROWS);
+const rows=ROWS;
+rows.forEach((r,i)=>{r.i=i;r.orig=r.t;r.comments=r.comments||[];r.ign=[];r.returned=false;
+  r.hist=r.t?[{who:r.st==='appr'?'Олена':'Максим',kind:r.st==='appr'?'вичитка':'переклад',when:'раніше',text:r.t}]:[]});
+const TERMS=[
+ {en:'Sylvian',uk:'Сильвіан',type:'c',note:'Божество',stem:/сильвіан/i},
+ {en:'Rher',uk:'Рер',type:'c',note:'Божество',stem:/рер/i},
+ {en:'Dark',uk:'Темрява',type:'t',note:'З великої, коли про сутність',stem:/темряв/i,bad:/Морок(?:у|ом|а|і)?/},
+ {en:'Soul',uk:'Душа',type:'t',note:'Не плутати з «дух»',stem:/душ/i},
+ {en:'Marina',uk:'Марина',type:'c',note:'Жіночий рід',stem:/марин/i},
+ {en:'Levi',uk:'Леві',type:'c',note:'Не відмінюється',stem:/леві/i},
+ {en:'Gatekeeper',uk:'Вартовий брами',type:'t',note:'Титул',stem:/вартов/i},
+ {en:'Cellar',uk:'Підвал',type:'l',note:'',stem:/підвал/i}];
+const TMDB=[
+ {s:'Keep your voice down, girl.',t:'Тихіше, дівчино.',src:'Map012.json · Максим · вичитано'},
+ {s:'You shouldn\'t be here, kid.',t:'Тобі тут не місце, хлопче.',src:'Map041.json · Максим · вичитано'},
+ {s:'The Dark remembers everyone.',t:'Темрява пам\'ятає кожного.',src:'CommonEvents.json · Олена · вичитано'},
+ {s:'Not many walk this way anymore.',t:'Цією дорогою вже мало хто ходить.',src:'Map041.json · Олена · вичитано'},
+ {s:'Hello? Is someone there?',t:'Агов? Є тут хто?',src:'Map012.json · Максим · вичитано'}];
+const stName={new:'без перекладу',draft:'чернетка',done:'чекає вичитки',appr:'вичитано',qa:'є проблема QA'};
+const RANK={new:0,draft:1,qa:2,done:3,appr:4};
+const PROJECT={total:12940,otherAppr:5300,otherDone:2850,otherDraft:1160};
+const CODE=/\\[A-Z]\[\d+\]/g;
+const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+const plural=(n,a)=>{const m=n%10,h=n%100;return n+' '+(m===1&&h!==11?a[0]:(m>=2&&m<=4&&(h<12||h>14))?a[1]:a[2])};
 function markup(s){
-  const re=new RegExp('(\\\\[A-Z]\\[\\d+\\])|\\b('+gloss.map(g=>g[0]).join('|')+')\\b','g');
+  const re=new RegExp('('+CODE.source+')|\\b('+TERMS.map(t=>t.en).join('|')+')\\b','gi');
   return esc(s).replace(re,(m,code,term)=>{
     if(code)return '<span class="code">'+m+'</span>';
-    const g=gloss.find(x=>x[0]===term);
-    return '<span class="term-hit" title="'+g[2]+': '+g[0]+' → '+g[1]+'">'+m+'</span>';
-  });
+    const g=TERMS.find(x=>x.en.toLowerCase()===term.toLowerCase());
+    return '<span class="term-hit" title="'+T[g.type]+': '+g.en+' → '+g.uk+'">'+m+'</span>'});
 }
-const tagH=(g,lg)=>`<span class="tg ${g[0]} ${lg?'lg':''}" data-tag="${g[1]}" title="${T[g[0]]} · фільтрувати за тегом">${g[1]}</span>`;
-const LIMIT=120;
-const STN={new:'без перекладу',draft:'чернетка',done:'перекладено · чекає вичитки',appr:'вичитано',qa:'є проблема'};
-let stage='tr', lp='files', cv='edit', sheet=false, sz='x', file='Map042.json';
-function qaIssues(r){
+const tagH=(g,lg)=>`<span class="tg ${g[0]} ${lg?'lg':''}" data-tag="${esc(g[1])}" title="${T[g[0]]} · фільтрувати за тегом">${esc(g[1])}</span>`;
+const cmI='<svg class="cmi" viewBox="0 0 16 16" aria-label="Є коментарі"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>';
+/* ---------- rules: limits, QA, statuses ---------- */
+const limitOf=r=>r.k.startsWith('choice')||r.k.startsWith('event.')?40:120;
+const dispLen=t=>t.replace(CODE,'').length;
+function qaAll(r){
   const o=[];if(!r.t)return o;
-  if(r.t.length>LIMIT)o.push({sev:'bad',msg:`Перевищено довжину: ${r.t.length} / ${LIMIT} символів`});
-  (r.s.match(/\\[A-Z]\[\d+\]/g)||[]).forEach(c=>{if(!r.t.includes(c))o.push({sev:'bad',msg:`Втрачено керівний код ${c}`})});
-  gloss.forEach(([e,u])=>{if(new RegExp('\\b'+e+'\\b').test(r.s)&&!r.t.toLowerCase().includes(u.toLowerCase().slice(0,u.length>5?u.length-2:u.length)))o.push({sev:'warn',msg:`Термін «${e}» має бути «${u}» за глосарієм`,fix:u})});
+  const lim=limitOf(r),n=dispLen(r.t);
+  if(n>lim)o.push({key:'len',sev:'bad',msg:`Перевищено довжину: ${n} / ${lim} символів (без керівних кодів)`});
+  [...new Set(r.s.match(CODE)||[])].forEach(c=>{if(!r.t.includes(c))o.push({key:'code:'+c,sev:'bad',msg:`Втрачено керівний код ${c}`,code:c})});
+  TERMS.forEach(g=>{if(new RegExp('\\b'+g.en+'\\b','i').test(r.s)&&!g.stem.test(r.t)){const m=g.bad&&r.t.match(g.bad);
+    o.push({key:'term:'+g.en,sev:'warn',msg:`Термін «${g.en}» має бути «${g.uk}» за глосарієм`,term:g.en,fix:m?g.uk:null,bad:m?m[0]:null})}});
   return o;
 }
+const qaIssues=r=>qaAll(r).filter(x=>!r.ign.includes(x.key));
 const effSt=r=>(r.t&&qaIssues(r).length&&r.st!=='new')?'qa':r.st;
-let cur=5, filter='all', sortKey=null, sortDir=1, tagFilter=null, mode='table', checked=new Set();
-rows.forEach((r,i)=>{r.i=i;r.orig=r.t});
-const $=id=>document.getElementById(id);
-
-/* tree */
-const treeData=[['d',0,'data',null,1],['f',1,'Actors.json','json',100],['f',1,'Armors.json','json',100],['f',1,'Classes.json','json',100],['f',1,'CommonEvents.json','json',38],['f',1,'Enemies.json','json',64],['f',1,'Items.json','json',91],['f',1,'Skills.json','json',77],['f',1,'States.json','json',100],['f',1,'System.json','json',55],['f',1,'Troops.json','json',12],['d',1,'maps',null,1],['f',2,'Map012.json','map',100],['f',2,'Map013.json','map',100],['f',2,'Map041.json','map',63],['f',2,'Map042.json','map',50,'cur'],['f',2,'Map043.json','map',0],['f',2,'Map044.json','map',0],['d',0,'js/plugins',null,0],['d',0,'Глосарій та ПП',null,1],['f',1,'glossary.tsv','gl',100],['f',1,'memory.tmx','gl',100]];
-$('tree').innerHTML=treeData.map(n=>{
-  const [t,d,nm,ic,pc,cl]=n;
-  if(t==='d')return `<div class="node" style="--d:${d}"><span class="chev">${pc?'▾':'▸'}</span><span class="ic dir">▤</span><span class="nm">${nm}</span></div>`;
-  const lab={json:'{}',map:'MAP',gl:'Aa'}[ic];
-  return `<div class="node ${cl||''}" style="--d:${d}"><span class="chev"></span><span class="ic ${ic}">${lab}</span><span class="nm">${nm}</span><span class="mini"><i class="${pc==100?'f':''}" style="width:${pc}%"></i></span><span class="pc ${pc==100?'full':''}">${pc}%</span></div>`;
-}).join('');
-
+const stLabel=r=>(r.returned&&r.st==='draft')?'повернено на доопрацювання':stName[effSt(r)];
+let stage='tr',mode='table',cur=5,filter='all',pfilter='done',tagFilter=null,q='',sortKey=null,sortDir=1,anchor=null;
+const checked=new Set();
+const lpBy={table:'files',focus:'rows',proof:'rows'};
+let lp=lpBy.table,lastUndo=null,toastTimer=null,savedAt=null,storageOk=true,sess={n:0,t0:Date.now()},collapsed=new Set(),inline=null;
+const curFilter=()=>mode==='proof'?pfilter:filter;
+const FIELDS=['t','st','returned','orig','ign','comments','hist'];
+const clone=x=>x===undefined?undefined:JSON.parse(JSON.stringify(x));
+function snap(idx){return {cur,rows:idx.map(i=>({i,v:FIELDS.map(f=>clone(rows[i][f]))}))}}
+function undo(){if(!lastUndo)return toast('Нічого скасовувати');const u=lastUndo;lastUndo=null;
+  u.rows.forEach(({i,v})=>FIELDS.forEach((f,k)=>{rows[i][f]=v[k]}));cur=u.cur;renderAll();toast('Дію скасовано')}
+function toast(msg,canUndo){const t=$('toast');t.innerHTML='<span></span>'+(canUndo?'<button id="toast-undo">Скасувати</button>':'');t.firstChild.textContent=msg;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true},7000)}
+function note(r,kind,text){r.hist.push({who:'Ви',kind,when:'щойно',text:text||''});sess.n++}
+/* the only places that change a status */
+function editText(r,val){r.t=val;if(!val){r.st='new';return}
+  if(stage==='tr'){if(r.st==='new'||r.st==='done'||r.st==='appr')r.st='draft'}else if(r.st==='new')r.st='draft'}
+function submitRow(r){
+  if(!r.t)return 'Рядок порожній';
+  if(stage==='tr'){if(r.st==='done')return 'Рядок уже очікує вичитки';if(r.st==='appr')return 'Рядок уже вичитано'}
+  else if(r.st!=='done')return 'Рядок не очікує вичитки';
+  const er=qaIssues(r).filter(x=>x.sev==='bad');
+  if(er.length)return 'Є помилка QA: '+er[0].msg+'. Виправте або проігноруйте її';
+  if(stage==='tr'){r.st='done';r.orig=r.t;r.returned=false;note(r,'на вичитку',r.t)}else{r.st='appr';note(r,'вичитано',r.t)}
+  return '';
+}
+/* ---------- view: what is visible ---------- */
+function matchStatus(r,f){return f==='all'||(f==='new'&&r.st==='new')||(f==='draft'&&r.st==='draft')||(f==='done'&&r.st==='done')||(f==='qa'&&effSt(r)==='qa')||(f==='cm'&&r.comments.length>0)}
+function inContext(r){
+  if(tagFilter&&!r.g.some(g=>g[1]===tagFilter))return false;
+  const s=q.trim().toLowerCase();
+  return !s||(r.s+' '+r.t+' '+r.k+' '+r.w+' '+r.g.map(g=>g[1]).join(' ')).toLowerCase().includes(s);
+}
 function vis(){
-  const q=$('q').value.trim().toLowerCase();
-  let a=rows.filter(r=>{
-    if(filter==='new'&&r.st!=='new')return false;
-    if(filter==='draft'&&r.st!=='draft')return false;
-    if(filter==='qa'&&effSt(r)!=='qa')return false;
-    if(filter==='done'&&r.st!=='done')return false;
-    if(filter==='cm'&&!r.cm)return false;
-    if(tagFilter&&!r.g.some(g=>g[1]===tagFilter))return false;
-    if(q&&!(r.s+r.t+r.k+r.w).toLowerCase().includes(q))return false;
-    return true;});
-  if(sortKey)a=[...a].sort((x,y)=>{const f=sortKey==='len'?x.t.length-y.t.length:String(x[sortKey]).localeCompare(String(y[sortKey]),'uk');return f*sortDir});
+  let a=rows.filter(r=>inContext(r)&&matchStatus(r,curFilter()));
+  if(sortKey){const c=new Intl.Collator('uk',{numeric:true});
+    a=[...a].sort((x,y)=>{let f;
+      if(sortKey==='len')f=dispLen(x.t)-dispLen(y.t);else if(sortKey==='st')f=RANK[effSt(x)]-RANK[effSt(y)];else f=c.compare(String(x[sortKey]),String(y[sortKey]));
+      return f*sortDir||x.i-y.i})}
   return a;
 }
+const visIds=()=>vis().map(r=>r.i);
 function chipsHTML(){
-  const c=(f,l,n)=>`<button class="chip ${filter===f?'on':''}" data-f="${f}">${l} <span class="n">${n}</span></button>`;
-  return c('all','Усі',rows.length)+c('new','Без перекладу',rows.filter(r=>r.st==='new').length)+c('draft','Чернетки',rows.filter(r=>r.st==='draft').length)+c('done','Чекають вичитки',rows.filter(r=>r.st==='done').length)+c('qa','Проблеми',rows.filter(r=>effSt(r)==='qa').length)+c('cm','З коментарями',rows.filter(r=>r.cm).length);
+  const ctx=rows.filter(inContext),cnt=f=>ctx.filter(r=>matchStatus(r,f)).length,cf=curFilter();
+  const c=(f,l)=>`<button class="chip ${cf===f?'on':''}" data-f="${f}" aria-pressed="${cf===f}">${l} <span class="n">${cnt(f)}</span></button>`;
+  return c('all','Усі')+c('new','Без перекладу')+c('draft','Чернетки')+c('done','Чекають вичитки')+c('qa','Проблеми')+c('cm','З коментарями');
 }
 function tagFilterHTML(){
   if(!tagFilter)return '';
   const g=rows.flatMap(r=>r.g).find(g=>g[1]===tagFilter);
-  return `<span class="chip on tagf">Тег: ${tagH(g)} <span class="x" data-cleartag="1" title="Скинути">✕</span></span>`;
+  return `<span class="chip on tagf">Тег: ${tagH(g)} <span class="x" data-cleartag="1" title="Скинути тег" role="button" aria-label="Скинути тег">✕</span></span>`;
 }
+/* ---------- render ---------- */
+const emptyHTML='<div class="empty-state"><b>Нічого не знайдено</b><span>Немає рядків за поточним пошуком, тегом і статусом.</span><button class="btn" data-reset>Скинути фільтри</button></div>';
 function renderTable(){
-  const a=vis();
+  const a=vis(),ids=a.map(r=>r.i);
   const ar=k=>sortKey===k?`<span class="arrow">${sortDir>0?'▲':'▼'}</span>`:'';
-  let h=`<div class="gh"><div></div><div class="s" data-s="st" title="Статус"></div><div class="s" data-s="k">Ключ ${ar('k')}</div><div class="s" data-s="w">Спікер ${ar('w')}</div><div>Оригінал · EN</div><div class="s" data-s="t">Переклад · UK ${ar('t')}</div><div>Теги</div><div class="s" data-s="len" style="justify-content:flex-end;border-right:0">Довж. ${ar('len')}</div></div>`;
-  h+=a.map(r=>{const n=r.t.length;
-    return `<div class="gr ${r.i===cur?'sel':''} ${checked.has(r.i)?'chk':''}" data-i="${r.i}">
-      <div class="ln"><span title="Вибрати">${r.i+1}</span></div>
-      <div class="st"><span class="sd ${effSt(r)}" title="${stName[effSt(r)]}"></span></div>
-      <div><span class="key" title="${r.k}">${r.k}</span></div>
-      <div class="who">${r.w}</div>
-      <div class="src">${markup(r.s)}</div>
-      <div class="tr ${r.t?'':'empty'}" title="Двічі клікніть, щоб редагувати тут">${r.t?markup(r.t):'не перекладено'}</div>
-      <div class="tags">${r.g.map(g=>tagH(g)).join('')}</div>
-      <div class="len ${n>LIMIT?'over':''}">${n?n+'/'+LIMIT:'—'}</div></div>`}).join('');
-  $('grid').innerHTML=h;
-  $('bulk').classList.toggle('show',checked.size>0);$('bulkn').textContent=checked.size;
-  $('pos').textContent='рядок '+(cur+1)+' з '+rows.length+(a.length!==rows.length?' · показано '+a.length:'');
+  const nSel=ids.filter(i=>checked.has(i)).length;
+  let h=`<div class="gh" role="row"><div class="gcheck"><input type="checkbox" id="selall" aria-label="Вибрати всі видимі рядки" ${nSel&&nSel===ids.length?'checked':''}></div><div title="Статус" role="columnheader" class="s" data-s="st"><span class="vh">Статус</span></div><div class="s" data-s="k" role="columnheader">Ключ ${ar('k')}</div><div class="s" data-s="w" role="columnheader">Спікер ${ar('w')}</div><div role="columnheader">Оригінал · EN</div><div class="s" data-s="t" role="columnheader">Переклад · UK ${ar('t')}</div><div role="columnheader">Теги</div><div class="s" data-s="len" role="columnheader" title="Довжина перекладу без керівних кодів / ліміт поля" style="justify-content:flex-end;border-right:0">Довж. ${ar('len')}</div></div>`;
+  h+=a.length?a.map(r=>{const n=dispLen(r.t),lim=limitOf(r);
+    return `<div class="gr ${r.i===cur?'sel':''} ${checked.has(r.i)?'chk':''}" role="row" tabindex="${r.i===cur?0:-1}" aria-selected="${r.i===cur}" data-i="${r.i}">
+      <div class="ln" role="gridcell"><span class="num">${r.i+1}</span><input type="checkbox" class="rc" ${checked.has(r.i)?'checked':''} aria-label="Вибрати рядок ${r.i+1}"></div>
+      <div class="st" role="gridcell"><span class="sd ${effSt(r)}" title="${stLabel(r)}"></span><span class="vh">${stLabel(r)}</span></div>
+      <div role="gridcell"><span class="key" title="${esc(r.k)}">${esc(r.k)}</span>${r.comments.length?cmI:''}</div>
+      <div class="who" role="gridcell">${esc(r.w)}</div>
+      <div class="src" role="gridcell">${markup(r.s)}</div>
+      <div class="tr ${r.t?'':'empty'}" role="gridcell" title="Двічі клікніть, щоб редагувати тут">${r.t?markup(r.t):'не перекладено'}</div>
+      <div class="tags" role="gridcell">${r.g.map(g=>tagH(g)).join('')}</div>
+      <div class="len ${n>lim?'over':''}" role="gridcell">${r.t?n+'/'+lim:'—'}</div></div>`}).join(''):emptyHTML;
+  $('grid').innerHTML=h;$('grid').classList.toggle('has-sel',nSel>0);
+  const all=$('selall');if(all)all.indeterminate=nSel>0&&nSel<ids.length;
+  const hidden=checked.size-nSel;
+  $('bulk').classList.toggle('show',nSel>0);$('bulkn').textContent=nSel;
+  $('bulkt').textContent=' вибрано'+(hidden?` · ще ${hidden} приховано фільтром, їх дія не торкнеться`:'');
+  const inV=ids.includes(cur);
+  $('pos').textContent='рядок '+(cur+1)+' з '+rows.length+(a.length!==rows.length?' · показано '+a.length:'')+(inV?'':' · поточний поза фільтром');
 }
 function renderList(){
-  $('slist').innerHTML=vis().map(r=>`<div class="si ${r.i===cur?'sel':''}" data-i="${r.i}"><span class="sd ${effSt(r)}"></span><div><div class="a"><span>${r.i+1}</span><b>${r.w}</b><span>${r.k}</span></div><div class="s">${esc(r.s)}</div><div class="t">${r.t?esc(r.t):'—'}</div></div></div>`).join('');
+  const a=vis();
+  $('slist').innerHTML=a.length?a.map(r=>`<div class="si ${r.i===cur?'sel':''}" data-i="${r.i}"><span class="sd ${effSt(r)}" title="${stLabel(r)}"></span><div><div class="a"><span>${r.i+1}</span><b>${esc(r.w)}</b><span>${esc(r.k)}</span>${r.comments.length?cmI:''}</div><div class="s">${esc(r.s)}</div><div class="t">${r.t?esc(r.t):'—'}</div></div></div>`).join(''):emptyHTML;
 }
+function tmFor(r){
+  const W=s=>new Set((s.toLowerCase().replace(CODE,' ').match(/[a-z']+/g)||[]));
+  const A=W(r.s),pool=rows.filter(o=>o!==r&&o.t&&o.st!=='draft').map(o=>({s:o.s,t:o.t,src:'Map042.json · '+o.k})).concat(TMDB);
+  return pool.map(o=>{const B=W(o.s),it=[...A].filter(w=>B.has(w)).length,un=new Set([...A,...B]).size;return {o,sc:un?Math.round(100*it/un):0}})
+    .filter(x=>x.sc>=40).sort((a,b)=>b.sc-a.sc).slice(0,3);
+}
+let tmCur=[];
 function renderFocus(){
-  const r=rows[cur];
-  $('f-state').innerHTML=`<span class="sd ${effSt(r)}"></span>${stName[effSt(r)]}`;
-  $('f-key').textContent='Map042 › EV014 › '+r.k;
-  $('f-spk').textContent=r.w+' · '+r.s.length+' симв.';
+  const r=rows[cur],ids=visIds(),pos=ids.indexOf(cur);
+  $('f-state').innerHTML=`<span class="sd ${effSt(r)}"></span>${stLabel(r)}`;
+  $('f-key').textContent=r.path||('Map042 › EV014 › '+r.k);
+  $('f-queue').textContent=pos>=0?`${pos+1} з ${ids.length} у списку`:'';
+  $('f-off').hidden=pos>=0;
   $('f-src').innerHTML=markup(r.s);
-  const ta=$('i-tr');if(document.activeElement!==ta)ta.value=r.t;
+  const ta=$('i-tr');if(document.activeElement!==ta||ta.dataset.row!==String(cur)){ta.value=r.t;ta.dataset.row=cur}
   meter();
-  $('f-qa').innerHTML=(()=>{const q=qaIssues(r);if(!r.t)return '';if(!q.length)return '<div class="qa-row good"><span class="dot"></span>QA: проблем не знайдено</div>';
-    return q.map((x,n)=>`<div class="qa-row ${x.sev}"><span class="dot"></span><span>${x.msg}</span>${x.fix?`<button class="fix" data-fix="${n}">Замінити на «${x.fix}»</button>`:''}</div>`).join('')})();
+  const iss=qaIssues(r),ig=qaAll(r).filter(x=>r.ign.includes(x.key));
+  let h='';
+  if(r.t){
+    if(!iss.length)h+=`<div class="qa-row good"><span class="dot"></span>${ig.length?'QA: активних проблем немає':'QA: проблем не знайдено'}</div>`;
+    h+=iss.map((x,n)=>`<div class="qa-row ${x.sev}"><span class="dot"></span><span>${x.msg}</span>${x.fix?`<button class="fix" data-fix="${n}">Замінити «${esc(x.bad)}» на «${esc(x.fix)}»</button>`:''}${x.code?`<button class="fix" data-ins="${esc(x.code)}">Вставити ${esc(x.code)}</button>`:''}<button class="ign" data-ign="${n}" title="Не вважати проблемою для цього рядка">Ігнорувати</button></div>`).join('');
+    h+=ig.map((x,n)=>`<div class="qa-row muted"><span class="dot"></span><span>${x.msg}</span><span class="tagi">ігноровано</span><button class="ign" data-unign="${n}">Повернути</button></div>`).join('');
+  }
+  $('f-qa').innerHTML=h;
   const pf=$('f-proof');pf.hidden=stage!=='proof';
   if(stage==='proof')pf.innerHTML=`<div class="lbl">Версія перекладача</div><div class="t">${esc(r.orig||'—')}${r.orig!==r.t?'<span class="chg">змінено вичиткою</span>':''}</div>`;
-  $('b-save').childNodes[0].textContent=stage==='proof'?'Затвердити ':'Підтвердити ';
+  const bs=$('b-save'),lab=stage==='proof'?'Затвердити':'Надіслати на вичитку';bs.title=lab+' (Ctrl+Enter)';bs.setAttribute('aria-label',lab);
+  $('qa-badge').hidden=!r.t||!iss.length;$('qa-badge').textContent=iss.length;
   $('b-return').hidden=stage!=='proof';
-  $('f-hint').textContent=stage==='proof'?'Ви вичитуєте: правте текст прямо в полі':'Зберігається автоматично як чернетка';
-  $('f-tags').innerHTML=r.g.length?r.g.map(g=>tagH(g,1)).join(''):'<span style="color:var(--dim)">Тегів немає</span>';
-  const hits=gloss.filter(([e])=>new RegExp('\\b'+e+'\\b').test(r.s));
-  $('i-gl').innerHTML=hits.length?hits.map(([e,u,t])=>`<div class="gloss-row"><b>${e}</b><span class="arr">→</span><span>${u}</span><span class="t">${t}</span></div>`).join(''):'<div style="color:var(--mute)">Термінів немає</div>';
-  const base=r.s.split(' ').slice(0,4).join(' ');
-  $('i-tm').innerHTML=`<div class="sg"><span class="pc">100%</span><div>${r.t||'Тихіше, дівчино.'}<small>Map012.json · Максим · підтверджено</small></div></div><div class="sg"><span class="pc mid">82%</span><div>${r.t?'Тобі тут не місце, хлопче.':'Не так багато хто сюди заходить.'}<small>Map041.json · «${esc(base)}…»</small></div></div><div class="sg"><span class="pc mid">64%</span><div>Темрява пам'ятає кожного.<small>CommonEvents.json · Олена</small></div></div>`;
+  $('f-tags').innerHTML=r.g.length?r.g.map(g=>tagH(g,1)).join(''):'<span style="color:var(--mute)">Тегів немає</span>';
+  const hits=TERMS.filter(g=>new RegExp('\\b'+g.en+'\\b','i').test(r.s));
+  $('i-gl').innerHTML=hits.length?hits.map(g=>`<div class="gloss-row"><b>${g.en}</b><span class="arr">→</span><span>${g.uk}</span><span class="t">${T[g.type]}</span></div>`).join(''):'<div style="color:var(--mute)">Термінів немає</div>';
+  tmCur=tmFor(r);$('tm-n').textContent=tmCur.length?plural(tmCur.length,['збіг','збіги','збігів']):'';
+  $('i-tm').innerHTML=tmCur.length?tmCur.map((x,n)=>`<div class="sg" data-tm="${n}" role="button" tabindex="0" title="Підставити в переклад"><span class="pc ${x.sc>=90?'':'mid'}">${x.sc}%</span><div>${esc(x.o.t)}<small>${esc(x.o.src)} · «${esc(x.o.s.length>38?x.o.s.slice(0,38)+'…':x.o.s)}»</small></div></div>`).join(''):'<div style="color:var(--mute)">Збігів у пам’яті перекладів немає</div>';
   $('c-who').textContent=r.w;$('c-txt').innerHTML=markup(r.t||r.s);
-  $('c-near').innerHTML=[-2,-1,0,1,2].map(d=>rows[cur+d]).map((x,j)=>x?`<div class="${j===2?'me':''}"><span>${x.i+1}</span><span>${x.w}</span><span>${esc(x.s.length>34?x.s.slice(0,34)+'…':x.s)}</span></div>`:'').join('');
+  $('c-near').innerHTML=[-2,-1,0,1,2].map(d=>rows[cur+d]).map((x,j)=>x?`<div class="${j===2?'me':''}"><span>${x.i+1}</span><span>${esc(x.w)}</span><span>${esc(x.s.length>34?x.s.slice(0,34)+'…':x.s)}</span></div>`:'').join('');
+  $('cm-badge').textContent=r.comments.length;
+  $('cm-list').innerHTML=r.comments.length?r.comments.map(c=>`<div class="cm"><div class="av" style="background:${c.who==='Ви'?'#6b9bf2':c.who==='Олена'?'#e5a04b':'#56a8f5'}">${c.who[0]}</div><div><div class="h"><b>${esc(c.who)}</b>${esc(c.when)}</div><p>${esc(c.text)}</p></div></div>`).join(''):'<div style="color:var(--mute)">До цього рядка коментарів немає.</div>';
+  $('hist-list').innerHTML=r.hist.length?[...r.hist].reverse().map(x=>`<div><div class="h"><b>${esc(x.who)}</b> · ${esc(x.kind)} · ${esc(x.when)}</div>${x.text?`<div class="t">${esc(x.text)}</div>`:''}</div>`).join(''):'<div style="color:var(--mute)">Змін поки немає.</div>';
   renderList();
 }
-function meter(){
-  const n=$('i-tr').value.length;$('i-len').textContent=n+' / '+LIMIT;
-  const m=$('i-meter');m.classList.toggle('over',n>LIMIT);m.firstElementChild.style.width=Math.min(100,n/LIMIT*100)+'%';
-}
+function meter(){const t=$('i-tr').value,r=rows[cur],lim=limitOf(r),n=dispLen(t);$('c-ch').textContent=n+'/'+lim;$('cnt2').classList.toggle('over',n>lim)}
 function tagPopHTML(){
-  const all=rows.flatMap(r=>r.g),map={};all.forEach(g=>{const k=g[1];map[k]=map[k]||{t:g[0],n:0};map[k].n++});
-  return ['c','l','i','t'].map(t=>{const items=Object.entries(map).filter(([k,v])=>v.t===t);
-    return items.length?`<div class="group">${T[t]}</div>`+items.map(([k,v])=>`<div class="tgrow ${t} ${tagFilter===k?'on':''}" data-tagrow="${k}"><i></i>${k}<span class="n">${v.n}</span></div>`).join(''):''}).join('');
+  const map={};rows.flatMap(r=>r.g).forEach(g=>{map[g[1]]=map[g[1]]||{t:g[0],n:0};map[g[1]].n++});
+  return ['c','l','i','t'].map(t=>{const it=Object.entries(map).filter(([k,v])=>v.t===t);
+    return it.length?`<div class="group">${T[t]}</div>`+it.map(([k,v])=>`<div class="tgrow ${t} ${tagFilter===k?'on':''}" data-tagrow="${esc(k)}" role="button" tabindex="0"><i></i>${esc(k)}<span class="n">${v.n}</span></div>`).join(''):''}).join('');
 }
-function renderSide(){
-  $('tagpop').innerHTML=tagPopHTML();
-  const nAppr=rows.filter(r=>r.st==='appr').length;
-  $('ab-title').textContent=file;$('ab-sub').textContent=(stage==='proof'?'Вичитка':'Переклад')+' · '+nAppr+' / '+rows.length+' вичитано · EN → UK';
-  $('ab-stage').textContent=stage==='proof'?'Вичитка':'Переклад';
-  document.querySelectorAll('#stage button').forEach(b=>b.classList.toggle('on',b.dataset.st===stage));
-  $('proof-n').textContent=rows.filter(r=>r.st==='done').length;
-  const bb=$('bb-ok');if(bb)bb.textContent=stage==='proof'?'Затвердити вичитку':'Підтвердити';
+function renderGlossary(){
+  const s=$('gl-q').value.trim().toLowerCase();
+  const a=TERMS.filter(g=>!s||(g.en+g.uk+g.note).toLowerCase().includes(s));
+  $('gtb').innerHTML=a.length?a.map(g=>`<tr><td>${g.en}</td><td>${g.uk}</td><td style="color:var(--mute)">${T[g.type]}${g.note?' · '+esc(g.note):''}</td></tr>`).join(''):'<tr><td colspan="3" style="color:var(--mute)">Нічого не знайдено</td></tr>';
 }
-function renderAll(){renderSide();
+const treeData=[['d',0,'data'],['f',1,'Actors.json','json',100],['f',1,'Armors.json','json',100],['f',1,'Classes.json','json',100],['f',1,'CommonEvents.json','json',38],['f',1,'Enemies.json','json',64],['f',1,'Items.json','json',91],['f',1,'Skills.json','json',77],['f',1,'States.json','json',100],['f',1,'System.json','json',55],['f',1,'Troops.json','json',12],['d',1,'maps'],['f',2,'Map012.json','map',100],['f',2,'Map013.json','map',100],['f',2,'Map041.json','map',63],['f',2,'Map042.json','map',0,'cur'],['f',2,'Map043.json','map',0],['f',2,'Map044.json','map',0],['d',0,'js/plugins'],['d',0,'Глосарій та ПП'],['f',1,'glossary.tsv','gl',100],['f',1,'memory.tmx','gl',100]];
+function renderTree(){
+  const pct=Math.round(100*rows.filter(r=>r.st==='appr').length/rows.length);
+  let skip=null;
+  $('tree').innerHTML=treeData.map(n=>{
+    const [t,d,nm,ic,pc0,cl]=n;
+    if(skip!==null&&d>skip)return '';skip=null;
+    if(t==='d'){const c=collapsed.has(nm);if(c)skip=d;
+      return `<div class="node dir" style="--d:${d}" data-dir="${esc(nm)}" role="button" tabindex="0" aria-expanded="${!c}"><span class="chev">${c?'▸':'▾'}</span><span class="ic dir">▤</span><span class="nm">${nm}</span></div>`}
+    const pc=cl==='cur'?pct:pc0,lab={json:'{}',map:'MAP',gl:'Aa'}[ic];
+    return `<div class="node ${cl||''}" style="--d:${d}" data-file="${esc(nm)}" role="button" tabindex="0" title="${cl==='cur'?'Відкрито · вичитано '+pc+'%':'Вичитано '+pc+'%'}"><span class="chev"></span><span class="ic ${ic}">${lab}</span><span class="nm">${nm}</span><span class="mini"><i class="${pc==100?'f':''}" style="width:${pc}%"></i></span><span class="pc ${pc==100?'full':''}">${pc}%</span></div>`}).join('');
+}
+function renderStats(){
+  const n=rows.length,c=s=>rows.filter(r=>r.st===s).length,qa=rows.filter(r=>effSt(r)==='qa').length;
+  const A=PROJECT.otherAppr+c('appr'),D=PROJECT.otherDone+c('done'),W=PROJECT.otherDraft+c('draft'),tot=PROJECT.total;
+  $('pg-a').style.width=100*A/tot+'%';$('pg-b').style.width=100*D/tot+'%';$('pg-c').style.width=100*W/tot+'%';
+  $('pg-txt').textContent=Math.round(100*A/tot)+'% вичитано · '+(A+D+W).toLocaleString('uk-UA')+' / '+tot.toLocaleString('uk-UA');
+  $('pg').title=`Вичитано ${Math.round(100*A/tot)}% · Чекає вичитки ${Math.round(100*D/tot)}% · Чернетки ${Math.round(100*W/tot)}% · Решта без перекладу`;
+  $('sb-qa').textContent=qa?plural(qa,['проблема QA','проблеми QA','проблем QA']):'Проблем QA немає';$('sb-qa').className=qa?'bad':'ok';
+  $('sb-file').textContent=`Файл: ${c('appr')} / ${n} вичитано · ${c('done')} чекає вичитки`;
+  const mins=Math.max(0,Math.round((Date.now()-sess.t0)/60000));
+  $('sb-sess').textContent=`Сесія: ${sess.n} змін · ${mins} хв`;
+  const tb=$('tab-badge');tb.textContent=qa||'';tb.hidden=!qa;
+  $('proof-n').textContent=c('done');
+  $('st-sel').textContent='Рядок '+(cur+1)+' · '+stLabel(rows[cur]);
+  $('sb-save').textContent=!storageOk?'○ Автозбереження недоступне':savedAt?'● Збережено о '+new Date(savedAt).toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'● Зміни зберігаються автоматично';
+}
+function renderAll(){
+  $('tagpop').innerHTML=tagPopHTML();$('lp-tags').innerHTML=tagPopHTML();
   document.querySelectorAll('.chipsHost').forEach(h=>h.innerHTML=chipsHTML());
   $('tagfilter').innerHTML=tagFilterHTML();$('tagfilter2').innerHTML=tagFilterHTML();
-  renderTable();renderFocus();
-  $('st-sel').textContent='Рядок '+(cur+1)+' · '+stName[effSt(rows[cur])];
+  document.querySelectorAll('.xclr').forEach(b=>b.hidden=!q);
+  renderTree();renderTable();renderFocus();renderStats();scheduleSave();
 }
-function select(i){cur=Math.max(0,Math.min(rows.length-1,i));renderAll();document.querySelectorAll('.gr.sel,.si.sel').forEach(el=>el.scrollIntoView({block:'nearest'}))}
-function calcSize(){return 's'}
+/* ---------- persistence ---------- */
+const LS='transly-mock-v2';let saveT=null;
+function scheduleSave(){clearTimeout(saveT);saveT=setTimeout(save,350)}
+function save(){try{const at=Date.now();localStorage.setItem(LS,JSON.stringify({cur,at,d:rows.map(r=>({t:r.t,st:r.st,returned:r.returned,orig:r.orig,ign:r.ign,comments:r.comments,hist:r.hist}))}));savedAt=at}catch(e){storageOk=false}renderStats()}
+function load(){try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j&&j.d&&j.d.length===rows.length){j.d.forEach((x,i)=>Object.assign(rows[i],x));cur=j.cur??cur;savedAt=j.at||null}}catch(e){storageOk=false}}
+function resetDemo(){try{localStorage.removeItem(LS)}catch(e){}
+  const s=JSON.parse(SEED);s.forEach((x,i)=>{const r=rows[i];r.t=x.t;r.st=x.st;r.orig=x.t;r.returned=false;r.ign=[];r.comments=x.comments||[];r.hist=x.t?[{who:x.st==='appr'?'Олена':'Максим',kind:x.st==='appr'?'вичитка':'переклад',when:'раніше',text:x.t}]:[]});
+  cur=5;checked.clear();lastUndo=null;savedAt=null;sess.n=0;renderAll();toast('Демо-дані відновлено')}
+/* ---------- navigation helpers ---------- */
+const scrollSel=()=>document.querySelectorAll('.gr.sel,.si.sel').forEach(el=>el.scrollIntoView({block:'nearest'}));
+function select(i,keepAnchor){cur=Math.max(0,Math.min(rows.length-1,i));if(!keepAnchor)anchor=cur;renderAll();scrollSel()}
+function step(d){const ids=visIds();if(!ids.length)return toast('Список порожній');
+  const p=ids.indexOf(cur);
+  if(p<0)cur=d>0?ids[0]:ids[ids.length-1];
+  else{const np=p+d;if(np<0||np>=ids.length)return toast(d>0?'Це останній рядок у списку':'Це перший рядок у списку');cur=ids[np]}
+  anchor=cur;renderAll();scrollSel()}
+function nextIdAfterCur(){const ids=visIds(),p=ids.indexOf(cur);return p>=0&&p<ids.length-1?ids[p+1]:(p<0&&ids.length?ids[0]:null)}
+const POPS=['tagpop','keypop','menupop'];
+const anyPop=()=>POPS.some(id=>!$(id).hidden);
+function closePops(){POPS.forEach(id=>{$(id).hidden=true})}
+function openPop(id,btn,align){const p=$(id),was=!p.hidden;closePops();if(was)return;
+  const rc=btn.getBoundingClientRect(),w=id==='keypop'?360:250;p.hidden=false;
+  p.style.left=Math.max(8,Math.min(align==='right'?rc.right-w:rc.left,innerWidth-w-8))+'px';p.style.top=(rc.bottom+4)+'px'}
+let menuBtn=null;
+function menu(btn,items){const same=!$('menupop').hidden&&menuBtn===btn;closePops();if(same)return;menuBtn=btn;$('menupop').innerHTML=items.map(x=>`<button ${x.act?`data-act="${x.act}"`:`data-soon="${esc(x.t)}"`}>${x.t}</button>`).join('');openPop('menupop',btn)}
 function layout(){
-  const m=sz==='s'?'focus':mode;
-  document.querySelector('.ide').className='ide mode-'+m+' sz-'+sz+' cv-'+cv+(lp?' lp-open':' lp-closed')+(sheet?' sheet-open':'');
+  document.querySelector('.ide').className='ide mode-'+(mode==='table'?'table':'focus')+(lp?' lp-open':' lp-closed');
   document.querySelectorAll('#strip button').forEach(b=>b.classList.toggle('on',b.dataset.lp===lp));
-  document.querySelectorAll('#bnav button').forEach(b=>b.classList.toggle('on',sheet?b.dataset.cv==='more':b.dataset.cv===cv));
-  $('tagpop').hidden=true;
+  $('tree').hidden=lp!=='files';$('lp-tags').hidden=lp!=='tags';$('lp-rows').hidden=lp!=='rows';
+  $('lp-title').textContent={files:'Файли гри',tags:'Теги · фільтр за темою',rows:'Рядки · Map042.json'}[lp]||'';
+  closePops();
 }
-function setMode(m){mode=m;if(sz==='x')lp=m==='focus'?null:(lp||'files');else lp=null;layout();
-  document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
-  renderAll();if(m==='focus'&&sz==='x')$('i-tr').focus();else document.querySelectorAll('.gr.sel').forEach(el=>el.scrollIntoView({block:'nearest'}))}
-function onResize(){const n=calcSize();if(n===sz)return;sz=n;lp=sz==='x'?(mode==='focus'?null:'files'):null;sheet=false;layout();renderAll()}
-addEventListener('resize',onResize);
-
+function setMode(m){mode=m;stage=m==='proof'?'proof':'tr';lp=lpBy[m];layout();
+  document.querySelectorAll('#seg button').forEach(b=>{const on=b.dataset.m===m;b.classList.toggle('on',on);b.setAttribute('aria-selected',on)});
+  renderAll();if(m!=='table')$('i-tr').focus();else scrollSel()}
+function resetFilters(){filter='all';pfilter='all';tagFilter=null;q='';document.querySelectorAll('.qin').forEach(x=>x.value='');if(mode==='proof')pfilter='done';renderAll()}
+function startInline(i){
+  const cell=document.querySelector(`.gr[data-i="${i}"] .tr`);if(!cell||inline!==null)return;inline=i;
+  const ta=document.createElement('textarea');ta.className='cell-ed';ta.rows=2;ta.value=rows[i].t;ta.setAttribute('aria-label','Переклад рядка '+(i+1));
+  cell.innerHTML='';cell.appendChild(ta);ta.focus();ta.select();
+  let cancelled=false;
+  ta.addEventListener('blur',()=>{inline=null;if(!cancelled&&ta.value!==rows[i].t){lastUndo=snap([i]);editText(rows[i],ta.value);note(rows[i],'правка в таблиці',ta.value)}renderAll()});
+  ta.addEventListener('keydown',ev=>{ev.stopPropagation();
+    if(ev.key==='Enter'&&!ev.shiftKey){ev.preventDefault();ta.blur()}
+    else if(ev.key==='Escape'){cancelled=true;ta.blur()}});
+}
+function insertAtCaret(text){const t=$('i-tr');const p=t.selectionStart==null?t.value.length:t.selectionStart;
+  t.value=t.value.slice(0,p)+text+t.value.slice(p);t.dispatchEvent(new Event('input'));t.dispatchEvent(new Event('change'));t.focus();t.setSelectionRange(p+text.length,p+text.length)}
+/* ---------- actions ---------- */
+function primary(){
+  const r=rows[cur],n=cur+1,u=snap([cur]),nid=nextIdAfterCur(),why=submitRow(r);
+  if(why)return toast(why);
+  const warn=qaIssues(r).length;lastUndo=u;
+  const last=nid===null;if(!last)cur=nid;anchor=cur;renderAll();scrollSel();
+  toast((stage==='proof'?'Рядок '+n+' вичитано':'Рядок '+n+' надіслано на вичитку')+(warn?' (є застереження QA)':'')+(last?'. Це був останній рядок у списку':''),true);
+}
+function bulk(){
+  const idx=visIds().filter(i=>checked.has(i)),u=snap(idx);let ok=0;const sk={};
+  idx.forEach(i=>{const why=submitRow(rows[i]);if(why){const k=why.startsWith('Є помилка')?'з помилками QA':why==='Рядок порожній'?'порожні':'вже відправлені/вичитані';sk[k]=(sk[k]||0)+1}else ok++});
+  if(ok)lastUndo=u;checked.clear();renderAll();
+  const sks=Object.entries(sk);toast('Надіслано на вичитку: '+ok+(sks.length?'. Пропущено: '+sks.map(([k,v])=>k+' '+v).join(', '):''),ok>0);
+}
+/* ---------- events ---------- */
 document.addEventListener('click',e=>{
-  if(!e.target.closest('#tagpop,#tagbtn,#tagbtn2'))$('tagpop').hidden=true;
-  const tb=e.target.closest('#tagbtn,#tagbtn2');if(tb){const p=$('tagpop'),rc=tb.getBoundingClientRect();p.hidden=!p.hidden;p.style.left=Math.max(8,Math.min(rc.left,innerWidth-258))+'px';p.style.top=(rc.bottom+4)+'px';return}
-  if(e.target.closest('#scrim,#sh-x')){sheet=false;if(sz==='m')lp=null;return layout()}
-  if(e.target.closest('#b-sheet')){sheet=true;return layout()}
-  if(e.target.closest('#ab-menu')){lp=lp?null:'files';return layout()}
-  if(e.target.closest('#ab-stage')){stage=stage==='tr'?'proof':'tr';filter=stage==='proof'?'done':'all';return renderAll()}
-  const bn=e.target.closest('#bnav [data-cv]');if(bn){if(bn.dataset.cv==='more'){sheet=true}else{cv=bn.dataset.cv;sheet=false}return layout()}
-  const nd=e.target.closest('#tree .node');if(nd&&sz!=='x'&&!nd.querySelector('.ic.dir')){file=nd.querySelector('.nm').textContent;lp=null;cv='list';renderAll();return layout()}
-  const fx=e.target.closest('[data-fix]');if(fx){const r=rows[cur],q=qaIssues(r)[+fx.dataset.fix];
-    const g=gloss.find(x=>x[1]===q.fix);r.t=r.t.replace(/(Морок|Мороку|Мороком)/,q.fix);r.t=r.t.includes(q.fix)?r.t:r.t+' ('+q.fix+')';return renderAll()}
-  const stg=e.target.closest('#stage [data-st]');if(stg){stage=stg.dataset.st;filter=stage==='proof'?'done':'all';return renderAll()}
-  const lb=e.target.closest('#strip [data-lp]');if(lb){lp=(lp===lb.dataset.lp)?null:lb.dataset.lp;return layout()}
-  if(e.target.closest('#lp-close')){lp=null;return layout()}
-  const tgr=e.target.closest('[data-tagrow]');if(tgr){$('tagpop').hidden=true;tagFilter=tagFilter===tgr.dataset.tagrow?null:tgr.dataset.tagrow;filter='all';return renderAll()}
-  const sg=e.target.closest('#seg [data-m]');if(sg)return setMode(sg.dataset.m);
-  if(e.target.closest('#f-back'))return setMode('table');
-  if(e.target.closest('[data-cleartag]')){tagFilter=null;return renderAll()}
-  const tg=e.target.closest('[data-tag]');if(tg){tagFilter=tg.dataset.tag;filter='all';return renderAll()}
-  const ch=e.target.closest('.chip[data-f]');if(ch){filter=ch.dataset.f;return renderAll()}
-  const s=e.target.closest('[data-s]');
-  if(s){const k=s.dataset.s;if(sortKey===k)sortDir=-sortDir;else{sortKey=k;sortDir=1}return renderTable()}
-  const si=e.target.closest('.si');if(si){if(sz==='s'){cv='edit';layout()}return select(+si.dataset.i)}
-  const r=e.target.closest('.gr');
+  const t=e.target;
+  if(t.closest('#toast-undo'))return undo();
+  if(!t.closest('.pop,[data-popbtn]'))closePops();
+  const so=t.closest('[data-soon]');if(so){closePops();return toast('Недоступно в макеті: '+so.dataset.soon)}
+  const ac=t.closest('[data-act]');if(ac){closePops();if(ac.dataset.act==='reset')return resetDemo();if(ac.dataset.act==='qa'){mode!=='table'&&setMode('table');filter='qa';return renderAll()}}
+  if(t.closest('#hamb'))return menu(t.closest('#hamb'),['Файл','Правка','Вигляд','Навігація','Переклад','Глосарій','QA','Інструменти','Довідка'].map(x=>({t:x})));
+  if(t.closest('#more'))return menu(t.closest('#more'),[{t:'Показати проблеми QA',act:'qa'},{t:'Синхронізувати з грою'},{t:'Експорт у файли гри…'},{t:'Імпорт ПП…'},{t:'Скинути демо-дані',act:'reset'}]);
+  if(t.closest('#hk'))return openPop('keypop',t.closest('#hk'),'right');
+  const tb=t.closest('#tagbtn,#tagbtn2');if(tb)return openPop('tagpop',tb);
+  if(t.closest('[data-reset]'))return resetFilters();
+  const xc=t.closest('.xclr');if(xc){q='';document.querySelectorAll('.qin').forEach(x=>x.value='');renderAll();return}
+  const ig=t.closest('[data-ign]');if(ig){const r=rows[cur],x=qaIssues(r)[+ig.dataset.ign];lastUndo=snap([cur]);r.ign.push(x.key);note(r,'проблему проігноровано',x.msg);renderAll();return toast('Проблему проігноровано для цього рядка',true)}
+  const un=t.closest('[data-unign]');if(un){const r=rows[cur],x=qaAll(r).filter(y=>r.ign.includes(y.key))[+un.dataset.unign];r.ign=r.ign.filter(k=>k!==x.key);return renderAll()}
+  const fx=t.closest('[data-fix]');if(fx){const r=rows[cur],x=qaIssues(r)[+fx.dataset.fix],g=TERMS.find(y=>y.en===x.term);
+    lastUndo=snap([cur]);editText(r,r.t.replace(g.bad,x.fix));note(r,'заміна за глосарієм',r.t);renderAll();return toast('Замінено «'+x.bad+'» на «'+x.fix+'»',true)}
+  const ins=t.closest('[data-ins]');if(ins)return insertAtCaret(ins.dataset.ins);
+  const tm=t.closest('[data-tm]');if(tm){const x=tmCur[+tm.dataset.tm],r=rows[cur];lastUndo=snap([cur]);editText(r,x.o.t);note(r,'з пам’яті перекладів',r.t);renderAll();return toast('Підставлено збіг '+x.sc+'%',true)}
+  const lb=t.closest('#strip [data-lp]');if(lb){lp=lpBy[mode]=(lp===lb.dataset.lp)?null:lb.dataset.lp;return layout()}
+  if(t.closest('#lp-close')){lp=lpBy[mode]=null;return layout()}
+  const dir=t.closest('[data-dir]');if(dir){const n=dir.dataset.dir;collapsed.has(n)?collapsed.delete(n):collapsed.add(n);return renderTree()}
+  const fl=t.closest('[data-file]');if(fl){if(fl.dataset.file!=='Map042.json')toast('У макеті доступний лише Map042.json');return}
+  const tgr=t.closest('[data-tagrow]');if(tgr){closePops();tagFilter=tagFilter===tgr.dataset.tagrow?null:tgr.dataset.tagrow;return renderAll()}
+  const sg=t.closest('#seg [data-m]');if(sg)return setMode(sg.dataset.m);
+  if(t.closest('#f-back'))return setMode('table');
+  if(t.closest('[data-cleartag]')){tagFilter=null;return renderAll()}
+  const tg=t.closest('[data-tag]');if(tg){tagFilter=tg.dataset.tag;return renderAll()}
+  const ch=t.closest('.chip[data-f]');if(ch){if(mode==='proof')pfilter=ch.dataset.f;else filter=ch.dataset.f;return renderAll()}
+  if(t.closest('#bb-ok'))return bulk();
+  if(t.closest('#bb-clear')){checked.clear();return renderTable()}
+  if(t.closest('#cm-add')){const ta=$('cm-in'),v=ta.value.trim();if(!v)return toast('Напишіть текст коментаря');const r=rows[cur];lastUndo=snap([cur]);r.comments.push({who:'Ви',when:'щойно',text:v});note(r,'коментар',v);ta.value='';renderAll();return}
+  const s=t.closest('[data-s]');
+  if(s){const k=s.dataset.s;if(sortKey!==k){sortKey=k;sortDir=1}else if(sortDir===1)sortDir=-1;else{sortKey=null;sortDir=1}return renderAll()}
+  if(t.closest('#selall')){const ids=visIds(),all=ids.every(i=>checked.has(i));ids.forEach(i=>all?checked.delete(i):checked.add(i));return renderTable()}
+  const si=t.closest('.si');if(si){const i=+si.dataset.i;return select(i)}
+  const r=t.closest('.gr');
   if(r){const i=+r.dataset.i;
-    if(e.target.closest('.ln')){checked.has(i)?checked.delete(i):checked.add(i);return renderTable()}
-    if(e.shiftKey){for(let x=Math.min(cur,i);x<=Math.max(cur,i);x++)checked.add(x);return renderTable()}
-    return select(i)}
+    if(t.closest('.ln')){if(e.shiftKey&&anchor!==null){const ids=visIds(),a=ids.indexOf(anchor),b=ids.indexOf(i);if(a>=0&&b>=0)ids.slice(Math.min(a,b),Math.max(a,b)+1).forEach(x=>checked.add(x));else checked.add(i)}else{checked.has(i)?checked.delete(i):checked.add(i);anchor=i}return renderTable()}
+    if(e.shiftKey){const ids=visIds(),a=ids.indexOf(anchor===null?cur:anchor),b=ids.indexOf(i);if(a>=0&&b>=0)ids.slice(Math.min(a,b),Math.max(a,b)+1).forEach(x=>checked.add(x));return renderTable()}
+    select(i);
+    if(e.detail===2&&t.closest('.tr'))startInline(i);
+    return}
 });
-/* inline edit in the table (double click) */
-$('grid').addEventListener('dblclick',e=>{
-  const c=e.target.closest('.gr .tr');if(!c)return;
-  const i=+c.parentElement.dataset.i;cur=i;
-  const ta=document.createElement('textarea');ta.className='cell-ed';ta.rows=2;ta.value=rows[i].t;
-  c.innerHTML='';c.appendChild(ta);ta.focus();
-  const done=()=>{rows[i].t=ta.value;rows[i].st=ta.value?(rows[i].st==='new'?'draft':rows[i].st):'new';renderAll()};
-  ta.addEventListener('blur',done);
-  ta.addEventListener('keydown',ev=>{if(ev.key==='Enter'&&!ev.shiftKey){ev.preventDefault();ta.blur()}if(ev.key==='Escape'){ta.value=rows[i].t;ta.blur()}});
-});
-document.querySelectorAll('.qin').forEach(q=>q.addEventListener('input',e=>{document.querySelectorAll('.qin').forEach(x=>{if(x!==q)x.value=q.value});$('q').value=q.value;renderAll();q.focus()}));
-$('i-tr').addEventListener('input',e=>{const r=rows[cur];r.t=e.target.value;r.st=r.t?(r.st==='new'?'draft':r.st):'new';meter();renderTable();renderList();$('f-state').innerHTML=`<span class="sd ${effSt(r)}"></span>${stName[effSt(r)]}`});
-function advance(st){const r=rows[cur];if(!r.t)return;r.st=st;cur=Math.min(rows.length-1,cur+1);renderAll()}
-const primary=()=>advance(stage==='proof'?'appr':'done');
-$('b-save').onclick=primary;$('b-return').onclick=()=>advance('draft');
-$('f-prev').onclick=$('b-prev').onclick=()=>select(cur-1);$('f-next').onclick=$('b-next').onclick=()=>select(cur+1);
+document.querySelectorAll('.qin').forEach(el=>el.addEventListener('input',()=>{q=el.value;document.querySelectorAll('.qin').forEach(x=>{if(x!==el)x.value=q});renderAll();el.focus()}));
+$('gl-q').addEventListener('input',renderGlossary);
+const ta=$('i-tr');
+ta.addEventListener('input',()=>{const r=rows[cur];editText(r,ta.value);renderAll()});
+ta.addEventListener('change',()=>{const r=rows[cur];if(r.t!==(r.hist[r.hist.length-1]||{}).text){note(r,'правка',r.t);renderStats()}});
+$('b-copy').onclick=()=>{const r=rows[cur];lastUndo=snap([cur]);editText(r,r.s);note(r,'оригінал скопійовано',r.t);renderAll();$('i-tr').focus();toast('Оригінал скопійовано в переклад',true)};
+$('b-clear').onclick=()=>{const r=rows[cur];if(!r.t)return;lastUndo=snap([cur]);editText(r,'');note(r,'переклад очищено');renderAll();$('i-tr').focus();toast('Переклад очищено',true)};
+$('b-code').onclick=()=>{const m=qaAll(rows[cur]).find(x=>x.code);insertAtCaret(m?m.code:'\\C[0]')};
+$('b-save').onclick=primary;
+$('b-return').onclick=()=>{const r=rows[cur],n=cur+1;if(r.st!=='done')return toast('Рядок не очікує вичитки');lastUndo=snap([cur]);const nid=nextIdAfterCur();r.st='draft';r.returned=true;note(r,'повернено перекладачу');if(nid!==null)cur=nid;anchor=cur;renderAll();toast('Рядок '+n+' повернено перекладачу',true)};
+$('f-prev').onclick=()=>step(-1);$('f-next').onclick=()=>step(1);
 document.addEventListener('keydown',e=>{
-  const inEd=e.target.matches('textarea,input');
-  if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();primary()}
-  else if(e.key==='Escape'&&mode==='focus'){setMode('table')}
-  else if(!inEd&&e.key==='ArrowDown'){e.preventDefault();select(cur+1)}
-  else if(!inEd&&e.key==='ArrowUp'){e.preventDefault();select(cur-1)}
-  else if(!inEd&&e.key==='Enter'&&mode==='table'){setMode('focus')}
+  const inEd=e.target.matches('textarea,input'),onCtl=e.target.closest('button,a,[role=button]');
+  if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();if(inline===null)primary()}
+  else if(e.key==='Escape'){
+    if(anyPop())closePops();
+    else if(inEd&&e.target.classList.contains('qin')&&e.target.value){e.target.value='';q='';document.querySelectorAll('.qin').forEach(x=>x.value='');renderAll()}
+    else if(mode==='table'&&checked.size){checked.clear();renderTable()}
+    else if(mode!=='table')setMode('table')}
+  else if(!inEd&&e.key==='ArrowDown'){e.preventDefault();step(1)}
+  else if(!inEd&&e.key==='ArrowUp'){e.preventDefault();step(-1)}
+  else if(!inEd&&!onCtl&&e.key==='Enter'&&mode==='table'){e.preventDefault();setMode('focus')}
+  else if(!inEd&&(e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();undo()}
+  else if(!inEd&&e.key==='Enter'&&onCtl&&onCtl.matches('[role=button]')&&!onCtl.matches('button')){e.preventDefault();onCtl.click()}
 });
-document.querySelectorAll('[data-bb]').forEach(b=>b.addEventListener('click',()=>{checked.forEach(i=>{if(rows[i].t)rows[i].st=stage==='proof'?'appr':'done'});checked.clear();renderAll()}));
-/* sidebar tabs */
 const stabs=$('stabs');stabs.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
-  stabs.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
-  stabs.querySelectorAll('button').forEach(x=>$(x.dataset.p).classList.toggle('on',x===b));}));
-$('gtb').innerHTML=[['Sylvian','Сильвіан','Божество'],['Rher','Рер','Божество'],['Dark','Темрява','Поняття'],['Marina','Марина','Персонаж'],['Levi','Леві','Персонаж'],['Soul','Душа','Механіка'],['Gatekeeper','Вартовий брами','Титул'],['Cellar','Підвал','Локація']].map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td style="color:var(--mute)">${r[2]}</td></tr>`).join('');
-sz=calcSize();if(sz!=='x')lp=null;layout();renderAll();
+  stabs.querySelectorAll('button').forEach(x=>{x.classList.toggle('on',x===b);x.setAttribute('aria-selected',x===b);$(x.dataset.p).classList.toggle('on',x===b)})}));
+function posGlow(){const p=document.querySelector('.tpill .pj').getBoundingClientRect(),i=document.querySelector('.ide'),r=i.getBoundingClientRect();i.style.setProperty('--gx',(p.left+p.width/2-r.left)+'px');i.style.setProperty('--gy',(p.top+p.height/2-r.top)+'px')}
+function onResize(){$('narrow').hidden=innerWidth>=1180;posGlow()}
+load();layout();renderGlossary();renderAll();onResize();
+addEventListener('resize',onResize);if(document.fonts)document.fonts.ready.then(posGlow);
+setInterval(renderStats,30000);
+</script>
+<script>
+/* mobile shell on top of the shared logic */
+(function(){
+  let sheet=false;const I=()=>document.querySelector('.ide');
+  const baseLayout=layout;
+  layout=function(){baseLayout();const el=I();el.classList.add('sz-s');el.classList.toggle('sheet-open',sheet);
+    document.querySelectorAll('#bnav button').forEach(b=>{const on=sheet?b.dataset.nav==='sheet':(b.dataset.nav==='edit'?!lp:b.dataset.nav===lp);b.classList.toggle('on',on)});
+    const st=document.getElementById('ab-stage');st.textContent=stage==='proof'?'Вичитка':'Переклад';
+    document.getElementById('ab-sub').textContent=(stage==='proof'?'Вичитка':'Переклад')+' · '+rows.filter(r=>r.st==='appr').length+' / '+rows.length+' вичитано'};
+  const baseMode=setMode;setMode=function(m){baseMode(m==='table'?'focus':m)};
+  lpBy.focus=null;lpBy.proof=null;lpBy.table=null;mode='focus';stage='tr';lp=null;
+  document.addEventListener('click',e=>{const t=e.target;
+    const nv=t.closest('#bnav [data-nav]');
+    if(nv){const n=nv.dataset.nav;if(n==='sheet'){sheet=true}else{sheet=false;lp=lpBy[mode]=n==='edit'?null:n}layout();return}
+    if(t.closest('#scrim')){sheet=false;layout();return}
+    if(t.closest('#ab-stage')){setMode(mode==='proof'?'focus':'proof');return}
+    if(t.closest('.si')){lp=lpBy[mode]=null;layout();return}
+    if(t.closest('[data-file="Map042.json"]')){lp=lpBy[mode]='rows';layout();return}
+    if(t.closest('#ab-more')){const b=document.getElementById('ab-more');menu(b,[{t:'Показати проблеми QA',act:'qa'},{t:'Синхронізувати з грою'},{t:'Експорт у файли гри…'},{t:'Скинути демо-дані',act:'reset'}]);return}
+  });
+  setMode('focus');layout();
+})();
 </script>

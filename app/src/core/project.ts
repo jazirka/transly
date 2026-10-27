@@ -1,3 +1,4 @@
+import type { GlossaryTerm } from './glossary';
 import { extract } from './rpgmaker';
 import { merge } from './merge';
 import type { Entry, GameFile, Translations, Unit } from './model';
@@ -15,7 +16,7 @@ export interface SavedProject {
   /** Imported translation memory pairs. */
   memory: { s: string; t: string; mt: number }[];
   /** Project glossary. */
-  terms: { en: string; uk: string; mt: number }[];
+  terms: GlossaryTerm[];
   settings: ProjectSettings;
   /**
    * Copy of the original strings as of the last time the game folder was read. Lets the app (and a phone

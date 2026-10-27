@@ -1,9 +1,10 @@
 import { displayLength, missingCodes } from './controlCodes';
+import { hasTerm, targetHasTerm } from './glossary';
 import type { Unit } from './model';
 
 export type Severity = 'bad' | 'warn';
 export interface Issue { key: 'codes' | 'len' | 'term' | 'empty-src-changed'; severity: Severity; message: string }
-export interface Term { en: string; uk: string }
+export interface Term { en: string; uk: string; alt?: string[]; /** false = hint only */ qa?: boolean }
 export interface QaOptions { tolerancePct: number; terms: Term[] }
 
 export const DEFAULT_QA: QaOptions = { tolerancePct: 25, terms: [] };
@@ -24,10 +25,10 @@ export function check(unit: Pick<Unit, 'source'>, target: string, opts: QaOption
   if (Math.abs(dev) > opts.tolerancePct) {
     out.push({ key: 'len', severity: 'warn', message: `Довжина відрізняється від оригіналу на ${dev > 0 ? '+' : ''}${dev}%. Рекомендація: якнайближче до оригіналу` });
   }
-  const lower = unit.source.toLowerCase();
   for (const t of opts.terms) {
-    if (lower.includes(t.en.toLowerCase()) && !target.toLowerCase().includes(t.uk.toLowerCase())) {
-      out.push({ key: 'term', severity: 'warn', message: `Термін «${t.en}» має бути «${t.uk}» за глосарієм` });
+    if (t.qa === false) continue;
+    if (hasTerm(unit.source, t.en) && !targetHasTerm(target, t.uk, t.alt)) {
+      out.push({ key: 'term', severity: 'warn', message: `Термін «${t.en}» має бути «${[t.uk, ...(t.alt ?? [])].join('» або «')}» за глосарієм` });
     }
   }
   return out;

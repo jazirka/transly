@@ -1,7 +1,7 @@
 import { Autosave, DupIndex, build, check, edit, emptyProject, note, propagate, readGame, reconcile, snapshotOf, sourceChanged, statsOf, submit, viewsFromSnapshot } from '../core';
 import type { Entry, GameFile, SavedProject, Status, Unit } from '../core';
 import { $, el, esc, plural, toast } from './dom';
-import { STATUS_LABEL, onEditorClick, onEditorInput, onEditorSubmit, renderEditor, send, step } from './edit';
+import { STATUS_LABEL, onEditorClick, setGlossQuery, onEditorInput, onEditorSubmit, renderEditor, send, step } from './edit';
 import { applyToGame, dataDirOf, isDesktop, launchGame, pickExe, rememberedExe, rememberedGameDir, reopenGameDirDesktop, restoreGame } from './desktop';
 import { canWriteFolder, downloadZip, writeToFolder } from './export';
 import { pickGameFolder, readFiles, reopenHandle } from './folder';
@@ -331,6 +331,12 @@ export async function start(root: HTMLElement): Promise<void> {
       s.cur = u.key;
       updateRow(t.closest<HTMLElement>('.row')!, u, ents[u.key]);
       ctx.persist(); ctx.invalidateTm();
+    } else if (t.id === 'gl-q') {
+      setGlossQuery((t as HTMLInputElement).value);
+      const pos = (t as HTMLInputElement).selectionStart ?? 0;
+      renderMain();
+      const g = $('#gl-q') as HTMLInputElement;
+      g.focus(); g.setSelectionRange(pos, pos);
     } else if (t.id === 'q') {
       s.q = (t as HTMLInputElement).value;
       const pos = (t as HTMLInputElement).selectionStart ?? s.q.length;

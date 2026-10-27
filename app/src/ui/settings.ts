@@ -1,4 +1,5 @@
-import { DEFAULT_SETTINGS, deserialize, emptyProject, mergeProjects, parseTerms, serialize } from '../core';
+import { DEFAULT_SETTINGS, deserialize, emptyProject, mergeProjects, parseDelimited, parseHtmlTable, parseTerms, serialize, termsFromTable } from '../core';
+import type { GlossaryTerm } from '../core';
 import { $, el, esc, plural, toast } from './dom';
 import type { Ctx } from './state';
 import { describe, loadSyncConfig, runSync, saveSyncConfig, syncConfigured } from './sync';
@@ -24,7 +25,11 @@ export function openSettings(ctx: Ctx, onReset: () => void, onImport: () => void
     <label class="chk"><input type="checkbox" id="st-block" ${st.blockErrors ? 'checked' : ''}> Не надсилати рядок із помилкою QA</label>
     <label class="chk"><input type="checkbox" id="st-prop" ${st.propagate ? 'checked' : ''}> Переносити переклад в однакові рядки (інші файли теж)</label>
     <p class="hint">Довжина не обмежується: застосунок лише попереджає, коли переклад дуже відрізняється від оригіналу.</p>
-    <details><summary>Імпорт глосарію</summary><p class="hint">Рядки «англійською, табуляція, українською».</p><textarea id="st-terms" rows="5" aria-label="Терміни для імпорту"></textarea><button class="btn" type="button" id="st-terms-go">Імпортувати терміни</button></details>
+    <details><summary>Імпорт глосарію</summary>
+      <p class="hint">З файлу: таблиця Google Sheets, збережена як веб-сторінка (.html), або .csv / .tsv із колонками «Оригінал», «Переклад 1…», «Опис», «Розділ».</p>
+      <label class="chk"><input type="checkbox" id="st-terms-qa"> Перевіряти ці терміни в QA (для великого загального словника краще вимкнути: він лише підказує)</label>
+      <div class="acts l"><button class="btn" type="button" id="st-terms-file-btn">Імпортувати з файлу…</button></div><input type="file" id="st-terms-file" accept=".html,.htm,.csv,.tsv,.txt,text/html,text/csv,text/plain" hidden>
+      <p class="hint">Або вставте рядки «англійською, табуляція, українською»:</p><textarea id="st-terms" rows="4" aria-label="Терміни для імпорту"></textarea><button class="btn" type="button" id="st-terms-go">Імпортувати вставлені терміни</button></details>
     <details><summary>Імпорт пам’яті перекладів</summary><p class="hint">Рядки «оригінал, табуляція, переклад».</p><textarea id="st-tm" rows="5" aria-label="Пари для імпорту"></textarea><button class="btn" type="button" id="st-tm-go">Імпортувати пари</button></details>
     <details><summary>Синхронізація пристроїв</summary><p class="hint">Через ваш власний проміжний сервер (<code>node server/relay.ts</code>): він лише передає зашифровані дані й забуває їх. Без чужих хмар. Дані шифруються паролем на пристроях. Для адреси в інтернеті потрібен https.</p>
       <div class="grid"><label for="sy-url">Адреса сервера</label><input id="sy-url" type="url" placeholder="https://sync.example.com або http://192.168.0.14:7421" value="${esc(sync.url)}">
@@ -45,6 +50,34 @@ export function openSettings(ctx: Ctx, onReset: () => void, onImport: () => void
     st.who = ($('#st-who', dlg) as HTMLInputElement).value.trim() || DEFAULT_SETTINGS.who;
     ctx.s.who = st.who;
     ctx.persist(); ctx.render(); toast('Налаштування збережено');
+  });
+  const addTerms = (terms: GlossaryTerm[]): { added: number; merged: number } => {
+    let added = 0, merged = 0;
+    const have = new Map(ctx.s.saved.terms.map(t => [t.en.toLowerCase(), t]));
+    for (const t of terms) {
+      const cur = have.get(t.en.toLowerCase());
+      if (!cur) { ctx.s.saved.terms.push(t); have.set(t.en.toLowerCase(), t); added++; continue; }
+      const known = new Set([cur.uk, ...(cur.alt ?? [])].map(x => x.toLowerCase()));
+      const more = [t.uk, ...(t.alt ?? [])].filter(x => !known.has(x.toLowerCase()));
+      if (more.length) { cur.alt = [...(cur.alt ?? []), ...more]; cur.mt = Date.now(); merged++; }
+    }
+    ctx.persist(); ctx.render();
+    return { added, merged };
+  };
+  const termsFile = $('#st-terms-file', dlg) as HTMLInputElement;
+  $('#st-terms-file-btn', dlg).addEventListener('click', () => termsFile.click());
+  termsFile.addEventListener('change', async () => {
+    const f = termsFile.files?.[0];
+    if (!f) return;
+    try {
+      const text = await f.text();
+      const rows = /\.html?$/i.test(f.name) || /<table/i.test(text.slice(0, 5000)) ? parseHtmlTable(text) : parseDelimited(text);
+      const { terms, skipped } = termsFromTable(rows, Date.now(), ($('#st-terms-qa', dlg) as HTMLInputElement).checked);
+      if (!terms.length) { toast('У файлі не знайдено термінів: потрібна колонка «Оригінал» і хоча б одна «Переклад»'); return; }
+      const r = addTerms(terms);
+      toast(`Додано термінів: ${r.added}${r.merged ? `, доповнено варіантами: ${r.merged}` : ''}${skipped ? `, пропущено рядків: ${skipped}` : ''}`);
+    } catch { toast('Не вдалося прочитати файл'); }
+    termsFile.value = '';
   });
   $('#st-terms-go', dlg).addEventListener('click', () => {
     const { terms, rejected } = parseTerms(($('#st-terms', dlg) as HTMLTextAreaElement).value);

@@ -6,6 +6,8 @@ import type { Ctx, SideTab } from './state';
 export const STATUS_LABEL = { new: 'Без перекладу', draft: 'Чернетка', done: 'Очікує вичитування', appr: 'Вичитано' } as const;
 const SIDE_TABS: [SideTab, string][] = [['hints', 'Вказівки'], ['glossary', 'Глосарій'], ['comments', 'Коментарі'], ['history', 'Історія']];
 
+let glossQuery = '';
+export const setGlossQuery = (q: string): void => { glossQuery = q; };
 const when = (t: number) => new Date(t).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
 /** Highlight glossary terms inside the (escaped) source. */
@@ -89,7 +91,19 @@ export function renderSide(ctx: Ctx, pane: HTMLElement, u: Unit): void {
     (pane as HTMLElement & { _m?: typeof m })._m = m;
   } else if (s.sideTab === 'glossary') {
     const hit = termsIn(u.source, s.saved.terms);
-    pane.innerHTML = `<div class="sh">Глосарій у рядку</div>${hit.length ? hit.map(t => `<div class="gl"><b>${esc(t.en)}</b> → ${esc(t.uk)}</div>`).join('') : '<div class="hint">У цьому рядку термінів немає.</div>'}
+    const q = glossQuery.trim().toLowerCase();
+    const rank = (t: { en: string; uk: string; alt?: string[] }): number => {
+      const names = [t.en, t.uk, ...(t.alt ?? [])].map(x => x.toLowerCase());
+      if (names.some(n => n === q)) return 0;
+      if (names.some(n => n.startsWith(q))) return 1;
+      if (names.some(n => n.split(/[^\p{L}\p{N}]+/u).some(w => w.startsWith(q)))) return 2;
+      return names.some(n => n.includes(q)) ? 3 : 4;
+    };
+    const found = q ? s.saved.terms.map(t => [rank(t), t] as const).filter(([r]) => r < 4).sort((a, b) => a[0] - b[0]).slice(0, 25).map(([, t]) => t) : [];
+    const card = (t: typeof hit[number]) => `<div class="gl"><b>${esc(t.en)}</b> → ${esc(t.uk)}${t.alt?.length ? `<span class="hint"> · також: ${esc(t.alt.join(', '))}</span>` : ''}${t.qa === false ? '' : '<span class="qatag" title="Перевіряється в QA"> QA</span>'}${t.note ? `<div class="hint">${esc(t.note)}</div>` : ''}${t.kind ? `<div class="hint">${esc(t.kind)}</div>` : ''}</div>`;
+    pane.innerHTML = `<div class="sh">У цьому рядку</div>${hit.length ? hit.map(card).join('') : '<div class="hint">Термінів немає.</div>'}
+      <div class="sh">Пошук у глосарії · ${plural(s.saved.terms.length, ['термін', 'терміни', 'термінів'])}</div><input id="gl-q" type="search" placeholder="Англійською чи українською" aria-label="Пошук у глосарії" value="${esc(glossQuery)}">
+      ${q ? (found.length ? found.map(card).join('') : '<div class="hint">Нічого не знайдено.</div>') : ''}
       <form class="form" id="gl-form"><div class="sh">Додати термін</div><input name="en" placeholder="Англійською" aria-label="Термін англійською" required><input name="uk" placeholder="Українською" aria-label="Термін українською" required><button class="btn">Додати</button></form>`;
   } else if (s.sideTab === 'comments') {
     const c = e?.comments ?? [];

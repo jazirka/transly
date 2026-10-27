@@ -27,3 +27,14 @@ Then on every device: Settings → Synchronization → server address and the sa
 Data is encrypted on the devices (AES-GCM, key from the passphrase); the relay only holds opaque blobs and forgets them after 30 days.
 Edits are merged per string, the newer edit wins, and concurrent edits to the same string are reported.
 For addresses reachable over the internet use https (browsers block plain http from https pages).
+
+## Desktop app (Tauri)
+
+The same UI runs in a Tauri shell that adds what a browser cannot do: remember the game folder, write the translation straight into the game's `data` folder (originals are backed up once next to it, in `data.transly-orig`, and can be restored), and launch the game for testing.
+
+```
+npm run tauri dev      # run the desktop app
+npm run tauri build    # installer for the current OS
+```
+
+Linux needs `libwebkit2gtk-4.1-dev`, `build-essential`, `libssl-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`. The UI can only touch folders and the game executable picked in a native dialog; paths are checked in `src-tauri/src/lib.rs`.

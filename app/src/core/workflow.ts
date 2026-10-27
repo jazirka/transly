@@ -1,4 +1,4 @@
-import { check, DEFAULT_QA } from './qa';
+import { activeIssues, DEFAULT_QA } from './qa';
 import type { QaOptions } from './qa';
 import type { Entry, Unit } from './model';
 
@@ -46,7 +46,7 @@ export function submit(prev: Entry | undefined, unit: Unit, stage: Stage, now: n
     return { ok: false, reason: 'Рядок ще не надіслано на вичитування' };
   }
   if (opts.blockErrors) {
-    const errors = check(unit, prev.target, opts.qa).filter(i => i.severity === 'bad');
+    const errors = activeIssues(unit, prev, opts.qa).filter(i => i.severity === 'bad');
     if (errors.length) return { ok: false, reason: 'Є помилка QA: ' + errors.map(i => i.message).join('; ') };
   }
   const e = { ...prev, mt: now, src: unit.source };

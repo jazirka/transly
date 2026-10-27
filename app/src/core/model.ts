@@ -29,6 +29,8 @@ export interface Entry {
   orig?: string;
   /** True when a reviewer sent the unit back to the translator. */
   returned?: boolean;
+  /** QA issue keys the translator chose to ignore for this unit. */
+  ign?: string[];
   comments?: Comment[];
   /** Newest last; capped so a long-lived unit does not grow the project without bound. */
   history?: HistoryItem[];

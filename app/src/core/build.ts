@@ -1,4 +1,4 @@
-import { check } from './qa';
+import { activeIssues } from './qa';
 import type { QaOptions } from './qa';
 import { apply, isTextFormat, formatOf } from './engine';
 import type { Entry, GameFile, Translations } from './model';
@@ -36,7 +36,7 @@ export function build(game: GameFile[], views: FileView[], saved: SavedProject, 
       if (!e || !e.target.trim()) continue;
       const stageOk = e.status === 'appr' || (!opts.onlyApproved && e.status === 'done');
       if (!stageOk) { out.skipped++; continue; }
-      if (opts.blockErrors && check(u, e.target, opts.qa).some(i => i.severity === 'bad')) {
+      if (opts.blockErrors && activeIssues(u, e, opts.qa).some(i => i.severity === 'bad')) {
         out.skipped++;
         out.blocked.push(`${v.name}::${u.key}`);
         continue;

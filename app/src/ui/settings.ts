@@ -9,7 +9,7 @@ import { describe, loadSyncConfig, runSync, saveSyncConfig, syncConfigured } fro
 /** Open a native <dialog>; it traps focus, closes on Esc and restores focus to the opener. */
 export function dialog(html: string, labelId: string): HTMLDialogElement {
   const opener = document.activeElement as HTMLElement | null;
-  const dlg = el('dialog', 'dlg');
+  const dlg = el('dialog', 'adlg');
   dlg.setAttribute('aria-labelledby', labelId);
   dlg.innerHTML = html;
   document.body.appendChild(dlg);
@@ -24,12 +24,12 @@ export function openSettings(ctx: Ctx, onReset: () => void, onImport: () => void
   const dlg = dialog(`<form method="dialog"><h2 id="st-t">Налаштування</h2>
     <div class="grid"><label for="st-tol">Допуск довжини перекладу відносно оригіналу, %</label><input id="st-tol" type="number" min="5" max="100" step="5" value="${st.tolerancePct}">
       <label for="st-who">Ваше ім’я в коментарях та історії</label><input id="st-who" maxlength="40" value="${st.who}"></div>
-    <label class="chk"><input type="checkbox" id="st-block" ${st.blockErrors ? 'checked' : ''}> Не надсилати рядок із помилкою QA</label>
-    <label class="chk"><input type="checkbox" id="st-prop" ${st.propagate ? 'checked' : ''}> Переносити переклад в однакові рядки (інші файли теж)</label>
+    <label class="achk"><input type="checkbox" id="st-block" ${st.blockErrors ? 'checked' : ''}> Не надсилати рядок із помилкою QA</label>
+    <label class="achk"><input type="checkbox" id="st-prop" ${st.propagate ? 'checked' : ''}> Переносити переклад в однакові рядки (інші файли теж)</label>
     <p class="hint">Довжина не обмежується: застосунок лише попереджає, коли переклад дуже відрізняється від оригіналу.</p>
     <details><summary>Імпорт глосарію</summary>
       <p class="hint">З файлу: таблиця Google Sheets, збережена як веб-сторінка (.html), або .csv / .tsv із колонками «Оригінал», «Переклад 1…», «Опис», «Розділ».</p>
-      <label class="chk"><input type="checkbox" id="st-terms-qa"> Перевіряти ці терміни в QA (для великого загального словника краще вимкнути: він лише підказує)</label>
+      <label class="achk"><input type="checkbox" id="st-terms-qa"> Перевіряти ці терміни в QA (для великого загального словника краще вимкнути: він лише підказує)</label>
       <div class="acts l"><button class="btn" type="button" id="st-terms-file-btn">Імпортувати з файлу…</button></div><input type="file" id="st-terms-file" accept=".html,.htm,.csv,.tsv,.txt,text/html,text/csv,text/plain" hidden>
       <p class="hint">Або вставте рядки «англійською, табуляція, українською»:</p><textarea id="st-terms" rows="4" aria-label="Терміни для імпорту"></textarea><button class="btn" type="button" id="st-terms-go">Імпортувати вставлені терміни</button></details>
     <details><summary>Імпорт пам’яті перекладів</summary><p class="hint">Рядки «оригінал, табуляція, переклад».</p><textarea id="st-tm" rows="5" aria-label="Пари для імпорту"></textarea><button class="btn" type="button" id="st-tm-go">Імпортувати пари</button></details>

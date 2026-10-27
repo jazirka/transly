@@ -1,0 +1,72 @@
+/* Phone layout (copied from the mobile mockup build). Applied when the .ide root has the sz-s class. */
+
+.appbar,.scrim{display:none}
+.ide.sz-s{min-width:0;font-size:14px;background:var(--bg)}
+.ide.sz-s .topbar,.ide.sz-s .status,.ide.sz-s .strip,.ide.sz-s .tabs,.ide.sz-s .ph,.ide.sz-s #f-back,.ide.sz-s .fhd .nav{display:none}
+.ide.sz-s .appbar{display:flex;align-items:center;gap:2px;height:52px;padding:0 6px;background:var(--panel);border-bottom:1px solid var(--line);flex:none}
+.appbar .abt{flex:1;min-width:0;display:flex;flex-direction:column}
+.appbar .abt b{font-weight:500;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .abt small{color:var(--mute);font-size:11.5px;white-space:nowrap}
+.ab-ic{width:38px;height:40px;flex:none;border:0;background:none;border-radius:20px;display:grid;place-items:center;color:var(--text)}
+.ab-ic svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.appbar .chip{height:30px;padding:0 10px;flex:none;margin:0 4px}
+.appbar .abt{padding-left:6px}
+.ab-ic[aria-pressed=true]{background:var(--on-bg);box-shadow:inset 0 0 0 1px var(--on-ring)}
+.ide.sz-s .main{display:block;position:relative;overflow:hidden;padding:0;gap:0}
+.ide.sz-s .editor{position:absolute;inset:0;border:0;border-radius:0}
+.ide.sz-s .tree{display:none;position:fixed;top:52px;bottom:0;left:0;width:min(88%,340px);z-index:30;border:0;border-right:1px solid var(--line);border-radius:0;background:var(--bg);box-shadow:0 0 40px rgba(0,0,0,.5)}
+.mtabs{display:none}
+.ide.sz-s .mtabs{display:flex;align-items:center;gap:4px;padding:6px 8px;border-bottom:1px solid var(--line);background:var(--panel);flex:none}
+.mtabs button[data-lt]{height:34px;padding:0 14px;border:1px solid transparent;border-radius:var(--r2);background:none;color:var(--mute);font-size:13px;letter-spacing:.04em;text-transform:uppercase}
+.mtabs button[data-lt].on{background:var(--on-bg);border-color:var(--on-ring);color:#fff}
+.mtabs .ab-ic{margin-left:auto;color:var(--text)}
+.ide.sz-s.lp-open .scrim,.ide.sz-s.sheet-open .scrim{display:block;position:fixed;top:52px;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:28}
+.ide.sz-s.lp-open .tree{display:flex}
+.ide.sz-s #v-focus{display:block;height:100%;grid-template-columns:none!important}
+.ide.sz-s .fc{height:100%}
+.ide.sz-s .node{height:44px;font-size:14px}
+.ide.sz-s .si{padding:12px 14px;min-height:64px}
+.ide.sz-s .slist .fh .chips2{flex-wrap:nowrap;overflow-x:auto}
+.ide.sz-s .slist .chipsHost{flex-wrap:nowrap;flex:none}
+.ide.sz-s .slist .chip{height:30px;padding:0 11px;font-size:12.5px;flex:none;white-space:nowrap}
+.ide.sz-s .slist .fin{height:38px}
+.ide.sz-s .fc-in{padding:12px 16px 0;gap:14px}
+.ide.sz-s .fc textarea.tr-in{font-size:16px;min-height:110px}
+.ide.sz-s .ctxrow{grid-template-columns:1fr}
+.ide.sz-s .trblock{display:contents}
+.ide.sz-s .edbar{position:sticky;bottom:0;z-index:5;margin:0 -8px;border-radius:10px}
+.ide.sz-s .ib{width:44px;height:44px}
+.ide.sz-s .saveb{width:52px;height:44px}
+.ide.sz-s .tg.lg{height:30px;padding:0 12px}
+.ide.sz-s .qa-row .fix,.ide.sz-s .qa-row .ign{height:32px}
+.ide.sz-s .fs{position:fixed;right:0;top:52px;bottom:0;width:min(92%,380px);z-index:30;border-radius:0;border:0;border-left:1px solid var(--line);display:none;flex-direction:row-reverse;background:var(--panel);box-shadow:0 0 40px rgba(0,0,0,.5)}
+.ide.sz-s.sheet-open .fs{display:flex}
+.ide.sz-s .fs .ibody{flex:1;min-width:0}
+.ide.sz-s .fs .itabs{flex-direction:column;align-items:center;gap:6px;width:56px;flex:none;padding:10px 0;border:0;border-left:1px solid var(--line);height:auto;background:var(--panel)}
+.ide.sz-s .fs .itabs button{position:relative;width:42px;height:42px;padding:0;border:1px solid transparent;border-radius:var(--r2);background:none;color:var(--mute);display:grid;place-items:center}
+.ide.sz-s .fs .itabs button.on{background:var(--on-bg);border-color:var(--on-ring);color:#fff}
+.ide.sz-s .fs .itabs button svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ide.sz-s .fs .itabs .cnt{position:absolute;top:2px;right:2px;min-width:16px;height:16px;border-radius:8px;font-size:10px}
+.ide.sz-s .fs .itabs button::after{display:none}
+.ide.sz-s .edbar{flex-wrap:wrap;row-gap:4px}
+.ide.sz-s .edbar .ib{width:40px;height:40px}
+.ide.sz-s .edbar .stepper{order:9;flex:0 0 100%;justify-content:center;margin:0}
+.ide.sz-s .edbar .stepper{gap:0;align-items:stretch}
+.ide.sz-s .edbar .stepper .queue{margin:0;min-width:72px;display:grid;place-items:center;border-block:1px solid rgba(255,255,255,.16);font-size:13px;color:var(--text)}
+.ide.sz-s .edbar .stepper .ib.sm{width:48px;height:36px;border:1px solid rgba(255,255,255,.16);background:var(--hv)}
+.ide.sz-s .edbar .stepper #f-prev{border-radius:var(--r2) 0 0 var(--r2)}
+.ide.sz-s .edbar .stepper #f-next{border-radius:0 var(--r2) var(--r2) 0}
+.ide.sz-s .edbar .stepper .ib.sm svg{width:18px;height:18px}
+.ide.sz-s .fhd{flex-wrap:wrap;gap:4px 8px}
+.ide.sz-s .st-pill{white-space:nowrap}
+.ide.sz-s .node .chev{width:24px;font-size:16px}
+.ide.sz-s .tg .tx{padding:11px 12px;margin:-11px -12px -11px 2px}
+.ide.sz-s .lbl-btn{padding:9px 10px;margin:-9px -10px}
+.ide.sz-s #b-play,.ide.sz-s #hk{display:none}
+.ide.sz-s .si{position:relative;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.ide.sz-s #lp-rows #bulk{flex-wrap:wrap;height:auto;padding:6px 10px;gap:6px}
+.ide.sz-s #lp-rows #bulk button{height:32px}
+.ide.sz-s #bb-rep,.ide.sz-s #bb-tm{display:none}
+.ide.sz-s #lp-rows #bulk .ghost{margin-left:auto}
+.dl-acts{display:flex;flex-direction:column;gap:6px}.dl-acts .btn{height:40px;text-align:left;padding:0 14px}
+.lphint{padding:6px 14px;color:var(--mute);font-size:11.5px}

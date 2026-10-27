@@ -938,7 +938,7 @@ html{background:#121315}
     <button data-nav="files"><svg viewBox="0 0 16 16"><path d="M2 4.5h4l1.2 1.5H14V12.5H2z"/></svg>Файли</button>
     <button data-nav="rows"><svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h10"/></svg>Рядки</button>
     <button data-nav="edit"><svg viewBox="0 0 16 16"><path d="M3 13l.7-3L10.5 3.2a1.4 1.4 0 0 1 2 2L5.7 12z"/></svg>Редагування</button>
-    <button data-nav="sheet"><svg viewBox="0 0 16 16"><path d="M3.5 3.5h9v7h-4l-2.5 2.5v-2.5h-2.5z"/></svg>Вказівки</button>
+    <button data-nav="settings"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2"/><path d="M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M3.6 12.4l1.1-1.1M11.3 4.7l1.1-1.1"/></svg>Налаштування</button>
   </nav>
   <footer class="status">
     <span class="ok" id="sb-save"></span>
@@ -1794,19 +1794,20 @@ setInterval(()=>{const sy=settings.sync;if(sy.every&&Date.now()-sy.last>sy.every
   let sheet=false;
   const baseLayout=layout;
   layout=function(){baseLayout();const el=document.querySelector('.ide');el.classList.add('sz-s');el.classList.toggle('sheet-open',sheet);
-    document.querySelectorAll('#bnav button').forEach(b=>{const on=sheet?b.dataset.nav==='sheet':(b.dataset.nav==='edit'?!lp:b.dataset.nav===lp);b.classList.toggle('on',on)});
+    document.querySelectorAll('#bnav button').forEach(b=>{const on=sheet?false:b.dataset.nav==='settings'?false:(b.dataset.nav==='edit'?!lp:b.dataset.nav===lp);b.classList.toggle('on',on)});
     $('ab-title').textContent=curFile;$('ab-stage').textContent=stage==='proof'?'Вичитування':'Переклад';
     $('ab-sub').textContent=(stage==='proof'?'Вичитування':'Переклад')+' · '+rows.filter(r=>r.st==='appr').length+' / '+rows.length+' вичитано'};
   const baseMode=setMode;setMode=function(m){baseMode(m==='table'?'focus':m)};
   mode='focus';stage='tr';lpOpen=false;
   document.addEventListener('click',e=>{const t=e.target;
     const nv=t.closest('#bnav [data-nav]');
-    if(nv){const n=nv.dataset.nav;if(n==='sheet'){sheet=true;layout()}else{sheet=false;setLp(n==='edit'?null:n)}return}
+    if(nv){const n=nv.dataset.nav;if(n==='settings'){openSettings()}else{sheet=false;setLp(n==='edit'?null:n)}return}
+    if(t.closest('[data-act=hints]')){sheet=true;layout();return}
     if(t.closest('#scrim')){sheet=false;layout();return}
     if(t.closest('#ab-stage')){setMode(mode==='proof'?'focus':'proof');return}
     if(t.closest('.si')){if(suppress){suppress=false;return}if(checked.size){const i=+t.closest('.si').dataset.i;checked.has(i)?checked.delete(i):checked.add(i);renderAll();return}setLp(null);return}
     const df=t.closest('[data-file]');if(df&&FILES[df.dataset.file]){setLp('rows');return}
-    if(t.closest('#ab-more')){menu($('ab-more'),[{t:'Показати проблеми QA',act:'qa'},{t:'Синхронізація пристроїв…',act:'devsync'},{t:'Налаштування…',act:'settings'},{t:'Скинути демо-дані',act:'reset'}]);return}
+    if(t.closest('#ab-more')){menu($('ab-more'),[{t:'Вказівки до рядка',act:'hints'},{t:'Показати проблеми QA',act:'qa'},{t:'Синхронізація пристроїв…',act:'devsync'},{t:'Скинути демо-дані',act:'reset'}]);return}
   });
   /* long press on a row starts multi-select; further taps toggle rows */
   let suppress=false,lpT=null,lpXY=null;

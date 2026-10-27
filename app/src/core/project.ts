@@ -88,13 +88,13 @@ export function deserialize(text: string): SavedProject {
 }
 
 /** Merge two copies of the same project (e.g. PC and phone). Entries from before the newest reset are dropped. */
-export function mergeProjects(a: SavedProject, b: SavedProject): { project: SavedProject; conflicts: { file: string; key: string }[] } {
+export function mergeProjects(a: SavedProject, b: SavedProject, since = 0): { project: SavedProject; conflicts: { file: string; key: string }[] } {
   const epoch = Math.max(a.resetEpoch, b.resetEpoch);
   const live = (t: Translations): Translations => Object.fromEntries(Object.entries(t).filter(([, e]) => e.mt > epoch));
   const files: Record<string, Translations> = {};
   const conflicts: { file: string; key: string }[] = [];
   for (const name of new Set([...Object.keys(a.files), ...Object.keys(b.files)])) {
-    const r = merge(live(a.files[name] ?? {}), live(b.files[name] ?? {}));
+    const r = merge(live(a.files[name] ?? {}), live(b.files[name] ?? {}), since);
     files[name] = r.merged;
     for (const key of r.conflicts) conflicts.push({ file: name, key });
   }

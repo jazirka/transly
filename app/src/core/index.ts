@@ -10,3 +10,5 @@ export * from './build';
 export * from './zip';
 export * from './tm';
 export * from './glossary';
+export * from './crypto';
+export * from './sync';

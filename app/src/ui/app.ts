@@ -7,6 +7,8 @@ import { pickGameFolder, readFiles, reopenHandle } from './folder';
 import type { DirHandle, PickedFile } from './folder';
 import { IdbStore, loadHandle, saveHandle } from './idb';
 import { openSettings } from './settings';
+import { describe as describeSync, loadSyncConfig, runSync, syncConfigured } from './sync';
+
 import { buildTm } from './state';
 import type { Ctx, Filter, Mode, State } from './state';
 
@@ -18,7 +20,10 @@ export async function start(root: HTMLElement): Promise<void> {
   let saved: SavedProject;
   try { saved = (await store.load()) ?? emptyProject('Новий проєкт'); }
   catch { saved = emptyProject('Новий проєкт'); }
-  const s: State = { views: [], game: [], saved, current: null, cur: null, mode: 'table', filter: 'all', q: '', sideTab: 'hints', saveOk: true, who: saved.settings.who };
+  const s: State = { views: [], game: [], saved, current: null, cur: null, mode: 'table', filter: 'all', q: '', sideTab: 'hints', saveOk: true, who: saved.settings.who, phone: false, drawer: null, leftTab: 'files' };
+  const mq = matchMedia('(max-width: 760px)');
+  s.phone = mq.matches;
+  if (s.phone) s.mode = 'edit';
   const fromSnapshot = viewsFromSnapshot(saved);
   if (fromSnapshot.length) { s.views = fromSnapshot; s.current = fromSnapshot[0]!.name; }
   let lastHandle: (DirHandle & { name: string }) | null = null;
@@ -32,14 +37,15 @@ export async function start(root: HTMLElement): Promise<void> {
   input.setAttribute('webkitdirectory', ''); input.setAttribute('aria-label', 'Папка гри');
 
   root.innerHTML = `
-    <header class="top"><div class="logo" aria-hidden="true">T</div><b>Transly</b><span class="grow"></span>
+    <header class="top"><button class="btn icon phone-only" id="btn-left" aria-label="Файли й рядки" aria-expanded="false">☰</button><div class="logo" aria-hidden="true">T</div><b class="brand">Transly</b><span class="ptitle phone-only" id="ptitle"></span><span class="grow"></span>
       <div class="seg" role="group" aria-label="Режим">${MODES.map(([m, l]) => `<button data-mode="${m}" aria-pressed="${m === 'table'}">${l}</button>`).join('')}</div>
       <span class="save" id="save" role="status"></span>
-      <button class="btn" id="settings">Налаштування</button>
+      <button class="btn icon phone-only" id="btn-side" aria-label="Вказівки, глосарій, коментарі" aria-expanded="false">▤</button>
+      <button class="btn" id="settings" aria-label="Налаштування"><span class="lbl-d">Налаштування</span><span class="phone-only">⚙</span></button>
       <button class="btn" id="build" disabled>Зібрати…</button>
       <button class="btn p" id="open">Відкрити папку гри</button></header>
     <div class="main"><aside class="panel tree" aria-label="Файли"><div class="phd">Файли гри</div><div class="files" id="files"></div></aside>
-      <main class="panel table" id="table"></main></div>`;
+      <main class="panel table" id="table"></main></div><div class="scrim" id="scrim"></div>`;
   root.appendChild(input);
 
   const qaOpts = () => ({ tolerancePct: s.saved.settings.tolerancePct, terms: s.saved.terms.map(t => ({ en: t.en, uk: t.uk })) });
@@ -86,14 +92,32 @@ export async function start(root: HTMLElement): Promise<void> {
     e.classList.toggle('bad', !s.saveOk);
   }
 
+  function rowsListHtml(): string {
+    const v = ctx.view();
+    if (!v) return '<div class="empty">Спершу відкрийте файл</div>';
+    const ents = ctx.entries(v.name);
+    const filters = `<div class="filters">${FILTERS.map(([f, l]) => `<button class="chip" data-filter="${f}" aria-pressed="${s.filter === f}">${l}</button>`).join('')}<input id="q" type="search" placeholder="Пошук рядків" aria-label="Пошук рядків" value="${esc(s.q)}"></div>`;
+    const items = ctx.visible().map(u => {
+      const e = ents[u.key], st = e?.status ?? 'new';
+      return `<button class="si ${u.key === s.cur ? 'sel' : ''}" data-pick="${esc(u.key)}"><span class="dot ${st}" role="img" aria-label="${STATUS_LABEL[st]}"></span><span class="sib"><span class="sia">${esc(u.speaker || u.kind)}</span><span class="sis">${esc(u.source)}</span><span class="sit">${esc(e?.target || '—')}</span></span></button>`;
+    });
+    return filters + (items.join('') || '<div class="empty">Нічого не знайдено</div>');
+  }
+
   function renderTree(): void {
     const box = $('#files');
+    if (s.phone) {
+      const tabs = `<div class="ltabs" role="group" aria-label="Бічна панель"><button data-ltab="files" aria-pressed="${s.leftTab === 'files'}">Файли</button><button data-ltab="rows" aria-pressed="${s.leftTab === 'rows'}">Рядки</button></div>`;
+      if (s.leftTab === 'rows') { box.innerHTML = tabs + rowsListHtml(); return; }
+      box.dataset.tabs = tabs;
+    }
     if (!s.views.length) { box.innerHTML = '<div class="empty">Папку гри ще не відкрито</div>'; return; }
-    box.innerHTML = s.views.map(v => {
+    const list = s.views.map(v => {
       const st = statsOf(v.units, s.saved.files[v.name] ?? {});
       const pct = Math.round((st.translated / st.total) * 100);
       return `<button class="file" data-file="${esc(v.name)}" aria-current="${v.name === s.current}"><span class="nm">${esc(v.name)}</span><span class="mini ${pct === 100 ? 'full' : ''}" aria-hidden="true"><i style="width:${pct}%"></i></span><span class="pc">${pct}%</span></button>`;
     }).join('');
+    box.innerHTML = (s.phone ? box.dataset.tabs ?? '' : '') + list;
   }
 
   function qaHtml(u: Unit, e: Entry | undefined): string {
@@ -115,23 +139,28 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!v) {
       box.innerHTML = s.views.length
         ? '<div class="empty"><h2>Оберіть файл</h2>Файл зліва відкриє його рядки.</div>'
-        : `<div class="empty"><h2>Відкрийте папку гри</h2>Оберіть папку <b>data</b> гри на RPG Maker (або саму папку гри). Ваш переклад зберігається в цьому браузері, файли гри не змінюються.${lastHandle ? `<p><button class="btn p" id="resume">Продовжити з папкою «${esc(lastHandle.name)}»</button></p>` : ''}</div>`;
+        : `<div class="empty"><h2>Відкрийте папку гри</h2>${s.phone ? 'На телефоні проєкт береться з комп’ютера: на ПК відкрийте «Налаштування → Обмін проєктом → Зберегти проєкт у файл», а тут імпортуйте цей файл у «Налаштування → Обмін проєктом».' : 'Оберіть папку <b>data</b> гри на RPG Maker (або саму папку гри). Ваш переклад зберігається в цьому браузері, файли гри не змінюються.'}${lastHandle ? `<p><button class="btn p" id="resume">Продовжити з папкою «${esc(lastHandle.name)}»</button></p>` : ''}</div>`;
       return;
     }
     const filters = `<div class="filters">${FILTERS.map(([f, l]) => `<button class="chip" data-filter="${f}" aria-pressed="${s.filter === f}">${l}</button>`).join('')}
         <input id="q" type="search" placeholder="Пошук у файлі" aria-label="Пошук у файлі" value="${esc(s.q)}"></div>`;
-    if (s.mode === 'table') {
+    if (s.mode === 'table' && !s.phone) {
       const ents = ctx.entries(v.name);
       const rows: string[] = [];
       v.units.forEach((u, i) => { if (matches(u, ents[u.key])) rows.push(rowHtml(u, i + 1, ents[u.key])); });
       box.innerHTML = `<div class="phd">${esc(v.name)} · ${plural(v.units.length, ['рядок', 'рядки', 'рядків'])}</div>${filters}<div class="scroll" id="scroll">${rows.join('') || '<div class="empty">Нічого не знайдено</div>'}</div>`;
     } else {
-      box.innerHTML = `<div class="phd">${esc(v.name)} · ${s.mode === 'review' ? 'вичитування' : 'редагування'}</div>${filters}<div class="scroll" id="edhost"></div>`;
+      box.innerHTML = `<div class="phd">${esc(v.name)} · ${s.mode === 'review' ? 'вичитування' : 'редагування'}</div>${s.phone ? '' : filters}<div class="scroll" id="edhost"></div>`;
       renderEditor(ctx, $('#edhost'));
     }
   }
 
   function renderAll(): void {
+    root.dataset.phone = String(s.phone);
+    root.dataset.drawer = s.drawer ?? '';
+    $('#btn-left').setAttribute('aria-expanded', String(s.drawer === 'left'));
+    $('#btn-side').setAttribute('aria-expanded', String(s.drawer === 'right'));
+    $('#ptitle').textContent = s.current ?? 'Transly';
     root.querySelectorAll<HTMLElement>('[data-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === s.mode)));
     renderTree(); renderMain(); renderSave();
     ($('#build') as HTMLButtonElement).disabled = !s.views.length;
@@ -139,6 +168,7 @@ export async function start(root: HTMLElement): Promise<void> {
   }
 
   function setMode(m: Mode, rerender = true): void {
+    if (s.phone && m === 'table') m = 'edit';
     if (m === s.mode) return;
     const wasReview = s.mode === 'review';
     s.mode = m;
@@ -159,6 +189,13 @@ export async function start(root: HTMLElement): Promise<void> {
     const dot = $('.dot', row);
     dot.className = `dot ${st}`; dot.title = STATUS_LABEL[st]; dot.setAttribute('aria-label', STATUS_LABEL[st]);
     $('.qas', row).innerHTML = qaHtml(u, e);
+  }
+
+  /** Take over a merged/imported/synced project: pick up its snapshot when this device has no files yet. */
+  function adopt(): void {
+    if (!s.views.length) { s.views = viewsFromSnapshot(s.saved); if (s.views[0]) selectFile(s.views[0].name); }
+    else if (s.current) unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u]));
+    s.who = s.saved.settings.who; tmCache = null; ctx.persist(); renderAll();
   }
 
   async function loadFiles(picked: PickedFile[]): Promise<void> {
@@ -231,12 +268,19 @@ export async function start(root: HTMLElement): Promise<void> {
     const t = e.target as HTMLElement;
     if (t.closest('#open')) { void openFolder(); return; }
     if (t.closest('#resume')) { void resume(); return; }
-    if (t.closest('#settings')) { openSettings(ctx, () => { s.views.forEach(v => { s.saved.files[v.name] = {}; }); renderAll(); ctx.persist(); }); return; }
+    if (t.closest('#btn-left')) { s.drawer = s.drawer === 'left' ? null : 'left'; renderAll(); return; }
+    if (t.closest('#btn-side')) { s.drawer = s.drawer === 'right' ? null : 'right'; renderAll(); return; }
+    if (t.closest('#scrim')) { s.drawer = null; renderAll(); return; }
+    const lt = t.closest<HTMLElement>('[data-ltab]');
+    if (lt) { s.leftTab = lt.dataset.ltab === 'rows' ? 'rows' : 'files'; renderAll(); return; }
+    const pick = t.closest<HTMLElement>('[data-pick]');
+    if (pick) { s.drawer = null; ctx.select(pick.dataset.pick ?? ''); return; }
+    if (t.closest('#settings')) { openSettings(ctx, () => { s.views.forEach(v => { s.saved.files[v.name] = {}; }); renderAll(); ctx.persist(); }, adopt); return; }
     if (t.closest('#build')) { openBuild(); return; }
     const m = t.closest<HTMLElement>('[data-mode]');
     if (m) { setMode(m.dataset.mode as Mode); return; }
     const f = t.closest<HTMLElement>('[data-file]');
-    if (f) { selectFile(f.dataset.file ?? ''); renderAll(); return; }
+    if (f) { selectFile(f.dataset.file ?? ''); if (s.phone) s.leftTab = 'rows'; renderAll(); return; }
     const ch = t.closest<HTMLElement>('[data-filter]');
     if (ch) { s.filter = ch.dataset.filter as Filter; if (s.mode !== 'table' && !ctx.visible().some(u => u.key === s.cur)) s.cur = ctx.visible()[0]?.key ?? null; renderAll(); return; }
     const op = t.closest<HTMLElement>('[data-open]');
@@ -273,7 +317,7 @@ export async function start(root: HTMLElement): Promise<void> {
     } else if (t.id === 'q') {
       s.q = (t as HTMLInputElement).value;
       const pos = (t as HTMLInputElement).selectionStart ?? s.q.length;
-      renderMain();
+      if (s.phone) renderTree(); else renderMain();
       const q = $('#q') as HTMLInputElement;
       q.focus(); q.setSelectionRange(pos, pos);
     }
@@ -303,6 +347,20 @@ export async function start(root: HTMLElement): Promise<void> {
   });
 
   if (s.current) unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u]));
+
+  // Background sync on the chosen interval; failures are shown, never silent.
+  setInterval(() => {
+    const cfg = loadSyncConfig();
+    if (!cfg.everyMin || !syncConfigured(cfg) || document.querySelector('dialog[open]')) return;
+    if (Date.now() - cfg.last < cfg.everyMin * 60_000) return;
+    runSync(ctx, cfg, adopt).then(r => toast(describeSync(r)), e => toast(e instanceof Error ? e.message : 'Не вдалося синхронізувати'));
+  }, 60_000);
+
+  mq.addEventListener('change', () => {
+    s.phone = mq.matches; s.drawer = null;
+    if (s.phone && s.mode === 'table') setMode('edit', false);
+    renderAll();
+  });
 
   addEventListener('beforeunload', () => { void autosave.flush(); });
   renderAll();

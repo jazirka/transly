@@ -132,3 +132,43 @@ textarea.big:focus{outline:0}
 .dlg textarea{height:auto;padding:8px;width:100%;font-family:var(--mono);font-size:12px}
 .dlg details{display:flex;flex-direction:column;gap:6px}.dlg summary{cursor:pointer;color:var(--mute)}
 .dlg details[open]{gap:8px}
+
+/* phone: one column, panels become drawers */
+.phone-only{display:none}
+.btn.icon{width:36px;padding:0;display:grid;place-items:center}
+.scrim{display:none}
+.ltabs{display:flex;gap:4px;padding:8px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);z-index:2}
+.ltabs button{height:32px;padding:0 14px;border:1px solid transparent;border-radius:var(--r2);background:none;color:var(--mute);text-transform:uppercase;letter-spacing:.04em;font-size:12px}
+.ltabs button[aria-pressed=true]{background:var(--on-bg);border-color:var(--on-ring);color:#fff}
+.si{display:flex;gap:10px;width:100%;padding:10px 12px;border:0;border-bottom:1px solid #2a2c30;background:none;text-align:left}
+.si:hover{background:var(--hv)}
+.si.sel{background:var(--sel)}
+.si .dot{flex:none;margin-top:4px}
+.sib{display:flex;flex-direction:column;gap:2px;min-width:0}
+.sia{color:#d9c3ee;font-size:11.5px}
+.sis{overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.sit{color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:760px){
+  .phone-only{display:inline-grid}
+  #app .top{height:48px;gap:6px;padding:0 8px}
+  #app .brand,#app .logo,#app #open,#app #build,#app #save,#app .lbl-d{display:none}
+  #app .ptitle{display:block;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  #app .seg [data-mode=table]{display:none}
+  #app .seg button{padding:0 8px}
+  .main{padding:0}
+  .panel.table{border:0;border-radius:0}
+  .tree{display:flex;position:fixed;top:48px;bottom:0;left:0;width:min(88%,340px);z-index:30;border-radius:0;border-width:0 1px 0 0;transform:translateX(-102%);transition:transform .18s ease;box-shadow:0 0 40px rgba(0,0,0,.5)}
+  [data-drawer=left] .tree{transform:none}
+  .edit{display:block}
+  .side{position:fixed;top:48px;bottom:0;right:0;width:min(92%,380px);z-index:30;border-left:1px solid var(--line);transform:translateX(102%);transition:transform .18s ease;box-shadow:0 0 40px rgba(0,0,0,.5)}
+  [data-drawer=right] .side{transform:none}
+  [data-drawer=left] .scrim,[data-drawer=right] .scrim{display:block;position:fixed;top:48px;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:28}
+  .edmain{padding:12px}
+  .ib{min-width:40px;height:40px}
+  .edbar .grow{flex-basis:100%;height:0}
+  .phd{display:none}
+  .tree .phd{display:none}
+  #app .tree .files{padding:0}
+}
+@media (prefers-reduced-motion:reduce){.tree,.side{transition:none}}
+.dlg .acts.l{justify-content:flex-start}

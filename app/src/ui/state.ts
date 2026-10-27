@@ -4,6 +4,7 @@ import type { Autosave, Entry, FileView, GameFile, SavedProject, Unit } from '..
 export type Mode = 'table' | 'edit' | 'review';
 export type Filter = 'all' | 'new' | 'draft' | 'done' | 'appr' | 'qa';
 export type SideTab = 'hints' | 'glossary' | 'comments' | 'history';
+export type Drawer = 'left' | 'right' | null;
 
 export interface State {
   views: FileView[];
@@ -17,6 +18,10 @@ export interface State {
   sideTab: SideTab;
   saveOk: boolean;
   who: string;
+  /** Narrow screen: one column, side panels become drawers. */
+  phone: boolean;
+  drawer: Drawer;
+  leftTab: 'files' | 'rows';
 }
 
 /** Everything UI modules need from the shell, so they stay free of globals. */

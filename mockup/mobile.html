@@ -748,9 +748,12 @@ html{background:#121315}
 .ide.sz-s .saveb{width:52px;height:44px}
 .ide.sz-s .tg.lg{height:30px;padding:0 12px}
 .ide.sz-s .qa-row .fix,.ide.sz-s .qa-row .ign{height:32px}
-.ide.sz-s .fs{position:fixed;left:0;right:0;bottom:0;height:72%;z-index:30;border-radius:16px 16px 0 0;transform:translateY(105%);transition:transform .2s ease;box-shadow:0 0 40px rgba(0,0,0,.55);border-left:0}
-.ide.sz-s.sheet-open .fs{transform:none}
-.ide.sz-s.sheet-open .scrim{display:block;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:28}
+.ide.sz-s .fs{position:fixed;left:0;right:0;top:52px;bottom:56px;height:auto;width:auto;z-index:30;border-radius:0;border:0;display:none;background:var(--bg)}
+.ide.sz-s.sheet-open .fs{display:flex}
+.ide.sz-s .edbar{flex-wrap:wrap;row-gap:4px}
+.ide.sz-s .edbar .ib{width:40px;height:40px}
+.ide.sz-s .edbar .stepper{order:9;flex:0 0 100%;justify-content:center;margin:0}
+.ide.sz-s .edbar .stepper .ib.sm{width:40px;height:32px}
 .ide.sz-s .fhd{flex-wrap:wrap;gap:4px 8px}
 .ide.sz-s .st-pill{white-space:nowrap}
 .ide.sz-s .queue{margin-left:auto}

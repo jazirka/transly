@@ -68,6 +68,11 @@ function choose(files: PickedFile[]): PickedFile[] {
     .sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true }));
 }
 
+/** Files chosen with an ordinary multi-file picker (a phone has no folder picker): the same selection rules as a folder. */
+export function pickFromFiles(files: File[]): PickedFile[] {
+  return choose(files.map(f => ({ name: f.name, path: f.name, rel: f.name, read: () => f.text() })));
+}
+
 /** Read and parse files one by one so the UI can show progress. Unreadable files are reported, not fatal. */
 export async function readFiles(files: PickedFile[], onProgress: (done: number, total: number) => void): Promise<{ files: GameFile[]; failed: string[] }> {
   const out: GameFile[] = [];

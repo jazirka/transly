@@ -9,8 +9,20 @@ export interface PluginCandidate {
   withText: number;
   /** Distinct example texts. */
   samples: string[];
-  /** Looks like sentences for the player (two or more words in most cases): safe to pre-select. */
+  /** Most of its texts read like sentences for the player rather than technical arguments: safe to pre-select. */
   likely: boolean;
+}
+
+/**
+ * Sentence-like text for a player, as opposed to a technical argument ("Screen Change Noise Rate 0.05",
+ * "SATURATION adjustment 0"): prose has ordinary lower-case words and few numbers.
+ */
+export function looksLikeProse(text: string): boolean {
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length < 3 && !/[.!?…"”]$/.test(text)) return false;
+  const lower = words.filter(w => /^\p{Ll}{2,}[.,!?…"”']?$/u.test(w)).length;
+  const numeric = words.filter(w => /^[#\d.+-]+$/.test(w)).length;
+  return lower >= 2 && numeric / words.length < 0.3;
 }
 
 /**
@@ -27,7 +39,7 @@ export function pluginCandidates(game: GameFile[]): PluginCandidate[] {
     e.count++;
     if (hasText(text)) {
       e.withText++;
-      if (/\p{L}{2,}\s+\p{L}{2,}/u.test(text)) e.wordy++;
+      if (looksLikeProse(text)) e.wordy++;
       if (e.samples.size < 3) e.samples.add(text.slice(0, 80));
     }
     m.set(name, e);

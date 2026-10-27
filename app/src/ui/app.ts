@@ -1,4 +1,4 @@
-import { Autosave, DupIndex, activeIssues, displayLength, edit, emptyProject, lengthDeviation, note, propagate, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, viewsFromSnapshot } from '../core';
+import { Autosave, DupIndex, GameNameIndex, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, lengthDeviation, limitFor, note, pluginCandidates, propagate, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, viewsFromSnapshot, wrapLines } from '../core';
 import type { Entry, GameFile, SavedProject, Unit } from '../core';
 import { openBuild } from './build-dialog';
 import { dataDirOf, isDesktop, rememberedGameDir, reopenGameDirDesktop } from './desktop';
@@ -7,6 +7,8 @@ import { FOCUS_HTML, focusClick, focusInput, renderFocus, renderGlossary, send, 
 import { pickGameFolder, readFiles, reopenHandle } from './folder';
 import type { DirHandle, PickedFile } from './folder';
 import { IdbStore, loadHandle, saveHandle } from './idb';
+import { openImport } from './import-dialog';
+import { openPluginTexts } from './plugins-dialog';
 import { markup } from './markup';
 import { openSettings } from './settings';
 import { openSpeakers } from './speakers-dialog';
@@ -24,6 +26,7 @@ const SVG = {
   gear: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>',
   play: '<svg viewBox="0 0 16 16"><path d="M4.5 2.5l9 5.5-9 5.5z" fill="currentColor" stroke="none"/></svg>',
   folder: '<svg viewBox="0 0 16 16"><path d="M2 4.5h4l1.2 1.5H14V12.5H2z"/><path d="M8 8v3M6.5 9.5h3"/></svg>',
+  import: '<svg viewBox="0 0 16 16"><path d="M8 2.5v7M5 6.5l3 3 3-3M2.5 11v2h11v-2"/></svg>',
   build: '<svg viewBox="0 0 16 16"><path d="M2.5 9l2-4.5h7L13.5 9v3h-11z"/><circle cx="5.5" cy="12" r="1"/><circle cx="10.5" cy="12" r="1"/></svg>',
   panelL: '<svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M6 3v10"/></svg>',
   panelR: '<svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M10 3v10"/></svg>',
@@ -70,7 +73,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
       <button data-lp="rows" title="Рядки файлу" aria-label="Рядки файлу">${SVG.rows}</button>
     </nav>
     <aside class="tree" id="lpanel" aria-label="Бічна панель: файли й рядки">
-      <div class="mtabs" id="mtabs" role="group" aria-label="Бічна панель"><button data-lt="files">Файли</button><button data-lt="rows">Рядки</button><button class="ab-ic" id="mt-search" aria-label="Пошук скрізь">${SVG.searchBig}</button></div>
+      <div class="mtabs" id="mtabs" role="group" aria-label="Бічна панель"><button data-lt="files">Файли</button><button data-lt="rows">Рядки</button><button class="ab-ic" id="mt-open" aria-label="Відкрити файли або вставити JSON" title="Відкрити файли або вставити JSON">${SVG.import}</button><button class="ab-ic" id="mt-search" aria-label="Пошук скрізь">${SVG.searchBig}</button></div>
       <div class="ph"><span class="grow" id="lp-title">Файли гри</span><span class="ico" id="lp-close" title="Сховати панель" role="button" aria-label="Сховати панель">—</span></div>
       <div class="treebody" id="tree"></div>
       <div class="slist" id="lp-rows" hidden>
@@ -140,11 +143,22 @@ export async function start(root: HTMLElement): Promise<void> {
   root.innerHTML = SHELL;
   root.appendChild(input);
 
-  const qaOpts = () => ({ tolerancePct: s.saved.settings.tolerancePct, terms: s.saved.terms });
+  /** Longest line a message may have: the translator's number, or what the original's own lines suggest (0 = not checked). */
+  let autoLimit: { views: State['views']; n: number } | null = null;
+  const lineLimit = (): number => {
+    const l = s.saved.settings.lineLimit;
+    if (l < 0) return 0;
+    if (l > 0) return l;
+    if (!autoLimit || autoLimit.views !== s.views) autoLimit = { views: s.views, n: autoLineLimit(s.views) };
+    return autoLimit.n;
+  };
+  let namesCache: { views: State['views']; idx: GameNameIndex } | null = null;
+  const qaOpts = () => ({ tolerancePct: s.saved.settings.tolerancePct, terms: s.saved.terms, lineLimit: lineLimit() });
   const ctx: Ctx = {
     s, autosave,
     entries: file => (s.saved.files[file] ??= {}),
-    qaOpts,
+    qaOpts, lineLimit,
+    names: () => { if (!namesCache || namesCache.views !== s.views) namesCache = { views: s.views, idx: new GameNameIndex(s.views) }; return namesCache.idx; },
     speaker: u => speakerOf(u, s.saved.speakers),
     view: () => s.views.find(v => v.name === s.current) ?? null,
     unit: key => unitMap.get(key),
@@ -170,6 +184,8 @@ export async function start(root: HTMLElement): Promise<void> {
   const shortKey = (key: string): string => {
     const c = /\.list\[(\d+)\]\.choice\[(\d+)\]$/.exec(key);
     if (c) return `choice[${c[1]}.${c[2]}]`;
+    const pc = /\.list\[(\d+)\]\.cmd$/.exec(key);
+    if (pc) return `plugin[${pc[1]}]`;
     const m = /\.list\[(\d+)\]$/.exec(key) ?? /^L(\d+)$/.exec(key);
     return m ? `msg[${m[1]}]` : key;
   };
@@ -275,7 +291,7 @@ export async function start(root: HTMLElement): Promise<void> {
       const pc = Math.round(100 * st.approved / st.total);
       const [ic, lab] = fileIcon(n.name);
       const cur = n.name === s.current;
-      return `<div class="node ${cur ? 'cur' : ''}" style="--d:${n.d}" data-file="${esc(n.name)}" role="button" tabindex="0" title="${cur ? 'Відкрито · ' : ''}Вичитано ${pc}% · перекладено ${Math.round(100 * st.translated / st.total)}%"><span class="chev"></span><span class="ic ${ic}">${lab}</span><span class="nm">${esc(n.label)}</span><span class="mini"><i class="${pc === 100 ? 'f' : ''}" style="width:${Math.max(pc, Math.round(100 * st.translated / st.total))}%"></i></span><span class="pc ${pc === 100 ? 'full' : ''}">${pc}%</span></div>`;
+      return `<div class="node ${cur ? 'cur' : ''}" style="--d:${n.d}" data-file="${esc(n.name)}" role="button" tabindex="0" title="${cur ? 'Відкрито · ' : ''}${v.label ? esc(v.label) + ' · ' : ''}Вичитано ${pc}% · перекладено ${Math.round(100 * st.translated / st.total)}%"><span class="chev"></span><span class="ic ${ic}">${lab}</span><span class="nm">${esc(n.label)}${v.label ? `<span class="lc">${esc(v.label)}</span>` : ''}</span><span class="mini"><i class="${pc === 100 ? 'f' : ''}" style="width:${Math.max(pc, Math.round(100 * st.translated / st.total))}%"></i></span><span class="pc ${pc === 100 ? 'full' : ''}">${pc}%</span></div>`;
     }).join('');
   }
 
@@ -337,7 +353,7 @@ export async function start(root: HTMLElement): Promise<void> {
       for (const u of v.units) { const e = ents[u.key]; if (e && e.target && activeIssues(u, e, qaOpts()).length) qa++; }
       const [ic, lab] = fileIcon(n);
       const on = n === s.current;
-      return `<div class="tab ${on ? 'on' : ''}"><button class="tb" data-tab="${esc(n)}" aria-current="${on}" title="${esc(n)}"><span class="tico ${ic === 'map' ? '' : 'j'}">${lab}</span>${esc(n.split('/').pop() ?? n)}${qa ? `<span class="badge" title="Проблеми QA у файлі">${qa}</span>` : ''}</button><button class="x" data-closetab="${esc(n)}" aria-label="Закрити вкладку ${esc(n)}">✕</button></div>`;
+      return `<div class="tab ${on ? 'on' : ''}"><button class="tb" data-tab="${esc(n)}" aria-current="${on}" title="${esc(v.label ? n + ' · ' + v.label : n)}"><span class="tico ${ic === 'map' ? '' : 'j'}">${lab}</span>${esc(n.split('/').pop() ?? n)}${qa ? `<span class="badge" title="Проблеми QA у файлі">${qa}</span>` : ''}</button><button class="x" data-closetab="${esc(n)}" aria-label="Закрити вкладку ${esc(n)}">✕</button></div>`;
     }).join('');
   }
 
@@ -418,7 +434,7 @@ export async function start(root: HTMLElement): Promise<void> {
     tv.style.display = 'none'; fv.style.display = 'none';
     let box = document.getElementById('start-empty');
     if (!box) { box = el("div", "msg-empty"); box.id = 'start-empty'; $('#main').appendChild(box); }
-    box.innerHTML = `<h2>Відкрийте папку гри</h2>${s.phone ? 'На телефоні проєкт береться з комп’ютера: на ПК відкрийте «Налаштування → Обмін проєктом через файл → Зберегти проєкт у файл», а тут імпортуйте цей файл у тому самому розділі або через синхронізацію.' : 'Оберіть папку <b>data</b> гри на RPG Maker (або саму папку гри), папку з файлами <b>.po</b>, <b>.csv</b>, <b>.rpy</b> (Ren’Py) чи JSON-локалізацією. Ваш переклад зберігається в цьому браузері, файли гри не змінюються.'}${(lastHandle || desktopDir) ? `<p><button class="btn p" id="resume">Продовжити з папкою «${esc(lastHandle?.name ?? (desktopDir ?? '').split(/[\\/]/).filter(Boolean).pop() ?? '')}»</button></p>` : ''}${s.phone ? '' : '<p><button class="btn p" id="open2">Відкрити папку гри</button></p>'}`;
+    box.innerHTML = `<h2>${s.phone ? 'Відкрийте файли' : 'Відкрийте папку гри'}</h2>${s.phone ? 'На телефоні проєкт береться з комп’ютера: на ПК виберіть «Налаштування → Обмін проєктом через файл → Зберегти проєкт у файл», передайте файл сюди й відкрийте його, або вставте його вміст як текст. Так само можна відкрити файли самої гри.' : 'Оберіть папку <b>data</b> гри на RPG Maker (або саму папку гри), папку з файлами <b>.po</b>, <b>.csv</b>, <b>.rpy</b> (Ren’Py) чи JSON-локалізацією. Ваш переклад зберігається в цьому браузері, файли гри не змінюються.'}${(lastHandle || desktopDir) ? `<p><button class="btn p" id="resume">Продовжити з папкою «${esc(lastHandle?.name ?? (desktopDir ?? '').split(/[\\/]/).filter(Boolean).pop() ?? '')}»</button></p>` : ''}${s.phone ? '<p><button class="btn p" id="imp2">Відкрити файли або вставити JSON…</button></p>' : '<p><button class="btn p" id="open2">Відкрити папку гри</button></p>'}`;
     return true;
   }
 
@@ -477,22 +493,58 @@ export async function start(root: HTMLElement): Promise<void> {
     box.innerHTML = '<h2>Читаю файли гри…</h2><div class="progress"><i id="bar"></i></div><span id="pct"></span>';
     $('#v-table').style.display = 'none'; $('#v-focus').style.display = 'none';
     const { files, failed } = await readFiles(picked, (d, t) => { $('#bar').style.width = `${(d / t) * 100}%`; $('#pct').textContent = `${d} з ${t}`; });
-    const game: GameFile[] = files;
-    s.game = game; s.views = readGame(game); tmCache = null;
+    const reset = ingest(files);
     dataDir = isDesktop() ? dataDirOf(picked) : null;
-    const snap = snapshotOf(s.views);
-    // Bump the revision only when the game's strings really changed, so other devices re-download them only then.
-    if (JSON.stringify(snap) !== JSON.stringify(s.saved.snapshot ?? null)) { s.saved.assetsRev = Date.now(); s.saved.snapshot = snap; }
     if (!s.views.length) { s.current = null; renderAll(); toast('У цих файлах немає тексту для перекладу'); return; }
     if (failed.length) toast(`Не вдалося прочитати файлів: ${failed.length}`);
-    // Originals may have changed in the game since the translation was written: send those units back to draft.
-    let changed = 0;
-    for (const v of s.views) { const ents = s.saved.files[v.name]; if (ents) changed += reconcile(v.units, ents, Date.now()).length; }
-    if (changed) toast(`Оригінал змінився в ${plural(changed, ['рядку', 'рядках', 'рядках'])}: їх повернуто в чернетки`);
+    if (reset) toast(`Оригінал змінився в ${plural(reset, ['рядку', 'рядках', 'рядках'])}: їх повернуто в чернетки`);
     s.open = s.open.filter(n => s.views.some(v => v.name === n));
     openFile(s.current && s.views.some(v => v.name === s.current) ? s.current : s.views[0]!.name);
     ctx.persist();
     renderAll();
+    offerPluginTexts();
+  }
+
+  /**
+   * Read the game's strings into views and into the project's snapshot. The snapshot revision changes only when the
+   * game's strings really did, so other devices fetch them again only then. Returns how many translated rows had
+   * their original changed (they go back to draft).
+   */
+  function ingest(game: GameFile[]): number {
+    s.game = game;
+    s.views = readGame(game, { pluginCommands: s.saved.settings.pluginCommands });
+    tmCache = null;
+    s.saved.labels = labelsOf(s.views);
+    const snap = snapshotOf(s.views);
+    if (JSON.stringify(snap) !== JSON.stringify(s.saved.snapshot ?? null)) { s.saved.assetsRev = Date.now(); s.saved.snapshot = snap; }
+    let changed = 0;
+    for (const v of s.views) { const ents = s.saved.files[v.name]; if (ents) changed += reconcile(v.units, ents, Date.now()).length; }
+    return changed;
+  }
+
+  /** Switch which plugin commands count as text; the rows appear in the files they belong to. */
+  function setPluginCommands(names: string[]): void {
+    const st = s.saved.settings;
+    st.pluginsAsked = true;
+    const before = new Set(st.pluginCommands);
+    if (names.length === before.size && names.every(n => before.has(n))) { ctx.persist(); return; }
+    st.pluginCommands = names;
+    const total = (): number => s.views.reduce((n, v) => n + v.units.length, 0);
+    const was = total();
+    ingest(s.game);
+    unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u]));
+    if (s.cur && !unitMap.has(s.cur)) s.cur = s.mode === 'table' ? null : ctx.visible()[0]?.key ?? null;
+    ctx.persist(); renderAll();
+    const d = total() - was;
+    toast(d > 0 ? `Додано рядків із плагінів: ${d}` : d < 0 ? `Прибрано рядків із плагінів: ${-d}` : 'Рядків не змінилося');
+  }
+
+  /** Once per project, right after the game is first opened: ask which plugin commands hold text. */
+  function offerPluginTexts(): void {
+    const st = s.saved.settings;
+    if (st.pluginsAsked || s.phone || !s.game.length) return;
+    if (!pluginCandidates(s.game).some(c => c.likely)) { st.pluginsAsked = true; ctx.persist(); return; }
+    openPluginTexts(ctx, setPluginCommands);
   }
 
   async function openFolder(): Promise<void> {
@@ -509,10 +561,24 @@ export async function start(root: HTMLElement): Promise<void> {
     await loadFiles(files);
   }
 
+  function openImportDlg(): void {
+    s.leftOpen = false; renderLayout();
+    openImport(ctx, adopt, loadFiles);
+  }
   const doBuild = () => openBuild(ctx, dataDir, n => { s.lastBuild = { at: Date.now(), n }; renderTop(); });
 
   function openSettingsDlg(): void {
-    openSettings(ctx, () => { s.views.forEach(v => { s.saved.files[v.name] = {}; }); renderAll(); ctx.persist(); }, adopt);
+    openSettings(ctx, {
+      reset: () => {
+        // The project is empty again, so the game's strings have to be read into it afresh (plugin texts are off by default).
+        if (s.game.length) { ingest(s.game); unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u])); if (s.cur && !unitMap.has(s.cur)) s.cur = null; }
+        s.views.forEach(v => { s.saved.files[v.name] = {}; });
+        renderAll(); ctx.persist();
+      },
+      adopt,
+      plugins: () => openPluginTexts(ctx, setPluginCommands),
+      importFiles: openImportDlg,
+    });
   }
 
   /* ---------- popovers (speaker / length) ---------- */
@@ -564,12 +630,30 @@ export async function start(root: HTMLElement): Promise<void> {
   /* ---------- menu bar ---------- */
   type MenuItem = '-' | { t: string; fn: () => void; sc?: string };
   const MENUS: Record<string, MenuItem[]> = {
-    'Файл': [{ t: 'Відкрити папку гри…', fn: () => void openFolder() }, { t: 'Зібрати…', fn: doBuild, sc: 'F5' }, '-', { t: 'Налаштування…', fn: openSettingsDlg }],
+    'Файл': [{ t: 'Відкрити папку гри…', fn: () => void openFolder() }, { t: 'Відкрити файли або вставити JSON…', fn: openImportDlg }, { t: 'Зібрати…', fn: doBuild, sc: 'F5' }, '-', { t: 'Налаштування…', fn: openSettingsDlg }],
     'Вигляд': [{ t: 'Таблиця', fn: () => setMode('table') }, { t: 'Редагування', fn: () => setMode('edit') }, { t: 'Вичитування', fn: () => setMode('review') }],
     'Навігація': [{ t: 'Наступний рядок без перекладу', fn: () => jump('new', 1) }, { t: 'Наступна проблема QA', fn: () => jump('qa', 1) }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: '⇧⇧' }],
-    'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Налаштування…', fn: openSettingsDlg }],
+    'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенести довгі рядки у файлі', fn: wrapFile }, '-', { t: 'Налаштування…', fn: openSettingsDlg }],
     'Довідка': [{ t: 'Гарячі клавіші', fn: () => toggleKeys() }],
   };
+  /** Re-flow every translated message of the current file whose lines are wider than the game window. */
+  function wrapFile(): void {
+    const v = ctx.view();
+    const limit = lineLimit();
+    if (!v) { toast('Спершу відкрийте файл'); return; }
+    if (!limit) { toast('Ширину рядка вимкнено в налаштуваннях'); return; }
+    const ents = ctx.entries(v.name);
+    let n = 0;
+    for (const u of v.units) {
+      const e = ents[u.key];
+      if (!e?.target || (u.kind !== 'dialogue' && u.kind !== 'scroll')) continue;
+      if (!activeIssues(u, e, qaOpts()).some(i => i.key === 'wrap')) continue;
+      const text = wrapLines(e.target, limitFor(limit, u.face));
+      if (text !== e.target) { ents[u.key] = note(edit(e, u, text, s.mode === 'review' ? 'review' : 'translate', Date.now()), 'перенесено рядки', text, s.who, Date.now()); n++; }
+    }
+    if (n) { s.sess.n += n; ctx.persist(); ctx.invalidateTm(); renderAll(); }
+    toast(n ? `Перенесено рядки: ${plural(n, ['репліка', 'репліки', 'реплік'])}` : 'Задовгих рядків у файлі немає');
+  }
   function jump(kind: 'new' | 'qa', dir: 1 | -1): void {
     const v = ctx.view();
     if (!v) return;
@@ -681,6 +765,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!t.closest('#keypop,#hk')) $('#keypop').hidden = true;
     if (t.closest('#open,#open2')) { void openFolder(); return; }
     if (t.closest('#resume')) { void resume(); return; }
+    if (t.closest('#imp2,#mt-open')) { openImportDlg(); return; }
     if (t.closest('#settings,#ab-set,#proj-btn')) { openSettingsDlg(); return; }
     if (t.closest('#build,#run-btn,#sb-build')) { doBuild(); return; }
     if (t.closest('#sb-sync')) { openSettingsDlg(); return; }

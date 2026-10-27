@@ -6,6 +6,8 @@ import type { Ctx } from './state';
  * RPG Maker MV stores no speaker name. Two things usually identify who talks: the face graphic of the message
  * and the event it sits in (an NPC). The translator names each once; every message that shares it gets the name.
  */
+const KIND_LABEL = { face: 'Обличчя', note: 'Позначка', event: 'Подія' } as const;
+
 export function openSpeakers(ctx: Ctx): void {
   const { s } = ctx;
   const cands = speakerCandidates(s.views);
@@ -20,7 +22,7 @@ export function openSpeakers(ctx: Ctx): void {
     return `Мовця визначено для ${named.toLocaleString('uk-UA')} із ${total.toLocaleString('uk-UA')} реплік.`;
   };
   dlg.innerHTML = `<form method="dialog"><h2 id="sp-t">Хто говорить</h2>
-    <p class="hint">У грі на RPG Maker MV імен мовців немає. Підказують <b>обличчя</b> персонажа в діалозі й <b>подія</b>, до якої належить репліка (часто це сам NPC). Вкажіть ім’я один раз: воно підставиться в усі репліки з тим самим обличчям чи подією.</p>
+    <p class="hint">У грі на RPG Maker MV імен мовців немає. Підказують <b>обличчя</b> персонажа в діалозі, <b>позначка</b> розробників (коментар перед текстом, наприклад «MARCOH») і <b>подія</b>, до якої належить репліка (часто це сам NPC). Вкажіть ім’я один раз: воно підставиться в усі репліки з тією самою ознакою.</p>
     <div class="grid"><label for="sp-q">Пошук</label><input id="sp-q" type="search" placeholder="Обличчя, подія або текст"></div>
     <p class="sum" id="sp-sum" role="status"></p>
     <div class="sp-list" id="sp-list"></div>
@@ -34,7 +36,7 @@ export function openSpeakers(ctx: Ctx): void {
     const q = ($('#sp-q', dlg) as HTMLInputElement).value.trim().toLowerCase();
     const list = cands.filter(c => !q || (c.label + ' ' + c.sample + ' ' + (draft.get(c.key) ?? '')).toLowerCase().includes(q));
     $('#sp-sum', dlg).textContent = `${covered()} Показано ${list.length} із ${plural(cands.length, ['варіанта', 'варіантів', 'варіантів'])}.`;
-    $('#sp-list', dlg).innerHTML = list.slice(0, 80).map((c, i) => `<div class="sp-row"><span class="sp-k ${c.kind}">${c.kind === 'face' ? 'Обличчя' : 'Подія'}</span><div class="sp-b"><b>${esc(c.label)}</b> <span class="hint">· ${plural(c.count, ['репліка', 'репліки', 'реплік'])}</span><div class="hint sp-s">«${esc(c.sample)}»</div></div><input class="sp-in" data-k="${esc(c.key)}" list="sp-names" value="${esc(draft.get(c.key) ?? '')}" placeholder="Ім’я мовця" aria-label="Ім’я мовця для ${esc(c.label)}" ${i === 0 ? '' : ''}></div>`).join('') || '<p class="hint">Нічого не знайдено.</p>';
+    $('#sp-list', dlg).innerHTML = list.slice(0, 80).map((c, i) => `<div class="sp-row"><span class="sp-k ${c.kind}">${KIND_LABEL[c.kind]}</span><div class="sp-b"><b>${esc(c.label)}</b> <span class="hint">· ${plural(c.count, ['репліка', 'репліки', 'реплік'])}</span><div class="hint sp-s">«${esc(c.sample)}»</div></div><input class="sp-in" data-k="${esc(c.key)}" list="sp-names" value="${esc(draft.get(c.key) ?? '')}" placeholder="Ім’я мовця" aria-label="Ім’я мовця для ${esc(c.label)}" ${i === 0 ? '' : ''}></div>`).join('') || '<p class="hint">Нічого не знайдено.</p>';
   };
   dlg.addEventListener('input', e => {
     const t = e.target as HTMLInputElement;

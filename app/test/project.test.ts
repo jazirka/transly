@@ -136,3 +136,14 @@ describe('duplicates', () => {
     expect(saved.files['B.json']!['8']!.status).toBe('done');
   });
 });
+
+describe('looksLikeProject', () => {
+  it('recognises a saved project, also after a merge, and not a game file', async () => {
+    const { emptyProject, looksLikeProject, mergeProjects, serialize } = await import('../src/core');
+    const p = emptyProject('Гра');
+    expect(looksLikeProject(serialize(p))).toBe(true);
+    expect(looksLikeProject(serialize(mergeProjects(p, emptyProject('Гра')).project))).toBe(true);
+    expect(looksLikeProject('[null,{"id":1,"name":"Torch"}]')).toBe(false);
+    expect(looksLikeProject('{"events":[null],"displayName":"","versionId":1}')).toBe(false);
+  });
+});

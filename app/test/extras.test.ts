@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GameNameIndex, apply, autoLineLimit, check, extract, pluginCandidates, readGame, splitPluginCommand, wrapLines } from '../src/core';
+import { GameNameIndex, isRpgMakerFile, looksLikeProse, apply, autoLineLimit, check, extract, pluginCandidates, readGame, splitPluginCommand, wrapLines } from '../src/core';
 import type { Translations, Unit } from '../src/core';
 
 const cmd = (code: number, parameters: unknown[]) => ({ code, indent: 0, parameters });
@@ -35,6 +35,18 @@ describe('plugin command text', () => {
     const c = pluginCandidates([{ name: 'Map001.json', json: many }]);
     expect(c.map(x => [x.name, x.likely])).toEqual([['GabText', true]]);
     expect(c[0]!.count).toBe(5);
+  });
+});
+
+describe('prose detection', () => {
+  it('tells player text from technical arguments', () => {
+    for (const t of ['\\N[1] feels a little less hungry.', 'You have travelled a great distance', '"I found a small cafe from the city..."', 'Thank you very much!']) expect(looksLikeProse(t), t).toBe(true);
+    for (const t of ['Screen Create Noise', 'Screen Change Noise Rate 0.05', 'SATURATION adjustment 0', 'on 1', 'black 0 0 170 0 0 0 0', 'circle_3 72 406 255', 'radius 100 #FFCC00', 'All']) expect(looksLikeProse(t), t).toBe(false);
+  });
+  it('does not pre-select a plugin whose arguments are technical', () => {
+    const list = [...Array(6)].map((_, i) => cmd(356, [`HorrorEffects Screen Change Noise Rate 0.${i}`]));
+    const c = pluginCandidates([{ name: 'Map001.json', json: { events: [null, { id: 1, name: 'a', pages: [{ list }] }] } }]);
+    expect(c.map(x => [x.name, x.likely])).toEqual([['HorrorEffects', false]]);
   });
 });
 
@@ -82,5 +94,12 @@ describe('line width', () => {
     expect(check(u, wrapLines('слово '.repeat(14), 40), { tolerancePct: 1000, terms: [], lineLimit: 66 }).map(i => i.key)).toEqual([]);
     expect(check({ ...u, face: 'A#1' }, 'я'.repeat(60), { tolerancePct: 1000, terms: [], lineLimit: 66 }).map(i => i.key)).toEqual(['wrap']);
     expect(check({ source: 'x'.repeat(70), kind: 'choice' as const }, long, { tolerancePct: 1000, terms: [], lineLimit: 66 })).toEqual([]);
+  });
+});
+
+describe('MapInfos', () => {
+  it('is picked up with the game but is not a translatable file by itself', () => {
+    expect(isRpgMakerFile('MapInfos.json')).toBe(true);
+    expect(extract({ name: 'MapInfos.json', json: [null, { id: 1, name: 'x' }] })).toEqual([]);
   });
 });

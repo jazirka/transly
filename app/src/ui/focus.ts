@@ -1,4 +1,4 @@
-import { activeIssues, addComment, displayLength, edit as editFn, lengthDeviation, note, propagate, sendBack, sourceChanged, submit, termsIn } from '../core';
+import { activeIssues, addComment, displayLength, edit as editFn, lengthDeviation, limitFor, note, propagate, sendBack, sourceChanged, submit, termsIn, wrapLines } from '../core';
 import type { Entry, Unit } from '../core';
 import { $, esc, plural, toast } from './dom';
 import { markup } from './markup';
@@ -14,6 +14,7 @@ const I = {
   up: '<svg viewBox="0 0 16 16"><path d="M4 9.5L8 5.5l4 4"/></svg>',
   down: '<svg viewBox="0 0 16 16"><path d="M4 6.5L8 10.5l4-4"/></svg>',
   ok: '<svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3.2L13 4.8"/></svg>',
+  wrap: '<svg viewBox="0 0 16 16"><path d="M2.5 4h11M2.5 8h8.5a2.5 2.5 0 0 1 0 5H8M9.5 11l-1.7 2 1.7 2M2.5 12h2"/></svg>',
 };
 
 /** Static skeleton of the editing view; renderFocus() fills the pieces so the textarea keeps focus while typing. */
@@ -29,6 +30,7 @@ export const FOCUS_HTML = `<div class="fc"><div class="fc-in">
       <button class="ib" id="b-copy" title="Копіювати оригінал у переклад" aria-label="Копіювати оригінал у переклад">${I.copy}</button>
       <button class="ib" id="b-clear" title="Очистити переклад (можна скасувати)" aria-label="Очистити переклад">${I.clear}</button>
       <button class="ib" id="b-code" title="Вставити відсутні керівні коди з оригіналу" aria-label="Вставити керівний код">${I.code}</button>
+      <button class="ib" id="b-wrap" title="Перенести рядки за шириною вікна гри" aria-label="Перенести рядки">${I.wrap}</button>
       <button class="ib" id="b-play" title="Зібрати й перевірити в грі (F5)" aria-label="Перевірити в грі" hidden>${I.play}</button>
       <button class="ib" id="b-return" title="Повернути перекладачу" aria-label="Повернути перекладачу" hidden>${I.back}</button>
       <span class="stepper" role="group" aria-label="Перехід між рядками списку"><button class="ib sm" id="f-prev" title="Попередній рядок у списку (Alt+↑)" aria-label="Попередній рядок">${I.up}</button><span class="queue" id="f-queue"></span><button class="ib sm" id="f-next" title="Наступний рядок у списку (Alt+↓)" aria-label="Наступний рядок">${I.down}</button></span>
@@ -51,7 +53,7 @@ export const FOCUS_HTML = `<div class="fc"><div class="fc-in">
     <button role="tab" data-p="s-hi"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.2l2 1.3"/></svg><span class="tl">Історія</span></button>
   </div>
   <div class="ibody">
-    <div class="pane on" id="s-tm"><div><div class="lbl">Глосарій у рядку</div><div id="i-gl"></div></div><div><div class="lbl">Пам’ять перекладів <span class="r" id="tm-n"></span></div><div id="i-tm"></div></div></div>
+    <div class="pane on" id="s-tm"><div><div class="lbl">Глосарій у рядку</div><div id="i-gl"></div></div><div id="gn-box" hidden><div class="lbl">Назви з гри</div><div id="i-gn"></div></div><div><div class="lbl">Пам’ять перекладів <span class="r" id="tm-n"></span></div><div id="i-tm"></div></div></div>
     <div class="pane" id="s-gl">
       <div class="fin" style="width:auto"><input id="gl-q" placeholder="Пошук у глосарії" aria-label="Пошук у глосарії"></div>
       <table class="gt"><thead><tr><th>EN</th><th>UK</th><th>Тип</th></tr></thead><tbody id="gtb"></tbody></table>
@@ -71,6 +73,7 @@ const stageOf = (ctx: Ctx) => (ctx.s.mode === 'review' ? 'review' : 'translate')
 const entryOf = (ctx: Ctx, u: Unit): Entry | undefined => ctx.entries(ctx.s.current!)[u.key];
 
 let tmCur: { t: string; score: number }[] = [];
+let gameNames: { file: string; key: string; name: string }[] = [];
 
 /** Fill the editing view from state. The textarea is only reset when the unit changed. */
 export function renderFocus(ctx: Ctx, desktop: boolean): void {
@@ -119,7 +122,10 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
   const idx = all.findIndex(x => x.key === u.key);
   $('#c-near').innerHTML = [-2, -1, 0, 1, 2].map(d => all[idx + d]).map((x, j) => x ? `<div class="${j === 2 ? 'me' : ''}"><span>${idx + j - 1}</span><span>${esc(ctx.speaker(x))}</span><span>${esc(x.source.length > 34 ? x.source.slice(0, 34) + '…' : x.source)}</span></div>` : '').join('');
   const same = ctx.dups().others(s.current!, u.key).length;
-  $('#f-meta').textContent = `Тип: ${u.kind}${same ? ` · однакових рядків у грі: ${same}` : ''}`;
+  const label = ctx.view()?.label;
+  const limit = u.kind === 'dialogue' || u.kind === 'scroll' ? limitFor(ctx.lineLimit(), u.face) : 0;
+  $('#b-wrap').hidden = !limit;
+  $('#f-meta').textContent = [`Тип: ${u.kind}`, label ? `Місцевість: ${label}` : '', u.note ? `Позначка розробників: ${u.note}` : '', limit ? `Ширина рядка: до ${limit} символів${u.face ? ' (поруч обличчя)' : ''}` : '', same ? `однакових рядків у грі: ${same}` : ''].filter(Boolean).join(' · ');
   $('#cm-badge').textContent = String(e?.comments?.length ?? 0);
   renderSide(ctx, u, e, hits);
 }
@@ -143,7 +149,7 @@ function refreshQa(ctx: Ctx, u: Unit): void {
   if (sourceChanged(e, u)) h += `<div class="qa-row warn"><span class="dot"></span><span class="qa-msg">Оригінал змінено в грі після перекладу. Було: «${esc(e?.src ?? '')}». Перевірте переклад</span></div>`;
   if (t) {
     if (!iss.length) h += `<div class="qa-row good"><span class="dot"></span>${ignored.length ? 'QA: активних проблем немає' : 'QA: проблем не знайдено'}</div>`;
-    h += iss.map(x => `<div class="qa-row ${x.severity}"><span class="dot"></span><span class="qa-msg">${esc(x.message)}</span><span class="qa-act">${x.codes?.length ? `<button class="fix" data-ins="${esc(x.codes.join(''))}">Вставити ${esc(x.codes.join(' '))}</button>` : ''}<button class="ign" data-ign="${x.key}" title="Не вважати проблемою для цього рядка">Ігнорувати</button></span></div>`).join('');
+    h += iss.map(x => `<div class="qa-row ${x.severity}"><span class="dot"></span><span class="qa-msg">${esc(x.message)}</span><span class="qa-act">${x.codes?.length ? `<button class="fix" data-ins="${esc(x.codes.join(''))}">Вставити ${esc(x.codes.join(' '))}</button>` : ''}${x.key === 'wrap' ? '<button class="fix" data-wrap>Перенести рядки</button>' : ''}<button class="ign" data-ign="${x.key}" title="Не вважати проблемою для цього рядка">Ігнорувати</button></span></div>`).join('');
     h += ignored.map(x => `<div class="qa-row muted"><span class="dot"></span><span class="qa-msg">${esc(x.message)}</span><span class="qa-act"><span class="tagi">ігноровано</span><button class="ign" data-unign="${x.key}">Повернути</button></span></div>`).join('');
   }
   $('#f-qa').innerHTML = h;
@@ -167,6 +173,13 @@ function renderSide(ctx: Ctx, u: Unit, e: Entry | undefined, hits: ReturnType<ty
   document.querySelectorAll<HTMLElement>('.ibody .pane').forEach(p => p.classList.toggle('on', p.id === map[tab]));
   if (tab === 'hints') {
     $('#i-gl').innerHTML = hits.length ? hits.map(g => `<div class="gloss-row"><b>${esc(g.en)}</b><span class="arr">→</span><span>${esc(g.uk)}${g.alt?.length ? `<small class="hint"> · ${esc(g.alt.join(', '))}</small>` : ''}</span>${g.kind ? `<span class="t">${esc(g.kind.slice(0, 18))}</span>` : ''}</div>`).join('') : '<div class="hint">Термінів немає</div>';
+    const gn = ctx.names().find(u.source).filter(g => !(g.file === s.current && g.key === u.key));
+    gameNames = gn;
+    $('#gn-box').hidden = !gn.length;
+    $('#i-gn').innerHTML = gn.map((g, n) => {
+      const t = ctx.entries(g.file)[g.key]?.target;
+      return t ? `<div class="gloss-row gn" data-gn="${n}" role="button" tabindex="0" title="Вставити в переклад"><b>${esc(g.name)}</b><span class="arr">→</span><span>${esc(t)}</span><span class="t">${esc(g.file.replace(/\.json$/, ''))}</span></div>` : `<div class="gloss-row gn"><b>${esc(g.name)}</b><span class="arr">→</span><span class="hint">ще не перекладено</span><span class="t">${esc(g.file.replace(/\.json$/, ''))}</span></div>`;
+    }).join('');
     const m = ctx.tm().find(u.source, { min: 50, limit: 4, exclude: x => x.s === u.source && x.t === (e?.target ?? '') });
     tmCur = m;
     $('#tm-n').textContent = m.length ? plural(m.length, ['збіг', 'збіги', 'збігів']) : '';
@@ -260,6 +273,20 @@ export function focusClick(ctx: Ctx, t: HTMLElement): boolean {
   const ta = $('#i-tr') as HTMLTextAreaElement;
   if (t.closest('#b-copy')) { setText(ctx, u, u.source, 'скопійовано оригінал'); return true; }
   if (t.closest('#b-clear')) { setText(ctx, u, '', 'очищено'); return true; }
+  if (t.closest('#b-wrap,[data-wrap]')) {
+    const limit = limitFor(ctx.lineLimit(), u.face);
+    if (!limit) { toast('Ширину рядка вимкнено в налаштуваннях'); return true; }
+    const text = wrapLines(ta.value, limit);
+    if (text === ta.value) toast('Рядки вже вміщаються'); else setText(ctx, u, text, 'перенесено рядки');
+    return true;
+  }
+  const gn = t.closest<HTMLElement>('[data-gn]');
+  if (gn) {
+    const g = gameNames[Number(gn.dataset.gn)];
+    const tr = g ? ctx.entries(g.file)[g.key]?.target : '';
+    if (tr) { ta.focus(); ta.setRangeText(tr, ta.selectionStart, ta.selectionEnd, 'end'); ta.dispatchEvent(new Event('input', { bubbles: true })); }
+    return true;
+  }
   if (t.closest('#b-code')) {
     const miss = activeIssues(u, { target: ta.value }, ctx.qaOpts()).find(i => i.key === 'codes')?.codes ?? [];
     if (!miss.length) { toast('Усі керівні коди вже є'); return true; }

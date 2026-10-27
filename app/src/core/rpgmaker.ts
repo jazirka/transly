@@ -28,7 +28,8 @@ const DB_FIELDS: Record<string, string[]> = {
 const DB_KIND: Record<string, Unit['kind']> = { name: 'name', nickname: 'name', description: 'description', profile: 'description' };
 
 /** Does this look like one of RPG Maker MV/MZ's data files? */
-export const isRpgMakerFile = (name: string): boolean => /^Map\d+\.json$/.test(name) || name === 'CommonEvents.json' || name === 'Troops.json' || name === 'System.json' || name in DB_FIELDS;
+/** MapInfos.json holds no text for players, but it names the maps (see mapLabels), so it is read along with the rest. */
+export const isRpgMakerFile = (name: string): boolean => /^Map\d+\.json$/.test(name) || name === 'MapInfos.json' || name === 'CommonEvents.json' || name === 'Troops.json' || name === 'System.json' || name in DB_FIELDS;
 
 const isMap = (name: string) => /^Map\d+\.json$/.test(name);
 const isCommonEvents = (name: string) => name === 'CommonEvents.json';

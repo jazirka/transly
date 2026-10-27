@@ -109,6 +109,15 @@ export function serialize(p: SavedProject): string {
   return JSON.stringify(p);
 }
 
+/**
+ * Cheap check on the start of a file: is this a project file (as opposed to a game's JSON)? Lets a phone take both
+ * kinds from one picker without parsing a large game file twice.
+ */
+export function looksLikeProject(head: string): boolean {
+  const h = head.slice(0, 4000);
+  return /^\s*\{/.test(h) && /"version"\s*:\s*1\b/.test(h) && /"sourceLang"\s*:/.test(h);
+}
+
 /** Parse and validate; throws a readable error for unusable input instead of loading garbage. */
 export function deserialize(text: string): SavedProject {
   let raw: unknown;

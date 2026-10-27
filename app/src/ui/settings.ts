@@ -1,7 +1,8 @@
-import { DEFAULT_SETTINGS, deserialize, emptyProject, mergeProjects, parseDelimited, parseHtmlTable, parseTerms, serialize, termsFromTable } from '../core';
+import { DEFAULT_SETTINGS, emptyProject, parseDelimited, parseHtmlTable, parseTerms, serialize, termsFromTable } from '../core';
 import type { GlossaryTerm } from '../core';
 import { $, el, esc, plural, toast } from './dom';
 import type { Ctx } from './state';
+import { importProjectText } from './import-dialog';
 import { importReference } from './reference';
 import { saveFile } from './save';
 import { openSpeakers } from './speakers-dialog';
@@ -19,15 +20,22 @@ export function dialog(html: string, labelId: string): HTMLDialogElement {
   return dlg;
 }
 
-export function openSettings(ctx: Ctx, onReset: () => void, onImport: () => void): void {
+/** Things the settings dialog starts but the shell owns. */
+export interface SettingsActions { reset: () => void; adopt: () => void; plugins: () => void; importFiles: () => void }
+
+export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugins: onPlugins, importFiles: onFiles }: SettingsActions): void {
   const st = ctx.s.saved.settings;
   const sync = loadSyncConfig();
+  const autoNow = st.lineLimit === 0 ? ctx.lineLimit() : 0;
   const dlg = dialog(`<form method="dialog"><h2 id="st-t">Налаштування</h2>
     <div class="grid"><label for="st-tol">Допуск довжини перекладу відносно оригіналу, %</label><input id="st-tol" type="number" min="5" max="100" step="5" value="${st.tolerancePct}">
       <label for="st-who">Ваше ім’я в коментарях та історії</label><input id="st-who" maxlength="40" value="${st.who}"></div>
     <label class="achk"><input type="checkbox" id="st-block" ${st.blockErrors ? 'checked' : ''}> Не надсилати рядок із помилкою QA</label>
     <label class="achk"><input type="checkbox" id="st-prop" ${st.propagate ? 'checked' : ''}> Переносити переклад в однакові рядки (інші файли теж)</label>
-    <p class="hint">Довжина не обмежується: застосунок лише попереджає, коли переклад дуже відрізняється від оригіналу.</p>
+    <div class="grid"><label for="st-lim-mode">Ширина рядка в повідомленні (вікно гри)</label><select id="st-lim-mode"><option value="auto" ${st.lineLimit === 0 ? 'selected' : ''}>За оригіналом гри${autoNow ? ` (зараз ${autoNow})` : ''}</option><option value="custom" ${st.lineLimit > 0 ? 'selected' : ''}>Своє число</option><option value="off" ${st.lineLimit < 0 ? 'selected' : ''}>Не перевіряти</option></select>
+      <label for="st-lim">Символів у рядку</label><input id="st-lim" type="number" min="10" max="200" value="${st.lineLimit > 0 ? st.lineLimit : autoNow || 50}" ${st.lineLimit > 0 ? '' : 'disabled'}></div>
+    <p class="hint">Довжина тексту не обмежується: застосунок лише попереджає, коли переклад дуже відрізняється від оригіналу або рядок ширший за вікно гри (з обличчям поруч вікно вужче). Кнопка «Перенести рядки» розбиває текст сама.</p>
+    <details><summary>Тексти плагінів</summary><p class="hint">Частина ігор показує текст командами плагінів, а не вікнами повідомлень. ${st.pluginCommands.length ? `Зараз увімкнено: ${esc(st.pluginCommands.join(', '))}.` : 'Поки нічого не увімкнено.'}</p><div class="acts l"><button class="btn" type="button" id="st-plug">Обрати команди з текстом…</button></div></details>
     <details><summary>Імпорт глосарію</summary>
       <p class="hint">З файлу: таблиця Google Sheets, збережена як веб-сторінка (.html), або .csv / .tsv із колонками «Оригінал», «Переклад 1…», «Опис», «Розділ».</p>
       <label class="achk"><input type="checkbox" id="st-terms-qa"> Перевіряти ці терміни в QA (для великого загального словника краще вимкнути: він лише підказує)</label>
@@ -45,9 +53,12 @@ export function openSettings(ctx: Ctx, onReset: () => void, onImport: () => void
         <label for="sy-every">Автоматично</label><select id="sy-every">${[[0, 'Лише за кліком'], [30, 'Кожні 30 хвилин'], [180, 'Кожні 3 години'], [360, 'Кожні 6 годин']].map(([v, l]) => `<option value="${v}" ${sync.everyMin === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
       <div class="acts l"><button class="btn p" type="button" id="sy-go">Синхронізувати зараз</button></div><p class="hint" id="sy-state" role="status">${sync.last ? 'Остання синхронізація: ' + new Date(sync.last).toLocaleString('uk-UA') : 'Ще не синхронізовано'}</p></details>
     <details><summary>Обмін проєктом через файл</summary><p class="hint">Файл містить переклад, глосарій, пам’ять і оригінальні рядки, без файлів гри. Імпорт зливає зміни по рядках: лишається новіша правка.</p>
-      <div class="acts l"><button class="btn" type="button" id="st-export">Зберегти проєкт у файл</button><button class="btn" type="button" id="st-import">Імпортувати з файлу…</button></div><input type="file" id="st-file" accept="application/json,.json" hidden></details>
+      <div class="acts l"><button class="btn" type="button" id="st-export">Зберегти проєкт у файл</button><button class="btn" type="button" id="st-import">Імпортувати з файлу…</button><button class="btn" type="button" id="st-files">Відкрити файли або вставити JSON…</button></div><input type="file" id="st-file" accept="application/json,.json" hidden></details>
     <details><summary>Небезпечна зона</summary><p class="hint">Видаляє весь переклад, глосарій та імпортовану пам’ять у цьому браузері. Файли гри не змінюються.</p><button class="btn" type="button" id="st-reset">Скинути проєкт…</button></details>
     <div class="acts"><button class="btn" value="cancel">Скасувати</button><button class="btn p" id="st-save" value="save">Зберегти</button></div></form>`, 'st-t');
+  $('#st-lim-mode', dlg).addEventListener('change', e => { ($('#st-lim', dlg) as HTMLInputElement).disabled = (e.target as HTMLSelectElement).value !== 'custom'; });
+  $('#st-plug', dlg).addEventListener('click', () => { dlg.close(); onPlugins(); });
+  $('#st-files', dlg).addEventListener('click', () => { dlg.close(); onFiles(); });
   const num = () => Number(($('#st-tol', dlg) as HTMLInputElement).value);
   $('#st-save', dlg).addEventListener('click', e => {
     const v = num();
@@ -55,6 +66,9 @@ export function openSettings(ctx: Ctx, onReset: () => void, onImport: () => void
     st.tolerancePct = v;
     st.blockErrors = ($('#st-block', dlg) as HTMLInputElement).checked;
     st.propagate = ($('#st-prop', dlg) as HTMLInputElement).checked;
+    const mode = ($('#st-lim-mode', dlg) as HTMLSelectElement).value, lim = Number(($('#st-lim', dlg) as HTMLInputElement).value);
+    if (mode === 'custom' && !(lim >= 10 && lim <= 200)) { e.preventDefault(); toast('Ширина рядка має бути від 10 до 200 символів'); return; }
+    st.lineLimit = mode === 'off' ? -1 : mode === 'custom' ? Math.round(lim) : 0;
     st.who = ($('#st-who', dlg) as HTMLInputElement).value.trim() || DEFAULT_SETTINGS.who;
     ctx.s.who = st.who;
     ctx.persist(); ctx.render(); toast('Налаштування збережено');
@@ -133,11 +147,8 @@ export function openSettings(ctx: Ctx, onReset: () => void, onImport: () => void
     const f = file.files?.[0];
     if (!f) return;
     try {
-      const other = deserialize(await f.text());
-      const r = mergeProjects(ctx.s.saved, other);
-      ctx.s.saved = r.project;
-      onImport();
-      toast(r.conflicts.length ? `Проєкт злито. Конфліктів: ${r.conflicts.length}: лишилась новіша правка` : 'Проєкт злито');
+      const conflicts = importProjectText(ctx, await f.text(), onImport);
+      toast(conflicts ? `Проєкт злито. Конфліктів: ${conflicts}: лишилась новіша правка` : 'Проєкт злито');
       dlg.close();
     } catch (err) { toast(err instanceof Error ? err.message : 'Не вдалося прочитати файл'); }
   });

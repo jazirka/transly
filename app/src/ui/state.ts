@@ -1,4 +1,5 @@
 import { TmIndex, activeIssues } from '../core';
+import type { GameNameIndex } from '../core';
 import type { Autosave, DupIndex, Entry, FileView, GameFile, SavedProject, Status, Unit } from '../core';
 
 export type Mode = 'table' | 'edit' | 'review';
@@ -46,7 +47,11 @@ export interface Ctx {
   entries(file: string): Record<string, Entry>;
   /** Who speaks this unit (game name, or the translator's face/event mapping). */
   speaker(u: Unit): string;
-  qaOpts(): { tolerancePct: number; terms: { en: string; uk: string; alt?: string[]; qa?: boolean }[] };
+  qaOpts(): { tolerancePct: number; terms: { en: string; uk: string; alt?: string[]; qa?: boolean }[]; lineLimit?: number };
+  /** Effective longest line of a message, 0 when not checked. */
+  lineLimit(): number;
+  /** Names the game's database defines (items, skills, characters…). */
+  names(): GameNameIndex;
   view(): FileView | null;
   unit(key: string): Unit | undefined;
   /** Units of the current file that pass the status/search/speaker/length filters. */

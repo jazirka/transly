@@ -406,8 +406,8 @@ export async function start(root: HTMLElement): Promise<void> {
     const nSel = ids.filter(k => s.checked.has(k)).length;
     const hasWho = v.units.some(u => ctx.speaker(u));
     grid.classList.toggle('no-who', !hasWho);
-    grid.style.setProperty('--cols', hasWho ? '34px 22px 110px 96px minmax(160px,.9fr) minmax(180px,1fr) 60px' : '34px 22px 110px minmax(160px,.9fr) minmax(180px,1fr) 60px');
-    let h = `<div class="gh" role="row"><div class="gcheck" role="columnheader"><input type="checkbox" id="selall" aria-label="Вибрати всі видимі рядки" ${nSel && nSel === ids.length ? 'checked' : ''}></div><div title="Статус" role="columnheader" class="s"><span class="vh">Статус</span></div><div class="s" role="columnheader">Ключ</div><div class="s" role="columnheader">Мовець</div><div role="columnheader">Оригінал · EN</div><div class="s" role="columnheader">Переклад · UK</div><div class="s" role="columnheader" title="Довжина перекладу / довжина оригіналу (без керівних кодів). Рекомендація: якнайближче до оригіналу" style="justify-content:flex-end;border-right:0">Знаків</div></div>`;
+    grid.style.setProperty('--cols', hasWho ? '34px 22px 110px 96px minmax(160px,.9fr) minmax(180px,1fr) 78px' : '34px 22px 110px minmax(160px,.9fr) minmax(180px,1fr) 78px');
+    let h = `<div class="gh" role="row"><div class="gcheck" role="columnheader"><input type="checkbox" id="selall" aria-label="Вибрати всі видимі рядки" ${nSel && nSel === ids.length ? 'checked' : ''}></div><div title="Статус" role="columnheader" class="s"><span class="vh">Статус</span></div><div class="s" role="columnheader">Ключ</div><div class="s" role="columnheader">Мовець</div><div role="columnheader">Оригінал · EN</div><div class="s" role="columnheader">Переклад · UK</div><div class="s" role="columnheader" title="Кількість знаків: переклад / оригінал (без керівних кодів). Рекомендація: якнайближче до оригіналу" style="justify-content:flex-end;border-right:0">К-сть зн.</div></div>`;
     h += list.length ? list.map(u => rowHtml(u, idx.get(u.key)!)).join('') : `<div class="empty-wrap" role="row"><div role="gridcell">${emptyHtml}</div></div>`;
     grid.innerHTML = h;
     grid.classList.toggle('has-sel', nSel > 0);
@@ -1002,6 +1002,32 @@ export async function start(root: HTMLElement): Promise<void> {
 
   $('#fq').addEventListener('input', e => { fileQ = (e.target as HTMLInputElement).value; renderTree(); });
   $('#fq').addEventListener('keydown', e => { if (e.key === 'Escape' && fileQ) { e.stopPropagation(); fileQ = ''; ($('#fq') as HTMLInputElement).value = ''; renderTree(); } });
+  // The tab strip scrolls sideways with the wheel and with a faint thumb drawn over its top edge (no scrollbar row of its own).
+  {
+    const host = $('#tabs-host'), bar = host.parentElement!;
+    const track = el('div', 'tabs-track'), thumb = el('i', 'tabs-thumb');
+    track.appendChild(thumb); bar.appendChild(track);
+    const sync = (): void => {
+      const over = host.scrollWidth - host.clientWidth;
+      track.hidden = over <= 1;
+      if (over <= 1) return;
+      const w = Math.max(28, (host.clientWidth / host.scrollWidth) * track.clientWidth);
+      thumb.style.width = `${w}px`;
+      thumb.style.transform = `translateX(${(host.scrollLeft / over) * (track.clientWidth - w)}px)`;
+    };
+    host.addEventListener('scroll', sync, { passive: true });
+    new ResizeObserver(sync).observe(host);
+    new MutationObserver(sync).observe(host, { childList: true });
+    thumb.addEventListener('pointerdown', e => {
+      e.preventDefault(); thumb.setPointerCapture(e.pointerId); thumb.classList.add('drag');
+      const x0 = e.clientX, l0 = host.scrollLeft;
+      const move = (ev: PointerEvent): void => { const over = host.scrollWidth - host.clientWidth, room = track.clientWidth - thumb.offsetWidth; host.scrollLeft = l0 + ((ev.clientX - x0) / Math.max(1, room)) * over; };
+      const up = (): void => { thumb.classList.remove('drag'); thumb.removeEventListener('pointermove', move); thumb.removeEventListener('pointerup', up); };
+      thumb.addEventListener('pointermove', move); thumb.addEventListener('pointerup', up);
+    });
+    track.addEventListener('pointerdown', e => { if (e.target === track) host.scrollLeft += (e.offsetX > thumb.offsetLeft ? 1 : -1) * host.clientWidth * 0.8; });
+    requestAnimationFrame(sync);
+  }
   // The tab strip scrolls sideways with the wheel as well as with its scrollbar.
   $('#tabs-host').addEventListener('wheel', e => { const h = e.currentTarget as HTMLElement; if (h.scrollWidth > h.clientWidth && Math.abs(e.deltaY) > Math.abs(e.deltaX)) { h.scrollLeft += e.deltaY; e.preventDefault(); } }, { passive: false });
   root.addEventListener('dblclick', e => {

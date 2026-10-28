@@ -108,7 +108,6 @@ button{cursor:pointer}
 .bulk button:hover{background:#4a3f8a}
 
 .gridwrap{flex:1;min-height:0;overflow:auto;position:relative;scrollbar-gutter:stable}
-.gridwrap .grid{padding-right:12px}
 .grid{--cols:34px 22px 150px 92px minmax(190px,1fr) minmax(190px,1fr) 66px;min-width:780px}
 .gh,.gr{display:grid;grid-template-columns:var(--cols);align-items:stretch}
 .gh{position:sticky;top:0;z-index:2;background:var(--panel);border-bottom:1px solid var(--line);height:26px;color:var(--mute);font-size:11px}
@@ -246,7 +245,7 @@ td .term{color:#d9c3ee}
 .status .ok{color:var(--ok)}.status .bad{color:var(--bad)}
 .status span{white-space:nowrap}
 ::-webkit-scrollbar{width:10px;height:10px}
-::-webkit-scrollbar-thumb{background:#43454a;border-radius:var(--r2);border:2px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-thumb{background:transparent;border-radius:var(--r2);border:2px solid transparent;background-clip:padding-box}
 ::-webkit-scrollbar-corner{background:transparent}
 @media (prefers-reduced-motion:no-preference){.gr,.chip,.tbtn,.node{transition:background .08s}}
 /* ===== v2: two modes (table | focus), bottom panel moved into focus sidebar, tags ===== */
@@ -974,3 +973,36 @@ body.resizing{user-select:none;cursor:col-resize}
 .tr:has(>.cell-ed){background:transparent}
 .cell-ed{background:transparent;box-shadow:inset 0 0 0 1px var(--accent)}
 .tr.empty{color:var(--mute);font-style:normal}
+/* scrollbars show up while you hover the scrolling area: a slightly transparent thumb, the track lights up under the pointer */
+*:hover::-webkit-scrollbar-thumb{background:rgba(255,255,255,.22);background-clip:padding-box}
+*::-webkit-scrollbar-thumb:hover,*::-webkit-scrollbar-thumb:active{background:rgba(255,255,255,.4);background-clip:padding-box}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-track:hover{background:rgba(255,255,255,.06)}
+.gridwrap{scrollbar-gutter:auto}
+.tabs-host::-webkit-scrollbar-thumb{background:rgba(255,255,255,.22)}
+.gh>div{white-space:nowrap}
+/* tab strip: the native scrollbar is replaced by a thin thumb drawn over the strip's top edge */
+.tabs{position:relative}
+.tabs-host{transform:none;scrollbar-width:none}
+.tabs-host>*{transform:none}
+.tabs-host::-webkit-scrollbar{display:none}
+.tabs-track{position:absolute;left:0;right:0;top:0;height:6px;z-index:6}
+.tabs-track[hidden]{display:none}
+.tabs-thumb{display:block;height:3px;margin-top:0;border-radius:2px;background:rgba(255,255,255,.14);transition:background .15s,height .12s,margin .12s}
+.tabs:hover .tabs-thumb{background:rgba(255,255,255,.28)}
+.tabs-track:hover{background:rgba(255,255,255,.05)}
+.tabs-track:hover .tabs-thumb,.tabs-thumb.drag{background:rgba(255,255,255,.5);height:5px}
+/* the other scrollbars are slim and see-through as well */
+::-webkit-scrollbar{width:8px;height:8px}
+/* filter chips wrap onto a second line instead of being cut off */
+.filters{height:auto;min-height:36px;flex-wrap:wrap;overflow:visible;padding:4px 10px;row-gap:4px}
+.filters .fin{flex:0 1 200px;min-width:140px}
+.filters .chipsHost{flex-wrap:wrap}
+/* ▶ is an outlined round button, not a filled blob */
+#run-btn.tb-ic.play{width:30px;height:30px;padding:0;justify-content:center;align-items:center;background:transparent;box-shadow:inset 0 0 0 1px rgba(95,184,101,.45)}
+#run-btn.tb-ic.play svg{margin-left:2px}
+#run-btn.tb-ic.play:hover,#run-btn.tb-ic.play:focus-visible{background:transparent;box-shadow:inset 0 0 0 1.5px rgba(95,184,101,.95)}
+#run-btn.tb-ic.play:active{background:rgba(95,184,101,.12)}
+#run-btn.tb-ic.play:disabled{box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);color:var(--mute)}
+/* the last top-bar icon sits exactly over the right rail's icons */
+.topbar{padding-right:4px}

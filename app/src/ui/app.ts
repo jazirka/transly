@@ -757,7 +757,8 @@ export async function start(root: HTMLElement): Promise<void> {
     }
     s.sess.n += ok;
     ctx.persist(); ctx.invalidateTm(); renderAll();
-    toast(`Надіслано на вичитування: ${ok}${skipped.size ? `. Пропущено: ${[...skipped.values()].reduce((a, b) => a + b, 0)}` : ''}`);
+    const nSkip = [...skipped.values()].reduce((a, b) => a + b, 0);
+    toast(`Надіслано на вичитування: ${ok}${nSkip ? `. Пропущено: ${nSkip} (${[...skipped.keys()].slice(0, 2).join('; ')})` : ''}`, { sticky: nSkip > 0 });
   }
   function bulkTm(): void {
     const v = ctx.view();
@@ -781,7 +782,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!cell || !u || cell.querySelector('textarea')) return;
     const ta = el('textarea', 'cell-ed');
     ta.rows = 2; ta.value = entryOf(u)?.target ?? ''; ta.setAttribute('aria-label', 'Переклад рядка');
-    cell.innerHTML = ''; cell.appendChild(ta); ta.focus(); ta.select();
+    cell.innerHTML = ''; cell.appendChild(ta); cell.appendChild(el('div', 'cell-hint', 'Ctrl+Enter — надіслати на вичитування · Esc — скасувати · клік поза коміркою — зберегти')); ta.focus(); ta.select();
     let cancelled = false;
     const finish = () => {
       if (!cancelled && ta.value !== (entryOf(u)?.target ?? '')) {
@@ -794,7 +795,7 @@ export async function start(root: HTMLElement): Promise<void> {
     ta.addEventListener('blur', finish, { once: true });
     ta.addEventListener('keydown', e => {
       if (e.key === 'Escape') { cancelled = true; e.preventDefault(); ta.blur(); }
-      else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); ta.removeEventListener('blur', finish); const ents = ctx.entries(s.current!); ents[key] = edit(ents[key], u, ta.value, 'translate', Date.now()); const r = submit(ents[key], u, 'translate', Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: qaOpts() }); if (r.ok) { ents[key] = note(r.entry, 'надіслано на вичитування', r.entry.target, s.who, Date.now()); toast('Надіслано на вичитування'); } else toast(r.reason); s.sess.n++; ctx.persist(); ctx.invalidateTm(); renderAll(); }
+      else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); ta.removeEventListener('blur', finish); const ents = ctx.entries(s.current!); ents[key] = edit(ents[key], u, ta.value, 'translate', Date.now()); const r = submit(ents[key], u, 'translate', Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: qaOpts() }); if (r.ok) { ents[key] = note(r.entry, 'надіслано на вичитування', r.entry.target, s.who, Date.now()); toast('Надіслано на вичитування'); } else toast(r.reason, { sticky: true }); s.sess.n++; ctx.persist(); ctx.invalidateTm(); renderAll(); }
     });
   }
 

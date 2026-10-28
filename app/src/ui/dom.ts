@@ -15,13 +15,21 @@ export const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: Parent
 };
 
 /** Short non-blocking message at the bottom of the window; several stack instead of overlapping. */
-export function toast(text: string): void {
+/** A short confirmation; `sticky` (errors) stays until closed, so the reason cannot be missed. */
+export function toast(text: string, opts: { sticky?: boolean } = {}): void {
   let host = document.getElementById('toasts');
   if (!host) { host = el('div', 'toasts'); host.id = 'toasts'; host.setAttribute('role', 'status'); document.body.appendChild(host); }
-  const t = el('div', 'toast');
+  host.querySelectorAll('.toast.err').forEach(x => x.remove());
+  const t = el('div', opts.sticky ? 'toast err' : 'toast');
   t.textContent = text;
+  if (opts.sticky) {
+    host.setAttribute('role', 'alert');
+    const x = el('button'); x.type = 'button'; x.textContent = '✕'; x.setAttribute('aria-label', 'Закрити повідомлення');
+    x.addEventListener('click', () => t.remove());
+    t.appendChild(x);
+  }
   host.appendChild(t);
-  setTimeout(() => t.remove(), 3500);
+  if (!opts.sticky) setTimeout(() => t.remove(), 3500);
 }
 
 /** Ukrainian plural: plural(5, ['рядок','рядки','рядків']) -> «5 рядків». */

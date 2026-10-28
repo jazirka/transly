@@ -263,7 +263,7 @@ export function send(ctx: Ctx): void {
   const ents = ctx.entries(s.current);
   const stage = stageOf(ctx);
   const r = submit(ents[u.key], u, stage, Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: ctx.qaOpts() });
-  if (!r.ok) { toast(r.reason); return; }
+  if (!r.ok) { toast(r.reason, { sticky: true }); return; }
   ents[u.key] = note(r.entry, stage === 'translate' ? 'надіслано на вичитування' : 'вичитано', r.entry.target, s.who, Date.now());
   const same = s.saved.settings.propagate ? propagate(s.saved, ctx.dups(), s.current, u, ents[u.key]!, stage, Date.now(), s.who) : 0;
   s.sess.n++;

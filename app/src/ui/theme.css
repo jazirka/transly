@@ -748,3 +748,11 @@ input[type=checkbox]{accent-color:#8b6cf0}
   .vsep:has(+ .stepper){display:none}
   .stepper{margin:0 auto}
 }
+.toast.err{border-color:#8a3b44;background:#3a2a2e}
+.toast.err button{color:#ffb3bb;pointer-events:auto}
+.toasts .toast{pointer-events:auto}
+.tr:has(>.cell-ed){position:relative;overflow:visible}
+.cell-hint{position:absolute;left:0;right:0;top:100%;z-index:5;padding:3px 10px;font-size:11px;color:var(--mute);background:#222427;border:1px solid var(--line);border-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tr:has(>.cell-ed){display:flex;flex-direction:column;align-items:stretch}
+.tr>.cell-ed{flex:1;font-style:normal;color:var(--text);min-height:0}
+.cell-hint{position:static;flex:none;border:0;background:#17181a;padding:0 10px 4px}

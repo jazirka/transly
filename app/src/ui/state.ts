@@ -26,6 +26,10 @@ export interface State {
   /** Keys ticked for bulk actions in the current file. */
   checked: Set<string>;
   sideTab: SideTab;
+  /** Desktop: all right-hand panels stacked, sharing the zone. */
+  sideStack: boolean;
+  /** Desktop: the right zone is folded down to its rail. */
+  sideCollapsed: boolean;
   saveOk: boolean;
   savedAt: number | null;
   who: string;
@@ -34,6 +38,8 @@ export interface State {
   /** Left panel: which list it shows and whether it is open (always open on desktop). */
   leftTab: Record<Mode, LeftTab>;
   leftOpen: boolean;
+  /** Desktop: files and rows stacked in the left panel, each taking half. */
+  leftBoth: boolean;
   rightOpen: boolean;
   collapsed: Set<string>;
   sess: { n: number; t0: number };

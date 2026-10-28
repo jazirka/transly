@@ -21,10 +21,12 @@ import { publishWidget } from './android';
 import { artifactDb, describeClaude, loadClaudeConfig, runClaudeSync } from './claude';
 import { describeGithub, githubConfigured, loadGithubConfig, runGithubSync } from './github';
 import { describe as describeSync, loadSyncConfig, runSync, syncConfigured } from './sync';
+import { initResize, initRightResize } from './resize';
 
 const SVG = {
   files: '<svg viewBox="0 0 16 16"><path d="M2 4.5h4l1.2 1.5H14V12.5H2z"/></svg>',
   rows: '<svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h10"/></svg>',
+  both: '<svg viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><path d="M2.5 8h11"/></svg>',
   menu: '<svg viewBox="0 0 16 16"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg>',
   search: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>',
   searchBig: '<svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>',
@@ -76,16 +78,21 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
   <div class="main">
     <nav class="strip" id="strip" aria-label="Бічні панелі">
       <button data-lp="files" class="on" title="Файли гри" aria-label="Файли гри">${SVG.files}</button>
+      <hr class="ssep">
       <button data-lp="rows" title="Рядки файлу" aria-label="Рядки файлу">${SVG.rows}</button>
+      <hr class="ssep">
+      <button data-lp="both" title="Файли й рядки разом: панель ділиться навпіл" aria-label="Файли й рядки разом">${SVG.both}</button>
     </nav>
     <aside class="tree" id="lpanel" aria-label="Бічна панель: файли й рядки">
       <div class="mtabs" id="mtabs" role="group" aria-label="Бічна панель"><button data-lt="files">Файли</button><button data-lt="rows">Рядки</button><button class="ab-ic" id="mt-open" aria-label="Відкрити файли або вставити JSON" title="Відкрити файли або вставити JSON">${SVG.import}</button><button class="ab-ic" id="mt-search" aria-label="Пошук скрізь">${SVG.searchBig}</button></div>
       <div class="ph"><span class="grow" id="lp-title">Файли гри</span><span class="ico" id="lp-close" title="Сховати панель" role="button" aria-label="Сховати панель">—</span></div>
       <div class="treebody" id="tree"></div>
+      <div class="rz rz-y" id="rz-y" role="separator" aria-orientation="horizontal" aria-label="Розділ між файлами й рядками" aria-valuemin="15" aria-valuemax="85" tabindex="0" title="Потягніть, щоб змінити співвідношення (подвійний клік — навпіл)" hidden></div>
       <div class="slist" id="lp-rows" hidden>
         <div class="fh"><div class="fin">${SVG.search}<input class="qin" id="q2" placeholder="Пошук рядків" aria-label="Пошук рядків"></div><div class="chips2"><span class="chipsHost" id="chips2"></span></div></div>
         <div class="sl-body" id="slist"></div>
       </div>
+      <div class="rz rz-x" id="rz-x" role="separator" aria-orientation="vertical" aria-label="Ширина бічної панелі" aria-valuemin="200" aria-valuemax="640" tabindex="0" title="Потягніть, щоб змінити ширину (подвійний клік — стандартна)"></div>
     </aside>
     <main class="editor" id="main">
       <div class="tabs"><span class="tabs-host" id="tabs-host"></span></div>
@@ -129,8 +136,8 @@ export async function start(root: HTMLElement): Promise<void> {
   const mq = matchMedia('(max-width: 760px)');
   const s: State = {
     views: [], game: [], saved, current: null, open: [], cur: null, mode: mq.matches ? 'edit' : 'table', filter: 'all', q: '', speaker: null, lenFilter: 'all',
-    checked: new Set(), sideTab: 'hints', saveOk: true, savedAt: null, who: saved.settings.who, phone: mq.matches,
-    leftTab: { table: 'files', edit: 'rows', review: 'rows' }, leftOpen: !mq.matches, rightOpen: false, collapsed: new Set(), sess: { n: 0, t0: Date.now() }, lastBuild: null,
+    checked: new Set(), sideTab: 'hints', sideStack: false, sideCollapsed: false, saveOk: true, savedAt: null, who: saved.settings.who, phone: mq.matches,
+    leftTab: { table: 'files', edit: 'rows', review: 'rows' }, leftOpen: !mq.matches, leftBoth: false, rightOpen: false, collapsed: new Set(), sess: { n: 0, t0: Date.now() }, lastBuild: null,
   };
   const fromSnapshot = viewsFromSnapshot(saved);
   if (fromSnapshot.length) { s.views = fromSnapshot; s.current = fromSnapshot[0]!.name; s.open = [s.current]; }
@@ -245,10 +252,13 @@ export async function start(root: HTMLElement): Promise<void> {
     const ide = $('#ide');
     const l = lp();
     ide.className = `ide mode-${s.mode === 'table' ? 'table' : 'focus'} ${l ? 'lp-open' : 'lp-closed'}${s.phone ? ' sz-s' : ''}${s.rightOpen ? ' sheet-open' : ''}`;
-    document.querySelectorAll<HTMLElement>('#strip button').forEach(b => b.classList.toggle('on', b.dataset.lp === l));
-    $('#tree').hidden = l !== 'files';
-    $('#lp-rows').hidden = l !== 'rows';
-    $('#lp-title').textContent = l === 'rows' ? `Рядки · ${s.current ?? ''}` : 'Файли гри';
+    const both = !!l && s.leftBoth && !s.phone;
+    $('#lpanel').classList.toggle('split', both);
+    $('#rz-y').hidden = !both;
+    document.querySelectorAll<HTMLElement>('#strip button').forEach(b => { const on = both ? b.dataset.lp === 'both' : b.dataset.lp === l; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+    $('#tree').hidden = !both && l !== 'files';
+    $('#lp-rows').hidden = !both && l !== 'rows';
+    $('#lp-title').textContent = both ? 'Файли й рядки' : l === 'rows' ? `Рядки · ${s.current ?? ''}` : 'Файли гри';
     document.querySelectorAll<HTMLElement>('#mtabs [data-lt]').forEach(b => { const on = b.dataset.lt === s.leftTab[s.mode]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
     document.querySelectorAll<HTMLElement>('#seg [data-m]').forEach(b => { const on = b.dataset.m === s.mode || (s.mode === 'review' && b.dataset.m === 'edit'); b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
     $('#ab-left').setAttribute('aria-pressed', String(s.leftOpen));
@@ -470,7 +480,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (renderMainEmpty()) { renderStatus(); return; }
     $('#v-table').style.display = '';
     $('#v-focus').style.display = '';
-    if (lp() === 'rows' || s.mode !== 'table') renderRowsList();
+    if (lp() === 'rows' || s.leftBoth || s.mode !== 'table') renderRowsList();
     if (s.mode === 'table') renderTable(); else renderFocus(ctx, isDesktop());
     renderStatus();
   }
@@ -664,7 +674,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const it = sdItems[i];
     if (!it) return;
     closeSearch();
-    if (it.t === 'term') { s.sideTab = 'glossary'; if (s.mode === 'table') setMode('edit', false); s.rightOpen = true; renderAll(); ($('#gl-q') as HTMLInputElement).value = it.label.split(' → ')[0] ?? ''; renderGlossary(ctx); return; }
+    if (it.t === 'term') { s.sideTab = 'glossary'; s.sideCollapsed = false; if (s.mode === 'table') setMode('edit', false); s.rightOpen = true; renderAll(); ($('#gl-q') as HTMLInputElement).value = it.label.split(' → ')[0] ?? ''; renderGlossary(ctx); return; }
     if (it.file) {
       if (it.file !== s.current) openFile(it.file);
       if (it.key) { s.filter = 'all'; s.q = ''; ctx.select(it.key, s.mode === 'table' ? undefined : s.mode); } else renderAll();
@@ -835,7 +845,12 @@ export async function start(root: HTMLElement): Promise<void> {
     const lt = t.closest<HTMLElement>('#mtabs [data-lt]');
     if (lt) { s.leftTab[s.mode] = lt.dataset.lt === 'rows' ? 'rows' : 'files'; renderAll(); return; }
     const sb = t.closest<HTMLElement>('#strip [data-lp]');
-    if (sb) { const want = sb.dataset.lp === 'rows' ? 'rows' : 'files'; if (s.leftOpen && s.leftTab[s.mode] === want) s.leftOpen = false; else { s.leftOpen = true; s.leftTab[s.mode] = want; } renderAll(); return; }
+    if (sb) {
+      if (sb.dataset.lp === 'both') { if (s.leftOpen && s.leftBoth) s.leftOpen = false; else { s.leftOpen = true; s.leftBoth = true; } renderAll(); return; }
+      const want = sb.dataset.lp === 'rows' ? 'rows' : 'files';
+      if (s.leftOpen && !s.leftBoth && s.leftTab[s.mode] === want) s.leftOpen = false; else { s.leftOpen = true; s.leftTab[s.mode] = want; }
+      s.leftBoth = false; renderAll(); return;
+    }
     if (t.closest('#lp-close')) { s.leftOpen = false; renderAll(); return; }
     const sm = t.closest<HTMLElement>('#seg [data-m]');
     if (sm) { setMode(sm.dataset.m as Mode); return; }
@@ -985,5 +1000,7 @@ export async function start(root: HTMLElement): Promise<void> {
   }
   Object.assign(window, { __back: backStep, __flush: () => autosave.flush(), __open: (file: string, key: string) => openRow(file, key) });
   if (s.current) { unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u])); if (s.mode !== 'table') s.cur = ctx.visible()[0]?.key ?? null; }
+  initResize();
+  initRightResize();
   renderAll();
 }

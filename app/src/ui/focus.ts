@@ -51,25 +51,30 @@ export const FOCUS_HTML = `<div class="fc"><div class="fc-in">
   <div class="hint" id="f-meta"></div>
 </div></div>
 <aside class="fs" aria-label="Вказівки до рядка">
+  <div class="rz rz-r" id="rz-r" role="separator" aria-orientation="vertical" aria-label="Ширина правої панелі" aria-valuemin="260" aria-valuemax="640" tabindex="0" title="Потягніть, щоб змінити ширину (подвійний клік — стандартна)"></div>
   <div class="itabs" id="stabs" role="tablist">
-    <button class="on" role="tab" data-p="s-tm"><svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h6"/></svg><span class="tl">Вказівки</span></button>
-    <button role="tab" data-p="s-gl"><svg viewBox="0 0 16 16"><path d="M3.5 2.5h8a1 1 0 0 1 1 1v10H4.5a1 1 0 0 1-1-1z"/><path d="M6 5.5h4"/></svg><span class="tl">Глосарій</span></button>
-    <button role="tab" data-p="s-cm"><svg viewBox="0 0 16 16"><path d="M3 3.5h10v7H8.5L6 13v-2.5H3z"/></svg><span class="tl">Коментарі</span> <span class="cnt" id="cm-badge">0</span></button>
-    <button role="tab" data-p="s-hi"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.2l2 1.3"/></svg><span class="tl">Історія</span></button>
+    <button class="on" role="tab" data-p="s-tm"><svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h6"/></svg><span class="tl">Вказівки</span></button><hr class="ssep">
+    <button role="tab" data-p="s-gl"><svg viewBox="0 0 16 16"><path d="M3.5 2.5h8a1 1 0 0 1 1 1v10H4.5a1 1 0 0 1-1-1z"/><path d="M6 5.5h4"/></svg><span class="tl">Глосарій</span></button><hr class="ssep">
+    <button role="tab" data-p="s-cm"><svg viewBox="0 0 16 16"><path d="M3 3.5h10v7H8.5L6 13v-2.5H3z"/></svg><span class="tl">Коментарі</span> <span class="cnt" id="cm-badge">0</span></button><hr class="ssep">
+    <button role="tab" data-p="s-hi"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.2l2 1.3"/></svg><span class="tl">Історія</span></button><hr class="ssep">
+    <button role="tab" data-p="all" title="Усі панелі разом: зона ділиться на частини" aria-label="Усі панелі разом"><svg viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><path d="M2.5 6.2h11M2.5 9.8h11"/></svg><span class="tl">Усі разом</span></button>
   </div>
   <div class="ibody">
-    <div class="pane on" id="s-tm"><div><div class="lbl">Глосарій у рядку</div><div id="i-gl"></div></div><div id="cd-box" hidden><div class="lbl">Коди в рядку</div><div id="i-cd"></div></div><div id="db-box" hidden><div class="lbl">Про цей запис гри</div><div id="i-db"></div></div><div id="gn-box" hidden><div class="lbl">Назви з гри</div><div id="i-gn"></div></div><div><div class="lbl">Пам’ять перекладів <span class="r" id="tm-n"></span></div><div id="i-tm"></div></div></div>
-    <div class="pane" id="s-gl">
+    <div class="pane on" id="s-tm" data-title="Вказівки"><div><div class="lbl">Глосарій у рядку</div><div id="i-gl"></div></div><div id="cd-box" hidden><div class="lbl">Коди в рядку</div><div id="i-cd"></div></div><div id="db-box" hidden><div class="lbl">Про цей запис гри</div><div id="i-db"></div></div><div id="gn-box" hidden><div class="lbl">Назви з гри</div><div id="i-gn"></div></div><div><div class="lbl">Пам’ять перекладів <span class="r" id="tm-n"></span></div><div id="i-tm"></div></div></div>
+    <div class="rz rz-p" data-rzp="0" role="separator" aria-orientation="horizontal" tabindex="0" hidden></div>
+    <div class="pane" id="s-gl" data-title="Глосарій">
       <div class="fin" style="width:auto"><input id="gl-q" placeholder="Пошук у глосарії" aria-label="Пошук у глосарії"></div>
       <table class="gt"><thead><tr><th>EN</th><th>UK</th><th>Тип</th></tr></thead><tbody id="gtb"></tbody></table>
       <div class="gl-form"><div class="lbl">Додати термін</div><input id="gl-en" placeholder="Англійською" aria-label="Термін англійською"><input id="gl-uk" placeholder="Українською" aria-label="Термін українською"><button class="btn" id="gl-add">＋ Додати термін</button></div>
     </div>
-    <div class="pane" id="s-cm">
+    <div class="rz rz-p" data-rzp="1" role="separator" aria-orientation="horizontal" tabindex="0" hidden></div>
+    <div class="pane" id="s-cm" data-title="Коментарі">
       <div id="cm-list" style="display:flex;flex-direction:column;gap:12px"></div>
       <textarea class="cmin" id="cm-in" placeholder="Написати коментар до цього рядка…" aria-label="Коментар"></textarea>
       <div class="actions" style="margin-top:0"><button class="btn" id="cm-add">Коментувати</button></div>
     </div>
-    <div class="pane" id="s-hi"><div class="hist" id="hist-list"></div></div>
+    <div class="rz rz-p" data-rzp="2" role="separator" aria-orientation="horizontal" tabindex="0" hidden></div>
+    <div class="pane" id="s-hi" data-title="Історія"><div class="hist" id="hist-list"></div></div>
   </div>
 </aside>`;
 
@@ -176,9 +181,16 @@ function renderSide(ctx: Ctx, u: Unit, e: Entry | undefined, hits: ReturnType<ty
   const { s } = ctx;
   const tab = s.sideTab;
   const map: Record<SideTab, string> = { hints: 's-tm', glossary: 's-gl', comments: 's-cm', history: 's-hi' };
-  document.querySelectorAll<HTMLElement>('#stabs [data-p]').forEach(b => { const on = b.dataset.p === map[tab]; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
-  document.querySelectorAll<HTMLElement>('.ibody .pane').forEach(p => p.classList.toggle('on', p.id === map[tab]));
-  if (tab === 'hints') {
+  const all = s.sideStack && !s.phone;
+  const open = !(s.sideCollapsed && !s.phone);
+  document.querySelectorAll<HTMLElement>('#stabs [data-p]').forEach(b => { const on = open && (b.dataset.p === 'all' ? all : !all && b.dataset.p === map[tab]); b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
+  document.querySelectorAll<HTMLElement>('.ibody .pane').forEach(p => p.classList.toggle('on', all || p.id === map[tab]));
+  document.querySelectorAll<HTMLElement>('.ibody .rz-p').forEach(d => { d.hidden = !all; });
+  const fsEl = document.querySelector<HTMLElement>('.fs');
+  fsEl?.classList.toggle('stack', all);
+  document.getElementById('v-focus')?.classList.toggle('side-collapsed', !open);
+  const show = (t: SideTab): boolean => all || tab === t;
+  if (show('hints')) {
     $('#i-gl').innerHTML = hits.length ? hits.map(g => `<div class="gloss-row"><b>${esc(g.en)}</b><span class="arr">→</span><span>${esc(g.uk)}${g.alt?.length ? `<small class="hint"> · ${esc(g.alt.join(', '))}</small>` : ''}</span>${g.kind ? `<span class="t">${esc(g.kind.slice(0, 18))}</span>` : ''}</div>`).join('') : '<div class="hint">Термінів немає</div>';
     const actor = (n: number) => { const a = s.views.find(v => v.name === 'Actors.json')?.units.find(x => x.key === `[${n}].name`); return a ? s.saved.files['Actors.json']?.[a.key]?.target || a.source : undefined; };
     const codes = explainCodes(u.source, actor, s.saved.sysNames);
@@ -199,12 +211,13 @@ function renderSide(ctx: Ctx, u: Unit, e: Entry | undefined, hits: ReturnType<ty
     tmCur = m;
     $('#tm-n').textContent = m.length ? plural(m.length, ['збіг', 'збіги', 'збігів']) : '';
     $('#i-tm').innerHTML = m.length ? m.map((x, n) => `<div class="sg" data-tm="${n}" role="button" tabindex="0" title="Підставити в переклад"><span class="pc ${x.score >= 90 ? '' : 'mid'}">${x.score}%</span><div>${esc(x.t)}<small>${esc(x.src)} · «${esc(x.s.length > 38 ? x.s.slice(0, 38) + '…' : x.s)}»</small></div></div>`).join('') : '<div class="hint">Збігів у пам’яті перекладів немає</div>';
-  } else if (tab === 'glossary') {
-    renderGlossary(ctx);
-  } else if (tab === 'comments') {
+  }
+  if (show('glossary')) renderGlossary(ctx);
+  if (show('comments')) {
     const c = e?.comments ?? [];
     $('#cm-list').innerHTML = c.length ? c.map(x => `<div class="cm"><div class="av" style="background:#7a62d8">${esc(x.who[0] ?? '?')}</div><div><div class="h"><b>${esc(x.who)}</b>${when(x.at)}</div><p>${esc(x.text)}</p></div></div>`).join('') : '<div class="hint">До цього рядка коментарів немає.</div>';
-  } else {
+  }
+  if (show('history')) {
     const h = [...(e?.history ?? [])].reverse();
     $('#hist-list').innerHTML = h.length ? h.map(x => `<div><div class="h"><b>${esc(x.who)}</b> · ${esc(x.what)} · ${when(x.at)}</div>${x.text ? `<div class="t">${esc(x.text.slice(0, 160))}</div>` : ''}</div>`).join('') : '<div class="hint">Змін поки немає.</div>';
   }
@@ -283,7 +296,13 @@ export function focusClick(ctx: Ctx, t: HTMLElement): boolean {
   const u = s.cur ? ctx.unit(s.cur) : undefined;
   if (!t.closest('details.more > summary')) document.querySelectorAll<HTMLDetailsElement>('details.more').forEach(d => { d.open = false; });
   const tab = t.closest<HTMLElement>('#stabs [data-p]');
-  if (tab) { s.sideTab = ({ 's-tm': 'hints', 's-gl': 'glossary', 's-cm': 'comments', 's-hi': 'history' } as const)[tab.dataset.p as 's-tm'] ?? 'hints'; ctx.render(); return true; }
+  if (tab) {
+    if (tab.dataset.p === 'all') { s.sideStack = !(s.sideStack && !s.sideCollapsed); s.sideCollapsed = false; ctx.render(); return true; }
+    const next = ({ 's-tm': 'hints', 's-gl': 'glossary', 's-cm': 'comments', 's-hi': 'history' } as const)[tab.dataset.p as 's-tm'] ?? 'hints';
+    // The tab that is already showing folds the zone away to its rail, like the left one.
+    if (!s.phone && !s.sideStack && next === s.sideTab) s.sideCollapsed = !s.sideCollapsed; else { s.sideCollapsed = false; s.sideStack = false; s.sideTab = next; }
+    ctx.render(); return true;
+  }
   if (!u || !s.current) return false;
   const ents = ctx.entries(s.current);
   const ta = $('#i-tr') as HTMLTextAreaElement;

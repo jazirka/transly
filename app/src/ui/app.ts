@@ -55,8 +55,8 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     <div class="seg" id="seg" role="tablist" aria-label="Режим">
       <button role="tab" aria-selected="true" data-m="table" class="on"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM2.5 7h11M6.5 3.5v9"/></svg>Таблиця</button>
       <button role="tab" aria-selected="false" data-m="edit"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM6 3.5v9M6 8h7.5"/></svg>Редагування</button>
+          <button class="sub" id="stage-pill" role="switch" aria-checked="false" aria-pressed="false" title="Вичитування: перегляд рядків, що чекають перевірки, і схвалення"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3 3 7-7"/></svg>Вичитування</button>
     </div>
-    <button class="tpill stage" id="stage-pill" aria-pressed="false" title="Вичитування: перегляд рядків, що чекають перевірки, і схвалення"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3 3 7-7"/></svg>Вичитування</button>
     <div class="grow"></div>
     <div class="prog" id="pg" title=""><div class="bar"><i class="a" id="pg-a"></i><i class="b" id="pg-b"></i><i class="c" id="pg-c"></i></div><span id="pg-txt" style="font-family:var(--mono);font-size:11.5px"></span></div>
     <div class="tsep"></div>
@@ -87,7 +87,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     <aside class="tree" id="lpanel" aria-label="Бічна панель: файли й рядки">
       <div class="mtabs" id="mtabs" role="group" aria-label="Бічна панель"><button data-lt="files">Файли</button><button data-lt="rows">Рядки</button><button class="ab-ic" id="mt-open" aria-label="Відкрити файли або вставити JSON" title="Відкрити файли або вставити JSON">${SVG.import}</button><button class="ab-ic" id="mt-search" aria-label="Пошук скрізь">${SVG.searchBig}</button></div>
       <div class="ph"><span class="grow" id="lp-title">Файли гри</span><span class="ico" id="lp-close" title="Сховати панель" role="button" aria-label="Сховати панель">—</span></div>
-      <div class="treebody" id="tree"></div>
+      <div class="treebody" id="tree"><div class="tree-q"><div class="fin">${SVG.search}<input class="qin" id="fq" placeholder="Пошук у файлах гри" aria-label="Пошук у файлах гри" autocomplete="off" spellcheck="false"></div></div><div id="tree-list"></div></div>
       <div class="rz rz-y" id="rz-y" role="separator" aria-orientation="horizontal" aria-label="Розділ між файлами й рядками" aria-valuemin="15" aria-valuemax="85" tabindex="0" title="Потягніть, щоб змінити співвідношення (подвійний клік — навпіл)" hidden></div>
       <div class="slist" id="lp-rows" hidden>
         <div class="fh"><div class="fin">${SVG.search}<input class="qin" id="q2" placeholder="Пошук рядків" aria-label="Пошук рядків"></div><div class="chips2"><span class="chipsHost" id="chips2"></span></div></div>
@@ -298,15 +298,28 @@ export async function start(root: HTMLElement): Promise<void> {
     return ['gl', 'Aa'];
   }
 
+  let fileQ = '';
   function renderTree(): void {
-    const box = $('#tree');
+    const box = $('#tree-list');
     if (!s.views.length) { box.innerHTML = '<div class="msg-empty">Папку гри ще не відкрито</div>'; return; }
     let skip: number | null = null;
-    box.innerHTML = treeNodes().map(n => {
-      if (skip !== null && n.d > skip) return '';
+    const q = fileQ.trim().toLowerCase();
+    let nodes = treeNodes();
+    if (q) {
+      const hit = (n: { name: string; label: string }): boolean => `${n.name} ${n.label} ${s.views.find(x => x.name === n.name)?.label ?? ''}`.toLowerCase().includes(q);
+      // Folders stay only when a file inside them matches.
+      nodes = nodes.filter((n, i) => {
+        if (n.t === 'f') return hit(n);
+        for (let j = i + 1; j < nodes.length && nodes[j]!.d > n.d; j++) if (nodes[j]!.t === 'f' && hit(nodes[j]!)) return true;
+        return false;
+      });
+      if (!nodes.length) { box.innerHTML = '<div class="msg-empty">Нічого не знайдено</div>'; return; }
+    }
+    box.innerHTML = nodes.map(n => {
+      if (!q && skip !== null && n.d > skip) return '';
       skip = null;
       if (n.t === 'd') {
-        const c = s.collapsed.has(n.name);
+        const c = !q && s.collapsed.has(n.name);
         if (c) skip = n.d;
         return `<div class="node dir" style="--d:${n.d}" data-dir="${esc(n.name)}" role="button" tabindex="0" aria-expanded="${!c}"><span class="chev">${c ? '▸' : '▾'}</span><span class="ic dir">▤</span><span class="nm">${esc(n.label)}</span></div>`;
       }
@@ -457,7 +470,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const mins = Math.max(0, Math.round((Date.now() - s.sess.t0) / 60000));
     $('#sb-sess').textContent = `Сесія: ${s.sess.n} змін · ${mins} хв`;
     $('#ab-title').textContent = s.current ?? 'Transly';
-    { const sp = $('#stage-pill'); sp.classList.toggle('on', s.mode === 'review'); sp.setAttribute('aria-pressed', String(s.mode === 'review')); }
+    { const sp = $('#stage-pill'); sp.classList.toggle('on', s.mode === 'review'); sp.setAttribute('aria-pressed', String(s.mode === 'review')); sp.setAttribute('aria-checked', String(s.mode === 'review')); sp.hidden = s.mode === 'table'; }
     $('#ab-stage').textContent = s.mode === 'review' ? 'Вичитування' : 'Переклад';
     $('#ab-sub').textContent = v ? `${s.mode === 'review' ? 'Вичитування' : 'Переклад'} · ${statsOf(v.units, ents).approved} / ${v.units.length} вичитано` : '';
   }
@@ -972,6 +985,8 @@ export async function start(root: HTMLElement): Promise<void> {
     }
   });
 
+  $('#fq').addEventListener('input', e => { fileQ = (e.target as HTMLInputElement).value; renderTree(); });
+  $('#fq').addEventListener('keydown', e => { if (e.key === 'Escape' && fileQ) { e.stopPropagation(); fileQ = ''; ($('#fq') as HTMLInputElement).value = ''; renderTree(); } });
   // The tab strip scrolls sideways with the wheel as well as with its scrollbar.
   $('#tabs-host').addEventListener('wheel', e => { const h = e.currentTarget as HTMLElement; if (h.scrollWidth > h.clientWidth && Math.abs(e.deltaY) > Math.abs(e.deltaX)) { h.scrollLeft += e.deltaY; e.preventDefault(); } }, { passive: false });
   root.addEventListener('dblclick', e => {

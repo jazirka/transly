@@ -22,6 +22,7 @@ import { artifactDb, describeClaude, loadClaudeConfig, runClaudeSync } from './c
 import { describeGithub, githubConfigured, loadGithubConfig, runGithubSync } from './github';
 import { describe as describeSync, loadSyncConfig, runSync, syncConfigured } from './sync';
 import { initResize, initRightResize } from './resize';
+import { buildAndRunGame } from './play';
 
 const SVG = {
   files: '<svg viewBox="0 0 16 16"><path d="M2 4.5h4l1.2 1.5H14V12.5H2z"/></svg>',
@@ -50,7 +51,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     <div class="logo">T</div>
     <button class="tb-ic" id="hamb" title="Головне меню" aria-haspopup="menu" aria-expanded="false">${SVG.menu}</button>
     <nav class="menubar" id="menubar" role="menubar" aria-label="Головне меню" hidden></nav>
-    <button class="tpill" id="proj-btn" title="Налаштування проєкту"><span class="pj">T</span><span id="proj-name">Проєкт</span></button>
+    <button class="tpill" id="proj-btn" aria-haspopup="menu" aria-expanded="false" title="Проєкт: відкрити іншу гру, налаштування"><span class="pj" id="proj-av">T</span><span id="proj-name">Проєкт</span><span class="dd">▾</span></button>
     <div class="seg" id="seg" role="tablist" aria-label="Режим">
       <button role="tab" aria-selected="true" data-m="table" class="on"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM2.5 7h11M6.5 3.5v9"/></svg>Таблиця</button>
       <button role="tab" aria-selected="false" data-m="edit"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM6 3.5v9M6 8h7.5"/></svg>Редагування</button>
@@ -59,8 +60,8 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     <div class="grow"></div>
     <div class="prog" id="pg" title=""><div class="bar"><i class="a" id="pg-a"></i><i class="b" id="pg-b"></i><i class="c" id="pg-c"></i></div><span id="pg-txt" style="font-family:var(--mono);font-size:11.5px"></span></div>
     <div class="tsep"></div>
-    <button class="tpill run" id="build" title="Зібрати переклад (F5)">${SVG.build}<span>Збірка</span></button>
-    <button class="tb-ic play" id="run-btn" title="Зібрати й перевірити (F5)" aria-label="Зібрати й перевірити">${SVG.play}<span class="lbl">Грати</span></button>
+    <button class="tpill run" id="cfg-btn" aria-haspopup="menu" aria-expanded="false" title="Що запускає кнопка ▶">${SVG.build}<span id="cfg-name">Збірка (файл)</span><span class="dd">▾</span></button>
+    <button class="tb-ic play" id="run-btn" title="Запустити (F5)" aria-label="Запустити">${SVG.play}</button>
     <div class="tsep"></div>
     <button class="tb-ic" id="open" title="Відкрити папку гри" aria-label="Відкрити папку гри">${SVG.folder}</button>
     <button class="tb-ic" id="sd-open" title="Знайти скрізь (⇧⇧)" aria-label="Знайти скрізь">${SVG.searchBig}</button>
@@ -115,6 +116,8 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
   </footer>
 </div></div>
 <div class="scrim" id="scrim"></div>
+<div class="pop cfgpop projpop" id="projpop" role="menu" aria-label="Проєкт" hidden></div>
+<div class="pop cfgpop" id="cfgpop" role="menu" aria-label="Що запускати" hidden></div>
 <div class="pop" id="fpop" role="dialog" aria-label="Параметри" hidden></div>
 <div class="pop keys" id="keypop" role="dialog" aria-label="Гарячі клавіші" hidden>
   <div class="kh">Гарячі клавіші</div>
@@ -123,7 +126,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
   <div class="kr"><span>У редагуванні: наступний / попередній у списку</span><kbd>Alt</kbd><kbd>↓</kbd></div>
   <div class="kr"><span>Надіслати на вичитування / затвердити й далі</span><kbd>Ctrl</kbd><kbd>Enter</kbd></div>
   <div class="kr"><span>Змінити переклад у комірці таблиці</span><kbd>2× клік</kbd></div>
-  <div class="kr"><span>Зібрати переклад</span><kbd>F5</kbd></div>
+  <div class="kr"><span>Запустити вибрану збірку (файл або гра)</span><kbd>F5</kbd></div>
   <div class="kr"><span>Знайти скрізь</span><kbd>⇧</kbd><kbd>⇧</kbd></div>
   <div class="kr"><span>Закрити вікно чи меню</span><kbd>Esc</kbd></div>
 </div>
@@ -376,6 +379,7 @@ export async function start(root: HTMLElement): Promise<void> {
       const on = n === s.current;
       return `<div class="tab ${on ? 'on' : ''}"><button class="tb" data-tab="${esc(n)}" aria-current="${on}" title="${esc(v.label ? n + ' · ' + v.label : n)}"><span class="tico ${ic === 'map' ? '' : 'j'}">${lab}</span>${esc(n.split('/').pop() ?? n)}${qa ? `<span class="badge" title="Проблеми QA у файлі">${qa}</span>` : ''}</button><button class="x" data-closetab="${esc(n)}" aria-label="Закрити вкладку ${esc(n)}">✕</button></div>`;
     }).join('');
+    document.querySelector<HTMLElement>('#tabs-host .tab.on')?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
   }
 
   function renderTable(): void {
@@ -408,6 +412,7 @@ export async function start(root: HTMLElement): Promise<void> {
 
   function renderTop(): void {
     $('#proj-name').textContent = s.saved.name;
+    $('#proj-av').textContent = (Array.from(s.saved.name.trim())[0] ?? 'T').toUpperCase();
     let total = 0, A = 0, D = 0, W = 0;
     for (const v of s.views) {
       total += v.units.length;
@@ -427,7 +432,8 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#sb-sync').hidden = !lastSync; $('#sb-build').hidden = !s.lastBuild;
     $('#sb-sync').textContent = lastSync ? 'Синхр.: ' + new Date(lastSync).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }) : 'Синхр.: ще не було';
     $('#sb-build').textContent = s.lastBuild ? `Збірка: ${new Date(s.lastBuild.at).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })} · ${s.lastBuild.n} рядків` : 'Збірки ще не було';
-    ($('#build') as HTMLButtonElement).disabled = !s.views.length;
+    ($('#cfg-btn') as HTMLButtonElement).disabled = !s.views.length;
+    renderRunCfg();
     ($('#run-btn') as HTMLButtonElement).disabled = !s.views.length;
   }
 
@@ -621,6 +627,53 @@ export async function start(root: HTMLElement): Promise<void> {
     s.leftOpen = false; renderLayout();
     openImport(ctx, adopt, files => loadFiles(files, true));
   }
+  /* ---------- run configurations: what the ▶ button does (like IntelliJ's run selector) ---------- */
+  type RunCfg = 'file' | 'game';
+  const CFG: Record<RunCfg, { name: string; sub: string; desk: boolean }> = {
+    file: { name: 'Збірка (файл)', sub: 'ZIP, папка або запис у файли гри', desk: false },
+    game: { name: 'Збірка (гра)', sub: 'Записати переклад із чернетками й запустити гру для тестування', desk: true },
+  };
+  const loadCfg = (): RunCfg => { try { const v = localStorage.getItem('transly.runcfg'); return v === 'game' && isDesktop() ? 'game' : 'file'; } catch { return 'file'; } };
+  let runCfg: RunCfg = loadCfg();
+  function renderRunCfg(): void {
+    if (runCfg === 'game' && !isDesktop()) runCfg = 'file';
+    $('#cfg-name').textContent = CFG[runCfg].name;
+    $('#run-btn').title = `Запустити «${CFG[runCfg].name}» (F5)`;
+    $('#run-btn').setAttribute('aria-label', `Запустити «${CFG[runCfg].name}»`);
+  }
+  function openCfgMenu(): void {
+    const pop = $('#cfgpop'), btn = $('#cfg-btn');
+    if (!pop.hidden) { pop.hidden = true; btn.setAttribute('aria-expanded', 'false'); return; }
+    pop.innerHTML = (Object.keys(CFG) as RunCfg[]).map(k => {
+      const off = CFG[k].desk && !isDesktop();
+      return `<button role="menuitemradio" aria-checked="${k === runCfg}" data-cfg="${k}" ${off ? 'disabled' : ''} class="${k === runCfg ? 'on' : ''}"><span class="cfg-t">${CFG[k].name}</span><small>${off ? 'Лише в застосунку на ПК' : CFG[k].sub}</small></button>`;
+    }).join('');
+    const r = btn.getBoundingClientRect();
+    pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 300))}px`; pop.style.top = `${r.bottom + 6}px`;
+    pop.hidden = false; btn.setAttribute('aria-expanded', 'true');
+  }
+  function openProjMenu(): void {
+    const pop = $('#projpop'), btn = $('#proj-btn');
+    if (!pop.hidden) { pop.hidden = true; btn.setAttribute('aria-expanded', 'false'); return; }
+    let total = 0, done = 0;
+    for (const v of s.views) { total += v.units.length; const ents = s.saved.files[v.name] ?? {}; for (const u of v.units) if (ents[u.key]?.target) done++; }
+    const folder = rememberedGameDir();
+    pop.innerHTML = `<button role="menuitem" data-pj="folder"><span class="cfg-t">Відкрити папку гри…</span></button>
+      <button role="menuitem" data-pj="files"><span class="cfg-t">Відкрити файли або вставити JSON…</span></button>
+      <hr><div class="pj-h">Поточний проєкт</div>
+      <div class="pj-card"><span class="pj lg">${esc((Array.from(s.saved.name.trim())[0] ?? 'T').toUpperCase())}</span><div><b>${esc(s.saved.name)}</b><small>${folder ? esc(folder) : 'Папку гри не вибрано'}</small><small>${total ? `Перекладено ${done.toLocaleString('uk-UA')} з ${total.toLocaleString('uk-UA')}` : 'Файлів ще немає'}</small></div></div>
+      <hr><button role="menuitem" data-pj="settings"><span class="cfg-t">Налаштування проєкту…</span></button>`;
+    const r = btn.getBoundingClientRect();
+    pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 340))}px`; pop.style.top = `${r.bottom + 6}px`;
+    pop.hidden = false; btn.setAttribute('aria-expanded', 'true');
+  }
+  const closeProjMenu = (): void => { $('#projpop').hidden = true; $('#proj-btn').setAttribute('aria-expanded', 'false'); };
+  const closeCfgMenu = (): void => { $('#cfgpop').hidden = true; $('#cfg-btn').setAttribute('aria-expanded', 'false'); };
+  const runSelected = (): void => {
+    if (!s.views.length) return;
+    if (runCfg === 'game') buildAndRunGame(ctx).catch(err => toast('Не вдалося запустити: ' + (err instanceof Error ? err.message : String(err))));
+    else doBuild();
+  };
   const doBuild = () => openBuild(ctx, dataDir, n => { s.lastBuild = { at: Date.now(), n }; renderTop(); });
 
   function openSettingsDlg(): void {
@@ -647,7 +700,7 @@ export async function start(root: HTMLElement): Promise<void> {
     p.style.left = Math.min(r.left, innerWidth - p.offsetWidth - 8) + 'px';
     p.style.top = r.bottom + 4 + 'px';
   }
-  const closePops = () => { fpop().hidden = true; };
+  const closePops = () => { fpop().hidden = true; $('#cfgpop').hidden = true; $('#projpop').hidden = true; };
 
   /* ---------- global search ---------- */
   let sdItems: { t: 'file' | 'row' | 'term'; file?: string; key?: string; label: string; kind: string }[] = [];
@@ -818,7 +871,7 @@ export async function start(root: HTMLElement): Promise<void> {
   /* ---------- events ---------- */
   root.addEventListener('click', e => {
     const t = e.target as HTMLElement;
-    if (!t.closest('#fpop,#spkbtn,#lenbtn')) closePops();
+    if (!t.closest('#fpop,#spkbtn,#lenbtn,#cfgpop,#cfg-btn,#projpop,#proj-btn')) closePops();
     if (!t.closest('#keypop,#hk')) $('#keypop').hidden = true;
     if (t.closest('#open,#open2')) { void openFolder(); return; }
     if (t.closest('#resume')) { void resume(); return; }
@@ -828,8 +881,17 @@ export async function start(root: HTMLElement): Promise<void> {
       runClaudeSync(ctx, loadClaudeConfig(), adopt).then(r => toast(s.views.length ? describeClaude(r) : 'У спільній базі ще немає проєкту: спершу синхронізуйте на комп’ютері (Налаштування → Синхронізація через Claude)'), er => toast(er instanceof Error ? er.message : 'Не вдалося синхронізувати'));
       return;
     }
-    if (t.closest('#settings,#ab-set,#proj-btn')) { openSettingsDlg(); return; }
-    if (t.closest('#build,#run-btn,#sb-build')) { doBuild(); return; }
+    if (t.closest('#settings,#ab-set')) { openSettingsDlg(); return; }
+    if (!t.closest('#cfgpop,#cfg-btn')) closeCfgMenu();
+    if (!t.closest('#projpop,#proj-btn')) closeProjMenu();
+    if (t.closest('#proj-btn')) { openProjMenu(); return; }
+    const pj = t.closest<HTMLElement>('#projpop [data-pj]');
+    if (pj) { closeProjMenu(); if (pj.dataset.pj === 'folder') void openFolder(); else if (pj.dataset.pj === 'files') openImportDlg(); else openSettingsDlg(); return; }
+    if (t.closest('#cfg-btn')) { openCfgMenu(); return; }
+    const cfgItem = t.closest<HTMLElement>('#cfgpop [data-cfg]');
+    if (cfgItem) { runCfg = cfgItem.dataset.cfg as RunCfg; try { localStorage.setItem('transly.runcfg', runCfg); } catch { /* private mode */ } closeCfgMenu(); renderRunCfg(); return; }
+    if (t.closest('#run-btn')) { runSelected(); return; }
+    if (t.closest('#sb-build')) { doBuild(); return; }
     if (t.closest('#sb-sync')) { openSettingsDlg(); return; }
     if (t.closest('#sd-open,#mt-search')) { openSearch(); return; }
     if (t.closest('#hk')) { toggleKeys(); return; }
@@ -900,6 +962,8 @@ export async function start(root: HTMLElement): Promise<void> {
     }
   });
 
+  // The tab strip scrolls sideways with the wheel as well as with its scrollbar.
+  $('#tabs-host').addEventListener('wheel', e => { const h = e.currentTarget as HTMLElement; if (h.scrollWidth > h.clientWidth && Math.abs(e.deltaY) > Math.abs(e.deltaX)) { h.scrollLeft += e.deltaY; e.preventDefault(); } }, { passive: false });
   root.addEventListener('dblclick', e => {
     const t = e.target as HTMLElement;
     const cell = t.closest<HTMLElement>('.gr .tr');
@@ -932,13 +996,13 @@ export async function start(root: HTMLElement): Promise<void> {
     const t = e.target as HTMLElement;
     if (e.key === 'Escape') {
       if (!$('#sd').hidden) { closeSearch(); return; }
-      if (!$('#fpop').hidden || !$('#keypop').hidden) { closePops(); $('#keypop').hidden = true; return; }
+      if (!$('#fpop').hidden || !$('#cfgpop').hidden || !$('#projpop').hidden || !$('#keypop').hidden) { closePops(); $('#keypop').hidden = true; return; }
       if (!$('#menubar').hidden) { mbToggle(false); return; }
       if (s.phone && (s.leftOpen || s.rightOpen)) { s.leftOpen = false; s.rightOpen = false; renderAll(); return; }
     }
     if (document.querySelector('dialog[open]')) return;
     if (e.key === 'Shift' && !e.repeat) { const now = Date.now(); if (now - lastShift < 400) openSearch(); lastShift = now; return; }
-    if (e.key === 'F5') { e.preventDefault(); doBuild(); return; }
+    if (e.key === 'F5') { e.preventDefault(); runSelected(); return; }
     if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && s.mode !== 'table') { e.preventDefault(); step(ctx, e.key === 'ArrowDown' ? 1 : -1); return; }
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && t.id === 'i-tr') { e.preventDefault(); send(ctx); return; }
     if (s.mode === 'table' && t.classList.contains('gr')) {

@@ -775,8 +775,8 @@ input[type=checkbox]{accent-color:#8b6cf0}
 @media (max-width:1100px){.ib .tl{display:none}.ib.lab{padding:0}}
 .morep button[hidden]{display:none}
 /* Збірка + Грати read as one split control: build, or build and run */
-#build{border-radius:999px 0 0 999px;margin-right:-1px;padding-right:12px}
-#run-btn.tb-ic.play{height:30px;border:1px solid rgba(255,255,255,.16);border-left:0;border-radius:0 999px 999px 0;background:rgba(255,255,255,.09);padding:0 12px 0 10px}
+#cfg-btn{border-radius:999px 0 0 999px;margin-right:-1px;padding-right:10px}
+#run-btn.tb-ic.play{height:30px;width:36px;min-width:0;border:1px solid rgba(255,255,255,.16);border-left:0;border-radius:0 999px 999px 0;background:rgba(255,255,255,.09);padding:0}
 #run-btn.tb-ic.play:hover{background:rgba(255,255,255,.17)}
 /* text never smaller than 11px */
 .tico,.node .ic{font-size:11px}
@@ -916,3 +916,29 @@ body.resizing{user-select:none;cursor:col-resize}
 .tb-ic,.ab-ic,.ib:not(.lab),.strip button,.dlg-h button{display:inline-grid;place-items:center}
 .tb-ic svg,.ab-ic svg,.ib svg,.strip svg,.itabs svg{display:block;margin:0}
 .tb-ic.play{display:inline-flex}
+/* run configuration menu (like IntelliJ's) */
+.cfgpop{width:290px;padding:4px;z-index:90}
+.cfgpop button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;padding:8px 10px;border:0;border-radius:var(--r2);background:none;color:var(--text);text-align:left;cursor:pointer}
+.cfgpop button small{color:var(--mute);font-size:11px;line-height:1.35}
+.cfgpop button:hover:not(:disabled){background:rgba(255,255,255,.08)}
+.cfgpop button.on{background:var(--on-bg);box-shadow:inset 0 0 0 1px var(--on-ring)}
+.cfgpop button:disabled{opacity:.5;cursor:default}
+.cfg-t{font-weight:500}
+#cfg-btn .dd{margin-left:2px}
+/* many open files: the tab strip scrolls sideways, its slim scrollbar sits above the tabs */
+.tabs{height:auto;min-height:34px}
+.tabs-host{flex:0 1 auto;min-width:0;overflow-x:auto;overflow-y:hidden;transform:scaleY(-1);scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.28) transparent}
+.tabs-host>*{transform:scaleY(-1);flex:none}
+.tabs-host::-webkit-scrollbar{height:5px}
+.tabs-host::-webkit-scrollbar-thumb{background:rgba(255,255,255,.28);border-radius:3px}
+.tabs-host::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.45)}
+.tabs-host::-webkit-scrollbar-track{background:transparent}
+.projpop{width:330px}
+.projpop hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+.pj-h{padding:6px 10px 2px;color:var(--mute);font-size:11px}
+.pj-card{display:flex;gap:10px;align-items:center;padding:8px 10px}
+.pj-card>div{display:flex;flex-direction:column;min-width:0}
+.pj-card b{font-weight:500}
+.pj-card small{color:var(--mute);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pj.lg{width:32px;height:32px;border-radius:var(--r2);font-size:13px;display:grid;place-items:center;background:var(--violet);color:#1e1f22;font-weight:600;flex:none}
+#proj-btn .dd{color:var(--mute);font-size:11px}

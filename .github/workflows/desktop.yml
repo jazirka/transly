@@ -1,6 +1,6 @@
 name: Desktop app
 
-# Builds the Tauri desktop app (app/src-tauri) for Windows, Linux and macOS. It adds what a browser cannot do: remembers
+# Builds the Tauri desktop app (app/src-tauri) for Windows only. It adds what a browser cannot do: remembers
 # the game folder, writes the translation into the game, starts the game (also inside a chosen scene).
 # Run it by hand from the Actions tab; tick "release" to publish the installers as the "desktop-latest" release.
 
@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-22.04]
+        os: [windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
@@ -37,57 +37,6 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: app/src-tauri
-
-      - name: Linux libraries
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf libxdo-dev
-
-      - name: Test and build the installer
-        working-directory: app
-        shell: bash
-        run: |
-          npm ci
-          npm test
-          npm run tauri build
-
-      - name: Collect the installers
-        shell: bash
-        run: |
-          mkdir out
-          find app/src-tauri/target/release/bundle -type f \( -name '*.exe' -o -name '*.msi' -o -name '*.dmg' -o -name '*.AppImage' -o -name '*.deb' \) -exec cp {} out/ \;
-          ls -la out
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: transly-desktop-${{ runner.os }}
-          path: out/*
-          if-no-files-found: error
-
-  build-macos:
-    runs-on: macos-latest
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: app/package-lock.json
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: app/src-tauri
-
-      - name: Linux libraries
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf libxdo-dev
 
       - name: Test and build the installer
         working-directory: app
@@ -128,20 +77,4 @@ jobs:
           gh release delete desktop-latest --yes --cleanup-tag --repo "$GITHUB_REPOSITORY" || true
           gh release create desktop-latest out/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
             --title "Transly for desktop" \
-            --notes "Build of commit $GITHUB_SHA. Windows: the .exe (installer) or .msi. macOS: the .dmg (not signed: right-click, Open). Linux: .AppImage or .deb."
-
-  # The macOS runner can queue for a long time: its installer is attached to the release afterwards, so the
-  # Windows and Linux installers are published without waiting for it.
-  release-macos:
-    needs: [release, build-macos]
-    if: ${{ !cancelled() && inputs.release && needs.release.result == 'success' && needs.build-macos.result == 'success' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: transly-desktop-macOS
-          path: out
-      - name: Attach to the release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload desktop-latest out/* --clobber --repo "$GITHUB_REPOSITORY"
+            --notes "Build of commit $GITHUB_SHA. Windows: the .exe (installer) or .msi."

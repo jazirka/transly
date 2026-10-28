@@ -1,6 +1,6 @@
 import { build, jumpPlugin, jumpTarget } from '../core';
 import type { Unit } from '../core';
-import { applyJump, applyToGame, launchGame } from './desktop';
+import { applyJump, applyToGame, launchGame, restoreJump } from './desktop';
 import { toast } from './dom';
 import type { Ctx } from './state';
 
@@ -19,4 +19,16 @@ export async function playInGame(ctx: Ctx, file: string, unit: Unit, from: 'line
   ctx.built(r.included);
   await launchGame();
   toast('Гру запущено: вона починається з цієї сцени. «Збірка → Повернути оригінали» прибере тестовий плагін');
+}
+
+/** Write the translation (drafts included) into the game folder and start the game, to try it as it is. */
+export async function buildAndRunGame(ctx: Ctx): Promise<void> {
+  const dir = ctx.gameDir();
+  if (!dir) { toast('Папку гри не відкрито: відкрийте її в застосунку на ПК'); return; }
+  const r = build(ctx.s.game, ctx.s.views, ctx.s.saved, { onlyApproved: false, includeDrafts: true, blockErrors: true, qa: ctx.qaOpts() });
+  const n = await applyToGame(dir, r.files);
+  await restoreJump(dir).catch(() => false); // a normal start, not a scene test
+  ctx.built(r.included);
+  await launchGame();
+  toast(`Записано файлів у гру: ${n}. Гру запущено`);
 }

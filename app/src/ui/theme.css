@@ -433,7 +433,7 @@ td .term{color:#d9c3ee}
 #v-focus{grid-template-columns:minmax(0,1fr) 350px!important}
 .ide.mode-focus .main{grid-template-columns:40px 310px minmax(0,1fr)}
 .ide.mode-focus.lp-closed .main{grid-template-columns:40px minmax(0,1fr)}
-.ide.mode-table [data-lp=rows]{display:none}
+
 .cnt2{flex-direction:row;min-width:64px;font:12px var(--mono);color:#e6e8ec}
 .cnt2.over{color:#ff8a94;background:#43292e}
 .qa-row .ign{margin-left:auto;height:22px;padding:0 9px;border-radius:var(--r1);border:1px solid var(--line);background:#2f3135;color:var(--mute);white-space:nowrap}
@@ -962,3 +962,11 @@ body.resizing{user-select:none;cursor:col-resize}
 .tree-q .fin{width:auto}
 .tree.split #tree::before{z-index:4}
 .tree.split .tree-q{top:34px}
+/* notifications slide in from below and fade out */
+@keyframes toast-in{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes toast-out{from{opacity:1;transform:none}to{opacity:0;transform:translateY(8px) scale(.98)}}
+@keyframes toast-shake{0%,100%{transform:none}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+.toasts .toast{animation:toast-in .22s cubic-bezier(.2,.8,.2,1) both}
+.toasts .toast.err{animation:toast-in .22s cubic-bezier(.2,.8,.2,1) both,toast-shake .32s .2s}
+.toasts .toast.out{animation:toast-out .2s ease-in both;pointer-events:none}
+.toasts{transition:transform .2s}

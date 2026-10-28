@@ -26,10 +26,8 @@ export interface State {
   /** Keys ticked for bulk actions in the current file. */
   checked: Set<string>;
   sideTab: SideTab;
-  /** Desktop: all right-hand panels stacked, sharing the zone. */
-  sideStack: boolean;
-  /** Desktop: the right zone is folded down to its rail. */
-  sideCollapsed: boolean;
+  /** Right-hand panels that are switched on (like tool windows): several are stacked, none folds the zone to its rail. */
+  sideOn: SideTab[];
   saveOk: boolean;
   savedAt: number | null;
   who: string;

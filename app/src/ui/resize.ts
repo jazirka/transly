@@ -65,15 +65,21 @@ export function initRightResize(): void {
     const z = read();
     const fs = document.querySelector<HTMLElement>('.fs .ibody')!;
     const panes = [...document.querySelectorAll<HTMLElement>('.ibody .pane')];
+    // The splitter sits right before pane `i + 1`; its upper neighbour is the nearest pane above that is shown.
+    const i = Number(t.dataset.rzp ?? 0);
+    const lower = i + 1;
+    let upper = lower - 1;
+    while (upper > 0 && !panes[upper]?.classList.contains('on')) upper--;
     const heights = panes.map(p => p.getBoundingClientRect().height);
-    const y0 = e.clientY, i = Number(t.dataset.rzp ?? 0);
+    const y0 = e.clientY;
     const on = (ev: PointerEvent): void => {
       if (t.id === 'rz-r') z.rw = clamp(fs.getBoundingClientRect().right - ev.clientX, MIN_RW, MAX_W);
       else {
-        const d = clamp(ev.clientY - y0, 60 - (heights[i] ?? 0), (heights[i + 1] ?? 0) - 60);
-        const px = heights.map((h, k) => (k === i ? h + d : k === i + 1 ? h - d : h));
-        const mean = px.reduce((a, b) => a + b, 0) / px.length;
-        z.pw = px.map(h => clamp(h / mean, 0.2, 5));
+        const d = clamp(ev.clientY - y0, 60 - (heights[upper] ?? 0), (heights[lower] ?? 0) - 60);
+        const px = heights.map((h, k) => (k === upper ? h + d : k === lower ? h - d : h));
+        const shown = px.filter((_, k) => panes[k]?.classList.contains('on'));
+        const mean = shown.reduce((a, b) => a + b, 0) / Math.max(1, shown.length);
+        z.pw = px.map((h, k) => (panes[k]?.classList.contains('on') ? clamp(h / mean, 0.2, 5) : z.pw[k] ?? 1));
       }
       css(z);
     };

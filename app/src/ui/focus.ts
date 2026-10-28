@@ -57,8 +57,7 @@ export const SIDE_HTML = `<aside class="fs" aria-label="Вказівки до р
     <button class="on" role="tab" data-p="s-tm"><svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h6"/></svg><span class="tl">Вказівки</span></button><hr class="ssep">
     <button role="tab" data-p="s-gl"><svg viewBox="0 0 16 16"><path d="M3.5 2.5h8a1 1 0 0 1 1 1v10H4.5a1 1 0 0 1-1-1z"/><path d="M6 5.5h4"/></svg><span class="tl">Глосарій</span></button><hr class="ssep">
     <button role="tab" data-p="s-cm"><svg viewBox="0 0 16 16"><path d="M3 3.5h10v7H8.5L6 13v-2.5H3z"/></svg><span class="tl">Коментарі</span> <span class="cnt" id="cm-badge">0</span></button><hr class="ssep">
-    <button role="tab" data-p="s-hi"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.2l2 1.3"/></svg><span class="tl">Історія</span></button><hr class="ssep">
-    <button role="tab" data-p="all" title="Усі панелі разом: зона ділиться на частини" aria-label="Усі панелі разом"><svg viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><path d="M2.5 6.2h11M2.5 9.8h11"/></svg><span class="tl">Усі разом</span></button>
+    <button role="tab" data-p="s-hi"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.2l2 1.3"/></svg><span class="tl">Історія</span></button>
   </div>
   <div class="ibody">
     <div class="ph"><span class="grow" id="rp-title">Вказівки</span><span class="ico" id="rp-close" title="Сховати панель" role="button" tabindex="0" aria-label="Сховати панель">—</span></div>
@@ -83,6 +82,11 @@ export const SIDE_HTML = `<aside class="fs" aria-label="Вказівки до р
 const when = (t: number) => new Date(t).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 const stageOf = (ctx: Ctx) => (ctx.s.mode === 'review' ? 'review' : 'translate') as 'review' | 'translate';
 const entryOf = (ctx: Ctx, u: Unit): Entry | undefined => ctx.entries(ctx.s.current!)[u.key];
+
+export const SIDE_ORDER: SideTab[] = ['hints', 'glossary', 'comments', 'history'];
+/** Switch a panel on (keeping the fixed order) / off. */
+export const showSide = (on: SideTab[], t: SideTab): SideTab[] => (on.includes(t) ? on : SIDE_ORDER.filter(x => x === t || on.includes(x)));
+export const hideSide = (on: SideTab[], t: SideTab): SideTab[] => on.filter(x => x !== t);
 
 let tmCur: { t: string; score: number }[] = [];
 let gameNames: { file: string; key: string; name: string }[] = [];
@@ -187,18 +191,21 @@ export function renderSidePanel(ctx: Ctx): void {
 
 function renderSide(ctx: Ctx, u: Unit | undefined, e: Entry | undefined, hits: ReturnType<typeof termsIn<Ctx['s']['saved']['terms'][number]>>): void {
   const { s } = ctx;
-  const tab = s.sideTab;
+  const on = s.phone ? [s.sideTab] : s.sideOn;
+  const tab = on[0] ?? s.sideTab;
   const map: Record<SideTab, string> = { hints: 's-tm', glossary: 's-gl', comments: 's-cm', history: 's-hi' };
-  const all = s.sideStack && !s.phone;
-  const open = !(s.sideCollapsed && !s.phone);
-  document.querySelectorAll<HTMLElement>('#stabs [data-p]').forEach(b => { const on = open && (b.dataset.p === 'all' ? all : !all && b.dataset.p === map[tab]); b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
-  document.querySelectorAll<HTMLElement>('.ibody .pane').forEach(p => p.classList.toggle('on', all || p.id === map[tab]));
-  document.querySelectorAll<HTMLElement>('.ibody .rz-p').forEach(d => { d.hidden = !all; });
+  const all = on.length > 1;
+  const open = s.phone || on.length > 0;
+  const idOf = (t: SideTab): string => map[t];
+  document.querySelectorAll<HTMLElement>('#stabs [data-p]').forEach(b => { const isOn = on.some(t => idOf(t) === b.dataset.p); b.classList.toggle('on', isOn); b.setAttribute('aria-selected', String(isOn)); b.setAttribute('aria-pressed', String(isOn)); });
+  document.querySelectorAll<HTMLElement>('.ibody .pane').forEach(p => p.classList.toggle('on', on.some(t => idOf(t) === p.id)));
+  // A splitter sits before every shown panel that has another shown panel above it.
+  document.querySelectorAll<HTMLElement>('.ibody .rz-p').forEach(d => { const pane = d.nextElementSibling as HTMLElement | null; const k = pane ? SIDE_ORDER.findIndex(t => idOf(t) === pane.id) : -1; d.hidden = !(k > 0 && on.some(t => idOf(t) === pane?.id) && on.some(t => SIDE_ORDER.indexOf(t) < k)); });
   const fsEl = document.querySelector<HTMLElement>('.fs');
   fsEl?.classList.toggle('stack', all);
   document.getElementById('v-focus')?.classList.toggle('side-collapsed', !open);
-  $('#rp-title').textContent = all ? 'Усі панелі' : ({ hints: 'Вказівки', glossary: 'Глосарій', comments: 'Коментарі', history: 'Історія' } as const)[tab];
-  const show = (t: SideTab): boolean => all || tab === t;
+  $('#rp-title').textContent = all ? 'Панелі' : ({ hints: 'Вказівки', glossary: 'Глосарій', comments: 'Коментарі', history: 'Історія' } as const)[tab];
+  const show = (t: SideTab): boolean => on.includes(t);
   if (!u) {
     const hintEmpty = '<div class="hint">Оберіть рядок.</div>';
     $('#i-gl').innerHTML = hintEmpty; $('#i-tm').innerHTML = ''; $('#tm-n').textContent = '';
@@ -355,13 +362,13 @@ export function sideClick(ctx: Ctx, t: HTMLElement): boolean {
   const { s } = ctx;
   const tab = t.closest<HTMLElement>('#stabs [data-p]');
   if (tab) {
-    if (tab.dataset.p === 'all') { s.sideStack = !(s.sideStack && !s.sideCollapsed); s.sideCollapsed = false; ctx.render(); return true; }
     const next = ({ 's-tm': 'hints', 's-gl': 'glossary', 's-cm': 'comments', 's-hi': 'history' } as const)[tab.dataset.p as 's-tm'] ?? 'hints';
-    // The tab that is already showing folds the zone away to its rail, like the left one.
-    if (!s.phone && !s.sideStack && next === s.sideTab) s.sideCollapsed = !s.sideCollapsed; else { s.sideCollapsed = false; s.sideStack = false; s.sideTab = next; }
+    // Every rail button switches its own panel on or off; several on = they share the zone.
+    if (s.phone) { s.sideTab = next; s.sideOn = [next]; }
+    else { s.sideOn = s.sideOn.includes(next) ? hideSide(s.sideOn, next) : showSide(s.sideOn, next); if (s.sideOn.length) s.sideTab = s.sideOn[0]!; }
     ctx.render(); return true;
   }
-  if (t.closest('#rp-close')) { s.sideCollapsed = true; ctx.render(); return true; }
+  if (t.closest('#rp-close')) { s.sideOn = []; ctx.render(); return true; }
   if (!t.closest('.fs')) return false;
   const u = s.cur ? ctx.unit(s.cur) : undefined;
   if (t.closest('#gl-add')) {

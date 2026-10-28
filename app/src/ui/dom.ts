@@ -20,16 +20,17 @@ export function toast(text: string, opts: { sticky?: boolean } = {}): void {
   let host = document.getElementById('toasts');
   if (!host) { host = el('div', 'toasts'); host.id = 'toasts'; host.setAttribute('role', 'status'); document.body.appendChild(host); }
   host.querySelectorAll('.toast.err').forEach(x => x.remove());
+  const leave = (n: HTMLElement): void => { n.classList.add('out'); setTimeout(() => n.remove(), 220); };
   const t = el('div', opts.sticky ? 'toast err' : 'toast');
   t.textContent = text;
   if (opts.sticky) {
     host.setAttribute('role', 'alert');
     const x = el('button'); x.type = 'button'; x.textContent = '✕'; x.setAttribute('aria-label', 'Закрити повідомлення');
-    x.addEventListener('click', () => t.remove());
+    x.addEventListener('click', () => leave(t));
     t.appendChild(x);
   }
   host.appendChild(t);
-  if (!opts.sticky) setTimeout(() => t.remove(), 3500);
+  if (!opts.sticky) setTimeout(() => leave(t), 3500);
 }
 
 /** Ukrainian plural: plural(5, ['рядок','рядки','рядків']) -> «5 рядків». */

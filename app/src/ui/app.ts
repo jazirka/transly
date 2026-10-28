@@ -3,7 +3,7 @@ import type { Entry, GameFile, SavedProject, Unit } from '../core';
 import { openBuild } from './build-dialog';
 import { dataDirOf, isDesktop, rememberedGameDir, reopenGameDirDesktop } from './desktop';
 import { $, el, esc, plural, toast } from './dom';
-import { FOCUS_HTML, SIDE_HTML, focusClick, focusInput, renderFocus, renderGlossary, renderSidePanel, send, sideClick, step } from './focus';
+import { FOCUS_HTML, SIDE_HTML, focusClick, focusInput, renderFocus, renderGlossary, renderSidePanel, send, showSide, sideClick, step } from './focus';
 import { pickGameFolder, readFiles, reopenHandle } from './folder';
 import type { DirHandle, PickedFile } from './folder';
 import { IdbStore, loadHandle, saveHandle } from './idb';
@@ -81,8 +81,6 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
       <button data-lp="files" class="on" title="Файли гри" aria-label="Файли гри">${SVG.files}</button>
       <hr class="ssep">
       <button data-lp="rows" title="Рядки файлу" aria-label="Рядки файлу">${SVG.rows}</button>
-      <hr class="ssep">
-      <button data-lp="both" title="Файли й рядки разом: панель ділиться навпіл" aria-label="Файли й рядки разом">${SVG.both}</button>
     </nav>
     <aside class="tree" id="lpanel" aria-label="Бічна панель: файли й рядки">
       <div class="mtabs" id="mtabs" role="group" aria-label="Бічна панель"><button data-lt="files">Файли</button><button data-lt="rows">Рядки</button><button class="ab-ic" id="mt-open" aria-label="Відкрити файли або вставити JSON" title="Відкрити файли або вставити JSON">${SVG.import}</button><button class="ab-ic" id="mt-search" aria-label="Пошук скрізь">${SVG.searchBig}</button></div>
@@ -140,7 +138,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const mq = matchMedia('(max-width: 760px)');
   const s: State = {
     views: [], game: [], saved, current: null, open: [], cur: null, mode: mq.matches ? 'edit' : 'table', filter: 'all', q: '', speaker: null, lenFilter: 'all',
-    checked: new Set(), sideTab: 'hints', sideStack: false, sideCollapsed: false, saveOk: true, savedAt: null, who: saved.settings.who, phone: mq.matches,
+    checked: new Set(), sideTab: 'hints', sideOn: ['hints'], saveOk: true, savedAt: null, who: saved.settings.who, phone: mq.matches,
     leftTab: { table: 'files', edit: 'rows', review: 'rows' }, leftOpen: !mq.matches, leftBoth: false, rightOpen: false, collapsed: new Set(), sess: { n: 0, t0: Date.now() }, lastBuild: null,
   };
   const fromSnapshot = viewsFromSnapshot(saved);
@@ -255,11 +253,11 @@ export async function start(root: HTMLElement): Promise<void> {
   function renderLayout(): void {
     const ide = $('#ide');
     const l = lp();
-    ide.className = `ide mode-${s.mode === 'table' ? 'table' : 'focus'} ${l ? 'lp-open' : 'lp-closed'}${s.phone ? ' sz-s' : ''}${s.rightOpen ? ' sheet-open' : ''}${s.sideCollapsed && !s.phone ? ' rp-collapsed' : ''}`;
+    ide.className = `ide mode-${s.mode === 'table' ? 'table' : 'focus'} ${l ? 'lp-open' : 'lp-closed'}${s.phone ? ' sz-s' : ''}${s.rightOpen ? ' sheet-open' : ''}${!s.sideOn.length && !s.phone ? ' rp-collapsed' : ''}`;
     const both = !!l && s.leftBoth && !s.phone;
     $('#lpanel').classList.toggle('split', both);
     $('#rz-y').hidden = !both;
-    document.querySelectorAll<HTMLElement>('#strip button').forEach(b => { const on = both ? b.dataset.lp === 'both' : b.dataset.lp === l; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+    document.querySelectorAll<HTMLElement>('#strip button').forEach(b => { const on = both || b.dataset.lp === l; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
     $('#tree').hidden = !both && l !== 'files';
     $('#lp-rows').hidden = !both && l !== 'rows';
     $('#lp-title').textContent = both ? 'Файли й рядки' : l === 'rows' ? `Рядки · ${s.current ?? ''}` : 'Файли гри';
@@ -749,7 +747,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const it = sdItems[i];
     if (!it) return;
     closeSearch();
-    if (it.t === 'term') { s.sideTab = 'glossary'; s.sideCollapsed = false; if (s.mode === 'table') setMode('edit', false); s.rightOpen = true; renderAll(); ($('#gl-q') as HTMLInputElement).value = it.label.split(' → ')[0] ?? ''; renderGlossary(ctx); return; }
+    if (it.t === 'term') { s.sideTab = 'glossary'; s.sideOn = showSide(s.sideOn, 'glossary'); if (s.mode === 'table') setMode('edit', false); s.rightOpen = true; renderAll(); ($('#gl-q') as HTMLInputElement).value = it.label.split(' → ')[0] ?? ''; renderGlossary(ctx); return; }
     if (it.file) {
       if (it.file !== s.current) openFile(it.file);
       if (it.key) { s.filter = 'all'; s.q = ''; ctx.select(it.key, s.mode === 'table' ? undefined : s.mode); } else renderAll();
@@ -933,10 +931,15 @@ export async function start(root: HTMLElement): Promise<void> {
     if (lt) { s.leftTab[s.mode] = lt.dataset.lt === 'rows' ? 'rows' : 'files'; renderAll(); return; }
     const sb = t.closest<HTMLElement>('#strip [data-lp]');
     if (sb) {
-      if (sb.dataset.lp === 'both') { if (s.leftOpen && s.leftBoth) s.leftOpen = false; else { s.leftOpen = true; s.leftBoth = true; } renderAll(); return; }
-      const want = sb.dataset.lp === 'rows' ? 'rows' : 'files';
-      if (s.leftOpen && !s.leftBoth && s.leftTab[s.mode] === want) s.leftOpen = false; else { s.leftOpen = true; s.leftTab[s.mode] = want; }
-      s.leftBoth = false; renderAll(); return;
+      // Each button switches its own panel on or off; both on = the zone is split between them.
+      const want = sb.dataset.lp === 'rows' ? 'rows' : 'files', other = want === 'rows' ? 'files' : 'rows';
+      const cur = s.leftTab[s.mode];
+      if (s.phone) { if (s.leftOpen && cur === want) s.leftOpen = false; else { s.leftOpen = true; s.leftTab[s.mode] = want; } s.leftBoth = false; }
+      else if (!s.leftOpen) { s.leftOpen = true; s.leftBoth = false; s.leftTab[s.mode] = want; }
+      else if (s.leftBoth) { s.leftBoth = false; s.leftTab[s.mode] = other; }
+      else if (cur === want) s.leftOpen = false;
+      else s.leftBoth = true;
+      renderAll(); return;
     }
     if (t.closest('#lp-close')) { s.leftOpen = false; renderAll(); return; }
     const sm = t.closest<HTMLElement>('#seg [data-m]');

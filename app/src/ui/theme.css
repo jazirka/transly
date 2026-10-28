@@ -704,3 +704,10 @@ td .term{color:#d9c3ee}
 .tabs .tab:first-child{border-top-left-radius:var(--r2)}
 .node .chev{width:18px;font-size:13px;color:var(--mute);line-height:1}
 .node.dir:hover .chev{color:var(--text)}
+
+/* Mode switch: the selected segment fills the capsule. No padding or gap between the two shapes; the segments at the
+   ends take the capsule's own radius, so the highlight and its edge follow the outline exactly. */
+.seg{padding:0;gap:0;overflow:hidden}
+.seg button{border-radius:0;height:28px}
+.seg button:first-child{border-radius:var(--r3) 0 0 var(--r3)}
+.seg button:last-child{border-radius:0 var(--r3) var(--r3) 0}

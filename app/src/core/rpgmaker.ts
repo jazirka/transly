@@ -88,7 +88,7 @@ function extractMap(json: unknown, opts: ExtractOptions): Unit[] {
   return out;
 }
 
-function pageInfo(page: Record<string, unknown>, ev: Record<string, unknown>): PageInfo {
+export function pageInfo(page: Record<string, unknown>, ev: Record<string, unknown>): PageInfo {
   const c = isObj(page.conditions) ? page.conditions : {};
   const n = (v: unknown) => (typeof v === 'number' ? v : 0);
   const info: PageInfo = { trigger: n(page.trigger), x: n(ev.x), y: n(ev.y), switches: [] };

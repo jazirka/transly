@@ -49,7 +49,7 @@ describe('scenes', () => {
 describe('jump target', () => {
   it('finds the event, its tile and where to start', () => {
     const key = units.find(u => u.source === 'Here you go.')!.key;
-    expect(jumpTarget('Map007.json', key, game, 'line')).toEqual({ kind: 'map', mapId: 7, x: 9, y: 3, eventIndex: 2, eventId: 2, page: 0, common: 0, index: 4, slot: 0 });
+    expect(jumpTarget('Map007.json', key, game, 'line')).toEqual({ kind: 'map', mapId: 7, x: 9, y: 3, eventIndex: 2, eventId: 2, page: 0, common: 0, index: 4, slot: 0, setup: { switches: [] } });
     expect(jumpTarget('Map007.json', key, game, 'event', 2)).toMatchObject({ index: 0, slot: 2 });
     expect(jumpTarget('CommonEvents.json', '[1].list[1]', game, 'line')).toMatchObject({ kind: 'common', common: 1, index: 1 });
   });
@@ -61,7 +61,7 @@ describe('jump target', () => {
 });
 
 /** The plugin runs against stand-ins for the engine's objects: what it calls, in what order, with which numbers. */
-function runPlugin(target: JumpTarget, opts: { loadGame?: (slot: number) => unknown; mapId?: number } = {}) {
+function runPlugin(target: JumpTarget, opts: { loadGame?: (slot: number) => unknown; mapId?: number; emptyParty?: boolean } = {}) {
   const calls: unknown[][] = [];
   const interpreter = { _index: -1, setup: (list: unknown, id: number) => calls.push(['setup', (list as unknown[]).length, id]) };
   const sandbox: Record<string, unknown> = {
@@ -74,6 +74,12 @@ function runPlugin(target: JumpTarget, opts: { loadGame?: (slot: number) => unkn
     $gameMap: { mapId: () => opts.mapId ?? target.mapId, _interpreter: interpreter },
     $dataMap: mapJson,
     $dataCommonEvents: [null, { list: [1, 2, 3] }],
+    $gameSwitches: { setValue: (id: number, v: boolean) => calls.push(['switch', id, v]) },
+    $gameVariables: { value: () => 0, setValue: (id: number, v: number) => calls.push(['variable', id, v]) },
+    $gameSelfSwitches: { setValue: (k: unknown[], v: boolean) => calls.push(['self', ...k, v]) },
+    $gameParty: { members: () => (opts.emptyParty ? [] : [1]), hasItem: () => false, gainItem: (i: { id: number }, n: number) => calls.push(['item', i.id, n]), addActor: (id: number) => calls.push(['actor', id]) },
+    $dataItems: [null, { id: 1 }],
+    $dataActors: [null, { id: 1 }],
   };
   vm.runInNewContext(jumpPlugin(target), sandbox);
   const boot = new (sandbox.Scene_Boot as new () => { start(): void })();
@@ -92,6 +98,15 @@ describe('the test plugin', () => {
     r.startMap();
     expect(r.calls).toContainEqual(['setup', 11, 2]);
     expect(r.interpreter._index).toBe(4);
+  });
+
+  it('switches on what the event page needs and makes sure the party is not empty', () => {
+    const need = { ...target, setup: { switches: [1, 4], variable: { id: 3, min: 10 }, selfSwitch: 'B', item: 1, actor: 1 } };
+    const r = runPlugin(need, { emptyParty: true });
+    expect(r.calls.filter(c => c[0] !== 'boot' && c[0] !== 'newGame' && c[0] !== 'goto' && c[0] !== 'transfer')).toEqual([['switch', 1, true], ['switch', 4, true], ['variable', 3, 10], ['self', 7, 2, 'B', true], ['item', 1, 1], ['actor', 1], ['actor', 1]]);
+    const idx = (n: string) => r.calls.findIndex(c => c[0] === n);
+    expect(idx('switch')).toBeLessThan(idx('transfer'));
+    expect(runPlugin(target).calls.some(c => c[0] === 'actor')).toBe(false);
   });
 
   it('runs only once, and only on the right map', () => {

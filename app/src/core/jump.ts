@@ -1,4 +1,5 @@
-import type { GameFile } from './model';
+import type { GameFile, PageInfo } from './model';
+import { pageInfo } from './rpgmaker';
 import { sceneAddress } from './scene';
 
 /** What the test plugin needs to start the game inside one scene. */
@@ -16,6 +17,8 @@ export interface JumpTarget {
   index: number;
   /** Save slot to start from; 0 = a new game. */
   slot: number;
+  /** What the event page needs to be active (switches, variable, self-switch, item, actor): set before the start, so the scene looks as in the game. */
+  setup?: Pick<PageInfo, 'switches' | 'variable' | 'selfSwitch' | 'item' | 'actor'>;
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -32,7 +35,10 @@ export function jumpTarget(file: string, key: string, game: GameFile[], from: 'l
   const events = (game.find(f => f.name === file)?.json as { events?: unknown } | undefined)?.events;
   const ev = Array.isArray(events) ? events[a.eventIndex] : undefined;
   if (!isObj(ev)) return null;
+  const pg = Array.isArray(ev.pages) ? (ev.pages[a.page] as Record<string, unknown> | undefined) : undefined;
+  const need = pg && typeof pg === 'object' ? pageInfo(pg, ev) : undefined;
   return {
+    ...(need ? { setup: { switches: need.switches, ...(need.variable ? { variable: need.variable } : {}), ...(need.selfSwitch ? { selfSwitch: need.selfSwitch } : {}), ...(need.item ? { item: need.item } : {}), ...(need.actor ? { actor: need.actor } : {}) } } : {}),
     kind: 'map', mapId: a.mapId, x: typeof ev.x === 'number' ? ev.x : 0, y: typeof ev.y === 'number' ? ev.y : 0,
     eventIndex: a.eventIndex, eventId: typeof ev.id === 'number' ? ev.id : a.eventIndex, page: a.page, common: 0, index, slot,
   };
@@ -57,7 +63,24 @@ export function jumpPlugin(target: JumpTarget): string {
 
   function complain(what) { try { console.error('Transly: ' + what); } catch (e) { /* no console */ } }
 
+  // A fresh game has no switches on and may have an empty party: put in what the event page needs, so the
+  // characters appear as they would in the game, and make sure there is someone to walk the map.
+  function prepare() {
+    try {
+      var s = J.setup;
+      if (s) {
+        for (var i = 0; i < s.switches.length; i++) $gameSwitches.setValue(s.switches[i], true);
+        if (s.variable && $gameVariables.value(s.variable.id) < s.variable.min) $gameVariables.setValue(s.variable.id, s.variable.min);
+        if (s.selfSwitch && J.kind === 'map') $gameSelfSwitches.setValue([J.mapId, J.eventId, s.selfSwitch], true);
+        if (s.item && $dataItems[s.item] && !$gameParty.hasItem($dataItems[s.item])) $gameParty.gainItem($dataItems[s.item], 1);
+        if (s.actor) $gameParty.addActor(s.actor);
+      }
+      if ($gameParty.members().length === 0 && $dataActors[1]) $gameParty.addActor(1);
+    } catch (e) { complain(String(e)); }
+  }
+
   function enter() {
+    prepare();
     if (J.kind === 'map') $gamePlayer.reserveTransfer(J.mapId, J.x, J.y, 2, 2);
     SceneManager.goto(Scene_Map);
   }

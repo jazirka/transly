@@ -20,6 +20,8 @@ export class MockGithub implements GithubApi {
   requests: string[] = [];
   /** Called before a PATCH of a ref: lets a test push from "another device" at exactly that moment. */
   beforeRefUpdate: (() => void) | null = null;
+  /** Test switch: GitHub refuses every ref update with 422 although the branch did not move. */
+  rejectRefUpdates = false;
   readonly repo: string;
   isPrivate: boolean;
   readonly token: string;
@@ -104,6 +106,7 @@ export class MockGithub implements GithubApi {
     if (method === 'POST' && sub === '/git/commits') return { status: 201, json: { sha: this.putCommit(String(body!.tree), body!.parents as string[], String(body!.message)) } };
     if (method === 'PATCH' && (x = /^\/git\/refs\/heads\/(.+)$/.exec(sub))) {
       this.beforeRefUpdate?.();
+      if (this.rejectRefUpdates) return { status: 422, json: { message: 'Required status check is expected' } };
       const cur = this.refs.get(x[1]!);
       if (!cur) return { status: 404, json: {} };
       if (!this.isAncestor(cur, String(body!.sha)) && !body!.force) return { status: 422, json: { message: 'Update is not a fast forward' } };

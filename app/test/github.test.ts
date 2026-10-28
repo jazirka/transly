@@ -87,6 +87,14 @@ describe('github sync', () => {
     expect(JSON.parse(gh.text('translations/Items.json.tr.json')!)['[1].name'].target).toBe('Факел');
   });
 
+  it('does not loop when GitHub refuses the ref update although nobody else pushed: it says why', async () => {
+    const gh = new MockGithub();
+    const a = new Device(pc(), gh);
+    gh.rejectRefUpdates = true;
+    await expect(a.sync()).rejects.toThrow(/оновлення гілки відхилено: Required status check is expected/);
+    expect(gh.requests.filter(r => r.startsWith('PATCH')).length).toBe(1);
+  });
+
   it('keeps the same bytes for the same data so devices do not ping-pong commits', async () => {
     const gh = new MockGithub();
     const a = new Device(pc(), gh), b = new Device(emptyProject('Гра'), gh);

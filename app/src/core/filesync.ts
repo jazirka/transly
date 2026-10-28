@@ -101,7 +101,7 @@ async function inBatches<T>(items: T[], n: number, fn: (x: T) => Promise<void>):
 
 export async function syncFiles(remote: RemoteFiles, cfg: FilesOptions, state: FilesState, local: SavedProject, opts: { since?: number; maxTries?: number } = {}): Promise<FilesReport> {
   const dir = normDir(cfg.dir);
-  const since = opts.since ?? 0, maxTries = opts.maxTries ?? 4;
+  const since = opts.since ?? 0, maxTries = opts.maxTries ?? 6;
 
   let project = local;
   let pulled = 0, conflicts = 0, gotSnapshot = false, skippedOriginals = false;

@@ -33,6 +33,8 @@ export function githubApi(cfg: GithubConfig, fetchFn: typeof fetch = fetch): Git
     async request(method, path, body) {
       const r = await fetchFn(base + path, {
         method,
+        // api.github.com answers GETs with max-age=60: a cached branch tip would make every push a non-fast-forward.
+        cache: 'no-store',
         headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', Authorization: `Bearer ${cfg.token.trim()}`, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
         ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       });

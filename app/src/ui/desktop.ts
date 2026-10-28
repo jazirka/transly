@@ -4,7 +4,7 @@ import type { PickedFile } from './folder';
 /** True inside the Tauri desktop shell; in a plain browser everything here is unavailable. */
 export const isDesktop = (): boolean => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
-interface JsonFile { name: string; path: string }
+interface JsonFile { name: string; path: string; orig?: string }
 
 const LS_DIR = 'transly-game-dir';
 const LS_EXE = 'transly-game-exe';
@@ -17,7 +17,8 @@ const toPicked = (files: JsonFile[]): PickedFile[] => {
   const inData = json.filter(f => /(^|[\\/])data[\\/][^\\/]+$/.test(f.path));
   return (inData.length ? inData : json)
     .sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true }))
-    .map(f => ({ name: f.name, path: f.path, read: () => invoke<string>('read_text', { path: f.path }) }));
+    .map(f => ({ name: f.name, path: f.path, // The game's files may already hold a translation: the originals are read from the backup the app made.
+    read: () => invoke<string>('read_text', { path: f.orig ?? f.path }), fromBackup: !!f.orig }));
 };
 
 export const rememberedGameDir = (): string | null => get(LS_DIR);

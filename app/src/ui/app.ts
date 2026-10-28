@@ -355,7 +355,7 @@ export async function start(root: HTMLElement): Promise<void> {
       <div role="gridcell"><span class="key" title="${esc(u.key)}">${esc(shortKey(u.key))}</span>${e?.comments?.length ? SVG.cmt : ''}</div>
       <div class="who" role="gridcell">${esc(ctx.speaker(u))}</div>
       <div class="src" role="gridcell">${markup(flow(u.source), hits)}</div>
-      <div class="tr ${e?.target ? '' : 'empty'}" role="gridcell" title="Двічі клікніть, щоб редагувати тут">${e?.target ? markup(flow(e.target)) : 'не перекладено'}</div>
+      <div class="tr ${e?.target ? '' : 'empty'}" role="gridcell" title="Клікніть, щоб писати прямо тут">${e?.target ? markup(flow(e.target)) : '—'}</div>
       <div class="len ${lenCls(u, e)}" role="gridcell" title="Символів у перекладі / в оригіналі">${len}</div></div>`;
   }
   let enforcedCache: { terms: SavedProject['terms']; en: string[] } | null = null;
@@ -558,7 +558,14 @@ export async function start(root: HTMLElement): Promise<void> {
     dataDir = isDesktop() ? dataDirOf(picked) : null;
     if (!s.views.length) { s.current = null; renderAll(); toast('У цих файлах немає тексту для перекладу'); return; }
     if (failed.length) toast(`Не вдалося прочитати файлів: ${failed.length}`);
-    if (reset) toast(`Оригінал змінився в ${plural(reset, ['рядку', 'рядках', 'рядках'])}: їх повернуто в чернетки`);
+    const fromBackup = picked.filter(f => f.fromBackup).length;
+    let translated = 0;
+    for (const v of s.views) for (const u of v.units) if (s.saved.files[v.name]?.[u.key]?.target) translated++;
+    if (isDesktop() && !fromBackup && translated >= 10 && reset / translated >= 0.2) {
+      // Many originals changed at once and there is no backup to read them from: most likely the folder already holds the translation.
+      toast('Оригінали в папці гри змінилися майже скрізь, а резервної копії немає: схоже, там уже лежить переклад. Натисніть «Збірка (файл)» → «Повернути оригінали», потім відкрийте папку знову', { sticky: true });
+    } else if (reset) toast(`Оригінал змінився в ${plural(reset, ['рядку', 'рядках', 'рядках'])}: їх повернуто в чернетки`);
+    else if (fromBackup) toast('Оригінали прочитано з резервної копії гри (data.transly-orig)');
     s.open = s.open.filter(n => s.views.some(v => v.name === n));
     openFile(s.current && s.views.some(v => v.name === s.current) ? s.current : s.views[0]!.name);
     ctx.persist();
@@ -869,7 +876,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!cell || !u || cell.querySelector('textarea')) return;
     const ta = el('textarea', 'cell-ed');
     ta.rows = 2; ta.value = entryOf(u)?.target ?? ''; ta.setAttribute('aria-label', 'Переклад рядка');
-    cell.innerHTML = ''; cell.appendChild(ta); cell.appendChild(el('div', 'cell-hint', 'Ctrl+Enter — надіслати на вичитування · Esc — скасувати · клік поза коміркою — зберегти')); ta.focus(); ta.select();
+    cell.innerHTML = ''; cell.appendChild(ta); ta.focus(); ta.select();
     let cancelled = false;
     const finish = () => {
       if (!cancelled && ta.value !== (entryOf(u)?.target ?? '')) {
@@ -984,6 +991,11 @@ export async function start(root: HTMLElement): Promise<void> {
     if (s.mode !== 'table' && focusClick(ctx, t)) return;
     if (s.mode === 'table') {
       const row = t.closest<HTMLElement>('.gr');
+      // A click on a translation cell selects its row and starts writing right there.
+      if (row && t.closest('.gr .tr') && !t.closest('textarea')) {
+        if (row.dataset.key !== s.cur) { document.querySelector('.gr.sel')?.classList.remove('sel'); row.classList.add('sel'); s.cur = row.dataset.key ?? null; renderStatus(); renderSidePanel(ctx); }
+        startInline(row.dataset.key!); return;
+      }
       if (row && row.dataset.key !== s.cur && !t.closest('textarea')) { document.querySelector('.gr.sel')?.classList.remove('sel'); row.classList.add('sel'); s.cur = row.dataset.key ?? null; renderStatus(); renderSidePanel(ctx); }
     }
   });

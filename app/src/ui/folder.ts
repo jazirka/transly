@@ -3,7 +3,7 @@ import type { GameFile } from '../core';
 import { isDesktop, pickGameDirDesktop } from './desktop';
 
 /** A file chosen by the user, not read yet. */
-export interface PickedFile { name: string; path: string; /** Path relative to the picked folder, with `/`. */ rel?: string; read: () => Promise<string> }
+export interface PickedFile { name: string; path: string; /** Path relative to the picked folder, with `/`. */ rel?: string; read: () => Promise<string>; /** The text comes from the app's backup of the game's untouched originals. */ fromBackup?: boolean }
 
 export type DirHandle = {
   queryPermission?(o: { mode: 'read' | 'readwrite' }): Promise<string>;

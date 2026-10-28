@@ -35,7 +35,8 @@ impl Roots {
             }
         };
         let roots = self.0.lock().unwrap();
-        if roots.iter().any(|r| resolved.starts_with(r)) {
+        // The backup of a picked folder's originals sits next to it: reading it is allowed too.
+        if roots.iter().any(|r| resolved.starts_with(r) || resolved.starts_with(backup_dir(r))) {
             Ok(resolved)
         } else {
             Err("Цей шлях не дозволено: оберіть папку через діалог".into())
@@ -47,6 +48,8 @@ impl Roots {
 struct JsonFile {
     name: String,
     path: String,
+    /// The untouched original of this file, when the app has backed it up (the file itself may hold a translation).
+    orig: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -61,11 +64,12 @@ fn walk(dir: &Path, depth: u8, out: &mut Vec<JsonFile>) {
         let p = e.path();
         let name = e.file_name().to_string_lossy().to_string();
         if p.is_dir() {
-            if depth < 3 && !name.starts_with('.') && name != "node_modules" {
+            if depth < 3 && !name.starts_with('.') && name != "node_modules" && !name.ends_with(".transly-orig") {
                 walk(&p, depth + 1, out);
             }
         } else if name.ends_with(".json") {
-            out.push(JsonFile { name, path: p.to_string_lossy().to_string() });
+            let orig = dir.parent().map(|_| backup_dir(dir).join(&name)).filter(|b| b.is_file()).map(|b| b.to_string_lossy().to_string());
+            out.push(JsonFile { name, path: p.to_string_lossy().to_string(), orig });
         }
     }
 }
@@ -369,6 +373,32 @@ mod tests {
         assert!(roots.check(inside.join("data.json").to_str().unwrap()).is_ok());
         assert!(roots.check(tmp.join("other.json").to_str().unwrap()).is_err());
         assert!(roots.check(inside.join("..").join("other.json").to_str().unwrap()).is_err());
+    }
+
+    #[test]
+    fn listing_points_at_the_backed_up_original_and_skips_the_backup_folder() {
+        let base = std::env::temp_dir().join("transly-test-orig");
+        let _ = fs::remove_dir_all(&base);
+        let data = base.join("data");
+        fs::create_dir_all(&data).unwrap();
+        fs::write(data.join("A.json"), "\"Тулуб\"").unwrap();
+        fs::write(data.join("B.json"), "\"fresh\"").unwrap();
+        let backup = backup_dir(&data);
+        fs::create_dir_all(&backup).unwrap();
+        fs::write(backup.join("A.json"), "\"Body\"").unwrap();
+        let mut out = Vec::new();
+        walk(&base, 0, &mut out);
+        out.sort_by(|a, b| a.name.cmp(&b.name));
+        assert_eq!(out.len(), 2, "the backup folder must not be listed");
+        assert!(out[0].path.ends_with("A.json") && out[0].path.contains("data") && !out[0].path.contains("transly-orig"));
+        let orig = out[0].orig.as_ref().expect("A.json has a backup");
+        assert_eq!(fs::read_to_string(orig).unwrap(), "\"Body\"");
+        assert!(out[1].orig.is_none());
+        // the backup next to a picked folder can be read, other siblings cannot
+        let roots = Roots::default();
+        roots.allow(&data);
+        assert!(roots.check(backup.join("A.json").to_str().unwrap()).is_ok());
+        assert!(roots.check(base.join("other.json").to_str().unwrap()).is_err());
     }
 
     #[test]

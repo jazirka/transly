@@ -57,6 +57,7 @@
 .sp-list{display:flex;flex-direction:column;gap:6px;max-height:46vh;overflow:auto}
 .sp-row{display:grid;grid-template-columns:70px minmax(0,1fr) minmax(130px,200px);gap:10px;align-items:center;padding:6px 8px;border:1px solid var(--line);border-radius:var(--r2)}
 .sp-k{font-size:11px;color:var(--mute);letter-spacing:.04em;text-transform:uppercase}
+.sp-k.hdr{color:#9fd0e8}
 .sp-k.face{color:#d9c3ee}
 .sp-b{min-width:0}
 .sp-s{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

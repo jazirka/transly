@@ -6,7 +6,7 @@ import type { Ctx } from './state';
  * RPG Maker MV stores no speaker name. Two things usually identify who talks: the face graphic of the message
  * and the event it sits in (an NPC). The translator names each once; every message that shares it gets the name.
  */
-const KIND_LABEL = { face: 'Обличчя', note: 'Позначка', event: 'Подія' } as const;
+const KIND_LABEL = { hdr: 'Напис у тексті', face: 'Обличчя', note: 'Позначка', event: 'Подія' } as const;
 
 export function openSpeakers(ctx: Ctx): void {
   const { s } = ctx;

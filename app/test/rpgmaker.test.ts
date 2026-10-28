@@ -63,7 +63,7 @@ describe('apply', () => {
   });
 });
 
-import { speakerCandidates, speakerOf } from '../src/core';
+import { headerName, speakerCandidates, speakerOf } from '../src/core';
 
 describe('speakers', () => {
   const faceMap = { events: [null, { id: 1, name: 'ghoul', pages: [{ list: [
@@ -82,6 +82,20 @@ describe('speakers', () => {
     const map = { 'face:Aura1#3': { name: 'Марина', mt: 1 }, 'event:ghoul': { name: 'Гуль', mt: 1 } };
     expect(units.map(u => speakerOf(u, map))).toEqual(['Марина', 'Named', 'Гуль', 'Гуль']);
     expect(units.map(u => speakerOf(u, undefined))).toEqual(['', 'Named', '', '']);
+  });
+
+  it('reads a name printed as the first line, its first letter drawn as an icon', () => {
+    expect(headerName('\\>\\i[73]\\}ANITOR\\{\\<\n"Gyah gyah!"')).toBe('JANITOR');
+    expect(headerName('\\i[76]\\}ARCOH\\{\\< "Hi"')).toBe('MARCOH');
+    expect(headerName('\\>\\i[84]\\}ILLAGER\\{\\<\nHm')).toBe('VILLAGER');
+    expect(headerName('\\i[144]\\}OCKETCAT\\{\\<\nHm')).toBe('');
+    expect(headerName('\\v[355]\\c[2]\\i[217]Shillings\\c[0] is all you got.')).toBe('');
+    const u = { speaker: '', source: '\\>\\i[73]\\}ANITOR\\{\\<\nHm' };
+    expect(speakerOf(u, undefined)).toBe('JANITOR');
+    expect(speakerOf(u, { 'hdr:JANITOR': { name: 'Двірник', mt: 1 } })).toBe('Двірник');
+    expect(speakerOf({ ...u, speaker: 'Named' }, { 'hdr:JANITOR': { name: 'Двірник', mt: 1 } })).toBe('Named');
+    const c = speakerCandidates([{ name: 'Map005.json', units: [{ key: 'a', source: u.source, speaker: '', kind: 'dialogue', context: '', face: 'Aura1#3' }, { key: 'b', source: u.source, speaker: '', kind: 'dialogue', context: '' }] }]);
+    expect(c.map(x => [x.key, x.count])).toEqual([['hdr:JANITOR', 2]]);
   });
 
   it('lists candidates: faces first, events only when they carry enough messages', () => {

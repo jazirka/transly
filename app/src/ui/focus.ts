@@ -29,11 +29,13 @@ export const FOCUS_HTML = `<div class="fc"><div class="fc-in">
     <div class="lbl" id="f-trlbl">Переклад · UK</div>
     <textarea class="tr-in" id="i-tr" spellcheck="false" aria-label="Переклад"></textarea>
     <div class="edbar">
-      <button class="ib" id="b-copy" title="Копіювати оригінал у переклад" aria-label="Копіювати оригінал у переклад">${I.copy}</button>
-      <button class="ib" id="b-clear" title="Очистити переклад (можна скасувати)" aria-label="Очистити переклад">${I.clear}</button>
-      <button class="ib" id="b-code" title="Вставити відсутні керівні коди з оригіналу" aria-label="Вставити керівний код">${I.code}</button>
-      <span class="vsep" aria-hidden="true"></span><button class="ib" id="b-scene" title="Переглянути сцену: усі рядки події поспіль, як у грі" aria-label="Переглянути сцену">${I.scene}</button>
-      <button class="ib" id="b-wrap" title="Перенести рядки за шириною вікна гри" aria-label="Перенести рядки">${I.wrap}</button>
+      <button class="ib lab" id="b-copy" title="Копіювати оригінал у переклад" aria-label="Копіювати оригінал у переклад">${I.copy}<span class="tl">Оригінал</span></button>
+      <button class="ib lab" id="b-scene" title="Переглянути сцену: усі рядки події поспіль, як у грі" aria-label="Переглянути сцену">${I.scene}<span class="tl">Сцена</span></button>
+      <details class="more"><summary class="ib" title="Ще дії" aria-label="Ще дії">⋯</summary><div class="morep">
+        <button id="b-code" title="Вставити відсутні керівні коди з оригіналу">${I.code}<span>Вставити керівні коди</span></button>
+        <button id="b-wrap" title="Перенести рядки за шириною вікна гри">${I.wrap}<span>Перенести рядки за шириною</span></button>
+        <hr><button class="danger" id="b-clear" title="Очистити переклад (можна скасувати)">${I.clear}<span>Очистити переклад</span></button>
+      </div></details>
       <span class="vsep" aria-hidden="true"></span><button class="ib" id="b-play" title="Зібрати й перевірити в грі (F5)" aria-label="Перевірити в грі" hidden>${I.play}</button>
       <button class="ib" id="b-return" title="Повернути перекладачу" aria-label="Повернути перекладачу" hidden>${I.back}</button>
       <span class="vsep" aria-hidden="true"></span><span class="stepper" role="group" aria-label="Перехід між рядками списку"><button class="ib sm" id="f-prev" title="Попередній рядок у списку (Alt+↑)" aria-label="Попередній рядок">${I.up}</button><span class="queue" id="f-queue"></span><button class="ib sm" id="f-next" title="Наступний рядок у списку (Alt+↓)" aria-label="Наступний рядок">${I.down}</button></span>
@@ -279,6 +281,7 @@ export function send(ctx: Ctx): void {
 export function focusClick(ctx: Ctx, t: HTMLElement): boolean {
   const { s } = ctx;
   const u = s.cur ? ctx.unit(s.cur) : undefined;
+  if (!t.closest('details.more > summary')) document.querySelectorAll<HTMLDetailsElement>('details.more').forEach(d => { d.open = false; });
   const tab = t.closest<HTMLElement>('#stabs [data-p]');
   if (tab) { s.sideTab = ({ 's-tm': 'hints', 's-gl': 'glossary', 's-cm': 'comments', 's-hi': 'history' } as const)[tab.dataset.p as 's-tm'] ?? 'hints'; ctx.render(); return true; }
   if (!u || !s.current) return false;

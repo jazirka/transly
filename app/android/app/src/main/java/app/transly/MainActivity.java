@@ -7,6 +7,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.provider.Settings;
 import android.util.Base64;
 import android.util.Log;
 import android.webkit.JavascriptInterface;
@@ -20,6 +21,8 @@ import android.webkit.WebViewClient;
 import android.widget.Toast;
 
 import java.io.ByteArrayInputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -219,6 +222,32 @@ public class MainActivity extends Activity {
             }
         }
 
+        /** Download the new APK from a release of the (private) repository and open the system installer. */
+        @JavascriptInterface
+        public void installUpdate(String url, String token) {
+            if (url == null || !url.startsWith("https://api.github.com/repos/") || !url.contains("/releases/assets/") || url.contains("..")) {
+                report("error", "Оновлення можна брати лише з релізу GitHub");
+                return;
+            }
+            if (!getPackageManager().canRequestPackageInstalls()) {
+                runOnUiThread(() -> startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName()))));
+                report("permission", "Дозвольте цьому застосунку встановлювати оновлення (відкрилися налаштування), потім повторіть оновлення");
+                return;
+            }
+            new Thread(() -> {
+                try {
+                    report("download", "Завантажую оновлення…");
+                    Uri apk = downloadUpdate(url, token);
+                    report("install", "Відкриваю встановлення: підтвердьте його в системному вікні");
+                    runOnUiThread(() -> startActivity(new Intent(Intent.ACTION_VIEW)
+                            .setDataAndType(apk, "application/vnd.android.package-archive")
+                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK)));
+                } catch (Exception e) {
+                    report("error", e.getMessage() == null ? "Не вдалося завантажити оновлення" : e.getMessage());
+                }
+            }).start();
+        }
+
         @JavascriptInterface
         public boolean endSave() {
             if (saving == null) return false;
@@ -227,6 +256,54 @@ public class MainActivity extends Activity {
             if (ok) toast("Збережено в «Завантаження»: " + name);
             return ok;
         }
+    }
+
+    /** Tell the page how an update is going ("download", "install", "permission", "error"). */
+    private void report(String stage, String text) {
+        web.post(() -> web.evaluateJavascript("window.__updateState&&window.__updateState(" + org.json.JSONObject.quote(stage) + "," + org.json.JSONObject.quote(text) + ")", null));
+    }
+
+    private HttpURLConnection open(String address, String token) throws java.io.IOException {
+        HttpURLConnection c = (HttpURLConnection) new URL(address).openConnection();
+        c.setInstanceFollowRedirects(false);
+        c.setConnectTimeout(20000);
+        c.setReadTimeout(60000);
+        c.setRequestProperty("User-Agent", "transly");
+        if (token != null) {
+            c.setRequestProperty("Authorization", "Bearer " + token);
+            c.setRequestProperty("Accept", "application/octet-stream");
+        }
+        return c;
+    }
+
+    /** Download a release asset of a private repository into Downloads. The redirect to the file store is followed without the token. */
+    private Uri downloadUpdate(String url, String token) throws Exception {
+        HttpURLConnection c = open(url, token);
+        int code = c.getResponseCode();
+        if (code >= 301 && code <= 308) {
+            String loc = c.getHeaderField("Location");
+            if (loc == null || !loc.startsWith("https://")) throw new java.io.IOException("GitHub надіслав небезпечну адресу файлу");
+            c.disconnect();
+            c = open(loc, null);
+            code = c.getResponseCode();
+        }
+        if (code == 401) throw new java.io.IOException("Токен недійсний або прострочений");
+        if (code == 403 || code == 404) throw new java.io.IOException("Немає доступу до релізу: токен має мати право читати вміст репозиторію");
+        if (code != 200) throw new java.io.IOException("Помилка завантаження: " + code);
+        ContentValues v = new ContentValues();
+        v.put(MediaStore.MediaColumns.DISPLAY_NAME, "transly-update.apk");
+        v.put(MediaStore.MediaColumns.MIME_TYPE, "application/vnd.android.package-archive");
+        v.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+        Uri uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
+        if (uri == null) throw new java.io.IOException("Не вдалося створити файл у Завантаженнях");
+        long total = 0;
+        try (InputStream in = c.getInputStream(); OutputStream out = getContentResolver().openOutputStream(uri)) {
+            byte[] buf = new byte[64 * 1024];
+            int n;
+            while ((n = in.read(buf)) > 0) { out.write(buf, 0, n); total += n; }
+        }
+        if (total == 0) throw new java.io.IOException("Порожній файл оновлення");
+        return uri;
     }
 
     private boolean closeSave() {

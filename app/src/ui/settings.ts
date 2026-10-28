@@ -7,6 +7,7 @@ import { DEFAULT_API, describeGithub, loadGithubConfig, runGithubSync, saveGithu
 import { importProjectText } from './import-dialog';
 import { importReference } from './reference';
 import { saveFile } from './save';
+import { loadUpdateConfig, updateSectionHtml, wireUpdateSection } from './updates';
 import { openSpeakers } from './speakers-dialog';
 import { describe, loadSyncConfig, runSync, saveSyncConfig, syncConfigured } from './sync';
 
@@ -51,6 +52,7 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
       <p class="hint" id="rf-state">${ctx.s.saved.reference ? `Додано: ${esc(ctx.s.saved.reference.lang)}` : 'Довідки ще немає'}</p>
       <div class="grid"><label for="rf-lang">Код мови</label><input id="rf-lang" maxlength="8" value="${esc(ctx.s.saved.reference?.lang ?? 'ru')}"></div>
       <div class="acts l"><button class="btn" type="button" id="rf-go">Обрати папку довідкової версії…</button>${ctx.s.saved.reference ? '<button class="btn" type="button" id="rf-del">Прибрати довідку</button>' : ''}</div></details>
+    ${updateSectionHtml(loadUpdateConfig())}
     <details id="cl-sec" hidden><summary>Синхронізація через Claude (між вашими пристроями)</summary>
       <p class="hint">Спільна база цього артефакта працює на всіх ваших пристроях, де відкрито цей самий артефакт: ПК, телефон. Не потрібні ні файли, ні свій сервер, ні GitHub. Натисніть «Синхронізувати» тут, потім відкрийте артефакт на іншому пристрої й натисніть там те саме: приїдуть переклад, глосарій, пам’ять та оригінальні рядки гри.</p>
       <div class="grid"><label for="cl-every">Автоматично</label><select id="cl-every">${[[0, 'Лише за кліком'], [30, 'Кожні 30 хвилин'], [180, 'Кожні 3 години'], [360, 'Кожні 6 годин']].map(([v, l]) => `<option value="${v}" ${cl.everyMin === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
@@ -157,6 +159,7 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
     catch (err) { state.textContent = err instanceof Error ? err.message : 'Не вдалося синхронізувати'; }
     btn.disabled = false;
   });
+  wireUpdateSection(dlg);
   const readGh = () => ({ ...gh, repo: ($('#gh-repo', dlg) as HTMLInputElement).value.trim(), token: ($('#gh-token', dlg) as HTMLInputElement).value.trim(), branch: ($('#gh-branch', dlg) as HTMLInputElement).value.trim(), dir: ($('#gh-dir', dlg) as HTMLInputElement).value.trim(), everyMin: Number(($('#gh-every', dlg) as HTMLSelectElement).value), originals: ($('#gh-orig', dlg) as HTMLInputElement).checked, api: ($('#gh-api', dlg) as HTMLInputElement).value.trim() || DEFAULT_API });
   // Everything typed here is kept at once, so closing the dialog does not lose a pasted token.
   dlg.querySelector('details:has(#gh-repo)')?.addEventListener('change', () => { const c = readGh(); if (c.repo !== gh.repo || c.branch !== gh.branch || c.dir !== gh.dir || c.api !== gh.api) c.state = { shas: {}, commit: '', assetsRev: 0 }; Object.assign(gh, c); saveGithubConfig(gh); });

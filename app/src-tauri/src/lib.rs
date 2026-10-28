@@ -255,6 +255,73 @@ fn restore_jump(roots: State<'_, Roots>, data_dir: String) -> Result<bool, Strin
     restore_jump_files(&roots.check(&data_dir)?)
 }
 
+/// Updates are fetched from this host only, and only as a release asset: the UI cannot make the app download or run
+/// anything else.
+fn allowed_update(url: &str, name: &str) -> Result<(), String> {
+    if !url.starts_with("https://api.github.com/repos/") || !url.contains("/releases/assets/") || url.contains("..") {
+        return Err("Оновлення можна брати лише з релізу GitHub".into());
+    }
+    let n = safe_name(name)?.to_lowercase();
+    if !(n.ends_with(".exe") || n.ends_with(".msi")) {
+        return Err("Автоматично встановлюється лише інсталятор Windows (.exe, .msi)".into());
+    }
+    Ok(())
+}
+
+/// Download a release asset of a private repository. The API answers with a redirect to a pre-signed address that
+/// must not receive the token, so the redirect is followed by hand.
+fn download_asset(url: &str, token: &str, dest: &Path) -> Result<u64, String> {
+    use std::io::Read;
+    let agent = ureq::AgentBuilder::new().redirects(0).user_agent("transly").build();
+    let status_err = |c: u16| match c {
+        401 => "токен недійсний або прострочений".to_string(),
+        403 | 404 => "немає доступу до релізу (токен має мати право читати вміст репозиторію)".to_string(),
+        _ => format!("помилка {c}"),
+    };
+    let first = match agent.get(url).set("Authorization", &format!("Bearer {token}")).set("Accept", "application/octet-stream").call() {
+        Ok(r) => r,
+        Err(ureq::Error::Status(c, _)) => return Err(format!("GitHub: {}", status_err(c))),
+        Err(e) => return Err(format!("Немає з’єднання з GitHub: {e}")),
+    };
+    let resp = if (301..=308).contains(&first.status()) {
+        let loc = first.header("Location").ok_or("GitHub не вказав, де лежить файл")?.to_string();
+        if !loc.starts_with("https://") {
+            return Err("GitHub надіслав небезпечну адресу файлу".into());
+        }
+        match agent.get(&loc).call() {
+            Ok(r) => r,
+            Err(ureq::Error::Status(c, _)) => return Err(format!("Сховище файлів: {}", status_err(c))),
+            Err(e) => return Err(format!("Немає з’єднання зі сховищем файлів: {e}")),
+        }
+    } else {
+        first
+    };
+    let mut out = fs::File::create(dest).map_err(|e| e.to_string())?;
+    let n = std::io::copy(&mut resp.into_reader().take(400 * 1024 * 1024), &mut out).map_err(|e| e.to_string())?;
+    if n == 0 {
+        return Err("Порожній файл оновлення".into());
+    }
+    Ok(n)
+}
+
+/// Download the Windows installer of a new version, start it and close the app so it can be replaced.
+#[tauri::command]
+async fn install_update(app: AppHandle, url: String, token: String, name: String) -> Result<(), String> {
+    allowed_update(&url, &name)?;
+    if !cfg!(windows) {
+        return Err("Автоматичне встановлення працює лише у Windows: завантажте файл зі сторінки релізу".into());
+    }
+    let dir = std::env::temp_dir().join("transly-update");
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join(&name);
+    let dest = path.clone();
+    tauri::async_runtime::spawn_blocking(move || download_asset(&url, &token, &dest)).await.map_err(|e| e.to_string())??;
+    let started = if name.to_lowercase().ends_with(".msi") { Command::new("msiexec").arg("/i").arg(&path).spawn() } else { Command::new(&path).spawn() };
+    started.map_err(|e| format!("Не вдалося запустити інсталятор: {e}"))?;
+    app.exit(0);
+    Ok(())
+}
+
 #[tauri::command]
 fn launch(roots: State<'_, Roots>, exe: String) -> Result<(), String> {
     let p = roots.check(&exe)?;
@@ -273,7 +340,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Roots::default())
-        .invoke_handler(tauri::generate_handler![pick_dir, pick_exe, allow_again, list_json, read_text, apply_data, restore_data, apply_jump, restore_jump, launch])
+        .invoke_handler(tauri::generate_handler![pick_dir, pick_exe, allow_again, list_json, read_text, apply_data, restore_data, apply_jump, restore_jump, install_update, launch])
         .run(tauri::generate_context!())
         .expect("error while running Transly");
 }
@@ -373,5 +440,55 @@ mod tests {
         fs::remove_file(base.join("js").join("plugins.js.transly-orig")).unwrap();
         assert!(restore_jump_files(&data).unwrap());
         assert!(!fs::read_to_string(base.join("js").join("plugins.js")).unwrap().contains("TranslyJump"));
+    }
+
+    #[test]
+    fn updates_come_only_from_a_github_release_and_only_as_a_windows_installer() {
+        let ok = "https://api.github.com/repos/o/r/releases/assets/1";
+        assert!(allowed_update(ok, "Transly_0.1.0_x64-setup.exe").is_ok());
+        assert!(allowed_update(ok, "Transly.MSI").is_ok());
+        assert!(allowed_update("https://evil.example/repos/o/r/releases/assets/1", "a.exe").is_err());
+        assert!(allowed_update("https://api.github.com/repos/o/r/contents/x", "a.exe").is_err());
+        assert!(allowed_update("https://api.github.com/repos/o/../releases/assets/1", "a.exe").is_err());
+        assert!(allowed_update(ok, "setup.sh").is_err());
+        assert!(allowed_update(ok, "..\\x.exe").is_err());
+    }
+
+    /// A local server stands in for GitHub: the first answer redirects, and the token must not follow the redirect.
+    #[test]
+    fn download_follows_the_redirect_without_the_token() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = l.local_addr().unwrap().port();
+        let seen = std::sync::Arc::new(Mutex::new(Vec::<String>::new()));
+        let s2 = seen.clone();
+        let th = std::thread::spawn(move || {
+            for i in 0..2 {
+                let (mut c, _) = l.accept().unwrap();
+                let mut buf = [0u8; 4096];
+                let n = c.read(&mut buf).unwrap();
+                let req = String::from_utf8_lossy(&buf[..n]).to_string();
+                s2.lock().unwrap().push(req.to_lowercase());
+                let reply = if i == 0 { format!("HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:{port}/blob\r\nContent-Length: 0\r\n\r\n") } else { "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello".to_string() };
+                c.write_all(reply.as_bytes()).unwrap();
+            }
+        });
+        let dest = std::env::temp_dir().join("transly-test-download.bin");
+        // the real function insists on https for the redirect; here the point is the header handling, so call the pieces it uses
+        let agent = ureq::AgentBuilder::new().redirects(0).user_agent("transly").build();
+        let first = agent.get(&format!("http://127.0.0.1:{port}/asset")).set("Authorization", "Bearer secret").call().unwrap();
+        assert_eq!(first.status(), 302);
+        let loc = first.header("Location").unwrap().to_string();
+        let resp = agent.get(&loc).call().unwrap();
+        let mut out = fs::File::create(&dest).unwrap();
+        std::io::copy(&mut resp.into_reader(), &mut out).unwrap();
+        th.join().unwrap();
+        assert_eq!(fs::read_to_string(&dest).unwrap(), "hello");
+        let seen = seen.lock().unwrap();
+        assert!(seen[0].contains("authorization: bearer secret"));
+        assert!(!seen[1].contains("authorization"));
+        // the real function refuses a plain-http redirect
+        assert!(download_asset("http://127.0.0.1:1/x", "t", &dest).is_err());
     }
 }

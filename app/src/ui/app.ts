@@ -9,6 +9,7 @@ import type { DirHandle, PickedFile } from './folder';
 import { IdbStore, loadHandle, saveHandle } from './idb';
 import { openImport } from './import-dialog';
 import { openScene } from './scene-dialog';
+import { autoCheck } from './updates';
 import { openConsistency, openFindReplace } from './tools-dialogs';
 import { openPluginTexts } from './plugins-dialog';
 import { markup } from './markup';
@@ -953,6 +954,7 @@ export async function start(root: HTMLElement): Promise<void> {
   });
 
   addEventListener('beforeunload', () => { void autosave.flush(); });
+  setTimeout(() => void autoCheck(), 4000);
   // The Android app goes to the background without unloading the page: save what was typed.
   document.addEventListener('visibilitychange', () => { if (document.hidden) void autosave.flush(); });
   /** Back button: close whatever is open on top first; false when there is nothing to close. */

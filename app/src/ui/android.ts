@@ -6,6 +6,8 @@ export interface AndroidBridge {
   beginSave?(name: string, mime: string): boolean;
   saveChunk?(base64: string): boolean;
   endSave?(): boolean;
+  /** Download the APK of a release asset (private repository, with the token) and open the system installer. */
+  installUpdate?(url: string, token: string): void;
 }
 
 export const androidBridge = (): AndroidBridge | null => (window as unknown as { TranslyAndroid?: AndroidBridge }).TranslyAndroid ?? null;

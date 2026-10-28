@@ -775,8 +775,8 @@ input[type=checkbox]{accent-color:#8b6cf0}
 @media (max-width:1100px){.ib .tl{display:none}.ib.lab{padding:0}}
 .morep button[hidden]{display:none}
 /* Збірка + Грати read as one split control: build, or build and run */
-#cfg-btn{border-radius:999px 0 0 999px;margin-right:-1px;padding-right:10px}
-#run-btn.tb-ic.play{height:30px;width:36px;min-width:0;border:1px solid rgba(255,255,255,.16);border-left:0;border-radius:0 999px 999px 0;background:rgba(255,255,255,.09);padding:0}
+#cfg-btn{border-radius:999px;margin-right:0;padding-right:10px}
+#run-btn.tb-ic.play{height:30px;width:36px;min-width:0;border:0;border-radius:999px;background:transparent;padding:0;color:#5fb865}
 #run-btn.tb-ic.play:hover{background:rgba(255,255,255,.17)}
 /* text never smaller than 11px */
 .tico,.node .ic{font-size:11px}
@@ -942,3 +942,12 @@ body.resizing{user-select:none;cursor:col-resize}
 .pj-card small{color:var(--mute);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pj.lg{width:32px;height:32px;border-radius:var(--r2);font-size:13px;display:grid;place-items:center;background:var(--violet);color:#1e1f22;font-weight:600;flex:none}
 #proj-btn .dd{color:var(--mute);font-size:11px}
+#run-btn.tb-ic.play:hover{background:rgba(95,184,101,.18)}
+.cfg-row{display:flex;align-items:stretch;border-radius:var(--r2)}
+.cfg-row>button:first-child{flex:1;min-width:0}
+.cfg-row.on{background:var(--on-bg);box-shadow:inset 0 0 0 1px var(--on-ring)}
+.cfg-row.on>button:first-child{background:none!important;box-shadow:none}
+.cfg-row .cfg-go{flex:none;width:34px;align-items:center;justify-content:center;color:#5fb865;opacity:0}
+.cfg-row:hover .cfg-go,.cfg-row.on .cfg-go,.cfg-row .cfg-go:focus-visible{opacity:1}
+.cfg-row .cfg-go svg{width:16px;height:16px;fill:currentColor;stroke:none}
+.cfgpop hr{border:0;border-top:1px solid var(--line);margin:4px 0}

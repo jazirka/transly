@@ -22,7 +22,7 @@ import { artifactDb, describeClaude, loadClaudeConfig, runClaudeSync } from './c
 import { describeGithub, githubConfigured, loadGithubConfig, runGithubSync } from './github';
 import { describe as describeSync, loadSyncConfig, runSync, syncConfigured } from './sync';
 import { initResize, initRightResize } from './resize';
-import { buildAndRunGame } from './play';
+import { buildAndRunGame, playInGame } from './play';
 
 const SVG = {
   files: '<svg viewBox="0 0 16 16"><path d="M2 4.5h4l1.2 1.5H14V12.5H2z"/></svg>',
@@ -628,12 +628,13 @@ export async function start(root: HTMLElement): Promise<void> {
     openImport(ctx, adopt, files => loadFiles(files, true));
   }
   /* ---------- run configurations: what the ▶ button does (like IntelliJ's run selector) ---------- */
-  type RunCfg = 'file' | 'game';
+  type RunCfg = 'file' | 'game' | 'scene';
   const CFG: Record<RunCfg, { name: string; sub: string; desk: boolean }> = {
     file: { name: 'Збірка (файл)', sub: 'ZIP, папка або запис у файли гри', desk: false },
     game: { name: 'Збірка (гра)', sub: 'Записати переклад із чернетками й запустити гру для тестування', desk: true },
+    scene: { name: 'Поточна сцена', sub: 'Те саме, але гра починається зі сцени вибраного рядка', desk: true },
   };
-  const loadCfg = (): RunCfg => { try { const v = localStorage.getItem('transly.runcfg'); return v === 'game' && isDesktop() ? 'game' : 'file'; } catch { return 'file'; } };
+  const loadCfg = (): RunCfg => { try { const v = localStorage.getItem('transly.runcfg'); return (v === 'game' || v === 'scene') && isDesktop() ? v : 'file'; } catch { return 'file'; } };
   let runCfg: RunCfg = loadCfg();
   function renderRunCfg(): void {
     if (runCfg === 'game' && !isDesktop()) runCfg = 'file';
@@ -646,8 +647,8 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!pop.hidden) { pop.hidden = true; btn.setAttribute('aria-expanded', 'false'); return; }
     pop.innerHTML = (Object.keys(CFG) as RunCfg[]).map(k => {
       const off = CFG[k].desk && !isDesktop();
-      return `<button role="menuitemradio" aria-checked="${k === runCfg}" data-cfg="${k}" ${off ? 'disabled' : ''} class="${k === runCfg ? 'on' : ''}"><span class="cfg-t">${CFG[k].name}</span><small>${off ? 'Лише в застосунку на ПК' : CFG[k].sub}</small></button>`;
-    }).join('');
+      return `<div class="cfg-row ${k === runCfg ? 'on' : ''}"><button role="menuitemradio" aria-checked="${k === runCfg}" data-cfg="${k}" ${off ? 'disabled' : ''}><span class="cfg-t">${CFG[k].name}</span><small>${off ? 'Лише в застосунку на ПК' : CFG[k].sub}</small></button>${off ? '' : `<button class="cfg-go" data-cfg-run="${k}" title="Запустити «${CFG[k].name}»" aria-label="Запустити «${CFG[k].name}»">${SVG.play}</button>`}</div>`;
+    }).join('') + `<hr><button role="menuitem" data-cfg-edit><span class="cfg-t">Налаштувати збірку…</span></button>`;
     const r = btn.getBoundingClientRect();
     pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 300))}px`; pop.style.top = `${r.bottom + 6}px`;
     pop.hidden = false; btn.setAttribute('aria-expanded', 'true');
@@ -669,11 +670,17 @@ export async function start(root: HTMLElement): Promise<void> {
   }
   const closeProjMenu = (): void => { $('#projpop').hidden = true; $('#proj-btn').setAttribute('aria-expanded', 'false'); };
   const closeCfgMenu = (): void => { $('#cfgpop').hidden = true; $('#cfg-btn').setAttribute('aria-expanded', 'false'); };
-  const runSelected = (): void => {
+  const runCfgNow = (k: RunCfg): void => {
     if (!s.views.length) return;
-    if (runCfg === 'game') buildAndRunGame(ctx).catch(err => toast('Не вдалося запустити: ' + (err instanceof Error ? err.message : String(err))));
-    else doBuild();
+    const fail = (err: unknown) => toast('Не вдалося запустити: ' + (err instanceof Error ? err.message : String(err)));
+    if (k === 'game') buildAndRunGame(ctx).catch(fail);
+    else if (k === 'scene') {
+      const u = s.cur ? ctx.unit(s.cur) : undefined;
+      if (!u || !s.current) { toast('Виберіть рядок: гра почнеться з його сцени'); return; }
+      playInGame(ctx, s.current, u, 'event', 0).catch(fail);
+    } else doBuild();
   };
+  const runSelected = (): void => runCfgNow(runCfg);
   const doBuild = () => openBuild(ctx, dataDir, n => { s.lastBuild = { at: Date.now(), n }; renderTop(); });
 
   function openSettingsDlg(): void {
@@ -888,6 +895,9 @@ export async function start(root: HTMLElement): Promise<void> {
     const pj = t.closest<HTMLElement>('#projpop [data-pj]');
     if (pj) { closeProjMenu(); if (pj.dataset.pj === 'folder') void openFolder(); else if (pj.dataset.pj === 'files') openImportDlg(); else openSettingsDlg(); return; }
     if (t.closest('#cfg-btn')) { openCfgMenu(); return; }
+    const cfgRun = t.closest<HTMLElement>('#cfgpop [data-cfg-run]');
+    if (cfgRun) { closeCfgMenu(); runCfgNow(cfgRun.dataset.cfgRun as RunCfg); return; }
+    if (t.closest('#cfgpop [data-cfg-edit]')) { closeCfgMenu(); doBuild(); return; }
     const cfgItem = t.closest<HTMLElement>('#cfgpop [data-cfg]');
     if (cfgItem) { runCfg = cfgItem.dataset.cfg as RunCfg; try { localStorage.setItem('transly.runcfg', runCfg); } catch { /* private mode */ } closeCfgMenu(); renderRunCfg(); return; }
     if (t.closest('#run-btn')) { runSelected(); return; }

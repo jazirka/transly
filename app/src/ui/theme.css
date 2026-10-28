@@ -744,3 +744,7 @@ input[type=checkbox]{accent-color:#8b6cf0}
 .tb-ic.play .lbl{text-transform:none;letter-spacing:0;margin-left:6px;font-size:12.5px}
 .adlg details>:not(summary){margin-top:8px}
 .adlg details>p,.adlg details .hint{margin-bottom:6px}
+@media (max-width:700px){
+  .vsep:has(+ .stepper){display:none}
+  .stepper{margin:0 auto}
+}

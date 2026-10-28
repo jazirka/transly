@@ -775,8 +775,6 @@ input[type=checkbox]{accent-color:#8b6cf0}
 .morep button[hidden]{display:none}
 /* Збірка + Грати read as one split control: build, or build and run */
 #cfg-btn{border-radius:999px;margin-right:0;padding-right:10px}
-#run-btn.tb-ic.play{height:30px;width:36px;min-width:0;border:0;border-radius:999px;background:transparent;padding:0;color:#5fb865}
-#run-btn.tb-ic.play:hover{background:rgba(255,255,255,.17)}
 /* text never smaller than 11px */
 .tico,.node .ic{font-size:11px}
 .btn kbd,.seg kbd,.tpill .dd,.tg .tx{font-size:11px}
@@ -845,13 +843,12 @@ body.resizing{user-select:none;cursor:col-resize}
 .fs.stack .ibody{overflow:hidden}
 .fs.stack .pane{overflow:auto;min-height:0}
 .fs.stack #s-tm{flex:var(--pw0,1) 1 0}.fs.stack #s-gl{flex:var(--pw1,1) 1 0}.fs.stack #s-cm{flex:var(--pw2,1) 1 0}.fs.stack #s-hi{flex:var(--pw3,1) 1 0}
-.fs.stack .pane::before{content:attr(data-title);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);font-weight:500;flex:none}
 .sz-s .rz-r,.sz-s .rz-p{display:none}
 /* close/hide controls appear on hover, or on the active tab / focused panel */
 .tab .x{opacity:0;transition:opacity .12s}
 .tab:hover .x,.tab.on .x,.tab .x:focus-visible{opacity:1}
 .ph .ico{opacity:0;transition:opacity .12s}
-.tree:hover .ph .ico,.tree:focus-within .ph .ico,.ph .ico:focus-visible{opacity:1}
+.tree:hover>.ph .ico,.tree:focus-within>.ph .ico,.ph .ico:focus-visible{opacity:1}
 @media (pointer:coarse){.tab .x,.ph .ico{opacity:1}}
 
 /* right zone = a real column of the workspace, with its rail outside the card, like the left one */
@@ -873,7 +870,7 @@ body.resizing{user-select:none;cursor:col-resize}
 .ide:not(.sz-s) .main{padding-right:0}
 /* both zones share one header: title, and a hide control that shows on hover */
 .ibody .ph{height:34px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:2}
-.ibody:hover .ph .ico,.ibody:focus-within .ph .ico{opacity:1}
+.ibody:hover>.ph .ico,.ibody:focus-within>.ph .ico{opacity:1}
 .sz-s .ibody .ph{display:none}
 /* splitters are the gaps between panels, as in IntelliJ: no visible bar, only the resize cursor */
 .rz{background:transparent!important}
@@ -893,15 +890,11 @@ body.resizing{user-select:none;cursor:col-resize}
 .tree.split>.ph{display:none}
 .tree.split #tree,.tree.split #lp-rows{border:1px solid rgba(255,255,255,.16);border-radius:var(--r3);background:var(--bg);overflow:hidden;min-height:0}
 .tree.split #tree{overflow:auto}
-.tree.split #tree::before,.tree.split #lp-rows::before,.ide:not(.sz-s) .fs.stack .pane::before{display:flex;align-items:center;flex:none;height:34px;padding:0 10px;background:var(--panel);border-bottom:1px solid var(--line);color:var(--mute);font-size:11px;letter-spacing:.06em;text-transform:uppercase;font-weight:400}
-.tree.split #tree::before{content:"Файли гри";position:sticky;top:0;z-index:2}
-.tree.split #lp-rows::before{content:"Рядки файлу"}
 .tree.split #lp-rows{border-top:1px solid rgba(255,255,255,.16)}
 .tree.split .rz-y,.rz-y{height:6px;background:transparent!important}
 .ide:not(.sz-s) .fs.stack .ibody{background:transparent;border:0;border-radius:0;overflow:visible}
 .ide:not(.sz-s) .fs.stack .ibody>.ph{display:none}
 .ide:not(.sz-s) .fs.stack .pane{border:1px solid rgba(255,255,255,.16);border-radius:var(--r3);background:var(--bg);padding:0 12px 12px;gap:12px}
-.ide:not(.sz-s) .fs.stack .pane::before{margin:0 -12px}
 .fs.stack .rz-p,.rz-p{height:6px;background:transparent!important}
 /* the right rail uses the very same button look as the left one */
 .ide:not(.sz-s) .fs .itabs{gap:6px;padding:8px 0 6px;align-items:center}
@@ -941,7 +934,6 @@ body.resizing{user-select:none;cursor:col-resize}
 .pj-card small{color:var(--mute);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pj.lg{width:32px;height:32px;border-radius:var(--r2);font-size:13px;display:grid;place-items:center;background:var(--violet);color:#1e1f22;font-weight:600;flex:none}
 #proj-btn .dd{color:var(--mute);font-size:11px}
-#run-btn.tb-ic.play:hover{background:rgba(95,184,101,.18)}
 .cfg-row{display:flex;align-items:stretch;border-radius:var(--r2)}
 .cfg-row>button:first-child{flex:1;min-width:0}
 .cfg-row.on{background:var(--on-bg);box-shadow:inset 0 0 0 1px var(--on-ring)}
@@ -959,7 +951,6 @@ body.resizing{user-select:none;cursor:col-resize}
 .seg:has(.sub:not([hidden])) button[data-m=edit]{border-radius:0!important}
 .tree-q{position:sticky;top:0;z-index:3;padding:8px;background:var(--panel);border-bottom:1px solid var(--line)}
 .tree-q .fin{width:auto}
-.tree.split #tree::before{z-index:4}
 .tree.split .tree-q{top:34px}
 /* notifications slide in from below and fade out */
 @keyframes toast-in{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
@@ -999,17 +990,27 @@ body.resizing{user-select:none;cursor:col-resize}
 .filters .fin{flex:0 1 200px;min-width:140px}
 .filters .chipsHost{flex-wrap:wrap}
 /* ▶ is an outlined round button, not a filled blob */
-#run-btn.tb-ic.play{width:30px;height:30px;padding:0;justify-content:center;align-items:center;background:transparent;box-shadow:inset 0 0 0 1px rgba(95,184,101,.45)}
-#run-btn.tb-ic.play svg{margin-left:2px}
-#run-btn.tb-ic.play:hover,#run-btn.tb-ic.play:focus-visible{background:transparent;box-shadow:inset 0 0 0 1.5px rgba(95,184,101,.95)}
-#run-btn.tb-ic.play:active{background:rgba(95,184,101,.12)}
-#run-btn.tb-ic.play:disabled{box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);color:var(--mute)}
 /* the last top-bar icon sits exactly over the right rail's icons */
 .topbar{padding-right:4px}
 /* files panel: the title and the search stay put, only the list scrolls (so the scrollbar never runs over the header) */
 #tree:not([hidden]){display:flex;flex-direction:column;overflow:hidden;padding:0}
 #tree-list{flex:1;min-height:0;overflow:auto;padding:4px 0}
 .tree-q{position:static;flex:none}
-.tree.split #tree::before{position:static}
 .tree.split .tree-q{top:auto}
 .tree-q .fin{background:var(--bg)}
+/* ▶: just a green outlined triangle, no circle */
+#run-btn.tb-ic.play{width:30px;height:30px;padding:0;border:0;background:transparent;box-shadow:none;color:#5fb865;justify-content:center;align-items:center}
+#run-btn.tb-ic.play svg{width:18px;height:18px;margin-left:1px}
+#run-btn.tb-ic.play svg path{fill:none;stroke:currentColor;stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round}
+#run-btn.tb-ic.play:hover,#run-btn.tb-ic.play:focus-visible{background:transparent;box-shadow:none;color:#7ddc84}
+#run-btn.tb-ic.play:hover svg path,#run-btn.tb-ic.play:focus-visible svg path{fill:rgba(95,184,101,.2)}
+#run-btn.tb-ic.play:active svg path{fill:rgba(95,184,101,.4)}
+#run-btn.tb-ic.play:disabled{color:var(--mute);background:transparent;box-shadow:none}
+#run-btn.tb-ic.play:disabled svg path{fill:none}
+/* every stacked card has its own header with a «—» that appears under the pointer */
+.card-ph{display:none}
+.tree.split .card-ph,.ide:not(.sz-s) .fs.stack .card-ph{display:flex;flex:none;height:34px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:3}
+.ide:not(.sz-s) .fs.stack .card-ph{margin:0 -12px}
+.tree.split #tree:hover .card-ph .ico,.tree.split #lp-rows:hover .card-ph .ico,.fs.stack .pane:hover .card-ph .ico,.card-ph .ico:focus-visible,.tree.split #tree:focus-within .card-ph .ico,.tree.split #lp-rows:focus-within .card-ph .ico,.fs.stack .pane:focus-within .card-ph .ico{opacity:1}
+.card-ph .ico{opacity:0;transition:opacity .12s;cursor:pointer}
+@media (pointer:coarse){.card-ph .ico{opacity:1}}

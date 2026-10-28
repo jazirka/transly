@@ -61,21 +61,21 @@ export const SIDE_HTML = `<aside class="fs" aria-label="Вказівки до р
   </div>
   <div class="ibody">
     <div class="ph"><span class="grow" id="rp-title">Вказівки</span><span class="ico" id="rp-close" title="Сховати панель" role="button" tabindex="0" aria-label="Сховати панель">—</span></div>
-    <div class="pane on" id="s-tm" data-title="Вказівки"><div><div class="lbl">Глосарій у рядку</div><div id="i-gl"></div></div><div id="cd-box" hidden><div class="lbl">Коди в рядку</div><div id="i-cd"></div></div><div id="db-box" hidden><div class="lbl">Про цей запис гри</div><div id="i-db"></div></div><div id="gn-box" hidden><div class="lbl">Назви з гри</div><div id="i-gn"></div></div><div><div class="lbl">Пам’ять перекладів <span class="r" id="tm-n"></span></div><div id="i-tm"></div></div></div>
+    <div class="pane on" id="s-tm" data-title="Вказівки"><div class="ph card-ph"><span class="grow">Вказівки</span><span class="ico" data-hide-pane="s-tm" role="button" tabindex="0" aria-label="Сховати панель «Вказівки»" title="Сховати">—</span></div><div><div class="lbl">Глосарій у рядку</div><div id="i-gl"></div></div><div id="cd-box" hidden><div class="lbl">Коди в рядку</div><div id="i-cd"></div></div><div id="db-box" hidden><div class="lbl">Про цей запис гри</div><div id="i-db"></div></div><div id="gn-box" hidden><div class="lbl">Назви з гри</div><div id="i-gn"></div></div><div><div class="lbl">Пам’ять перекладів <span class="r" id="tm-n"></span></div><div id="i-tm"></div></div></div>
     <div class="rz rz-p" data-rzp="0" role="separator" aria-orientation="horizontal" tabindex="0" hidden></div>
-    <div class="pane" id="s-gl" data-title="Глосарій">
+    <div class="pane" id="s-gl" data-title="Глосарій"><div class="ph card-ph"><span class="grow">Глосарій</span><span class="ico" data-hide-pane="s-gl" role="button" tabindex="0" aria-label="Сховати панель «Глосарій»" title="Сховати">—</span></div>
       <div class="fin" style="width:auto"><input id="gl-q" placeholder="Пошук у глосарії" aria-label="Пошук у глосарії"></div>
       <table class="gt"><thead><tr><th>EN</th><th>UK</th><th>Тип</th></tr></thead><tbody id="gtb"></tbody></table>
       <div class="gl-form"><div class="lbl">Додати термін</div><input id="gl-en" placeholder="Англійською" aria-label="Термін англійською"><input id="gl-uk" placeholder="Українською" aria-label="Термін українською"><button class="btn" id="gl-add">＋ Додати термін</button></div>
     </div>
     <div class="rz rz-p" data-rzp="1" role="separator" aria-orientation="horizontal" tabindex="0" hidden></div>
-    <div class="pane" id="s-cm" data-title="Коментарі">
+    <div class="pane" id="s-cm" data-title="Коментарі"><div class="ph card-ph"><span class="grow">Коментарі</span><span class="ico" data-hide-pane="s-cm" role="button" tabindex="0" aria-label="Сховати панель «Коментарі»" title="Сховати">—</span></div>
       <div id="cm-list" style="display:flex;flex-direction:column;gap:12px"></div>
       <textarea class="cmin" id="cm-in" placeholder="Написати коментар до цього рядка…" aria-label="Коментар"></textarea>
       <div class="actions" style="margin-top:0"><button class="btn" id="cm-add">Коментувати</button></div>
     </div>
     <div class="rz rz-p" data-rzp="2" role="separator" aria-orientation="horizontal" tabindex="0" hidden></div>
-    <div class="pane" id="s-hi" data-title="Історія"><div class="hist" id="hist-list"></div></div>
+    <div class="pane" id="s-hi" data-title="Історія"><div class="ph card-ph"><span class="grow">Історія</span><span class="ico" data-hide-pane="s-hi" role="button" tabindex="0" aria-label="Сховати панель «Історія»" title="Сховати">—</span></div><div class="hist" id="hist-list"></div></div>
   </div>
 </aside>`;
 
@@ -368,6 +368,8 @@ export function sideClick(ctx: Ctx, t: HTMLElement): boolean {
     else { s.sideOn = s.sideOn.includes(next) ? hideSide(s.sideOn, next) : showSide(s.sideOn, next); if (s.sideOn.length) s.sideTab = s.sideOn[0]!; }
     ctx.render(); return true;
   }
+  const hp = t.closest<HTMLElement>('[data-hide-pane]');
+  if (hp) { const tab = ({ 's-tm': 'hints', 's-gl': 'glossary', 's-cm': 'comments', 's-hi': 'history' } as const)[hp.dataset.hidePane as 's-tm']; if (tab) { s.sideOn = hideSide(s.sideOn, tab); ctx.render(); } return true; }
   if (t.closest('#rp-close')) { s.sideOn = []; ctx.render(); return true; }
   if (!t.closest('.fs')) return false;
   const u = s.cur ? ctx.unit(s.cur) : undefined;

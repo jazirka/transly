@@ -85,9 +85,10 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     <aside class="tree" id="lpanel" aria-label="Бічна панель: файли й рядки">
       <div class="mtabs" id="mtabs" role="group" aria-label="Бічна панель"><button data-lt="files">Файли</button><button data-lt="rows">Рядки</button><button class="ab-ic" id="mt-open" aria-label="Відкрити файли або вставити JSON" title="Відкрити файли або вставити JSON">${SVG.import}</button><button class="ab-ic" id="mt-search" aria-label="Пошук скрізь">${SVG.searchBig}</button></div>
       <div class="ph"><span class="grow" id="lp-title">Файли гри</span><span class="ico" id="lp-close" title="Сховати панель" role="button" aria-label="Сховати панель">—</span></div>
-      <div class="treebody" id="tree"><div class="tree-q"><div class="fin">${SVG.search}<input class="qin" id="fq" placeholder="Пошук у файлах гри" aria-label="Пошук у файлах гри" autocomplete="off" spellcheck="false"></div></div><div id="tree-list"></div></div>
+      <div class="treebody" id="tree"><div class="ph card-ph" data-card="files"><span class="grow">Файли гри</span><span class="ico" data-hide-left="files" role="button" tabindex="0" aria-label="Сховати панель «Файли гри»" title="Сховати">—</span></div><div class="tree-q"><div class="fin">${SVG.search}<input class="qin" id="fq" placeholder="Пошук у файлах гри" aria-label="Пошук у файлах гри" autocomplete="off" spellcheck="false"></div></div><div id="tree-list"></div></div>
       <div class="rz rz-y" id="rz-y" role="separator" aria-orientation="horizontal" aria-label="Розділ між файлами й рядками" aria-valuemin="15" aria-valuemax="85" tabindex="0" title="Потягніть, щоб змінити співвідношення (подвійний клік — навпіл)" hidden></div>
       <div class="slist" id="lp-rows" hidden>
+        <div class="ph card-ph" data-card="rows"><span class="grow">Рядки файлу</span><span class="ico" data-hide-left="rows" role="button" tabindex="0" aria-label="Сховати панель «Рядки файлу»" title="Сховати">—</span></div>
         <div class="fh"><div class="fin">${SVG.search}<input class="qin" id="q2" placeholder="Пошук рядків" aria-label="Пошук рядків"></div><div class="chips2"><span class="chipsHost" id="chips2"></span></div></div>
         <div class="sl-body" id="slist"></div>
       </div>
@@ -936,6 +937,8 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.closest('#ab-stage')) { setMode(s.mode === 'review' ? 'edit' : 'review'); return; }
     const lt = t.closest<HTMLElement>('#mtabs [data-lt]');
     if (lt) { s.leftTab[s.mode] = lt.dataset.lt === 'rows' ? 'rows' : 'files'; renderAll(); return; }
+    const hl = t.closest<HTMLElement>('[data-hide-left]');
+    if (hl) { s.leftBoth = false; s.leftTab[s.mode] = hl.dataset.hideLeft === 'files' ? 'rows' : 'files'; renderAll(); return; }
     const sb = t.closest<HTMLElement>('#strip [data-lp]');
     if (sb) {
       // Each button switches its own panel on or off; both on = the zone is split between them.

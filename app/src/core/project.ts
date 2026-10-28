@@ -1,3 +1,4 @@
+import type { SysNames } from './sysnames';
 import type { GlossaryTerm } from './glossary';
 import type { Reference } from './reference';
 import { extract } from './engine';
@@ -31,6 +32,8 @@ export interface SavedProject {
   reference?: { lang: string; texts: Record<string, Reference> };
   /** Where a file takes place (map names), for context in the tree, tabs and breadcrumbs. */
   labels?: Record<string, string>;
+  /** Switch and variable names, currency (from System.json): they explain codes and event conditions. */
+  sysNames?: SysNames;
   /** Who speaks, as set by the translator: keys `face:Actor1#3` and `event:ghoul111`. */
   speakers?: Record<string, { name: string; mt: number }>;
   /** Time the snapshot/reference last changed. The device with the larger value owns the newer copy. */
@@ -139,6 +142,7 @@ export function deserialize(text: string): SavedProject {
     ...(o.assetsRev ? { assetsRev: o.assetsRev } : {}),
     ...(o.speakers ? { speakers: o.speakers } : {}),
     ...(o.labels ? { labels: o.labels } : {}),
+    ...(o.sysNames ? { sysNames: o.sysNames } : {}),
     ...(o.settingsAt ? { settingsAt: o.settingsAt } : {}),
   };
 }
@@ -174,6 +178,7 @@ export function mergeProjects(a: SavedProject, b: SavedProject, since = 0): { pr
     project: {
       ...newer, settings: { ...settingsFrom.settings, pluginsAsked: a.settings.pluginsAsked || b.settings.pluginsAsked }, ...(settingsAt ? { settingsAt } : {}), resetEpoch: epoch, files, ...(snapshot ? { snapshot } : {}), ...(reference ? { reference } : {}), ...(assetsRev ? { assetsRev } : {}),
       ...(Object.keys(speakers).length ? { speakers } : {}),
+      ...(a.sysNames || b.sysNames ? { sysNames: a.sysNames ?? b.sysNames } : {}),
       ...(a.labels || b.labels ? { labels: { ...(b.labels ?? {}), ...(a.labels ?? {}) } } : {}),
       memory: union(a.memory, b.memory, v => v.s + '\u0001' + v.t),
       terms: union(a.terms, b.terms, v => v.en.toLowerCase()),

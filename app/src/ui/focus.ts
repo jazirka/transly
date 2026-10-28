@@ -1,4 +1,4 @@
-import { activeIssues, addComment, displayLength, edit as editFn, lengthDeviation, limitFor, note, propagate, sendBack, sourceChanged, submit, termsIn, wrapLines } from '../core';
+import { activeIssues, addComment, describePage, explainCodes, sceneUnits, usageKey, displayLength, edit as editFn, lengthDeviation, limitFor, note, propagate, sendBack, sourceChanged, submit, termsIn, wrapLines } from '../core';
 import type { Entry, Unit } from '../core';
 import { $, esc, plural, toast } from './dom';
 import { markup } from './markup';
@@ -56,7 +56,7 @@ export const FOCUS_HTML = `<div class="fc"><div class="fc-in">
     <button role="tab" data-p="s-hi"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.2l2 1.3"/></svg><span class="tl">Історія</span></button>
   </div>
   <div class="ibody">
-    <div class="pane on" id="s-tm"><div><div class="lbl">Глосарій у рядку</div><div id="i-gl"></div></div><div id="gn-box" hidden><div class="lbl">Назви з гри</div><div id="i-gn"></div></div><div><div class="lbl">Пам’ять перекладів <span class="r" id="tm-n"></span></div><div id="i-tm"></div></div></div>
+    <div class="pane on" id="s-tm"><div><div class="lbl">Глосарій у рядку</div><div id="i-gl"></div></div><div id="cd-box" hidden><div class="lbl">Коди в рядку</div><div id="i-cd"></div></div><div id="db-box" hidden><div class="lbl">Про цей запис гри</div><div id="i-db"></div></div><div id="gn-box" hidden><div class="lbl">Назви з гри</div><div id="i-gn"></div></div><div><div class="lbl">Пам’ять перекладів <span class="r" id="tm-n"></span></div><div id="i-tm"></div></div></div>
     <div class="pane" id="s-gl">
       <div class="fin" style="width:auto"><input id="gl-q" placeholder="Пошук у глосарії" aria-label="Пошук у глосарії"></div>
       <table class="gt"><thead><tr><th>EN</th><th>UK</th><th>Тип</th></tr></thead><tbody id="gtb"></tbody></table>
@@ -128,7 +128,9 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
   const label = ctx.view()?.label;
   const limit = u.kind === 'dialogue' || u.kind === 'scroll' ? limitFor(ctx.lineLimit(), u.face) : 0;
   $('#b-wrap').hidden = !limit;
-  $('#f-meta').textContent = [`Тип: ${u.kind}`, label ? `Місцевість: ${label}` : '', u.note ? `Позначка розробників: ${u.note}` : '', limit ? `Ширина рядка: до ${limit} символів${u.face ? ' (поруч обличчя)' : ''}` : '', same ? `однакових рядків у грі: ${same}` : ''].filter(Boolean).join(' · ');
+  const first = sceneUnits(ctx.view()?.units ?? [], u.key)[0];
+  const cond = first?.page ? describePage(first.page, s.saved.sysNames).slice(0, 4).join('; ') : '';
+  $('#f-meta').textContent = [`Тип: ${u.kind}`, cond ? `Умови: ${cond}` : '', label ? `Місцевість: ${label}` : '', u.note ? `Позначка розробників: ${u.note}` : '', limit ? `Ширина рядка: до ${limit} символів${u.face ? ' (поруч обличчя)' : ''}` : '', same ? `однакових рядків у грі: ${same}` : ''].filter(Boolean).join(' · ');
   $('#cm-badge').textContent = String(e?.comments?.length ?? 0);
   renderSide(ctx, u, e, hits);
 }
@@ -176,6 +178,14 @@ function renderSide(ctx: Ctx, u: Unit, e: Entry | undefined, hits: ReturnType<ty
   document.querySelectorAll<HTMLElement>('.ibody .pane').forEach(p => p.classList.toggle('on', p.id === map[tab]));
   if (tab === 'hints') {
     $('#i-gl').innerHTML = hits.length ? hits.map(g => `<div class="gloss-row"><b>${esc(g.en)}</b><span class="arr">→</span><span>${esc(g.uk)}${g.alt?.length ? `<small class="hint"> · ${esc(g.alt.join(', '))}</small>` : ''}</span>${g.kind ? `<span class="t">${esc(g.kind.slice(0, 18))}</span>` : ''}</div>`).join('') : '<div class="hint">Термінів немає</div>';
+    const actor = (n: number) => { const a = s.views.find(v => v.name === 'Actors.json')?.units.find(x => x.key === `[${n}].name`); return a ? s.saved.files['Actors.json']?.[a.key]?.target || a.source : undefined; };
+    const codes = explainCodes(u.source, actor, s.saved.sysNames);
+    $('#cd-box').hidden = !codes.length;
+    $('#i-cd').innerHTML = codes.map(c => `<div class="gloss-row"><b>${esc(c.code)}</b><span class="arr">→</span><span>${esc(c.meaning)}</span></div>`).join('');
+    const uk = usageKey(s.current!, u.key);
+    const used = uk ? ctx.usage().get(uk) ?? [] : [];
+    $('#db-box').hidden = !u.dbNote && !used.length;
+    $('#i-db').innerHTML = (u.dbNote ? `<div class="hint">Примітка в базі: <code>${esc(u.dbNote)}</code></div>` : '') + (used.length ? `<div class="hint">Гравець отримує в: ${used.map(esc).join('; ')}</div>` : '');
     const gn = ctx.names().find(u.source).filter(g => !(g.file === s.current && g.key === u.key));
     gameNames = gn;
     $('#gn-box').hidden = !gn.length;

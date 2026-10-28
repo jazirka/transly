@@ -91,13 +91,21 @@ Control-code QA (`\C[2]`, `\V[1]`…) currently knows RPG Maker codes only; plac
 - **Play in the game** (desktop app, RPG Maker MV/MZ): from the preview, "▶ From the chosen line" or "▶ From the start of the event". The app writes the translation (drafts too) into the game, adds a small plugin `js/plugins/TranslyJump.js` plus one entry at the end of `js/plugins.js`, and starts the game: it skips the title, puts the player on the event's tile (or loads the chosen save) and runs the event page from the chosen command. `js/plugins.js` is backed up once as `plugins.js.transly-orig`; Build → "Повернути оригінали" (or any normal "Apply") removes the plugin again. Not offered for battles and database rows. Scenes can depend on the game's state (switches, variables, party), so pick a save for those.
 - The plugin's logic is tested against stand-ins for the engine's objects (`test/scene.test.ts`); it has not been run in a real RPG Maker game from here.
 
+## More context for translators
+
+- **Control codes explained** in the hints: `\N[1]` → the actor's name, `\V[12]` → the variable's name from `System.json`, `\G` → the currency, colours, pauses.
+- **Event conditions** in the row's details and in the scene preview: trigger, tile, switches (with their names), variable, self-switch.
+- **Database notes**: the `note` field of items/skills and where the game hands them out (needs the game's files).
+- **Scene preview** also has a game-window mode (816 px, 28 px font, width measured in pixels) and "send the whole scene for review / approve the whole scene".
+- Tools → **Find and replace** (previews every change, you tick what to change) and **Check consistency** (the same original translated in different ways; pick the variant to apply everywhere).
+
 ## Moving work between devices by file
 
 Settings → Exchange project through a file saves everything but the game files into one `.transly.json`. On a phone (no folder picker) use **Open files or paste JSON**: pick that file, paste its text, or pick game files (`.json`, `.po`, `.csv`, `.rpy`) directly. Imports merge row by row; the newer edit wins.
 
 ## Android app
 
-`android/` is a small Android project that wraps the web app in a WebView, so the phone gets what a browser tab or an artifact view cannot give: the system **file chooser**, **saving to Downloads**, working **offline**, requests to GitHub / your sync server, and a **home-screen widget** in One UI's style (a large rounded card with a progress ring: approved share in the accent colour, translated share behind it, the number of approved rows, and a "continue" pill; light and dark follow the system).
+`android/` is a small Android project that wraps the web app in a WebView, so the phone gets what a browser tab or an artifact view cannot give: the system **file chooser**, **saving to Downloads**, working **offline**, requests to GitHub / your sync server, and two **home-screen widgets** in One UI's frosted-glass pill style: a progress pill (ring with the approved share, translated share behind it, approved/total numbers) and a "next line" pill (the next untranslated row; a tap opens it in the editor).
 
 - The app's files are copied into the APK and served from a fixed https origin, so storage and `crypto` behave as on the web. The page talks to the app through `window.TranslyAndroid` (`src/ui/android.ts`): progress numbers for the widget, saving files in pieces, and the back button (closes dialogs and panels first).
 - Build: the GitHub Actions workflow **Android APK** builds it with the official Android SDK and uploads `transly.apk` as an artifact (Actions → the run → Artifacts). The APK is signed with the debug key, so install it by hand (allow installs from this source) and publish with your own key if you ever distribute it.

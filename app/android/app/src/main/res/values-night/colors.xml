@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="w_bg">#2A2A2E</color>
-    <color name="w_text">#F1F1F4</color>
-    <color name="w_sub">#A6A6AE</color>
-    <color name="w_accent">#B6A4FF</color>
+    <color name="w_text">#FFFFFF</color>
+    <color name="w_sub">#CCFFFFFF</color>
+    <color name="w_accent">#E4DBFF</color>
     <color name="w_pill">#3E3660</color>
 </resources>

@@ -66,24 +66,21 @@ public class TranslyWidget extends AppWidgetProvider {
             v.setImageViewBitmap(R.id.w_ring, ring(context, 0, 0, night));
             v.setTextViewText(R.id.w_big, context.getString(R.string.widget_empty_title));
             v.setTextViewText(R.id.w_lbl, context.getString(R.string.widget_empty_sub));
-            v.setTextViewText(R.id.w_note, "");
-        } else {
+                    } else {
             int translated = approved + waiting + draft;
             int approvedPct = percent(approved, total);
             int translatedPct = percent(translated, total);
             v.setImageViewBitmap(R.id.w_ring, ring(context, approvedPct, translatedPct, night));
             v.setTextViewText(R.id.w_big, nf.format(approved));
-            v.setTextViewText(R.id.w_lbl, "вичитано з " + nf.format(total));
             String note = "перекладено " + translatedPct + "%";
-            if (waiting > 0) note += " · чекає вичитування " + nf.format(waiting);
-            v.setTextViewText(R.id.w_note, file.isEmpty() ? note : file + " · " + note);
+            if (waiting > 0) note += " · чекає " + nf.format(waiting);
+            v.setTextViewText(R.id.w_lbl, "вичитано з " + nf.format(total) + " · " + note);
         }
 
         Intent open = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
         if (open != null) {
             PendingIntent pi = PendingIntent.getActivity(context, 0, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
             v.setOnClickPendingIntent(android.R.id.background, pi);
-            v.setOnClickPendingIntent(R.id.w_btn, pi);
         }
         return v;
     }
@@ -100,16 +97,16 @@ public class TranslyWidget extends AppWidgetProvider {
     /** The progress ring: translated share in a soft tone behind, approved share in the accent, the percentage inside. */
     private static android.graphics.Bitmap ring(Context context, int approvedPct, int translatedPct, boolean night) {
         float d = context.getResources().getDisplayMetrics().density;
-        int size = Math.round(76 * d);
+        int size = Math.round(44 * d);
         Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
 
-        int track = night ? 0xFF3C3C42 : 0xFFE4E4EA;
-        int soft = night ? 0xFF5B4E96 : 0xFFC8BCF5;
-        int accent = night ? 0xFFB6A4FF : 0xFF6F55D9;
-        int text = night ? 0xFFF1F1F4 : 0xFF1C1C1E;
+        int track = 0x4DFFFFFF;
+        int soft = 0x99FFFFFF;
+        int accent = 0xFFE4DBFF;
+        int text = 0xFFFFFFFF;
 
-        float stroke = 9 * d;
+        float stroke = 5 * d;
         float c = size / 2f;
         RectF box = new RectF(stroke / 2, stroke / 2, size - stroke / 2, size - stroke / 2);
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -131,8 +128,8 @@ public class TranslyWidget extends AppWidgetProvider {
         t.setColor(text);
         t.setTextAlign(Paint.Align.CENTER);
         t.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        t.setTextSize(19 * d);
-        canvas.drawText(approvedPct + "%", c, c - (t.ascent() + t.descent()) / 2f, t);
+        t.setTextSize(12 * d);
+        canvas.drawText(approvedPct + "", c, c - (t.ascent() + t.descent()) / 2f, t);
         return bitmap;
     }
 }

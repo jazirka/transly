@@ -1,4 +1,4 @@
-import { Autosave, DupIndex, GameNameIndex, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, lengthDeviation, limitFor, note, pluginCandidates, propagate, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, viewsFromSnapshot, wrapLines } from '../core';
+import { Autosave, DupIndex, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, lengthDeviation, limitFor, note, pluginCandidates, propagate, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, viewsFromSnapshot, wrapLines } from '../core';
 import type { Entry, GameFile, SavedProject, Unit } from '../core';
 import { openBuild } from './build-dialog';
 import { dataDirOf, isDesktop, rememberedGameDir, reopenGameDirDesktop } from './desktop';
@@ -9,6 +9,7 @@ import type { DirHandle, PickedFile } from './folder';
 import { IdbStore, loadHandle, saveHandle } from './idb';
 import { openImport } from './import-dialog';
 import { openScene } from './scene-dialog';
+import { openConsistency, openFindReplace } from './tools-dialogs';
 import { openPluginTexts } from './plugins-dialog';
 import { markup } from './markup';
 import { openSettings } from './settings';
@@ -156,12 +157,14 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!autoLimit || autoLimit.views !== s.views) autoLimit = { views: s.views, n: autoLineLimit(s.views) };
     return autoLimit.n;
   };
+  let usageCache: { game: State['game']; u: ReturnType<typeof buildUsage> } | null = null;
   let namesCache: { views: State['views']; idx: GameNameIndex } | null = null;
   const qaOpts = () => ({ tolerancePct: s.saved.settings.tolerancePct, terms: s.saved.terms, lineLimit: lineLimit() });
   const ctx: Ctx = {
     s, autosave,
     entries: file => (s.saved.files[file] ??= {}),
     qaOpts, lineLimit,
+    usage: () => { if (!usageCache || usageCache.game !== s.game) usageCache = { game: s.game, u: buildUsage(s.game, f => s.saved.labels?.[f]) }; return usageCache.u; },
     gameDir: () => dataDir,
     built: n => { s.lastBuild = { at: Date.now(), n }; renderTop(); },
     names: () => { if (!namesCache || namesCache.views !== s.views) namesCache = { views: s.views, idx: new GameNameIndex(s.views) }; return namesCache.idx; },
@@ -397,7 +400,9 @@ export async function start(root: HTMLElement): Promise<void> {
       const ents = s.saved.files[v.name] ?? {};
       for (const u of v.units) { const e = ents[u.key]; if (!e || !e.target) continue; if (e.status === 'appr') A++; else if (e.status === 'done') D++; else if (e.status === 'draft') W++; }
     }
-    publishWidget({ name: s.saved.name, file: s.current ?? '', total, approved: A, done: D, draft: W });
+    const cur = ctx.view();
+    const nextU = cur ? cur.units.find(u => !s.saved.files[cur.name]?.[u.key]?.target && u.kind !== 'name' && u.kind !== 'term') : undefined;
+    publishWidget({ name: s.saved.name, file: s.current ?? '', total, approved: A, done: D, draft: W, ...(cur && nextU ? { next: { file: cur.name, key: nextU.key, text: nextU.source.replace(/\s+/g, ' ').slice(0, 160) } } : {}) });
     $('#pg-a').style.width = total ? `${(100 * A) / total}%` : '0';
     $('#pg-b').style.width = total ? `${(100 * D) / total}%` : '0';
     $('#pg-c').style.width = total ? `${(100 * W) / total}%` : '0';
@@ -543,6 +548,7 @@ export async function start(root: HTMLElement): Promise<void> {
     } else { s.game = game; s.views = fresh; }
     tmCache = null;
     s.saved.labels = labelsOf(s.views);
+    s.saved.sysNames = sysNamesOf(game) ?? s.saved.sysNames;
     const snap = snapshotOf(s.views);
     if (JSON.stringify(snap) !== JSON.stringify(s.saved.snapshot ?? null)) { s.saved.assetsRev = Date.now(); s.saved.snapshot = snap; }
     let changed = 0;
@@ -666,7 +672,7 @@ export async function start(root: HTMLElement): Promise<void> {
     'Файл': [{ t: 'Відкрити папку гри…', fn: () => void openFolder() }, { t: 'Відкрити файли або вставити JSON…', fn: openImportDlg }, { t: 'Зібрати…', fn: doBuild, sc: 'F5' }, '-', { t: 'Налаштування…', fn: openSettingsDlg }],
     'Вигляд': [{ t: 'Таблиця', fn: () => setMode('table') }, { t: 'Редагування', fn: () => setMode('edit') }, { t: 'Вичитування', fn: () => setMode('review') }],
     'Навігація': [{ t: 'Наступний рядок без перекладу', fn: () => jump('new', 1) }, { t: 'Наступна проблема QA', fn: () => jump('qa', 1) }, { t: 'Переглянути сцену…', fn: () => { const u = s.cur ? ctx.unit(s.cur) : undefined; if (u) openScene(ctx, u); else toast('Спершу виберіть рядок'); } }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: '⇧⇧' }],
-    'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенести довгі рядки у файлі', fn: wrapFile }, '-', { t: 'Налаштування…', fn: openSettingsDlg }],
+    'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Перевірити узгодженість…', fn: () => openConsistency(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенести довгі рядки у файлі', fn: wrapFile }, '-', { t: 'Налаштування…', fn: openSettingsDlg }],
     'Довідка': [{ t: 'Гарячі клавіші', fn: () => toggleKeys() }],
   };
   /** Re-flow every translated message of the current file whose lines are wider than the game window. */
@@ -960,7 +966,16 @@ export async function start(root: HTMLElement): Promise<void> {
     if (s.phone && (s.leftOpen || s.rightOpen)) { s.leftOpen = false; s.rightOpen = false; renderAll(); return true; }
     return false;
   }
-  Object.assign(window, { __back: backStep, __flush: () => autosave.flush() });
+  /** The widget's "next line" tap: open that row in the editor (waits until the project has loaded). */
+  function openRow(file: string, key: string, tries = 0): void {
+    if (s.views.some(v => v.name === file)) {
+      if (s.current !== file) openFile(file);
+      s.filter = 'all'; s.q = ''; s.speaker = null; s.lenFilter = 'all';
+      if (!ctx.unit(key)) { renderAll(); return; }
+      ctx.select(key, s.mode === 'table' ? 'edit' : s.mode);
+    } else if (tries < 40) setTimeout(() => openRow(file, key, tries + 1), 250);
+  }
+  Object.assign(window, { __back: backStep, __flush: () => autosave.flush(), __open: (file: string, key: string) => openRow(file, key) });
   if (s.current) { unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u])); if (s.mode !== 'table') s.cur = ctx.visible()[0]?.key ?? null; }
   renderAll();
 }

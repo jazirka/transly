@@ -1,5 +1,5 @@
 import { TmIndex, activeIssues } from '../core';
-import type { GameNameIndex } from '../core';
+import type { GameNameIndex, Usage } from '../core';
 import type { Autosave, DupIndex, Entry, FileView, GameFile, SavedProject, Status, Unit } from '../core';
 
 export type Mode = 'table' | 'edit' | 'review';
@@ -52,6 +52,8 @@ export interface Ctx {
   lineLimit(): number;
   /** Names the game's database defines (items, skills, characters…). */
   names(): GameNameIndex;
+  /** Where the game hands out items and skills (needs the game's files; empty on a phone). */
+  usage(): Usage;
   /** The game's data folder when the desktop app knows it (needed to start the game); null otherwise. */
   gameDir(): string | null;
   /** A build was written into the game: update the status bar. */

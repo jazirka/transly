@@ -1,4 +1,4 @@
-import type { GameFile, Translations, Unit } from './model';
+import type { GameFile, PageInfo, Translations, Unit } from './model';
 
 /** What to extract beyond the standard fields. */
 export interface ExtractOptions {
@@ -80,10 +80,25 @@ function extractMap(json: unknown, opts: ExtractOptions): Unit[] {
     const evId = typeof ev.id === 'number' ? ev.id : ei;
     ev.pages.forEach((page, pi) => {
       if (!isObj(page) || !Array.isArray(page.list)) return;
-      out.push(...extractList(page.list as unknown as Cmd[], `events[${ei}].pages[${pi}].list`, `EV${String(evId).padStart(3, '0')}${evName ? ' · ' + evName : ''}`, evName, opts));
+      const rows = extractList(page.list as unknown as Cmd[], `events[${ei}].pages[${pi}].list`, `EV${String(evId).padStart(3, '0')}${evName ? ' · ' + evName : ''}`, evName, opts);
+      if (rows[0]) rows[0].page = pageInfo(page, ev);
+      out.push(...rows);
     });
   });
   return out;
+}
+
+function pageInfo(page: Record<string, unknown>, ev: Record<string, unknown>): PageInfo {
+  const c = isObj(page.conditions) ? page.conditions : {};
+  const n = (v: unknown) => (typeof v === 'number' ? v : 0);
+  const info: PageInfo = { trigger: n(page.trigger), x: n(ev.x), y: n(ev.y), switches: [] };
+  if (c.switch1Valid) info.switches.push(n(c.switch1Id));
+  if (c.switch2Valid) info.switches.push(n(c.switch2Id));
+  if (c.variableValid) info.variable = { id: n(c.variableId), min: n(c.variableValue) };
+  if (c.selfSwitchValid && isStr(c.selfSwitchCh)) info.selfSwitch = c.selfSwitchCh;
+  if (c.itemValid) info.item = n(c.itemId);
+  if (c.actorValid) info.actor = n(c.actorId);
+  return info;
 }
 
 function extractCommon(json: unknown, opts: ExtractOptions): Unit[] {
@@ -195,7 +210,7 @@ function extractDb(json: unknown, fields: string[]): Unit[] {
     const label = isStr(row.name) && row.name ? row.name : `#${i}`;
     for (const f of fields) {
       const v = row[f];
-      if (isStr(v) && v) out.push({ key: `[${i}].${f}`, source: v, speaker: '', kind: DB_KIND[f] ?? 'message', context: label });
+      if (isStr(v) && v) out.push({ key: `[${i}].${f}`, source: v, speaker: '', kind: DB_KIND[f] ?? 'message', context: label, ...(f === fields[0] && isStr(row.note) && row.note.trim() ? { dbNote: row.note.trim().slice(0, 400) } : {}) });
     }
   });
   return out;

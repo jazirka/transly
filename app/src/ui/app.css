@@ -99,3 +99,11 @@
 .scn-n{flex:none;min-width:1.4em;text-align:center;color:#aab4e6;font-weight:600}
 .scn-play{display:flex;flex-direction:column;gap:8px;padding-top:6px;border-top:1px solid var(--line)}
 @media (max-width:560px){.scn-choice{min-width:80%}}
+
+.scn-real .scn-win{width:816px;max-width:none;font:28px/36px sans-serif;padding:14px 18px}
+.scn-real{overflow-x:auto}
+.fr-row{grid-template-columns:24px minmax(0,1fr);align-items:start}
+.fr-b{color:var(--mute);text-decoration:line-through;overflow-wrap:anywhere}
+.fr-a{overflow-wrap:anywhere}
+.cs-v{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:4px 0}
+.cs-row{grid-template-columns:minmax(0,1fr)}

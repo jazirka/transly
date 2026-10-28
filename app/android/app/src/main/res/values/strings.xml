@@ -5,4 +5,9 @@
     <string name="widget_continue">Продовжити</string>
     <string name="widget_empty_title">Почніть переклад</string>
     <string name="widget_empty_sub">Відкрийте застосунок і виберіть гру</string>
+    <string name="widget_next_label">Transly: наступний рядок</string>
+    <string name="widget_next_desc">Наступний неперекладений рядок: торкніться, щоб перекласти</string>
+    <string name="widget_next_title">Наступний рядок</string>
+    <string name="widget_next_action">Перекласти</string>
+    <string name="widget_next_empty">Усе перекладено або проєкт ще не відкрито</string>
 </resources>

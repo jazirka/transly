@@ -15,10 +15,27 @@ export interface Unit {
   event?: string;
   /** RPG Maker: the developer's own label (an uppercase comment such as `MARCOH` or `SMALL_TALK`) in force at this message. */
   note?: string;
+  /** RPG Maker database row: the `note` field (tags such as `<Cost: 50>`), on the row's name unit. */
+  dbNote?: string;
+  /** RPG Maker map event: how the page this row opens is triggered, on the first row of the page. */
+  page?: PageInfo;
   /** Short kind label used for grouping and the Тип column. */
   kind: UnitKind;
   /** Human-readable scene path, e.g. `EV014 · Старий солдат`. */
   context: string;
+}
+
+/** Conditions of an event page. Ids refer to System.json's switch and variable names. */
+export interface PageInfo {
+  /** 0 action button, 1 player touch, 2 event touch, 3 autorun, 4 parallel */
+  trigger: number;
+  x: number;
+  y: number;
+  switches: number[];
+  variable?: { id: number; min: number };
+  selfSwitch?: string;
+  item?: number;
+  actor?: number;
 }
 
 export type UnitKind = 'dialogue' | 'choice' | 'scroll' | 'name' | 'description' | 'message' | 'term';

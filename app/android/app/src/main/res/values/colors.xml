@@ -4,8 +4,8 @@
     <color name="ic_bg">#8B72E8</color>
     <!-- Widget, light (One UI: soft neutral card, one accent) -->
     <color name="w_bg">#F6F6F8</color>
-    <color name="w_text">#1C1C1E</color>
-    <color name="w_sub">#6B6B72</color>
-    <color name="w_accent">#6F55D9</color>
+    <color name="w_text">#FFFFFF</color>
+    <color name="w_sub">#CCFFFFFF</color>
+    <color name="w_accent">#E4DBFF</color>
     <color name="w_pill">#E6E0FB</color>
 </resources>

@@ -37,6 +37,8 @@ public class MainActivity extends Activity {
     static final String HOST = "appassets.androidplatform.net";
     private static final int REQ_FILES = 1;
     private static final String TAG = "Transly";
+    static final String EXTRA_FILE = "file";
+    static final String EXTRA_KEY = "key";
 
     private WebView web;
     private ValueCallback<Uri[]> chooser;
@@ -89,6 +91,22 @@ public class MainActivity extends Activity {
             }
         });
         web.loadUrl("https://" + HOST + "/index.html");
+        openFromIntent(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        openFromIntent(intent);
+    }
+
+    /** A tap on the "next line" widget: tell the page which row to open (it waits until the project has loaded). */
+    private void openFromIntent(Intent intent) {
+        String file = intent == null ? null : intent.getStringExtra(EXTRA_FILE);
+        String key = intent == null ? null : intent.getStringExtra(EXTRA_KEY);
+        if (file == null || file.isEmpty() || key == null || key.isEmpty()) return;
+        intent.removeExtra(EXTRA_FILE);
+        web.post(() -> web.evaluateJavascript("(function(){var f=" + org.json.JSONObject.quote(file) + ",k=" + org.json.JSONObject.quote(key) + ";var t=setInterval(function(){if(window.__open){clearInterval(t);window.__open(f,k)}},200);setTimeout(function(){clearInterval(t)},10000)})()", null));
     }
 
     @Override
@@ -163,6 +181,7 @@ public class MainActivity extends Activity {
         public void setStats(String json) {
             getSharedPreferences(TranslyWidget.PREFS, MODE_PRIVATE).edit().putString(TranslyWidget.KEY, json).apply();
             TranslyWidget.refresh(MainActivity.this);
+            NextLineWidget.refresh(MainActivity.this);
         }
 
         /** Start saving a file to the Downloads folder. */

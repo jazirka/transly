@@ -10,7 +10,7 @@ export interface AndroidBridge {
 
 export const androidBridge = (): AndroidBridge | null => (window as unknown as { TranslyAndroid?: AndroidBridge }).TranslyAndroid ?? null;
 
-export interface WidgetStats { name: string; file: string; total: number; approved: number; done: number; draft: number }
+export interface WidgetStats { name: string; file: string; total: number; approved: number; done: number; draft: number; /** The next untranslated row of the open file, for the "next line" widget. */ next?: { file: string; key: string; text: string } }
 
 let timer: ReturnType<typeof setTimeout> | undefined;
 let last = '';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alignReference } from '../src/core';
+import { alignReference, referenceSets, withReference, withoutReference } from '../src/core';
 import type { Unit } from '../src/core';
 
 const u = (key: string, source: string, kind: Unit['kind'] = 'dialogue'): Unit => ({ key, source, speaker: '', kind, context: 'c' });
@@ -32,5 +32,25 @@ describe('alignReference', () => {
     const en = [u(`${L(0)}.choice[0]`, 'Yes', 'choice'), u(`${L(0)}.choice[1]`, 'No', 'choice')];
     const ru = [u(`${L(0)}.choice[0]`, 'Да', 'choice'), u(`${L(0)}.choice[1]`, 'Нет', 'choice')];
     expect(alignReference(en, ru)).toEqual({ [`${L(0)}.choice[0]`]: 'Да', [`${L(0)}.choice[1]`]: 'Нет' });
+  });
+});
+
+describe('several reference languages', () => {
+  const ru = { lang: 'ru', texts: { 'A.json': { k: 'Да' } } };
+  const pl = { lang: 'pl', texts: { 'A.json': { k: 'Tak' } } };
+  it('adds languages, replaces one with the same code and removes them one by one', () => {
+    const one = withReference(undefined, ru);
+    expect(referenceSets(one).map(x => x.lang)).toEqual(['ru']);
+    const two = withReference(one, pl);
+    expect(referenceSets(two).map(x => x.lang)).toEqual(['ru', 'pl']);
+    const replaced = withReference(two, { lang: 'pl', texts: { 'A.json': { k: 'Owszem' } } });
+    expect(referenceSets(replaced).map(x => [x.lang, x.texts['A.json']!.k])).toEqual([['ru', 'Да'], ['pl', 'Owszem']]);
+    expect(referenceSets(withoutReference(two, 'ru')).map(x => x.lang)).toEqual(['pl']);
+    expect(withoutReference(one, 'ru')).toBeUndefined();
+  });
+  it('keeps the first language where older projects stored it', () => {
+    const b = withReference(withReference(undefined, ru), pl);
+    expect(b.lang).toBe('ru');
+    expect(b.texts).toBe(ru.texts);
   });
 });

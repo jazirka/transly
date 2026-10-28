@@ -4,6 +4,28 @@ import type { Unit } from './model';
 /** Reference-language text per unit key of the working language. */
 export type Reference = Record<string, string>;
 
+/** One reference language: its texts per file. */
+export interface ReferenceSet { lang: string; texts: Record<string, Reference> }
+/** The first reference language plus any others; everything travels as one blob, so sync and storage stay as they were. */
+export interface ReferenceBundle extends ReferenceSet { extra?: ReferenceSet[] }
+
+export const referenceSets = (b: ReferenceBundle | undefined): ReferenceSet[] => (b ? [{ lang: b.lang, texts: b.texts }, ...(b.extra ?? [])] : []);
+
+/** Add a reference language, or replace the one with the same code. Returns a new bundle. */
+export function withReference(b: ReferenceBundle | undefined, set: ReferenceSet): ReferenceBundle {
+  const cur = referenceSets(b);
+  const merged = cur.some(x => x.lang === set.lang) ? cur.map(x => (x.lang === set.lang ? set : x)) : [...cur, set];
+  const [first, ...rest] = merged as [ReferenceSet, ...ReferenceSet[]];
+  return { lang: first.lang, texts: first.texts, ...(rest.length ? { extra: rest } : {}) };
+}
+
+/** Drop one reference language; undefined when none is left. */
+export function withoutReference(b: ReferenceBundle | undefined, lang: string): ReferenceBundle | undefined {
+  const rest = referenceSets(b).filter(x => x.lang !== lang);
+  const [first, ...others] = rest;
+  return first ? { lang: first.lang, texts: first.texts, ...(others.length ? { extra: others } : {}) } : undefined;
+}
+
 const LIST = /^(.*\.list)\[\d+\]/;
 const prefixOf = (key: string): string | null => LIST.exec(key)?.[1] ?? null;
 

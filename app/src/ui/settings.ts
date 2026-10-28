@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, emptyProject, parseDelimited, parseHtmlTable, parseTerms, serialize, termsFromTable } from '../core';
+import { DEFAULT_SETTINGS, emptyProject, parseDelimited, parseHtmlTable, parseTerms, referenceSets, serialize, termsFromTable, withoutReference } from '../core';
 import type { GlossaryTerm } from '../core';
 import { $, el, esc, plural, toast } from './dom';
 import type { Ctx } from './state';
@@ -50,10 +50,10 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
       <p class="hint">Або вставте рядки «англійською, табуляція, українською»:</p><textarea id="st-terms" rows="4" aria-label="Терміни для імпорту"></textarea><button class="btn" type="button" id="st-terms-go">Імпортувати вставлені терміни</button></details>
     <details><summary>Імпорт пам’яті перекладів</summary><p class="hint">Рядки «оригінал, табуляція, переклад».</p><textarea id="st-tm" rows="5" aria-label="Пари для імпорту"></textarea><button class="btn" type="button" id="st-tm-go">Імпортувати пари</button></details>
     <details><summary>Мовці</summary><p class="hint">Імен мовців у грі на RPG Maker MV немає. Їх можна визначити за обличчям персонажа й подією.</p><div class="acts l"><button class="btn" type="button" id="st-spk">Визначити мовців…</button></div></details>
-    <details><summary>Довідкова мова</summary><p class="hint">Додайте ту саму гру іншою мовою (наприклад, російською): її переклад з’явиться під оригіналом як підказка. Рядки вирівнюються автоматично, навіть якщо в тій версії є додані чи прибрані репліки.</p>
-      <p class="hint" id="rf-state">${ctx.s.saved.reference ? `Додано: ${esc(ctx.s.saved.reference.lang)}` : 'Довідки ще немає'}</p>
-      <div class="grid"><label for="rf-lang">Код мови</label><input id="rf-lang" maxlength="8" value="${esc(ctx.s.saved.reference?.lang ?? 'ru')}"></div>
-      <div class="acts l"><button class="btn" type="button" id="rf-go">Обрати папку довідкової версії…</button>${ctx.s.saved.reference ? '<button class="btn" type="button" id="rf-del">Прибрати довідку</button>' : ''}</div></details>
+    <details><summary>Довідкові мови</summary><p class="hint">Додайте ту саму гру іншими мовами (наприклад, російською, польською): кожна з’явиться під оригіналом як підказка. Мов можна додати скільки завгодно. Рядки вирівнюються автоматично, навіть якщо в тій версії є додані чи прибрані репліки.</p>
+      <div id="rf-state" class="acts l">${referenceSets(ctx.s.saved.reference).map(r => `<span class="chip on">${esc(r.lang.toUpperCase())} <span class="hint">${Object.keys(r.texts).length} файлів</span></span><button class="btn" type="button" data-rf-del="${esc(r.lang)}" aria-label="Прибрати довідку ${esc(r.lang)}">Прибрати ${esc(r.lang.toUpperCase())}</button>`).join('') || '<span class="hint">Довідок ще немає</span>'}</div>
+      <div class="grid"><label for="rf-lang">Код мови</label><input id="rf-lang" maxlength="8" value="${ctx.s.saved.reference ? '' : 'ru'}" placeholder="ru, pl, fr…"></div>
+      <div class="acts l"><button class="btn" type="button" id="rf-go">Додати мову: обрати папку довідкової версії…</button></div></details>
     ${updateSectionHtml(loadUpdateConfig())}
     <details id="cl-sec" hidden><summary>Синхронізація через Claude (між вашими пристроями)</summary>
       <p class="hint">Спільна база цього артефакта працює на всіх ваших пристроях, де відкрито цей самий артефакт: ПК, телефон. Не потрібні ні файли, ні свій сервер, ні GitHub. Натисніть «Синхронізувати» тут, потім відкрийте артефакт на іншому пристрої й натисніть там те саме: приїдуть переклад, глосарій, пам’ять та оригінальні рядки гри.</p>
@@ -172,10 +172,15 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
   });
   $('#st-spk', dlg).addEventListener('click', () => { dlg.close(); openSpeakers(ctx); });
   $('#rf-go', dlg).addEventListener('click', async () => {
-    const lang = ($('#rf-lang', dlg) as HTMLInputElement).value.trim().toLowerCase() || 'ru';
+    const lang = ($('#rf-lang', dlg) as HTMLInputElement).value.trim().toLowerCase();
+    if (!lang) { toast('Вкажіть код мови, наприклад ru або pl'); return; }
     try { if (await importReference(ctx, lang)) { ctx.render(); dlg.close(); } } catch (err) { toast(err instanceof Error ? err.message : 'Не вдалося прочитати папку'); }
   });
-  dlg.querySelector('#rf-del')?.addEventListener('click', () => { delete ctx.s.saved.reference; ctx.s.saved.assetsRev = Date.now(); ctx.persist(); ctx.render(); toast('Довідку прибрано'); dlg.close(); });
+  dlg.querySelectorAll<HTMLElement>('[data-rf-del]').forEach(b => b.addEventListener('click', () => {
+    const next = withoutReference(ctx.s.saved.reference, b.dataset.rfDel!);
+    if (next) ctx.s.saved.reference = next; else delete ctx.s.saved.reference;
+    ctx.s.saved.assetsRev = Date.now(); ctx.persist(); ctx.render(); toast(`Довідку ${b.dataset.rfDel!.toUpperCase()} прибрано`); dlg.close();
+  }));
   // The shared database exists only inside an artifact: show the section once the page knows it is there.
   void artifactDb().then(db => { if (db) $('#cl-sec', dlg).hidden = false; });
   $('#cl-every', dlg).addEventListener('change', e => { cl.everyMin = Number((e.target as HTMLSelectElement).value); saveClaudeConfig(cl); });

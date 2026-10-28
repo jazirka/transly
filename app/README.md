@@ -75,7 +75,7 @@ Control-code QA (`\C[2]`, `\V[1]`…) currently knows RPG Maker codes only; plac
 ## Glossary and reference language
 
 - Settings → Import glossary: a Google Sheets table saved as a web page (`.html`), or `.csv`/`.tsv`, with columns «Оригінал», «Переклад 1…», «Опис», «Розділ». A big dictionary is added as hints only; tick the box to enforce terms in QA.
-- Settings → Reference language: pick the same game in another language; its text is aligned line by line (even when that version added or removed lines) and shown under the original.
+- Settings → Reference languages: pick the same game in another language (as many as you like: add RU, PL…, each with its own code); each is aligned line by line (even when that version added or removed lines) and shown under the original. A Russian copy of Fear & Hunger 2 aligned 99.97% of the rows.
 
 ## RPG Maker extras
 

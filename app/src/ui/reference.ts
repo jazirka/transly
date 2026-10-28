@@ -1,4 +1,4 @@
-import { alignReference, extract } from '../core';
+import { alignReference, extract, withReference } from '../core';
 import type { Reference } from '../core';
 import { toast } from './dom';
 import { pickGameFolder, readFiles } from './folder';
@@ -27,9 +27,9 @@ export async function importReference(ctx: Ctx, lang: string): Promise<boolean> 
     paired += Object.keys(ref).length;
   }
   if (!paired) { toast('Не знайдено спільних файлів: оберіть папку тієї ж гри іншою мовою'); return false; }
-  ctx.s.saved.reference = { lang, texts };
+  ctx.s.saved.reference = withReference(ctx.s.saved.reference, { lang, texts });
   ctx.s.saved.assetsRev = Date.now();
   ctx.persist();
-  toast(`Довідку додано: ${paired} із ${total} рядків знайшли пару`);
+  toast(`Довідку (${lang.toUpperCase()}) додано: ${paired} із ${total} рядків знайшли пару`);
   return true;
 }

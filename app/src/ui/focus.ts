@@ -1,4 +1,4 @@
-import { activeIssues, addComment, describePage, explainCodes, sceneUnits, usageKey, displayLength, edit as editFn, lengthDeviation, limitFor, note, propagate, sendBack, sourceChanged, submit, termsIn, wrapLines } from '../core';
+import { activeIssues, addComment, describePage, explainCodes, sceneUnits, usageKey, displayLength, edit as editFn, lengthDeviation, limitFor, note, propagate, referenceSets, sendBack, sourceChanged, submit, termsIn, wrapLines } from '../core';
 import type { Entry, Unit } from '../core';
 import { $, esc, plural, toast } from './dom';
 import { markup } from './markup';
@@ -24,7 +24,7 @@ export const FOCUS_HTML = `<div class="fc"><div class="fc-in">
   <div class="fhd"><span class="k" id="f-key"></span><span class="st-pill" id="f-state"></span></div>
   <div class="offlist" id="f-off" hidden><span>Цей рядок не входить у поточний фільтр або пошук.</span><button data-reset>Показати всі рядки</button></div>
   <div><div class="lbl">Оригінал · EN</div><div class="srcbox" id="f-src"></div></div>
-  <div id="f-refbox" hidden><div class="lbl" id="f-reflbl">Довідка</div><div class="srcbox ref" id="f-ref"></div></div>
+  <div id="f-refbox" hidden></div>
   <div class="trblock">
     <div class="lbl" id="f-trlbl">Переклад · UK</div>
     <textarea class="tr-in" id="i-tr" spellcheck="false" aria-label="Переклад"></textarea>
@@ -120,9 +120,9 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
   $('#f-off').hidden = pos >= 0;
   const hits = termsIn(u.source, s.saved.terms);
   $('#f-src').innerHTML = markup(u.source, hits.map(t => t.en));
-  const ref = s.saved.reference?.texts[realOf(ctx, u).file]?.[realOf(ctx, u).key];
-  $('#f-refbox').hidden = !ref;
-  if (ref) { $('#f-reflbl').textContent = 'Довідка · ' + (s.saved.reference?.lang ?? '').toUpperCase(); $('#f-ref').textContent = ref; $('#f-ref').lang = s.saved.reference?.lang ?? ''; }
+  const refs = referenceSets(s.saved.reference).map(r => ({ lang: r.lang, text: r.texts[realOf(ctx, u).file]?.[realOf(ctx, u).key] })).filter(r => r.text);
+  $('#f-refbox').hidden = !refs.length;
+  $('#f-refbox').innerHTML = refs.map(r => `<div class="lbl">Довідка · ${esc(r.lang.toUpperCase())}</div><div class="srcbox ref" lang="${esc(r.lang)}">${esc(r.text!)}</div>`).join('');
   $('#f-trlbl').textContent = review ? 'Після вичитування · UK' : 'Переклад · UK';
   const ta = $('#i-tr') as HTMLTextAreaElement;
   if (document.activeElement !== ta || ta.dataset.key !== u.key) { ta.value = e?.target ?? ''; ta.dataset.key = u.key; }

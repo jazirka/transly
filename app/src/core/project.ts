@@ -1,6 +1,6 @@
 import type { SysNames } from './sysnames';
 import type { GlossaryTerm } from './glossary';
-import type { Reference } from './reference';
+import type { ReferenceBundle } from './reference';
 import { extract } from './engine';
 import type { ExtractOptions } from './rpgmaker';
 import { merge } from './merge';
@@ -29,7 +29,7 @@ export interface SavedProject {
    */
   snapshot?: Record<string, Unit[]>;
   /** Same game in another language, aligned to the working language: shown to the translator as a hint. */
-  reference?: { lang: string; texts: Record<string, Reference> };
+  reference?: ReferenceBundle;
   /** Where a file takes place (map names), for context in the tree, tabs and breadcrumbs. */
   labels?: Record<string, string>;
   /** Switch and variable names, currency (from System.json): they explain codes and event conditions. */

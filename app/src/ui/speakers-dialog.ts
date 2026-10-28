@@ -43,6 +43,10 @@ export function openSpeakers(ctx: Ctx): void {
     if (t.classList.contains('sp-in')) draft.set(t.dataset.k!, t.value);
     else if (t.id === 'sp-q') render();
   });
+  // Enter in a name field (not the search) would submit the form through its first button, "Скасувати", and drop what was typed.
+  dlg.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.target as HTMLElement).classList.contains('sp-in')) { e.preventDefault(); ($('#sp-save', dlg) as HTMLButtonElement).click(); }
+  });
   $('#sp-save', dlg).addEventListener('click', () => {
     const m = map();
     let changed = 0;

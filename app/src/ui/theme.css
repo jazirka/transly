@@ -707,7 +707,7 @@ td .term{color:#d9c3ee}
 
 /* Mode switch: the selected segment fills the capsule. No padding or gap between the two shapes; the segments at the
    ends take the capsule's own radius, so the highlight and its edge follow the outline exactly. */
-.seg{padding:0;gap:0;overflow:hidden}
+.seg{padding:0;gap:0;overflow:hidden;border-radius:999px}
 .seg button{border-radius:0;height:28px}
-.seg button:first-child{border-radius:var(--r3) 0 0 var(--r3)}
-.seg button:last-child{border-radius:0 var(--r3) var(--r3) 0}
+.seg button:first-child{border-radius:999px 0 0 999px}
+.seg button:last-child{border-radius:0 999px 999px 0}

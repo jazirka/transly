@@ -756,3 +756,7 @@ input[type=checkbox]{accent-color:#8b6cf0}
 .tr:has(>.cell-ed){display:flex;flex-direction:column;align-items:stretch}
 .tr>.cell-ed{flex:1;font-style:normal;color:var(--text);min-height:0}
 .cell-hint{position:static;flex:none;border:0;background:#17181a;padding:0 10px 4px}
+.chip.zero{opacity:.55}
+.code{color:#c9a8ec;background:#2e2840}
+.gr .tr .code{color:#c9a8ec}
+.sbtn[hidden]{display:none}

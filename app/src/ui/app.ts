@@ -311,7 +311,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const ents = ctx.entries(v.name);
     const ctxUnits = v.units.filter(u => inContext(u, ents[u.key]));
     const cnt = (f: Filter) => (f === 'all' ? ctxUnits.length : ctxUnits.filter(u => matchesStatus(u, ents[u.key], f)).length);
-    return FILTERS.map(([f, l]) => `<button class="chip ${s.filter === f ? 'on' : ''}" data-filter="${f}" aria-pressed="${s.filter === f}">${l} <span class="n">${cnt(f)}</span></button>`).join('');
+    return FILTERS.map(([f, l]) => `<button class="chip ${s.filter === f ? 'on' : cnt(f) === 0 && f !== 'all' ? 'zero' : ''}" data-filter="${f}" aria-pressed="${s.filter === f}">${l} <span class="n">${cnt(f)}</span></button>`).join('');
   }
 
   const tagFilterHtml = (): string => {
@@ -379,7 +379,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const ids = list.map(u => u.key);
     const nSel = ids.filter(k => s.checked.has(k)).length;
     grid.style.setProperty('--cols', '34px 22px 110px 96px minmax(160px,.9fr) minmax(180px,1fr) 60px');
-    let h = `<div class="gh" role="row"><div class="gcheck" role="columnheader"><input type="checkbox" id="selall" aria-label="Вибрати всі видимі рядки" ${nSel && nSel === ids.length ? 'checked' : ''}></div><div title="Статус" role="columnheader" class="s"><span class="vh">Статус</span></div><div class="s" role="columnheader">Ключ</div><div class="s" role="columnheader">Мовець</div><div role="columnheader">Оригінал · EN</div><div class="s" role="columnheader">Переклад · UK</div><div class="s" role="columnheader" title="Довжина перекладу / довжина оригіналу (без керівних кодів). Рекомендація: якнайближче до оригіналу" style="justify-content:flex-end;border-right:0">Довж.</div></div>`;
+    let h = `<div class="gh" role="row"><div class="gcheck" role="columnheader"><input type="checkbox" id="selall" aria-label="Вибрати всі видимі рядки" ${nSel && nSel === ids.length ? 'checked' : ''}></div><div title="Статус" role="columnheader" class="s"><span class="vh">Статус</span></div><div class="s" role="columnheader">Ключ</div><div class="s" role="columnheader">Мовець</div><div role="columnheader">Оригінал · EN</div><div class="s" role="columnheader">Переклад · UK</div><div class="s" role="columnheader" title="Довжина перекладу / довжина оригіналу (без керівних кодів). Рекомендація: якнайближче до оригіналу" style="justify-content:flex-end;border-right:0">Знаків</div></div>`;
     h += list.length ? list.map(u => rowHtml(u, idx.get(u.key)!)).join('') : `<div class="empty-wrap" role="row"><div role="gridcell">${emptyHtml}</div></div>`;
     grid.innerHTML = h;
     grid.classList.toggle('has-sel', nSel > 0);
@@ -407,10 +407,11 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#pg-a').style.width = total ? `${(100 * A) / total}%` : '0';
     $('#pg-b').style.width = total ? `${(100 * D) / total}%` : '0';
     $('#pg-c').style.width = total ? `${(100 * W) / total}%` : '0';
-    $('#pg-txt').textContent = total ? `${Math.round((100 * A) / total)}% вичитано · ${(A + D + W).toLocaleString('uk-UA')} перекладено з ${total.toLocaleString('uk-UA')}` : 'Папку гри не відкрито';
+    $('#pg-txt').textContent = total ? `Перекладено ${Math.floor((100 * (A + D + W)) / total)}% (${(A + D + W).toLocaleString('uk-UA')} з ${total.toLocaleString('uk-UA')}) · вичитано ${Math.floor((100 * A) / total)}%` : 'Папку гри не відкрито';
     $('#pg').title = total ? `Вичитано ${Math.round((100 * A) / total)}% · Чекає вичитування ${Math.round((100 * D) / total)}% · Чернетки ${Math.round((100 * W) / total)}% · Решта без перекладу` : '';
     const sy = loadSyncConfig();
     const lastSync = Math.max(sy.last, loadGithubConfig().last, loadClaudeConfig().last);
+    $('#sb-sync').hidden = !lastSync; $('#sb-build').hidden = !s.lastBuild;
     $('#sb-sync').textContent = lastSync ? 'Синхр.: ' + new Date(lastSync).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }) : 'Синхр.: ще не було';
     $('#sb-build').textContent = s.lastBuild ? `Збірка: ${new Date(s.lastBuild.at).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })} · ${s.lastBuild.n} рядків` : 'Збірки ще не було';
     ($('#build') as HTMLButtonElement).disabled = !s.views.length;

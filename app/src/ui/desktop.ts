@@ -55,6 +55,12 @@ export async function applyToGame(dataDir: string, files: { name: string; json: 
   return invoke<number>('apply_data', { dataDir, files: files.map(f => ({ name: f.name, content: f.text ?? JSON.stringify(f.json) })) });
 }
 
+/** Put the test plugin (js/plugins/TranslyJump.js) into the game so it starts inside one scene. */
+export const applyJump = (dataDir: string, source: string): Promise<void> => invoke<void>('apply_jump', { dataDir, source });
+
+/** Take the test plugin out again. True when it was there. */
+export const restoreJump = (dataDir: string): Promise<boolean> => invoke<boolean>('restore_jump', { dataDir });
+
 export const restoreGame = (dataDir: string): Promise<number> => invoke<number>('restore_data', { dataDir });
 
 export async function launchGame(): Promise<void> {

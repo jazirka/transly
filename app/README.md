@@ -85,6 +85,12 @@ Control-code QA (`\C[2]`, `\V[1]`…) currently knows RPG Maker codes only; plac
 - **Names from the game**: when a line mentions an item, skill, character or enemy from the database, the glossary hints show how that name is translated there (click to insert it).
 - **Line width**: Settings → line width (by default taken from the original's own line lengths; narrower when a face picture is shown). Too wide a line is a QA warning, and "Wrap lines" re-flows one row (or Tools → Wrap long lines for the whole file). The length of a translation is never capped.
 
+## Scene preview and playing a scene in the game
+
+- **Scene preview** (button next to the editor, or Navigation → View scene): all rows of the event page the current row belongs to, one after another, as message windows. Speakers, choices grouped under their question, `\C[n]` colours, `\N[n]` replaced by the actor's name from `Actors.json` (when the file is open), other codes as small chips, lines wider than the game window marked. Show the translation, the original or both; click a row to pick it. Works on the phone too (it uses only the project's rows).
+- **Play in the game** (desktop app, RPG Maker MV/MZ): from the preview, "▶ From the chosen line" or "▶ From the start of the event". The app writes the translation (drafts too) into the game, adds a small plugin `js/plugins/TranslyJump.js` plus one entry at the end of `js/plugins.js`, and starts the game: it skips the title, puts the player on the event's tile (or loads the chosen save) and runs the event page from the chosen command. `js/plugins.js` is backed up once as `plugins.js.transly-orig`; Build → "Повернути оригінали" (or any normal "Apply") removes the plugin again. Not offered for battles and database rows. Scenes can depend on the game's state (switches, variables, party), so pick a save for those.
+- The plugin's logic is tested against stand-ins for the engine's objects (`test/scene.test.ts`); it has not been run in a real RPG Maker game from here.
+
 ## Moving work between devices by file
 
 Settings → Exchange project through a file saves everything but the game files into one `.transly.json`. On a phone (no folder picker) use **Open files or paste JSON**: pick that file, paste its text, or pick game files (`.json`, `.po`, `.csv`, `.rpy`) directly. Imports merge row by row; the newer edit wins.

@@ -25,3 +25,5 @@ export { splitPluginCommand } from './rpgmaker';
 export * from './plugins';
 export * from './gamenames';
 export * from './wrap';
+export * from './scene';
+export * from './jump';

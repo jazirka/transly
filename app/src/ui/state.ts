@@ -52,6 +52,10 @@ export interface Ctx {
   lineLimit(): number;
   /** Names the game's database defines (items, skills, characters…). */
   names(): GameNameIndex;
+  /** The game's data folder when the desktop app knows it (needed to start the game); null otherwise. */
+  gameDir(): string | null;
+  /** A build was written into the game: update the status bar. */
+  built(n: number): void;
   view(): FileView | null;
   unit(key: string): Unit | undefined;
   /** Units of the current file that pass the status/search/speaker/length filters. */

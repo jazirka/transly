@@ -66,3 +66,16 @@ describe('zip', () => {
     }
   });
 });
+
+describe('drafts in a test build', () => {
+  it('are left out of a normal build and put in when asked', async () => {
+    const { build, emptyProject, extract } = await import('../src/core');
+    const game = [{ name: 'Map001.json', json: { events: [null, { id: 1, name: 'a', pages: [{ list: [{ code: 101, indent: 0, parameters: ['', 0, 0, 2, ''] }, { code: 401, indent: 0, parameters: ['Hello there.'] }] }] }] } }];
+    const units = extract(game[0]!);
+    const views = [{ name: 'Map001.json', units }];
+    const saved = { ...emptyProject('p'), files: { 'Map001.json': { [units[0]!.key]: { target: 'Привіт.', status: 'draft' as const, mt: 5 } } } };
+    const opts = { onlyApproved: false, blockErrors: true, qa: { tolerancePct: 1000, terms: [] } };
+    expect(build(game, views, saved, opts).included).toBe(0);
+    expect(build(game, views, saved, { ...opts, includeDrafts: true }).included).toBe(1);
+  });
+});

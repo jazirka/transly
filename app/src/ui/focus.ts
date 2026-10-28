@@ -2,6 +2,7 @@ import { activeIssues, addComment, displayLength, edit as editFn, lengthDeviatio
 import type { Entry, Unit } from '../core';
 import { $, esc, plural, toast } from './dom';
 import { markup } from './markup';
+import { openScene } from './scene-dialog';
 import { STATUS_CAP, shownStatus } from './state';
 import type { Ctx, SideTab } from './state';
 
@@ -14,6 +15,7 @@ const I = {
   up: '<svg viewBox="0 0 16 16"><path d="M4 9.5L8 5.5l4 4"/></svg>',
   down: '<svg viewBox="0 0 16 16"><path d="M4 6.5L8 10.5l4-4"/></svg>',
   ok: '<svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3.2L13 4.8"/></svg>',
+  scene: '<svg viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="6" rx="1.5"/><rect x="2.5" y="11" width="7" height="2.5" rx="1"/></svg>',
   wrap: '<svg viewBox="0 0 16 16"><path d="M2.5 4h11M2.5 8h8.5a2.5 2.5 0 0 1 0 5H8M9.5 11l-1.7 2 1.7 2M2.5 12h2"/></svg>',
 };
 
@@ -30,6 +32,7 @@ export const FOCUS_HTML = `<div class="fc"><div class="fc-in">
       <button class="ib" id="b-copy" title="Копіювати оригінал у переклад" aria-label="Копіювати оригінал у переклад">${I.copy}</button>
       <button class="ib" id="b-clear" title="Очистити переклад (можна скасувати)" aria-label="Очистити переклад">${I.clear}</button>
       <button class="ib" id="b-code" title="Вставити відсутні керівні коди з оригіналу" aria-label="Вставити керівний код">${I.code}</button>
+      <button class="ib" id="b-scene" title="Переглянути сцену: усі рядки події поспіль, як у грі" aria-label="Переглянути сцену">${I.scene}</button>
       <button class="ib" id="b-wrap" title="Перенести рядки за шириною вікна гри" aria-label="Перенести рядки">${I.wrap}</button>
       <button class="ib" id="b-play" title="Зібрати й перевірити в грі (F5)" aria-label="Перевірити в грі" hidden>${I.play}</button>
       <button class="ib" id="b-return" title="Повернути перекладачу" aria-label="Повернути перекладачу" hidden>${I.back}</button>
@@ -273,6 +276,7 @@ export function focusClick(ctx: Ctx, t: HTMLElement): boolean {
   const ta = $('#i-tr') as HTMLTextAreaElement;
   if (t.closest('#b-copy')) { setText(ctx, u, u.source, 'скопійовано оригінал'); return true; }
   if (t.closest('#b-clear')) { setText(ctx, u, '', 'очищено'); return true; }
+  if (t.closest('#b-scene')) { openScene(ctx, u); return true; }
   if (t.closest('#b-wrap,[data-wrap]')) {
     const limit = limitFor(ctx.lineLimit(), u.face);
     if (!limit) { toast('Ширину рядка вимкнено в налаштуваннях'); return true; }

@@ -1,6 +1,6 @@
 import { build, isRpgMakerFile } from '../core';
 import { $, el, esc, plural, toast } from './dom';
-import { applyToGame, isDesktop, launchGame, pickExe, rememberedExe, restoreGame } from './desktop';
+import { applyToGame, isDesktop, launchGame, pickExe, rememberedExe, restoreGame, restoreJump } from './desktop';
 import { canWriteFolder, downloadZip, writeToFolder } from './export';
 import type { Ctx } from './state';
 
@@ -16,6 +16,7 @@ export function openBuild(ctx: Ctx, dataDir: string | null, onBuilt: (n: number)
     <p class="hint">Записує перекладені рядки в копії файлів гри. Оригінальні файли не змінюються: оберіть окрему папку або завантажте ZIP.</p>
     <label class="achk"><input type="checkbox" id="bd-appr"> Лише вичитані рядки</label>
     <label class="achk"><input type="checkbox" id="bd-block" checked> Не брати рядки з помилкою QA</label>
+    ${desk ? '<label class="achk"><input type="checkbox" id="bd-draft"> Додати чернетки (щоб побачити в грі те, що ще пишете)</label>' : ''}
     <p id="bd-sum" class="sum" role="status"></p>
     ${desk ? `<div class="gamebox"><div class="sh">Перевірка в грі</div><p class="hint">Переклад записується прямо в папку даних гри (${esc(dataDir ?? '')}). Оригінали зберігаються поруч, у папці з суфіксом «.transly-orig», і повертаються кнопкою нижче.</p>
       <p class="hint" id="bd-exe">${rememberedExe() ? 'Файл гри: ' + esc(rememberedExe() ?? '') : 'Файл гри ще не вибрано'}</p>
@@ -24,7 +25,7 @@ export function openBuild(ctx: Ctx, dataDir: string | null, onBuilt: (n: number)
       ${canWriteFolder() && !desk ? '<button class="btn p" id="bd-dir" type="button">Зібрати в папку…</button>' : ''}
       <button class="btn ${canWriteFolder() && !desk ? '' : desk ? '' : 'p'}" id="bd-zip" type="button">Завантажити ZIP</button></div></form>`;
   document.body.appendChild(dlg);
-  const run = () => build(s.game, s.views, s.saved, { onlyApproved: ($('#bd-appr', dlg) as HTMLInputElement).checked, blockErrors: ($('#bd-block', dlg) as HTMLInputElement).checked, qa: ctx.qaOpts() });
+  const run = () => build(s.game, s.views, s.saved, { onlyApproved: ($('#bd-appr', dlg) as HTMLInputElement).checked, includeDrafts: !!(dlg.querySelector('#bd-draft') as HTMLInputElement | null)?.checked, blockErrors: ($('#bd-block', dlg) as HTMLInputElement).checked, qa: ctx.qaOpts() });
   const sum = () => {
     const r = run();
     $('#bd-sum', dlg).textContent = r.included
@@ -42,11 +43,12 @@ export function openBuild(ctx: Ctx, dataDir: string | null, onBuilt: (n: number)
       else if (t.id === 'bd-apply' || t.id === 'bd-play') {
         const r = run();
         const n = await applyToGame(dataDir!, r.files);
+        await restoreJump(dataDir!).catch(() => false); // a normal start, not the scene test
         toast(`Записано файлів у гру: ${n}`);
         onBuilt(r.included);
         if (t.id === 'bd-play') { await launchGame(); toast('Гру запущено'); }
         dlg.close();
-      } else if (t.id === 'bd-restore') { toast(`Повернуто оригінальних файлів: ${await restoreGame(dataDir!)}`); }
+      } else if (t.id === 'bd-restore') { const n = await restoreGame(dataDir!); const plugin = await restoreJump(dataDir!).catch(() => false); toast(`Повернуто оригінальних файлів: ${n}${plugin ? '. Тестовий плагін прибрано' : ''}`); }
       else if (t.id === 'bd-pickexe') { const x = await pickExe(); if (x) $('#bd-exe', dlg).textContent = 'Файл гри: ' + x; }
     } catch (err) { toast('Не вдалося записати: ' + (err instanceof Error ? err.message : String(err))); }
   });

@@ -77,3 +77,25 @@
 .adlg .sum.bad{border-color:var(--err,#c75450);color:var(--text)}
 @media (max-width:560px){.adlg .grid{grid-template-columns:1fr}.adlg .grid input,.adlg .grid select{width:100%}}
 .adlg [hidden]{display:none!important}
+
+/* Scene preview: the message window as the game shows it */
+.scn-dlg{width:min(720px,94vw)}
+.scn-seg{align-self:flex-start;margin:0}
+.scn{display:flex;flex-direction:column;gap:10px;max-height:52vh;overflow:auto;padding:12px;border-radius:var(--r2);background:#14161a;border:1px solid var(--line)}
+.scn-box{position:relative;display:flex;flex-direction:column;gap:4px;cursor:pointer;border-radius:var(--r2);outline:2px solid transparent;outline-offset:3px}
+.scn-box:focus-visible,.scn-box.scn-cur{outline-color:var(--accent)}
+.scn-who{align-self:flex-start;margin-left:14px;padding:2px 12px;border-radius:var(--r2) var(--r2) 0 0;background:#1d2a52;color:#fff;font-size:13px;font-weight:600}
+.scn-win{padding:10px 14px;border-radius:var(--r2);background:linear-gradient(#1b2a5a,#101a3c);border:2px solid #c8d0ee;color:#fff;font-size:15px;line-height:1.45;text-shadow:0 1px 1px rgba(0,0,0,.6)}
+.scn-win.scn-scroll{background:#000;border-color:#555;text-align:center}
+.scn-ln{min-height:1.45em;white-space:pre-wrap;overflow-wrap:anywhere}
+.scn-over{background:repeating-linear-gradient(90deg,rgba(255,80,80,.0) 0 6px,rgba(255,80,80,.18) 6px 12px)}
+.scn-orig{padding:0 14px;font-size:12px;color:var(--mute)}
+.scn-chip{padding:0 5px;border-radius:var(--r1);background:rgba(255,255,255,.18);font:12px var(--mono)}
+.scn-name{padding:0 4px;border-radius:var(--r1);background:rgba(139,114,232,.35)}
+.scn-tag{align-self:flex-start;margin-left:14px;padding:1px 8px;border-radius:10px;background:#3a3b40;color:var(--mute);font-size:11px}
+.scn-tag.scn-warn{background:#5a2d2d;color:#ffd7d7}
+.scn-choice{display:flex;flex-direction:column;gap:6px;align-self:flex-end;min-width:50%}
+.scn-opt{flex-direction:row;align-items:flex-start;gap:10px;padding:8px 12px;background:#101a3c;border:2px solid #7f8bc0;border-radius:var(--r2);color:#fff}
+.scn-n{flex:none;min-width:1.4em;text-align:center;color:#aab4e6;font-weight:600}
+.scn-play{display:flex;flex-direction:column;gap:8px;padding-top:6px;border-top:1px solid var(--line)}
+@media (max-width:560px){.scn-choice{min-width:80%}}

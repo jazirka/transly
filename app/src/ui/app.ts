@@ -8,6 +8,7 @@ import { pickGameFolder, readFiles, reopenHandle } from './folder';
 import type { DirHandle, PickedFile } from './folder';
 import { IdbStore, loadHandle, saveHandle } from './idb';
 import { openImport } from './import-dialog';
+import { openScene } from './scene-dialog';
 import { openPluginTexts } from './plugins-dialog';
 import { markup } from './markup';
 import { openSettings } from './settings';
@@ -161,6 +162,8 @@ export async function start(root: HTMLElement): Promise<void> {
     s, autosave,
     entries: file => (s.saved.files[file] ??= {}),
     qaOpts, lineLimit,
+    gameDir: () => dataDir,
+    built: n => { s.lastBuild = { at: Date.now(), n }; renderTop(); },
     names: () => { if (!namesCache || namesCache.views !== s.views) namesCache = { views: s.views, idx: new GameNameIndex(s.views) }; return namesCache.idx; },
     speaker: u => speakerOf(u, s.saved.speakers),
     view: () => s.views.find(v => v.name === s.current) ?? null,
@@ -662,7 +665,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const MENUS: Record<string, MenuItem[]> = {
     'Файл': [{ t: 'Відкрити папку гри…', fn: () => void openFolder() }, { t: 'Відкрити файли або вставити JSON…', fn: openImportDlg }, { t: 'Зібрати…', fn: doBuild, sc: 'F5' }, '-', { t: 'Налаштування…', fn: openSettingsDlg }],
     'Вигляд': [{ t: 'Таблиця', fn: () => setMode('table') }, { t: 'Редагування', fn: () => setMode('edit') }, { t: 'Вичитування', fn: () => setMode('review') }],
-    'Навігація': [{ t: 'Наступний рядок без перекладу', fn: () => jump('new', 1) }, { t: 'Наступна проблема QA', fn: () => jump('qa', 1) }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: '⇧⇧' }],
+    'Навігація': [{ t: 'Наступний рядок без перекладу', fn: () => jump('new', 1) }, { t: 'Наступна проблема QA', fn: () => jump('qa', 1) }, { t: 'Переглянути сцену…', fn: () => { const u = s.cur ? ctx.unit(s.cur) : undefined; if (u) openScene(ctx, u); else toast('Спершу виберіть рядок'); } }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: '⇧⇧' }],
     'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенести довгі рядки у файлі', fn: wrapFile }, '-', { t: 'Налаштування…', fn: openSettingsDlg }],
     'Довідка': [{ t: 'Гарячі клавіші', fn: () => toggleKeys() }],
   };

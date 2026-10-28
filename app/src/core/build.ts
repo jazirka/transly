@@ -7,6 +7,8 @@ import type { FileView, SavedProject } from './project';
 export interface BuildOptions {
   /** Only reviewed (appr) units go into the build; otherwise units waiting for review (done) are included too. */
   onlyApproved: boolean;
+  /** Also put drafts in: for checking a translation in the game while it is still being written. */
+  includeDrafts?: boolean;
   /** Units with a QA error are left in the original language. */
   blockErrors: boolean;
   qa: QaOptions;
@@ -34,7 +36,7 @@ export function build(game: GameFile[], views: FileView[], saved: SavedProject, 
     for (const u of v.units) {
       const e: Entry | undefined = entries[u.key];
       if (!e || !e.target.trim()) continue;
-      const stageOk = e.status === 'appr' || (!opts.onlyApproved && e.status === 'done');
+      const stageOk = e.status === 'appr' || (!opts.onlyApproved && e.status === 'done') || (!!opts.includeDrafts && e.status === 'draft');
       if (!stageOk) { out.skipped++; continue; }
       if (opts.blockErrors && activeIssues(u, e, opts.qa).some(i => i.severity === 'bad')) {
         out.skipped++;

@@ -23,6 +23,8 @@ export function dialog(html: string, labelId: string): HTMLDialogElement {
   return dlg;
 }
 
+let lastSettingsTab = 0;
+
 /** Things the settings dialog starts but the shell owns. */
 export interface SettingsActions { reset: () => void; adopt: () => void; plugins: () => void; importFiles: () => void }
 
@@ -79,6 +81,31 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
       <div class="acts l"><button class="btn" type="button" id="st-export">Зберегти проєкт у файл</button><button class="btn" type="button" id="st-import">Імпортувати з файлу…</button><button class="btn" type="button" id="st-files">Відкрити файли або вставити JSON…</button></div><input type="file" id="st-file" accept="application/json,.json" hidden></details>
     <details><summary>Небезпечна зона</summary><p class="hint">Видаляє весь переклад, глосарій та імпортовану пам’ять у цьому браузері. Файли гри не змінюються.</p><button class="btn" type="button" id="st-reset">Скинути проєкт…</button></details>
     <div class="acts"><button class="btn" value="cancel">Скасувати</button><button class="btn p" id="st-save" value="save">Зберегти</button></div></form>`, 'st-t');
+  /* Sections live on tabs so nobody scrolls through everything to reach one setting. */
+  const TABS: [string, string[]][] = [
+    ['Загальні', []],
+    ['Словники й мовці', ['Імпорт глосарію', 'Імпорт пам’яті перекладів', 'Мовці', 'Довідкова мова', 'Тексти плагінів']],
+    ['Синхронізація', ['Синхронізація через Claude', 'Синхронізація через GitHub', 'Синхронізація через власний сервер', 'Обмін проєктом через файл']],
+    ['Застосунок', ['Оновлення застосунку', 'Небезпечна зона']],
+  ];
+  const form = dlg.querySelector('form')!;
+  const bar = el('div', 'stabbar'); bar.setAttribute('role', 'tablist');
+  const items = [...form.children].filter(c => c.tagName !== 'H2' && !c.classList.contains('acts') || c.matches('details'));
+  const tabOf = (c: Element): number => {
+    const sum = c.matches('details') ? c.querySelector(':scope > summary')?.textContent ?? '' : '';
+    const i = TABS.findIndex(([, names]) => names.some(n => sum.startsWith(n)));
+    return i < 0 ? 0 : i;
+  };
+  items.forEach(c => c.setAttribute('data-stab', String(tabOf(c))));
+  let shown = lastSettingsTab;
+  const show = (i: number): void => {
+    shown = lastSettingsTab = i;
+    items.forEach(c => c.classList.toggle('tab-off', c.getAttribute('data-stab') !== String(i)));
+    bar.querySelectorAll('button').forEach((b, k) => { b.setAttribute('aria-selected', String(k === i)); b.tabIndex = k === i ? 0 : -1; });
+  };
+  TABS.forEach(([name], i) => { const b = el('button'); b.type = 'button'; b.setAttribute('role', 'tab'); b.textContent = name; b.addEventListener('click', () => show(i)); bar.appendChild(b); });
+  form.querySelector('h2')!.after(bar);
+  show(shown);
   $('#st-lim-mode', dlg).addEventListener('change', e => { ($('#st-lim', dlg) as HTMLInputElement).disabled = (e.target as HTMLSelectElement).value !== 'custom'; });
   $('#st-plug', dlg).addEventListener('click', () => { dlg.close(); onPlugins(); });
   $('#st-files', dlg).addEventListener('click', () => { dlg.close(); onFiles(); });

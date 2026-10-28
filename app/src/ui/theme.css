@@ -789,3 +789,10 @@ input[type=checkbox]{accent-color:#8b6cf0}
 }
 .tab .x{color:var(--mute)}
 .tab .x:hover,.tab.on .x{color:var(--text)}
+.stabbar{display:flex;gap:2px;overflow-x:auto;border-bottom:1px solid var(--line);margin:0 0 8px;scrollbar-width:none}
+.stabbar::-webkit-scrollbar{display:none}
+.stabbar button{flex:none;border:0;background:none;color:var(--mute);height:36px;padding:0 14px;border-bottom:2px solid transparent;cursor:pointer;font:inherit}
+.stabbar button:hover{color:var(--text)}
+.stabbar button[aria-selected=true]{color:var(--text);border-bottom-color:#8b6cf0}
+.adlg .tab-off,.adlg details.tab-off[hidden]{display:none!important}
+.adlg form{min-height:min(440px,78vh)}

@@ -711,3 +711,27 @@ td .term{color:#d9c3ee}
 .seg button{border-radius:0;height:28px}
 .seg button:first-child{border-radius:999px 0 0 999px}
 .seg button:last-child{border-radius:0 999px 999px 0}
+
+/* UX round 1: toast clear of the legend, scrollable filter row, settings sections as cards, visible focus */
+.toast{bottom:76px;max-width:min(560px,calc(100vw - 24px))}
+.filters{overflow-x:auto;scrollbar-width:none}
+.filters::-webkit-scrollbar{display:none}
+.filters .fin{flex:none}
+.adlg details{border:1px solid var(--line);border-radius:var(--r3);background:rgba(255,255,255,.02);padding:0 12px}
+.adlg details[open]{padding-bottom:12px;background:rgba(255,255,255,.035)}
+.adlg summary{list-style:none;display:flex;align-items:center;gap:8px;min-height:40px;color:var(--text);font-weight:500}
+.adlg summary::-webkit-details-marker{display:none}
+.adlg summary::after{content:"";margin-left:auto;width:7px;height:7px;border-right:2px solid var(--mute);border-bottom:2px solid var(--mute);transform:rotate(45deg);transition:transform .15s}
+.adlg details[open]>summary::after{transform:rotate(-135deg)}
+.adlg details details{background:none;border:0;border-top:1px solid var(--line);border-radius:0;padding:0}
+.adlg details>p,.adlg details .hint{color:var(--mute);font-size:12.5px;line-height:1.5}
+:focus-visible{outline:2px solid #8fb2f7;outline-offset:1px}
+input:focus-visible,select:focus-visible,textarea:focus-visible{outline-offset:0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+.vsep{width:1px;height:20px;background:var(--line);margin:0 4px;flex:none}
+.cnt2{background:transparent;border:1px solid var(--line)}
+.tb-ic.play .lbl{font-size:12.5px;font-weight:500;margin-left:6px;color:var(--text)}
+.tb-ic.play{width:auto;padding:0 10px;border-radius:999px}
+input[type=checkbox]{accent-color:#8b6cf0}
+.dlg{max-width:calc(100vw - 24px)}
+.dlg *{min-width:0}

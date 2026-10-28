@@ -32,11 +32,11 @@ export const FOCUS_HTML = `<div class="fc"><div class="fc-in">
       <button class="ib" id="b-copy" title="Копіювати оригінал у переклад" aria-label="Копіювати оригінал у переклад">${I.copy}</button>
       <button class="ib" id="b-clear" title="Очистити переклад (можна скасувати)" aria-label="Очистити переклад">${I.clear}</button>
       <button class="ib" id="b-code" title="Вставити відсутні керівні коди з оригіналу" aria-label="Вставити керівний код">${I.code}</button>
-      <button class="ib" id="b-scene" title="Переглянути сцену: усі рядки події поспіль, як у грі" aria-label="Переглянути сцену">${I.scene}</button>
+      <span class="vsep" aria-hidden="true"></span><button class="ib" id="b-scene" title="Переглянути сцену: усі рядки події поспіль, як у грі" aria-label="Переглянути сцену">${I.scene}</button>
       <button class="ib" id="b-wrap" title="Перенести рядки за шириною вікна гри" aria-label="Перенести рядки">${I.wrap}</button>
-      <button class="ib" id="b-play" title="Зібрати й перевірити в грі (F5)" aria-label="Перевірити в грі" hidden>${I.play}</button>
+      <span class="vsep" aria-hidden="true"></span><button class="ib" id="b-play" title="Зібрати й перевірити в грі (F5)" aria-label="Перевірити в грі" hidden>${I.play}</button>
       <button class="ib" id="b-return" title="Повернути перекладачу" aria-label="Повернути перекладачу" hidden>${I.back}</button>
-      <span class="stepper" role="group" aria-label="Перехід між рядками списку"><button class="ib sm" id="f-prev" title="Попередній рядок у списку (Alt+↑)" aria-label="Попередній рядок">${I.up}</button><span class="queue" id="f-queue"></span><button class="ib sm" id="f-next" title="Наступний рядок у списку (Alt+↓)" aria-label="Наступний рядок">${I.down}</button></span>
+      <span class="vsep" aria-hidden="true"></span><span class="stepper" role="group" aria-label="Перехід між рядками списку"><button class="ib sm" id="f-prev" title="Попередній рядок у списку (Alt+↑)" aria-label="Попередній рядок">${I.up}</button><span class="queue" id="f-queue"></span><button class="ib sm" id="f-next" title="Наступний рядок у списку (Alt+↓)" aria-label="Наступний рядок">${I.down}</button></span>
       <span class="qab" id="qa-badge" title="Активні проблеми QA в рядку" hidden></span>
       <span class="grow"></span>
       <div class="cnt2" id="cnt2" title="Символів у перекладі / в оригіналі. Рекомендація: якнайближче до оригіналу"><span id="c-ch">0/0</span></div>

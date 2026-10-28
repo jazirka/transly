@@ -58,7 +58,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     <div class="prog" id="pg" title=""><div class="bar"><i class="a" id="pg-a"></i><i class="b" id="pg-b"></i><i class="c" id="pg-c"></i></div><span id="pg-txt" style="font-family:var(--mono);font-size:11.5px"></span></div>
     <div class="tsep"></div>
     <button class="tpill run" id="build" title="Зібрати переклад (F5)">${SVG.build}<span>Збірка</span></button>
-    <button class="tb-ic play" id="run-btn" title="Зібрати й перевірити (F5)" aria-label="Зібрати й перевірити">${SVG.play}</button>
+    <button class="tb-ic play" id="run-btn" title="Зібрати й перевірити (F5)" aria-label="Зібрати й перевірити">${SVG.play}<span class="lbl">Грати</span></button>
     <div class="tsep"></div>
     <button class="tb-ic" id="open" title="Відкрити папку гри" aria-label="Відкрити папку гри">${SVG.folder}</button>
     <button class="tb-ic" id="sd-open" title="Знайти скрізь (⇧⇧)" aria-label="Знайти скрізь">${SVG.searchBig}</button>

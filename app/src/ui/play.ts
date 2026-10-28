@@ -12,7 +12,7 @@ export async function playInGame(ctx: Ctx, file: string, unit: Unit, from: 'line
   const dir = ctx.gameDir();
   if (!dir) throw new Error('Папку гри не відкрито');
   const target = jumpTarget(file, unit.key, ctx.s.game, from, slot);
-  if (!target) { toast('Для цього рядка запуск у грі недоступний: він не належить до події на мапі чи загальної події'); return; }
+  if (!target) { toast('Для цього рядка запуск у грі недоступний: він не належить до події на мапі, загальної події чи битви (рядки бази даних, як-от предмети й навички, у грі не відтворюються)'); return; }
   const r = build(ctx.s.game, ctx.s.views, ctx.s.saved, { onlyApproved: false, includeDrafts: true, blockErrors: true, qa: ctx.qaOpts() });
   await applyToGame(dir, r.files);
   await applyJump(dir, jumpPlugin(target));

@@ -49,12 +49,12 @@ describe('scenes', () => {
 describe('jump target', () => {
   it('finds the event, its tile and where to start', () => {
     const key = units.find(u => u.source === 'Here you go.')!.key;
-    expect(jumpTarget('Map007.json', key, game, 'line')).toEqual({ kind: 'map', mapId: 7, x: 9, y: 3, eventIndex: 2, eventId: 2, page: 0, common: 0, index: 4, slot: 0, setup: { switches: [] } });
+    expect(jumpTarget('Map007.json', key, game, 'line')).toEqual({ kind: 'map', mapId: 7, x: 9, y: 3, eventIndex: 2, eventId: 2, page: 0, common: 0, troop: 0, index: 4, slot: 0, setup: { switches: [] } });
     expect(jumpTarget('Map007.json', key, game, 'event', 2)).toMatchObject({ index: 0, slot: 2 });
     expect(jumpTarget('CommonEvents.json', '[1].list[1]', game, 'line')).toMatchObject({ kind: 'common', common: 1, index: 1 });
   });
-  it('has nothing to offer for battles, database rows and unknown events', () => {
-    expect(jumpTarget('Troops.json', '[1].pages[0].list[1]', game, 'line')).toBeNull();
+  it('starts a battle for troop rows and has nothing for database rows and unknown events', () => {
+    expect(jumpTarget('Troops.json', '[1].pages[0].list[1]', game, 'line')).toMatchObject({ kind: 'troop', troop: 1, page: 0, index: 1 });
     expect(jumpTarget('Items.json', '[1].name', game, 'line')).toBeNull();
     expect(jumpTarget('Map007.json', 'events[9].pages[0].list[1]', game, 'line')).toBeNull();
   });
@@ -67,7 +67,12 @@ function runPlugin(target: JumpTarget, opts: { loadGame?: (slot: number) => unkn
   const sandbox: Record<string, unknown> = {
     console: { error: (m: string) => calls.push(['error', m]) },
     DataManager: { setupNewGame: () => calls.push(['newGame']), loadGame: (s: number) => { calls.push(['load', s]); return opts.loadGame ? opts.loadGame(s) : true; } },
-    SceneManager: { goto: (c: { name: string }) => calls.push(['goto', c.name]) },
+    SceneManager: { goto: (c: { name: string }) => calls.push(['goto', c.name]), push: (c: { name: string }) => calls.push(['push', c.name]) },
+    BattleManager: { setup: (...a: unknown[]) => calls.push(['battle', ...a]), onEncounter: () => calls.push(['encounter']) },
+    Scene_Battle: class { start() { calls.push(['battleStart']); } },
+    $gameTroop: { _interpreter: interpreter },
+    $dataTroops: [null, { pages: [{ list: [1, 2, 3, 4] }] }],
+    $dataSystem: { startMapId: 1, startX: 5, startY: 6 },
     Scene_Boot: class { start() { calls.push(['boot']); } },
     Scene_Map: class { start() { calls.push(['mapStart']); } },
     $gamePlayer: { reserveTransfer: (...a: unknown[]) => calls.push(['transfer', ...a]) },
@@ -85,7 +90,8 @@ function runPlugin(target: JumpTarget, opts: { loadGame?: (slot: number) => unkn
   const boot = new (sandbox.Scene_Boot as new () => { start(): void })();
   boot.start();
   const map = new (sandbox.Scene_Map as new () => { start(): void })();
-  return { calls, interpreter, startMap: () => map.start() };
+  const fight = new (sandbox.Scene_Battle as new () => { start(): void })();
+  return { calls, interpreter, startMap: () => map.start(), startBattle: () => fight.start() };
 }
 
 describe('the test plugin', () => {
@@ -124,6 +130,17 @@ describe('the test plugin', () => {
     r.startMap();
     expect(r.calls).toContainEqual(['setup', 3, 0]);
     expect(r.interpreter._index).toBe(1);
+  });
+
+  it('starts a battle and runs the chosen page of its troop once the fight opens', () => {
+    const r = runPlugin(jumpTarget('Troops.json', '[1].pages[0].list[2]', game, 'line')!);
+    expect(r.calls.slice(0, 4)).toEqual([['boot'], ['newGame'], ['transfer', 1, 5, 6, 2, 2], ['goto', 'Scene_Map']]);
+    r.startMap();
+    expect(r.calls).toContainEqual(['battle', 1, false, true]);
+    expect(r.calls).toContainEqual(['push', 'Scene_Battle']);
+    r.startBattle(); r.startBattle();
+    expect(r.calls.filter(c => c[0] === 'setup')).toEqual([['setup', 4, 0]]);
+    expect(r.interpreter._index).toBe(2);
   });
 
   it('loads a save (MV answers at once, MZ with a promise) and falls back to a new game when that fails', async () => {

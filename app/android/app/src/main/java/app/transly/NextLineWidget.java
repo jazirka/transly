@@ -48,7 +48,6 @@ public class NextLineWidget extends AppWidgetProvider {
         // The extras differ per line, so the PendingIntent must be replaced when they do.
         PendingIntent pi = PendingIntent.getActivity(context, 1, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         v.setOnClickPendingIntent(android.R.id.background, pi);
-        v.setOnClickPendingIntent(R.id.n_btn, pi);
         return v;
     }
 }

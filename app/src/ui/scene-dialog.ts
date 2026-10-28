@@ -3,6 +3,7 @@ import type { SceneLine, Unit } from '../core';
 import { isDesktop } from './desktop';
 import { $, el, esc, plural, toast } from './dom';
 import { playInGame } from './play';
+import { GROUP } from './state';
 import type { Ctx } from './state';
 
 /** RPG Maker's default window colours (\C[n]); close to what the game shows, not exact for games with a custom skin. */
@@ -36,6 +37,7 @@ export function openScene(ctx: Ctx, start: Unit): void {
   const { s } = ctx;
   const view = ctx.view();
   if (!view || !s.current) return;
+  if (s.current === GROUP) { toast('Сцену видно у файлі, відкритому окремо: відкрийте його зі списку файлів'); return; }
   const file = s.current;
   const lines = sceneLines(sceneUnits(view.units, start.key));
   const entries = ctx.entries(file);

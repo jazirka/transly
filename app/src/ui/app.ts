@@ -1,5 +1,5 @@
 import { Autosave, DupIndex, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, lengthDeviation, limitFor, note, pluginCandidates, propagate, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, viewsFromSnapshot, wrapLines } from '../core';
-import type { Entry, GameFile, SavedProject, Unit } from '../core';
+import type { Entry, FileView, GameFile, SavedProject, Unit } from '../core';
 import { openBuild } from './build-dialog';
 import { dataDirOf, isDesktop, rememberedGameDir, reopenGameDirDesktop } from './desktop';
 import { $, el, esc, plural, toast } from './dom';
@@ -15,7 +15,7 @@ import { openPluginTexts } from './plugins-dialog';
 import { markup } from './markup';
 import { openSettings } from './settings';
 import { openSpeakers } from './speakers-dialog';
-import { STATUS_LABEL, buildTm, shownStatus } from './state';
+import { GROUP, SEP, STATUS_LABEL, buildTm, shownStatus, splitKey } from './state';
 import type { Ctx, Filter, Mode, State } from './state';
 import { publishWidget } from './android';
 import { artifactDb, describeClaude, loadClaudeConfig, runClaudeSync } from './claude';
@@ -85,7 +85,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     <aside class="tree" id="lpanel" aria-label="Бічна панель: файли й рядки">
       <div class="mtabs" id="mtabs" role="group" aria-label="Бічна панель"><button data-lt="files">Файли</button><button data-lt="rows">Рядки</button><button class="ab-ic" id="mt-open" aria-label="Відкрити файли або вставити JSON" title="Відкрити файли або вставити JSON">${SVG.import}</button><button class="ab-ic" id="mt-search" aria-label="Пошук скрізь">${SVG.searchBig}</button></div>
       <div class="ph"><span class="grow" id="lp-title">Файли гри</span><span class="ico" id="lp-close" title="Сховати панель" role="button" aria-label="Сховати панель">—</span></div>
-      <div class="treebody" id="tree"><div class="ph card-ph" data-card="files"><span class="grow">Файли гри</span><span class="ico" data-hide-left="files" role="button" tabindex="0" aria-label="Сховати панель «Файли гри»" title="Сховати">—</span></div><div class="tree-q"><div class="fin">${SVG.search}<input class="qin" id="fq" placeholder="Пошук у файлах гри" aria-label="Пошук у файлах гри" autocomplete="off" spellcheck="false"></div></div><div id="tree-list"></div></div>
+      <div class="treebody" id="tree"><div class="ph card-ph" data-card="files"><span class="grow">Файли гри</span><span class="ico" data-hide-left="files" role="button" tabindex="0" aria-label="Сховати панель «Файли гри»" title="Сховати">—</span></div><div class="tree-q"><div class="fin">${SVG.search}<input class="qin" id="fq" placeholder="Пошук у файлах гри" aria-label="Пошук у файлах гри" autocomplete="off" spellcheck="false"></div></div><div class="tree-act" id="tree-act"></div><div id="tree-list"></div></div>
       <div class="rz rz-y" id="rz-y" role="separator" aria-orientation="horizontal" aria-label="Розділ між файлами й рядками" aria-valuemin="15" aria-valuemax="85" tabindex="0" title="Потягніть, щоб змінити співвідношення (подвійний клік — навпіл)" hidden></div>
       <div class="slist" id="lp-rows" hidden>
         <div class="ph card-ph" data-card="rows"><span class="grow">Рядки файлу</span><span class="ico" data-hide-left="rows" role="button" tabindex="0" aria-label="Сховати панель «Рядки файлу»" title="Сховати">—</span></div>
@@ -138,7 +138,7 @@ export async function start(root: HTMLElement): Promise<void> {
   catch { saved = emptyProject('Новий проєкт'); }
   const mq = matchMedia('(max-width: 760px)');
   const s: State = {
-    views: [], game: [], saved, current: null, open: [], cur: null, mode: mq.matches ? 'edit' : 'table', filter: 'all', q: '', speaker: null, lenFilter: 'all',
+    views: [], game: [], saved, current: null, open: [], group: null, picked: new Set(), cur: null, mode: mq.matches ? 'edit' : 'table', filter: 'all', q: '', speaker: null, lenFilter: 'all',
     checked: new Set(), sideTab: 'hints', sideOn: ['hints'], saveOk: true, savedAt: null, who: saved.settings.who, phone: mq.matches,
     leftTab: { table: 'files', edit: 'rows', review: 'rows' }, leftOpen: !mq.matches, leftBoth: false, rightOpen: false, collapsed: new Set(), sess: { n: 0, t0: Date.now() }, lastBuild: null,
   };
@@ -171,16 +171,39 @@ export async function start(root: HTMLElement): Promise<void> {
   let usageCache: { game: State['game']; u: ReturnType<typeof buildUsage> } | null = null;
   let namesCache: { views: State['views']; idx: GameNameIndex } | null = null;
   const qaOpts = () => ({ tolerancePct: s.saved.settings.tolerancePct, terms: s.saved.terms, lineLimit: lineLimit() });
+  /**
+   * Several files shown as one table: the rows are copies whose key is `file␟key`, and this object reads and writes
+   * the entries of the files they came from, so everything that works on one file works on the group unchanged.
+   */
+  const groupEntries = new Proxy({} as Record<string, Entry>, {
+    get: (_, k) => { const r = typeof k === 'string' ? splitKey(k) : null; return r ? s.saved.files[r.file]?.[r.key] : undefined; },
+    set: (_, k, v: Entry) => { const r = typeof k === 'string' ? splitKey(k) : null; if (r) (s.saved.files[r.file] ??= {})[r.key] = v; return !!r; },
+    deleteProperty: (_, k) => { const r = typeof k === 'string' ? splitKey(k) : null; if (r && s.saved.files[r.file]) delete s.saved.files[r.file]![r.key]; return true; },
+    has: (_, k) => { const r = typeof k === 'string' ? splitKey(k) : null; return !!r && !!s.saved.files[r.file]?.[r.key]; },
+    ownKeys: () => (s.group ?? []).flatMap(f => Object.keys(s.saved.files[f] ?? {}).map(k => f + SEP + k)),
+    getOwnPropertyDescriptor: (_, k) => { const r = typeof k === 'string' ? splitKey(k) : null; const v = r && s.saved.files[r.file]?.[r.key]; return v ? { value: v, enumerable: true, configurable: true, writable: true } : undefined; },
+  });
+  let groupCache: { views: State['views']; names: string; view: FileView } | null = null;
+  const groupView = (): FileView | null => {
+    if (!s.group?.length) return null;
+    const names = s.group.join('\n');
+    if (!groupCache || groupCache.views !== s.views || groupCache.names !== names) {
+      const units: Unit[] = [];
+      for (const f of s.group) for (const u of s.views.find(v => v.name === f)?.units ?? []) units.push({ ...u, key: f + SEP + u.key });
+      groupCache = { views: s.views, names, view: { name: GROUP, label: '', units } };
+    }
+    return groupCache.view;
+  };
   const ctx: Ctx = {
     s, autosave,
-    entries: file => (s.saved.files[file] ??= {}),
+    entries: file => (file === GROUP ? groupEntries : (s.saved.files[file] ??= {})),
     qaOpts, lineLimit,
     usage: () => { if (!usageCache || usageCache.game !== s.game) usageCache = { game: s.game, u: buildUsage(s.game, f => s.saved.labels?.[f]) }; return usageCache.u; },
     gameDir: () => dataDir,
     built: n => { s.lastBuild = { at: Date.now(), n }; renderTop(); },
     names: () => { if (!namesCache || namesCache.views !== s.views) namesCache = { views: s.views, idx: new GameNameIndex(s.views) }; return namesCache.idx; },
     speaker: u => speakerOf(u, s.saved.speakers),
-    view: () => s.views.find(v => v.name === s.current) ?? null,
+    view: () => (s.current === GROUP ? groupView() : s.views.find(v => v.name === s.current) ?? null),
     unit: key => unitMap.get(key),
     visible: () => visibleUnits(true),
     tm: () => (tmCache ??= buildTm(s)),
@@ -199,9 +222,17 @@ export async function start(root: HTMLElement): Promise<void> {
   };
 
   /* ---------- data helpers ---------- */
-  const entryOf = (u: Unit): Entry | undefined => (s.current ? s.saved.files[s.current]?.[u.key] : undefined);
-  /** Short key for the table: `msg[5]` for text, `choice[5.2]` for choice options, database keys as they are. */
-  const shortKey = (key: string): string => {
+  const entryOf = (u: Unit): Entry | undefined => (s.current === GROUP ? groupEntries[u.key] : s.current ? s.saved.files[s.current]?.[u.key] : undefined);
+  /** The name shown for what is open: a file, or the group. */
+  const currentLabel = (): string => (s.current === GROUP ? groupTitle() : s.current ?? '');
+  const groupTitle = (): string => (s.group && s.group.length === s.views.length ? 'Усі файли разом' : `Група з ${s.group?.length ?? 0} файлів`);
+  /** Short key for the table: `msg[5]` for text, `choice[5.2]` for choice options, database keys as they are; in a group the file comes first. */
+  const shortKey = (full: string): string => {
+    const r = splitKey(full);
+    const body = shortKeyOf(r ? r.key : full);
+    return r ? `${r.file.split('/').pop()!.replace(/\.json$/, '')} · ${body}` : body;
+  };
+  const shortKeyOf = (key: string): string => {
     const c = /\.list\[(\d+)\]\.choice\[(\d+)\]$/.exec(key);
     if (c) return `choice[${c[1]}.${c[2]}]`;
     const pc = /\.list\[(\d+)\]\.cmd$/.exec(key);
@@ -261,7 +292,7 @@ export async function start(root: HTMLElement): Promise<void> {
     document.querySelectorAll<HTMLElement>('#strip button').forEach(b => { const on = both || b.dataset.lp === l; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
     $('#tree').hidden = !both && l !== 'files';
     $('#lp-rows').hidden = !both && l !== 'rows';
-    $('#lp-title').textContent = both ? 'Файли й рядки' : l === 'rows' ? `Рядки · ${s.current ?? ''}` : 'Файли гри';
+    $('#lp-title').textContent = both ? 'Файли й рядки' : l === 'rows' ? `Рядки · ${currentLabel()}` : 'Файли гри';
     document.querySelectorAll<HTMLElement>('#mtabs [data-lt]').forEach(b => { const on = b.dataset.lt === s.leftTab[s.mode]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
     document.querySelectorAll<HTMLElement>('#seg [data-m]').forEach(b => { const on = b.dataset.m === s.mode || (s.mode === 'review' && b.dataset.m === 'edit'); b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
     $('#ab-left').setAttribute('aria-pressed', String(s.leftOpen));
@@ -300,6 +331,7 @@ export async function start(root: HTMLElement): Promise<void> {
   let fileQ = '';
   function renderTree(): void {
     const box = $('#tree-list');
+    $('#tree-act').innerHTML = s.views.length > 1 ? `<button class="btn" data-act="group-all" title="Усі рядки всіх файлів в одній таблиці">Усі файли разом</button>${s.picked.size ? `<button class="btn p" data-act="group-picked">Відкрити вибрані (${s.picked.size})</button><button class="btn" data-act="group-clear" title="Зняти позначки">✕</button>` : '<span class="hint">Ctrl-клік по файлах, щоб відкрити їх разом</span>'}` : '';
     if (!s.views.length) { box.innerHTML = '<div class="msg-empty">Папку гри ще не відкрито</div>'; return; }
     let skip: number | null = null;
     const q = fileQ.trim().toLowerCase();
@@ -327,7 +359,7 @@ export async function start(root: HTMLElement): Promise<void> {
       const pc = Math.round(100 * st.approved / st.total);
       const [ic, lab] = fileIcon(n.name);
       const cur = n.name === s.current;
-      return `<div class="node ${cur ? 'cur' : ''} ${!pc && !st.translated ? 'idle' : ''}" style="--d:${n.d}" data-file="${esc(n.name)}" role="button" tabindex="0" title="${cur ? 'Відкрито · ' : ''}${v.label ? esc(v.label) + ' · ' : ''}Вичитано ${pc}% · перекладено ${Math.round(100 * st.translated / st.total)}%"><span class="chev"></span><span class="ic ${ic}">${lab}</span><span class="nm">${v.label ? `${esc(v.label)}<span class="lc">${esc(n.label.replace(/\.json$/, ''))}</span>` : esc(n.label)}</span><span class="mini"><i class="${pc === 100 ? 'f' : ''}" style="width:${Math.max(pc, Math.round(100 * st.translated / st.total))}%"></i></span><span class="pc ${pc === 100 ? 'full' : ''}">${pc}%</span></div>`;
+      return `<div class="node ${cur ? 'cur' : ''} ${s.picked.has(n.name) ? 'pick' : ''} ${!pc && !st.translated ? 'idle' : ''}" style="--d:${n.d}" data-file="${esc(n.name)}" role="button" tabindex="0" title="${cur ? 'Відкрито · ' : ''}${v.label ? esc(v.label) + ' · ' : ''}Вичитано ${pc}% · перекладено ${Math.round(100 * st.translated / st.total)}%"><span class="chev"></span><span class="ic ${ic}">${lab}</span><span class="nm">${v.label ? `${esc(v.label)}<span class="lc">${esc(n.label.replace(/\.json$/, ''))}</span>` : esc(n.label)}</span><span class="mini"><i class="${pc === 100 ? 'f' : ''}" style="width:${Math.max(pc, Math.round(100 * st.translated / st.total))}%"></i></span><span class="pc ${pc === 100 ? 'full' : ''}">${pc}%</span></div>`;
     }).join('');
   }
 
@@ -340,10 +372,16 @@ export async function start(root: HTMLElement): Promise<void> {
     return FILTERS.map(([f, l]) => `<button class="chip ${s.filter === f ? 'on' : cnt(f) === 0 && f !== 'all' ? 'zero' : ''}" data-filter="${f}" aria-pressed="${s.filter === f}">${l} <span class="n">${cnt(f)}</span></button>`).join('');
   }
 
-  const tagFilterHtml = (): string => {
-    const chip = (label: string, body: string, k: string) => `<span class="chip on tagf">${label} ${body} <span class="x" data-clear="${k}" title="Скинути" role="button" tabindex="0" aria-label="Скинути фільтр">✕</span></span>`;
-    return (s.speaker !== null ? chip('Мовець:', `<b>${esc(s.speaker || '—')}</b>`, 'speaker') : '') + (s.lenFilter !== 'all' ? chip('Довжина:', `<b>${LEN_LABEL[s.lenFilter]}</b>`, 'len') : '');
-  };
+  /** The speaker and length buttons show the chosen value themselves, with a cross to drop it. */
+  function renderFilterButtons(): void {
+    const set = (id: string, on: boolean, label: string, clear: string): void => {
+      const b = $(id);
+      b.classList.toggle('on', on);
+      b.innerHTML = `${esc(label)} ▾${on ? `<span class="x" data-clear="${clear}" title="Скинути" role="button" tabindex="0" aria-label="Скинути фільтр">✕</span>` : ''}`;
+    };
+    set('#spkbtn', s.speaker !== null, s.speaker === null ? 'Мовець' : s.speaker || 'Без мовця', 'speaker');
+    set('#lenbtn', s.lenFilter !== 'all', s.lenFilter === 'all' ? 'Довжина' : LEN_LABEL[s.lenFilter], 'len');
+  }
 
   function rowHtml(u: Unit, n: number): string {
     const e = entryOf(u), sel = u.key === s.cur, chk = s.checked.has(u.key);
@@ -390,15 +428,18 @@ export async function start(root: HTMLElement): Promise<void> {
       const [ic, lab] = fileIcon(n);
       const on = n === s.current;
       return `<div class="tab ${on ? 'on' : ''}"><button class="tb" data-tab="${esc(n)}" aria-current="${on}" title="${esc(v.label ? n + ' · ' + v.label : n)}"><span class="tico ${ic === 'map' ? '' : 'j'}">${lab}</span>${esc(n.split('/').pop() ?? n)}${qa ? `<span class="badge" title="Проблеми QA у файлі">${qa}</span>` : ''}</button><button class="x" data-closetab="${esc(n)}" aria-label="Закрити вкладку ${esc(n)}">✕</button></div>`;
-    }).join('');
+    }).join('') + (s.group ? `<div class="tab ${s.current === GROUP ? 'on' : ''}"><button class="tb" data-tab="${GROUP}" aria-current="${s.current === GROUP}" title="${esc(s.group.join(', '))}"><span class="tico j">▦</span>${esc(groupTitle())}</button><button class="x" data-closetab="${GROUP}" aria-label="Закрити групу">✕</button></div>` : '');
     document.querySelector<HTMLElement>('#tabs-host .tab.on')?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
   }
 
+  /** The table is drawn in full, so a group of many files shows only the first rows of what passes the filters. */
+  const ROW_CAP = 2500;
   function renderTable(): void {
     const v = ctx.view();
     const grid = $('#grid');
     $('#chips1').innerHTML = chipsHtml();
-    $('#tagfilter').innerHTML = tagFilterHtml();
+    $('#tagfilter').innerHTML = '';
+    renderFilterButtons();
     ($('#q') as HTMLInputElement).value = s.q;
     if (!v) { grid.innerHTML = ''; return; }
     const idx = new Map(v.units.map((u, i) => [u.key, i + 1]));
@@ -409,7 +450,7 @@ export async function start(root: HTMLElement): Promise<void> {
     grid.classList.toggle('no-who', !hasWho);
     grid.style.setProperty('--cols', hasWho ? '34px 22px 110px 96px minmax(160px,.9fr) minmax(180px,1fr) 78px' : '34px 22px 110px minmax(160px,.9fr) minmax(180px,1fr) 78px');
     let h = `<div class="gh" role="row"><div class="gcheck" role="columnheader"><input type="checkbox" id="selall" aria-label="Вибрати всі видимі рядки" ${nSel && nSel === ids.length ? 'checked' : ''}></div><div title="Статус" role="columnheader" class="s"><span class="vh">Статус</span></div><div class="s" role="columnheader">Ключ</div><div class="s" role="columnheader">Мовець</div><div role="columnheader">Оригінал · EN</div><div class="s" role="columnheader">Переклад · UK</div><div class="s" role="columnheader" title="Кількість знаків: переклад / оригінал (без керівних кодів). Рекомендація: якнайближче до оригіналу" style="justify-content:flex-end;border-right:0">К-сть зн.</div></div>`;
-    h += list.length ? list.map(u => rowHtml(u, idx.get(u.key)!)).join('') : `<div class="empty-wrap" role="row"><div role="gridcell">${emptyHtml}</div></div>`;
+    h += list.length ? list.slice(0, ROW_CAP).map(u => rowHtml(u, idx.get(u.key)!)).join('') + (list.length > ROW_CAP ? `<div class="grid-note" role="row">Показано ${ROW_CAP.toLocaleString('uk-UA')} із ${list.length.toLocaleString('uk-UA')}. Уточніть пошук, мовця чи статус.</div>` : '') : `<div class="empty-wrap" role="row"><div role="gridcell">${emptyHtml}</div></div>`;
     grid.innerHTML = h;
     grid.classList.toggle('has-sel', nSel > 0);
     const all = $('#selall') as HTMLInputElement | null;
@@ -419,7 +460,7 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#bulkn').textContent = String(nSel);
     $('#bulkt').textContent = ' вибрано' + (hidden ? ` · ще ${hidden} приховано фільтром, їх дія не торкається` : '');
     const cur = s.cur ? idx.get(s.cur) : undefined;
-    $('#crumbs').innerHTML = `<span>${esc(s.current?.includes('/') ? s.current.split('/').slice(0, -1).join('/') : 'data')}</span>›<span>${esc(s.current ?? '')}</span>${cur && s.cur ? `›<b>${esc(ctx.unit(s.cur)?.context ?? '')}</b>` : ''}<span class="r">${cur ? `рядок ${cur} з ${v.units.length}` : `${v.units.length} рядків`}${list.length !== v.units.length ? ` · показано ${list.length}` : ''}</span>`;
+    $('#crumbs').innerHTML = `<span>${esc(s.current !== GROUP && s.current?.includes('/') ? s.current.split('/').slice(0, -1).join('/') : 'data')}</span>›<span>${esc(currentLabel())}</span>${cur && s.cur ? `›<b>${esc(ctx.unit(s.cur)?.context ?? '')}</b>` : ''}<span class="r">${cur ? `рядок ${cur} з ${v.units.length}` : `${v.units.length} рядків`}${list.length !== v.units.length ? ` · показано ${list.length}` : ''}</span>`;
   }
 
   function renderTop(): void {
@@ -432,8 +473,8 @@ export async function start(root: HTMLElement): Promise<void> {
       for (const u of v.units) { const e = ents[u.key]; if (!e || !e.target) continue; if (e.status === 'appr') A++; else if (e.status === 'done') D++; else if (e.status === 'draft') W++; }
     }
     const cur = ctx.view();
-    const nextU = cur ? cur.units.find(u => !s.saved.files[cur.name]?.[u.key]?.target && u.kind !== 'name' && u.kind !== 'term') : undefined;
-    publishWidget({ name: s.saved.name, file: s.current ?? '', total, approved: A, done: D, draft: W, ...(cur && nextU ? { next: { file: cur.name, key: nextU.key, text: nextU.source.replace(/\s+/g, ' ').slice(0, 160) } } : {}) });
+    const nextU = cur && cur.name !== GROUP ? cur.units.find(u => !s.saved.files[cur.name]?.[u.key]?.target && u.kind !== 'name' && u.kind !== 'term') : undefined;
+    publishWidget({ name: s.saved.name, file: s.current === GROUP ? '' : s.current ?? '', total, approved: A, done: D, draft: W, ...(cur && nextU ? { next: { file: cur.name, key: nextU.key, text: nextU.source.replace(/\s+/g, ' ').slice(0, 160) } } : {}) });
     $('#pg-a').style.width = total ? `${(100 * A) / total}%` : '0';
     $('#pg-b').style.width = total ? `${(100 * D) / total}%` : '0';
     $('#pg-c').style.width = total ? `${(100 * W) / total}%` : '0';
@@ -457,18 +498,18 @@ export async function start(root: HTMLElement): Promise<void> {
     const sv = $('#sb-save');
     sv.textContent = !s.saveOk ? '○ Не збережено: повторю спробу' : s.savedAt ? '● Збережено о ' + new Date(s.savedAt).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '● Зміни зберігаються автоматично';
     sv.className = s.saveOk ? 'ok' : 'bad';
-    $('#sb-fmt').textContent = s.current ? FORMAT_LABEL[s.current.split('.').pop() ?? ''] ?? '' : '';
+    $('#sb-fmt').textContent = s.current && s.current !== GROUP ? FORMAT_LABEL[s.current.split('.').pop() ?? ''] ?? '' : '';
     $('#sb-qa').textContent = qa ? plural(qa, ['проблема QA', 'проблеми QA', 'проблем QA']) : 'Проблем QA немає';
     $('#sb-qa').className = qa ? 'bad' : 'ok';
     const u = s.cur ? ctx.unit(s.cur) : undefined;
     $('#st-sel').textContent = u && v ? `Рядок ${v.units.indexOf(u) + 1} · ${STATUS_LABEL[shownStatus(ctx, u, entryOf(u))]}` : '';
     if (v) {
       const st = statsOf(v.units, ents);
-      $('#sb-file').textContent = `Файл: ${st.approved} / ${st.total} вичитано · ${st.done} чекає вичитування`;
+      $('#sb-file').textContent = `${s.current === GROUP ? 'Група' : 'Файл'}: ${st.approved} / ${st.total} вичитано · ${st.done} чекає вичитування`;
     } else $('#sb-file').textContent = '';
     const mins = Math.max(0, Math.round((Date.now() - s.sess.t0) / 60000));
     $('#sb-sess').textContent = `Сесія: ${s.sess.n} змін · ${mins} хв`;
-    $('#ab-title').textContent = s.current ?? 'Transly';
+    $('#ab-title').textContent = s.current ? currentLabel() : 'Transly';
     { const sp = $('#stage-pill'); sp.classList.toggle('on', s.mode === 'review'); sp.setAttribute('aria-pressed', String(s.mode === 'review')); sp.setAttribute('aria-checked', String(s.mode === 'review')); sp.hidden = s.mode === 'table'; }
     $('#ab-stage').textContent = s.mode === 'review' ? 'Вичитування' : 'Переклад';
     $('#ab-sub').textContent = v ? `${s.mode === 'review' ? 'Вичитування' : 'Переклад'} · ${statsOf(v.units, ents).approved} / ${v.units.length} вичитано` : '';
@@ -519,13 +560,30 @@ export async function start(root: HTMLElement): Promise<void> {
   function openFile(name: string): void {
     if (!s.views.some(v => v.name === name)) return;
     if (!s.open.includes(name)) s.open.push(name);
-    s.current = name; s.q = ''; s.speaker = null; s.lenFilter = 'all'; s.checked.clear();
+    s.current = name; s.q = ''; s.lenFilter = 'all'; s.checked.clear();
     s.filter = s.mode === 'review' ? 'done' : 'all';
     unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u]));
     s.cur = s.mode === 'table' ? null : ctx.visible()[0]?.key ?? null;
   }
 
+  /** Show the rows of several files in one table (a group keeps its tab until it is closed). */
+  function openGroup(names: string[]): void {
+    const known = names.filter(n => s.views.some(v => v.name === n));
+    if (!known.length) return;
+    s.group = known;
+    s.current = GROUP; s.q = ''; s.lenFilter = 'all'; s.checked.clear();
+    s.filter = s.mode === 'review' ? 'done' : 'all';
+    unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u]));
+    s.cur = null;
+  }
+
   function closeTab(name: string): void {
+    if (name === GROUP) {
+      s.group = null; s.checked.clear();
+      const next = s.open[s.open.length - 1];
+      if (next) openFile(next); else { s.current = null; s.cur = null; }
+      renderAll(); return;
+    }
     const i = s.open.indexOf(name);
     if (i < 0) return;
     s.open.splice(i, 1);
@@ -696,6 +754,7 @@ export async function start(root: HTMLElement): Promise<void> {
     else if (k === 'scene') {
       const u = s.cur ? ctx.unit(s.cur) : undefined;
       if (!u || !s.current) { toast('Виберіть рядок: гра почнеться з його сцени'); return; }
+      if (s.current === GROUP) { toast('Запуск у грі працює для файлу, відкритого окремо: відкрийте його зі списку файлів'); return; }
       playInGame(ctx, s.current, u, 'event', 0).catch(fail);
     } else doBuild();
   };
@@ -955,22 +1014,34 @@ export async function start(root: HTMLElement): Promise<void> {
     const sm = t.closest<HTMLElement>('#seg [data-m]');
     if (sm) { setMode(sm.dataset.m as Mode); return; }
     const tab = t.closest<HTMLElement>('[data-tab]');
-    if (tab) { openFile(tab.dataset.tab!); renderAll(); return; }
+    if (tab) { if (tab.dataset.tab === GROUP) openGroup(s.group ?? []); else openFile(tab.dataset.tab!); renderAll(); return; }
     const ct = t.closest<HTMLElement>('[data-closetab]');
     if (ct) { closeTab(ct.dataset.closetab!); return; }
+    const ga = t.closest<HTMLElement>('[data-act^=group-]');
+    if (ga) {
+      const a = ga.dataset.act;
+      closePops();
+      if (a === 'group-clear') { s.picked.clear(); renderTree(); return; }
+      openGroup(a === 'group-all' ? s.views.map(v => v.name) : [...s.picked]);
+      s.picked.clear(); renderAll(); return;
+    }
     const dir = t.closest<HTMLElement>('[data-dir]');
     if (dir) { const n = dir.dataset.dir!; s.collapsed.has(n) ? s.collapsed.delete(n) : s.collapsed.add(n); renderTree(); return; }
     const f = t.closest<HTMLElement>('.node[data-file]');
+    if (f && (e.ctrlKey || e.metaKey)) { const n = f.dataset.file!; s.picked.has(n) ? s.picked.delete(n) : s.picked.add(n); renderTree(); return; }
     if (f) { openFile(f.dataset.file!); if (s.phone) s.leftTab[s.mode] = 'rows'; renderAll(); return; }
     const ch = t.closest<HTMLElement>('[data-filter]');
     if (ch) { s.filter = ch.dataset.filter as Filter; if (s.mode !== 'table' && !ctx.visible().some(u => u.key === s.cur)) s.cur = ctx.visible()[0]?.key ?? null; renderAll(); return; }
     const clr = t.closest<HTMLElement>('[data-clear]');
-    if (clr) { if (clr.dataset.clear === 'speaker') s.speaker = null; else s.lenFilter = 'all'; renderAll(); return; }
+    if (clr) { closePops(); if (clr.dataset.clear === 'speaker') s.speaker = null; else s.lenFilter = 'all'; renderAll(); return; }
     if (t.closest('[data-reset]')) { s.filter = s.mode === 'review' ? 'done' : 'all'; s.q = ''; s.speaker = null; s.lenFilter = 'all'; renderAll(); return; }
     if (t.closest('#spkbtn')) {
       const v = ctx.view();
-      const names = v ? [...new Set(v.units.map(u => ctx.speaker(u)))].sort((a, b) => a.localeCompare(b, 'uk')) : [];
-      showPop(t.closest<HTMLElement>('#spkbtn')!, `<div class="group">Мовець</div>${names.slice(0, 60).map(n => `<button data-spk="${esc(n)}">${esc(n || 'без мовця')}</button>`).join('')}<div class="msep" role="separator"></div><button data-act="speakers">Визначити мовців…</button>`);
+      // Speakers of every file, not only the open one: the choice stays when another file is opened.
+      const counts = new Map<string, number>();
+      if (v) for (const f of s.views) for (const u of f.units) { const n = ctx.speaker(u); counts.set(n, (counts.get(n) ?? 0) + 1); }
+      const names = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'uk'));
+      showPop(t.closest<HTMLElement>('#spkbtn')!, `<div class="group">Мовець · у всіх файлах</div>${s.speaker !== null ? '<button data-clear="speaker">Усі мовці</button>' : ''}${names.slice(0, 80).map(([n, c]) => `<button data-spk="${esc(n)}" ${s.speaker === n ? 'class="on"' : ''}>${esc(n || 'без мовця')} <span class="hint">${c.toLocaleString('uk-UA')}</span></button>`).join('')}<div class="msep" role="separator"></div>${s.speaker !== null && s.current !== GROUP && s.views.length > 1 ? '<button data-act="group-all">Показати в усіх файлах разом</button>' : ''}<button data-act="speakers">Визначити мовців…</button>`);
       return;
     }
     if (t.closest('[data-act=speakers]')) { closePops(); openSpeakers(ctx); return; }

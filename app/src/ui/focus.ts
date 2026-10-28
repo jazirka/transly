@@ -3,7 +3,7 @@ import type { Entry, Unit } from '../core';
 import { $, esc, plural, toast } from './dom';
 import { markup } from './markup';
 import { openScene } from './scene-dialog';
-import { STATUS_CAP, shownStatus } from './state';
+import { STATUS_CAP, shownStatus, splitKey } from './state';
 import type { Ctx, SideTab } from './state';
 
 const I = {
@@ -81,6 +81,8 @@ export const SIDE_HTML = `<aside class="fs" aria-label="Вказівки до р
 
 const when = (t: number) => new Date(t).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 const stageOf = (ctx: Ctx) => (ctx.s.mode === 'review' ? 'review' : 'translate') as 'review' | 'translate';
+/** The file and key a row really belongs to: in a group of files the row's key carries its file. */
+const realOf = (ctx: Ctx, u: Unit): { file: string; key: string } => splitKey(u.key) ?? { file: ctx.s.current!, key: u.key };
 const entryOf = (ctx: Ctx, u: Unit): Entry | undefined => ctx.entries(ctx.s.current!)[u.key];
 
 export const SIDE_ORDER: SideTab[] = ['hints', 'glossary', 'comments', 'history'];
@@ -111,14 +113,14 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
   const st = shownStatus(ctx, u, e);
   const review = s.mode === 'review';
   const pos = list.findIndex(x => x.key === u.key);
-  $('#f-key').textContent = `${s.current!.replace(/\.[^.]+$/, '')} › ${u.context}${ctx.speaker(u) ? ' › ' + ctx.speaker(u) : ''} › ${u.key.replace(/^.*\.list/, 'list')}`;
+  $('#f-key').textContent = `${realOf(ctx, u).file.replace(/\.[^.]+$/, '')} › ${u.context}${ctx.speaker(u) ? ' › ' + ctx.speaker(u) : ''} › ${u.key.replace(/^.*\.list/, 'list')}`;
   $('#f-state').innerHTML = `<span class="sd ${st}"></span>${e?.returned && e.status === 'draft' ? 'повернено на доопрацювання' : STATUS_CAP[st]}`;
   $('#f-queue').textContent = pos >= 0 ? `${pos + 1}/${list.length}` : '';
   $('#f-queue').title = pos >= 0 ? `Рядок ${pos + 1} із ${list.length} у поточному списку (з урахуванням фільтрів)` : '';
   $('#f-off').hidden = pos >= 0;
   const hits = termsIn(u.source, s.saved.terms);
   $('#f-src').innerHTML = markup(u.source, hits.map(t => t.en));
-  const ref = s.saved.reference?.texts[s.current!]?.[u.key];
+  const ref = s.saved.reference?.texts[realOf(ctx, u).file]?.[realOf(ctx, u).key];
   $('#f-refbox').hidden = !ref;
   if (ref) { $('#f-reflbl').textContent = 'Довідка · ' + (s.saved.reference?.lang ?? '').toUpperCase(); $('#f-ref').textContent = ref; $('#f-ref').lang = s.saved.reference?.lang ?? ''; }
   $('#f-trlbl').textContent = review ? 'Після вичитування · UK' : 'Переклад · UK';
@@ -137,11 +139,11 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
   const all = ctx.view()?.units ?? [];
   const idx = all.findIndex(x => x.key === u.key);
   $('#c-near').innerHTML = [-2, -1, 0, 1, 2].map(d => all[idx + d]).map((x, j) => x ? `<div class="${j === 2 ? 'me' : ''}"><span>${idx + j - 1}</span><span>${esc(ctx.speaker(x))}</span><span>${esc(x.source.length > 34 ? x.source.slice(0, 34) + '…' : x.source)}</span></div>` : '').join('');
-  const same = ctx.dups().others(s.current!, u.key).length;
-  const label = ctx.view()?.label;
+  const same = ctx.dups().others(realOf(ctx, u).file, realOf(ctx, u).key).length;
+  const label = ctx.view()?.label ?? s.views.find(v => v.name === realOf(ctx, u).file)?.label;
   const limit = u.kind === 'dialogue' || u.kind === 'scroll' ? limitFor(ctx.lineLimit(), u.face) : 0;
   $('#b-wrap').hidden = !limit;
-  const first = sceneUnits(ctx.view()?.units ?? [], u.key)[0];
+  const first = sceneUnits(s.views.find(v => v.name === realOf(ctx, u).file)?.units ?? [], realOf(ctx, u).key)[0];
   const cond = first?.page ? describePage(first.page, s.saved.sysNames).slice(0, 4).join('; ') : '';
   $('#f-meta').textContent = [`Тип: ${u.kind}`, cond ? `Умови: ${cond}` : '', label ? `Місцевість: ${label}` : '', u.note ? `Позначка розробників: ${u.note}` : '', limit ? `Ширина рядка: до ${limit} символів${u.face ? ' (поруч обличчя)' : ''}` : '', same ? `однакових рядків у грі: ${same}` : ''].filter(Boolean).join(' · ');
   $('#cm-badge').textContent = String(e?.comments?.length ?? 0);
@@ -220,11 +222,11 @@ function renderSide(ctx: Ctx, u: Unit | undefined, e: Entry | undefined, hits: R
     const codes = explainCodes(u.source, actor, s.saved.sysNames);
     $('#cd-box').hidden = !codes.length;
     $('#i-cd').innerHTML = codes.map(c => `<div class="gloss-row"><b>${esc(c.code)}</b><span class="arr">→</span><span>${esc(c.meaning)}</span></div>`).join('');
-    const uk = usageKey(s.current!, u.key);
+    const uk = usageKey(realOf(ctx, u).file, realOf(ctx, u).key);
     const used = uk ? ctx.usage().get(uk) ?? [] : [];
     $('#db-box').hidden = !u.dbNote && !used.length;
     $('#i-db').innerHTML = (u.dbNote ? `<div class="hint">Примітка в базі: <code>${esc(u.dbNote)}</code></div>` : '') + (used.length ? `<div class="hint">Гравець отримує в: ${used.map(esc).join('; ')}</div>` : '');
-    const gn = ctx.names().find(u.source).filter(g => !(g.file === s.current && g.key === u.key));
+    const gn = ctx.names().find(u.source).filter(g => !(g.file === realOf(ctx, u).file && g.key === realOf(ctx, u).key));
     gameNames = gn;
     $('#gn-box').hidden = !gn.length;
     $('#i-gn').innerHTML = gn.map((g, n) => {
@@ -304,7 +306,7 @@ export function send(ctx: Ctx): void {
   const r = submit(ents[u.key], u, stage, Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: ctx.qaOpts() });
   if (!r.ok) { toast(r.reason, { sticky: true }); return; }
   ents[u.key] = note(r.entry, stage === 'translate' ? 'надіслано на вичитування' : 'вичитано', r.entry.target, s.who, Date.now());
-  const same = s.saved.settings.propagate ? propagate(s.saved, ctx.dups(), s.current, u, ents[u.key]!, stage, Date.now(), s.who) : 0;
+  const same = s.saved.settings.propagate ? propagate(s.saved, ctx.dups(), realOf(ctx, u).file, { ...u, key: realOf(ctx, u).key }, ents[u.key]!, stage, Date.now(), s.who) : 0;
   s.sess.n++;
   ctx.persist(); ctx.invalidateTm();
   toast((stage === 'translate' ? 'Надіслано на вичитування' : 'Вичитано') + (same ? `. Також у ${plural(same, ['однаковому рядку', 'однакових рядках', 'однакових рядках'])}` : ''));

@@ -1014,3 +1014,15 @@ body.resizing{user-select:none;cursor:col-resize}
 .tree.split #tree:hover .card-ph .ico,.tree.split #lp-rows:hover .card-ph .ico,.fs.stack .pane:hover .card-ph .ico,.card-ph .ico:focus-visible,.tree.split #tree:focus-within .card-ph .ico,.tree.split #lp-rows:focus-within .card-ph .ico,.fs.stack .pane:focus-within .card-ph .ico{opacity:1}
 .card-ph .ico{opacity:0;transition:opacity .12s;cursor:pointer}
 @media (pointer:coarse){.card-ph .ico{opacity:1}}
+
+/* speaker / length buttons show the chosen value; groups of files */
+.filters .r{gap:6px}
+.filters .r .chip{max-width:240px;overflow:hidden;text-overflow:ellipsis;display:inline-flex;gap:6px}
+.chip .x{margin-left:2px;color:inherit;opacity:.7;cursor:pointer}
+.chip .x:hover{opacity:1}
+.pop button.on{color:var(--accent)}
+.pop button .hint{margin-left:8px;opacity:.7}
+.tree-act{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:4px 10px 6px}
+.tree-act .btn{height:24px;padding:0 9px;font-size:12px}
+.tree-act .hint{font-size:11px}
+.node.pick{background:var(--on-bg);box-shadow:inset 2px 0 0 var(--accent)}

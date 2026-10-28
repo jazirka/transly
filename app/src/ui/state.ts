@@ -8,6 +8,15 @@ export type SideTab = 'hints' | 'glossary' | 'comments' | 'history';
 export type LeftTab = 'files' | 'rows';
 export type LenFilter = 'all' | 'far' | 'longer' | 'shorter';
 
+/** `State.current` while several files are shown together: their rows get keys `file␟key` and their entries are reached through ctx.entries(GROUP). */
+export const GROUP = '⁖group';
+export const SEP = '␟';
+/** Split a row key of the group view into the file and the key inside it; a plain key has no file. */
+export const splitKey = (key: string): { file: string; key: string } | null => {
+  const i = key.indexOf(SEP);
+  return i < 0 ? null : { file: key.slice(0, i), key: key.slice(i + SEP.length) };
+};
+
 export interface State {
   views: FileView[];
   game: GameFile[];
@@ -16,6 +25,10 @@ export interface State {
   current: string | null;
   /** Files open as tabs, in the order they were opened. */
   open: string[];
+  /** Files shown together in one table (`current` is then GROUP); null when no group is open. */
+  group: string[] | null;
+  /** Files ticked in the file tree (Ctrl/Shift-click) to open together. */
+  picked: Set<string>;
   /** Unit key selected in the current file. */
   cur: string | null;
   mode: Mode;

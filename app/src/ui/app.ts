@@ -52,8 +52,8 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     <div class="seg" id="seg" role="tablist" aria-label="Режим">
       <button role="tab" aria-selected="true" data-m="table" class="on"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM2.5 7h11M6.5 3.5v9"/></svg>Таблиця</button>
       <button role="tab" aria-selected="false" data-m="edit"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM6 3.5v9M6 8h7.5"/></svg>Редагування</button>
-      <button role="tab" aria-selected="false" data-m="review"><svg viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7"/></svg>Вичитування</button>
     </div>
+    <button class="tpill stage" id="stage-pill" aria-pressed="false" title="Вичитування: перегляд рядків, що чекають перевірки, і схвалення"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3 3 7-7"/></svg>Вичитування</button>
     <div class="grow"></div>
     <div class="prog" id="pg" title=""><div class="bar"><i class="a" id="pg-a"></i><i class="b" id="pg-b"></i><i class="c" id="pg-c"></i></div><span id="pg-txt" style="font-family:var(--mono);font-size:11.5px"></span></div>
     <div class="tsep"></div>
@@ -250,7 +250,7 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#lp-rows').hidden = l !== 'rows';
     $('#lp-title').textContent = l === 'rows' ? `Рядки · ${s.current ?? ''}` : 'Файли гри';
     document.querySelectorAll<HTMLElement>('#mtabs [data-lt]').forEach(b => { const on = b.dataset.lt === s.leftTab[s.mode]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
-    document.querySelectorAll<HTMLElement>('#seg [data-m]').forEach(b => { const on = b.dataset.m === s.mode; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
+    document.querySelectorAll<HTMLElement>('#seg [data-m]').forEach(b => { const on = b.dataset.m === s.mode || (s.mode === 'review' && b.dataset.m === 'edit'); b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
     $('#ab-left').setAttribute('aria-pressed', String(s.leftOpen));
     $('#ab-right').setAttribute('aria-pressed', String(s.rightOpen));
   }
@@ -301,7 +301,7 @@ export async function start(root: HTMLElement): Promise<void> {
       const pc = Math.round(100 * st.approved / st.total);
       const [ic, lab] = fileIcon(n.name);
       const cur = n.name === s.current;
-      return `<div class="node ${cur ? 'cur' : ''}" style="--d:${n.d}" data-file="${esc(n.name)}" role="button" tabindex="0" title="${cur ? 'Відкрито · ' : ''}${v.label ? esc(v.label) + ' · ' : ''}Вичитано ${pc}% · перекладено ${Math.round(100 * st.translated / st.total)}%"><span class="chev"></span><span class="ic ${ic}">${lab}</span><span class="nm">${esc(n.label)}${v.label ? `<span class="lc">${esc(v.label)}</span>` : ''}</span><span class="mini"><i class="${pc === 100 ? 'f' : ''}" style="width:${Math.max(pc, Math.round(100 * st.translated / st.total))}%"></i></span><span class="pc ${pc === 100 ? 'full' : ''}">${pc}%</span></div>`;
+      return `<div class="node ${cur ? 'cur' : ''} ${!pc && !st.translated ? 'idle' : ''}" style="--d:${n.d}" data-file="${esc(n.name)}" role="button" tabindex="0" title="${cur ? 'Відкрито · ' : ''}${v.label ? esc(v.label) + ' · ' : ''}Вичитано ${pc}% · перекладено ${Math.round(100 * st.translated / st.total)}%"><span class="chev"></span><span class="ic ${ic}">${lab}</span><span class="nm">${v.label ? `${esc(v.label)}<span class="lc">${esc(n.label.replace(/\.json$/, ''))}</span>` : esc(n.label)}</span><span class="mini"><i class="${pc === 100 ? 'f' : ''}" style="width:${Math.max(pc, Math.round(100 * st.translated / st.total))}%"></i></span><span class="pc ${pc === 100 ? 'full' : ''}">${pc}%</span></div>`;
     }).join('');
   }
 
@@ -378,7 +378,9 @@ export async function start(root: HTMLElement): Promise<void> {
     const list = visibleUnits(true);
     const ids = list.map(u => u.key);
     const nSel = ids.filter(k => s.checked.has(k)).length;
-    grid.style.setProperty('--cols', '34px 22px 110px 96px minmax(160px,.9fr) minmax(180px,1fr) 60px');
+    const hasWho = v.units.some(u => ctx.speaker(u));
+    grid.classList.toggle('no-who', !hasWho);
+    grid.style.setProperty('--cols', hasWho ? '34px 22px 110px 96px minmax(160px,.9fr) minmax(180px,1fr) 60px' : '34px 22px 110px minmax(160px,.9fr) minmax(180px,1fr) 60px');
     let h = `<div class="gh" role="row"><div class="gcheck" role="columnheader"><input type="checkbox" id="selall" aria-label="Вибрати всі видимі рядки" ${nSel && nSel === ids.length ? 'checked' : ''}></div><div title="Статус" role="columnheader" class="s"><span class="vh">Статус</span></div><div class="s" role="columnheader">Ключ</div><div class="s" role="columnheader">Мовець</div><div role="columnheader">Оригінал · EN</div><div class="s" role="columnheader">Переклад · UK</div><div class="s" role="columnheader" title="Довжина перекладу / довжина оригіналу (без керівних кодів). Рекомендація: якнайближче до оригіналу" style="justify-content:flex-end;border-right:0">Знаків</div></div>`;
     h += list.length ? list.map(u => rowHtml(u, idx.get(u.key)!)).join('') : `<div class="empty-wrap" role="row"><div role="gridcell">${emptyHtml}</div></div>`;
     grid.innerHTML = h;
@@ -438,6 +440,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const mins = Math.max(0, Math.round((Date.now() - s.sess.t0) / 60000));
     $('#sb-sess').textContent = `Сесія: ${s.sess.n} змін · ${mins} хв`;
     $('#ab-title').textContent = s.current ?? 'Transly';
+    { const sp = $('#stage-pill'); sp.classList.toggle('on', s.mode === 'review'); sp.setAttribute('aria-pressed', String(s.mode === 'review')); }
     $('#ab-stage').textContent = s.mode === 'review' ? 'Вичитування' : 'Переклад';
     $('#ab-sub').textContent = v ? `${s.mode === 'review' ? 'Вичитування' : 'Переклад'} · ${statsOf(v.units, ents).approved} / ${v.units.length} вичитано` : '';
   }
@@ -827,6 +830,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.closest('#ab-left')) { s.leftOpen = !s.leftOpen; s.rightOpen = false; renderAll(); return; }
     if (t.closest('#ab-right')) { s.rightOpen = !s.rightOpen; s.leftOpen = false; renderAll(); return; }
     if (t.closest('#scrim')) { s.leftOpen = false; s.rightOpen = false; renderAll(); return; }
+    if (t.closest('#stage-pill')) { setMode(s.mode === 'review' ? 'edit' : 'review'); return; }
     if (t.closest('#ab-stage')) { setMode(s.mode === 'review' ? 'edit' : 'review'); return; }
     const lt = t.closest<HTMLElement>('#mtabs [data-lt]');
     if (lt) { s.leftTab[s.mode] = lt.dataset.lt === 'rows' ? 'rows' : 'files'; renderAll(); return; }

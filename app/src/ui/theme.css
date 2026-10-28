@@ -796,3 +796,11 @@ input[type=checkbox]{accent-color:#8b6cf0}
 .stabbar button[aria-selected=true]{color:var(--text);border-bottom-color:#8b6cf0}
 .adlg .tab-off,.adlg details.tab-off[hidden]{display:none!important}
 .adlg form{min-height:min(440px,78vh)}
+.grid.no-who .who,.grid.no-who .gh>div:nth-child(4){display:none}
+.gr.sel{background:rgba(139,114,232,.08)!important}
+.gr.sel .tr{box-shadow:inset 0 0 0 1px var(--accent);background:rgba(139,114,232,.16)}
+.tpill.stage{height:30px;gap:6px}
+.tpill.stage.on{background:rgba(95,184,101,.18);border-color:rgba(95,184,101,.55);color:#bfe8c3}
+.node.idle .mini,.node.idle .pc{display:none}
+.node .nm{display:flex;gap:8px;align-items:baseline;min-width:0}
+.node .nm .lc{color:var(--mute);flex:none;font-size:11px}

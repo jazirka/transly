@@ -92,8 +92,8 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
         <div class="fh"><div class="fin">${SVG.search}<input class="qin" id="q2" placeholder="Пошук рядків" aria-label="Пошук рядків"></div><div class="chips2"><span class="chipsHost" id="chips2"></span></div></div>
         <div class="sl-body" id="slist"></div>
       </div>
-      <div class="rz rz-x" id="rz-x" role="separator" aria-orientation="vertical" aria-label="Ширина бічної панелі" aria-valuemin="200" aria-valuemax="640" tabindex="0" title="Потягніть, щоб змінити ширину (подвійний клік — стандартна)"></div>
     </aside>
+    <div class="rz rz-x" id="rz-x" role="separator" aria-orientation="vertical" aria-label="Ширина бічної панелі" aria-valuemin="200" aria-valuemax="640" tabindex="0" title="Потягніть, щоб змінити ширину (подвійний клік — стандартна)"></div>
     <main class="editor" id="main">
       <div class="tabs"><span class="tabs-host" id="tabs-host"></span></div>
       <div class="view" id="v-table">

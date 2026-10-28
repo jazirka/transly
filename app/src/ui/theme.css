@@ -876,3 +876,43 @@ body.resizing{user-select:none;cursor:col-resize}
 .ibody .ph{height:34px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:2}
 .ibody:hover .ph .ico,.ibody:focus-within .ph .ico{opacity:1}
 .sz-s .ibody .ph{display:none}
+/* splitters are the gaps between panels, as in IntelliJ: no visible bar, only the resize cursor */
+.rz{background:transparent!important}
+.rz:hover,.rz.drag,.rz:focus-visible{background:transparent!important}
+.rz.drag{background:rgba(139,108,240,.22)!important}
+.rz:focus-visible{outline:none;box-shadow:0 0 0 1px rgba(139,108,240,.6) inset}
+.ide:not(.sz-s) .rz-x{position:absolute;top:0;bottom:6px;left:calc(46px + var(--lpw,300px));right:auto;width:6px;cursor:col-resize}
+.ide:not(.sz-s).lp-closed .rz-x{display:none}
+.ide:not(.sz-s) .rz-r{right:calc(46px + var(--rpw,350px));width:6px}
+.rz-y,.rz-p{height:7px;border:0;background:linear-gradient(var(--line),var(--line)) center/100% 1px no-repeat!important}
+.rz-y.drag,.rz-p.drag{background:rgba(139,108,240,.22)!important}
+/* rails sit on the window background, not as a separate strip */
+.ide:not(.sz-s) .strip,.ide:not(.sz-s) .fs .itabs{background:transparent;border:0}
+.ide:not(.sz-s) .strip button.on::before{left:-3px}
+/* stacked panels are separate cards with a gap between them (the gap is the splitter), like tool windows in IntelliJ */
+.tree.split{background:transparent!important;border:0!important;border-radius:0;overflow:visible}
+.tree.split>.ph{display:none}
+.tree.split #tree,.tree.split #lp-rows{border:1px solid rgba(255,255,255,.16);border-radius:var(--r3);background:var(--bg);overflow:hidden;min-height:0}
+.tree.split #tree{overflow:auto}
+.tree.split #tree::before,.tree.split #lp-rows::before,.ide:not(.sz-s) .fs.stack .pane::before{display:flex;align-items:center;flex:none;height:34px;padding:0 10px;background:var(--panel);border-bottom:1px solid var(--line);color:var(--mute);font-size:11px;letter-spacing:.06em;text-transform:uppercase;font-weight:400}
+.tree.split #tree::before{content:"Файли гри";position:sticky;top:0;z-index:2}
+.tree.split #lp-rows::before{content:"Рядки файлу"}
+.tree.split #lp-rows{border-top:1px solid rgba(255,255,255,.16)}
+.tree.split .rz-y,.rz-y{height:6px;background:transparent!important}
+.ide:not(.sz-s) .fs.stack .ibody{background:transparent;border:0;border-radius:0;overflow:visible}
+.ide:not(.sz-s) .fs.stack .ibody>.ph{display:none}
+.ide:not(.sz-s) .fs.stack .pane{border:1px solid rgba(255,255,255,.16);border-radius:var(--r3);background:var(--bg);padding:0 12px 12px;gap:12px}
+.ide:not(.sz-s) .fs.stack .pane::before{margin:0 -12px}
+.fs.stack .rz-p,.rz-p{height:6px;background:transparent!important}
+/* the right rail uses the very same button look as the left one */
+.ide:not(.sz-s) .fs .itabs{gap:6px;padding:8px 0 6px;align-items:center}
+.ide:not(.sz-s) .fs .itabs button{width:32px;height:32px;border-radius:var(--r-ctl);color:var(--mute);display:grid;place-items:center}
+.ide:not(.sz-s) .fs .itabs button::before,.ide:not(.sz-s) .fs .itabs button.on::before{display:none}
+.ide:not(.sz-s) .fs .itabs button:hover{background:rgba(255,255,255,.09);color:var(--text)}
+.ide:not(.sz-s) .fs .itabs button.on{background:var(--on-bg);box-shadow:inset 0 0 0 1px var(--on-ring);color:#fff}
+.ide:not(.sz-s) .fs .itabs svg{width:17px;height:17px}
+.ide:not(.sz-s) .fs .itabs .cnt{top:-3px;right:-5px}
+/* icons are centred in their buttons */
+.tb-ic,.ab-ic,.ib:not(.lab),.strip button,.dlg-h button{display:inline-grid;place-items:center}
+.tb-ic svg,.ab-ic svg,.ib svg,.strip svg,.itabs svg{display:block;margin:0}
+.tb-ic.play{display:inline-flex}

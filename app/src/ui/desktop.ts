@@ -17,7 +17,7 @@ const toPicked = (files: JsonFile[]): PickedFile[] => {
   const inData = json.filter(f => /(^|[\\/])data[\\/][^\\/]+$/.test(f.path));
   return (inData.length ? inData : json)
     .sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true }))
-    .map(f => ({ name: f.name, path: f.path, // The game's files may already hold a translation: the originals are read from the backup the app made.
+    .map(f => ({ name: f.name, path: f.path, // The game's files may already hold a translation: the originals are read from the app's backup or the game's spare data1.
     read: () => invoke<string>('read_text', { path: f.orig ?? f.path }), fromBackup: !!f.orig }));
 };
 

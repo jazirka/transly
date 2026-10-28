@@ -35,8 +35,8 @@ impl Roots {
             }
         };
         let roots = self.0.lock().unwrap();
-        // The backup of a picked folder's originals sits next to it: reading it is allowed too.
-        if roots.iter().any(|r| resolved.starts_with(r) || resolved.starts_with(backup_dir(r))) {
+        // The backup of a picked folder's originals (or the game's own spare `data1`) sits next to it: reading it is allowed too.
+        if roots.iter().any(|r| resolved.starts_with(r) || resolved.starts_with(backup_dir(r)) || alt_dir(r).is_some_and(|a| resolved.starts_with(a))) {
             Ok(resolved)
         } else {
             Err("Цей шлях не дозволено: оберіть папку через діалог".into())
@@ -68,7 +68,7 @@ fn walk(dir: &Path, depth: u8, out: &mut Vec<JsonFile>) {
                 walk(&p, depth + 1, out);
             }
         } else if name.ends_with(".json") {
-            let orig = dir.parent().map(|_| backup_dir(dir).join(&name)).filter(|b| b.is_file()).map(|b| b.to_string_lossy().to_string());
+            let orig = original_of(dir, &name);
             out.push(JsonFile { name, path: p.to_string_lossy().to_string(), orig });
         }
     }
@@ -81,6 +81,22 @@ fn safe_name(n: &str) -> Result<&str, String> {
     } else {
         Ok(n)
     }
+}
+
+/// Some games ship an untouched spare copy of `data` named `data1` next to it.
+fn alt_dir(data: &Path) -> Option<PathBuf> {
+    if data.file_name()? != "data" {
+        return None;
+    }
+    Some(data.with_file_name("data1")).filter(|a| a.is_dir())
+}
+
+/// Where the untouched original of `name` can be read: the app's backup first, else the game's spare `data1`.
+fn original_of(dir: &Path, name: &str) -> Option<String> {
+    dir.parent()?;
+    let backup = backup_dir(dir).join(name);
+    let spare = alt_dir(dir).map(|a| a.join(name));
+    [Some(backup), spare].into_iter().flatten().find(|b| b.is_file()).map(|b| b.to_string_lossy().to_string())
 }
 
 fn backup_dir(data: &Path) -> PathBuf {
@@ -399,6 +415,28 @@ mod tests {
         roots.allow(&data);
         assert!(roots.check(backup.join("A.json").to_str().unwrap()).is_ok());
         assert!(roots.check(base.join("other.json").to_str().unwrap()).is_err());
+    }
+
+    #[test]
+    fn spare_data1_is_the_original_when_there_is_no_backup() {
+        let base = std::env::temp_dir().join("transly-test-data1");
+        let _ = fs::remove_dir_all(&base);
+        let (data, spare) = (base.join("data"), base.join("data1"));
+        fs::create_dir_all(&data).unwrap();
+        fs::create_dir_all(&spare).unwrap();
+        fs::write(data.join("A.json"), "\"Тулуб\"").unwrap();
+        fs::write(data.join("B.json"), "\"b\"").unwrap();
+        fs::write(spare.join("A.json"), "\"Body\"").unwrap();
+        assert_eq!(fs::read_to_string(original_of(&data, "A.json").unwrap()).unwrap(), "\"Body\"");
+        assert!(original_of(&data, "B.json").is_none());
+        let backup = backup_dir(&data);
+        fs::create_dir_all(&backup).unwrap();
+        fs::write(backup.join("A.json"), "\"Backup\"").unwrap();
+        assert_eq!(fs::read_to_string(original_of(&data, "A.json").unwrap()).unwrap(), "\"Backup\"");
+        let roots = Roots::default();
+        roots.allow(&data);
+        assert!(roots.check(spare.join("A.json").to_str().unwrap()).is_ok());
+        assert!(alt_dir(&base.join("other")).is_none());
     }
 
     #[test]

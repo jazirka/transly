@@ -49,8 +49,9 @@ export const FOCUS_HTML = `<div class="fc"><div class="fc-in">
   </div>
   <div class="ctxrow"><div style="grid-column:1/-1"><div class="lbl">Сусідні рядки</div><div class="ctx" id="c-near"></div></div></div>
   <div class="hint" id="f-meta"></div>
-</div></div>
-<aside class="fs" aria-label="Вказівки до рядка">
+</div></div>`;
+
+export const SIDE_HTML = `<aside class="fs" aria-label="Вказівки до рядка">
   <div class="rz rz-r" id="rz-r" role="separator" aria-orientation="vertical" aria-label="Ширина правої панелі" aria-valuemin="260" aria-valuemax="640" tabindex="0" title="Потягніть, щоб змінити ширину (подвійний клік — стандартна)"></div>
   <div class="itabs" id="stabs" role="tablist">
     <button class="on" role="tab" data-p="s-tm"><svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h6"/></svg><span class="tl">Вказівки</span></button><hr class="ssep">
@@ -60,6 +61,7 @@ export const FOCUS_HTML = `<div class="fc"><div class="fc-in">
     <button role="tab" data-p="all" title="Усі панелі разом: зона ділиться на частини" aria-label="Усі панелі разом"><svg viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><path d="M2.5 6.2h11M2.5 9.8h11"/></svg><span class="tl">Усі разом</span></button>
   </div>
   <div class="ibody">
+    <div class="ph"><span class="grow" id="rp-title">Вказівки</span><span class="ico" id="rp-close" title="Сховати панель" role="button" tabindex="0" aria-label="Сховати панель">—</span></div>
     <div class="pane on" id="s-tm" data-title="Вказівки"><div><div class="lbl">Глосарій у рядку</div><div id="i-gl"></div></div><div id="cd-box" hidden><div class="lbl">Коди в рядку</div><div id="i-cd"></div></div><div id="db-box" hidden><div class="lbl">Про цей запис гри</div><div id="i-db"></div></div><div id="gn-box" hidden><div class="lbl">Назви з гри</div><div id="i-gn"></div></div><div><div class="lbl">Пам’ять перекладів <span class="r" id="tm-n"></span></div><div id="i-tm"></div></div></div>
     <div class="rz rz-p" data-rzp="0" role="separator" aria-orientation="horizontal" tabindex="0" hidden></div>
     <div class="pane" id="s-gl" data-title="Глосарій">
@@ -139,7 +141,6 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
   const cond = first?.page ? describePage(first.page, s.saved.sysNames).slice(0, 4).join('; ') : '';
   $('#f-meta').textContent = [`Тип: ${u.kind}`, cond ? `Умови: ${cond}` : '', label ? `Місцевість: ${label}` : '', u.note ? `Позначка розробників: ${u.note}` : '', limit ? `Ширина рядка: до ${limit} символів${u.face ? ' (поруч обличчя)' : ''}` : '', same ? `однакових рядків у грі: ${same}` : ''].filter(Boolean).join(' · ');
   $('#cm-badge').textContent = String(e?.comments?.length ?? 0);
-  renderSide(ctx, u, e, hits);
 }
 
 function meter(ctx: Ctx, u: Unit): void {
@@ -177,7 +178,14 @@ function checkAllIgnored(u: Unit, e: Entry, opts: ReturnType<Ctx['qaOpts']>) {
   return check(u, e.target, opts).filter(i => e.ign?.includes(i.key));
 }
 
-function renderSide(ctx: Ctx, u: Unit, e: Entry | undefined, hits: ReturnType<typeof termsIn<Ctx['s']['saved']['terms'][number]>>): void {
+/** The right zone belongs to the whole editor: it follows the selected row in the table and in the editing view alike. */
+export function renderSidePanel(ctx: Ctx): void {
+  const { s } = ctx;
+  const u = s.cur && s.current ? ctx.unit(s.cur) : undefined;
+  renderSide(ctx, u, u ? entryOf(ctx, u) : undefined, u ? termsIn(u.source, s.saved.terms) : []);
+}
+
+function renderSide(ctx: Ctx, u: Unit | undefined, e: Entry | undefined, hits: ReturnType<typeof termsIn<Ctx['s']['saved']['terms'][number]>>): void {
   const { s } = ctx;
   const tab = s.sideTab;
   const map: Record<SideTab, string> = { hints: 's-tm', glossary: 's-gl', comments: 's-cm', history: 's-hi' };
@@ -189,7 +197,16 @@ function renderSide(ctx: Ctx, u: Unit, e: Entry | undefined, hits: ReturnType<ty
   const fsEl = document.querySelector<HTMLElement>('.fs');
   fsEl?.classList.toggle('stack', all);
   document.getElementById('v-focus')?.classList.toggle('side-collapsed', !open);
+  $('#rp-title').textContent = all ? 'Усі панелі' : ({ hints: 'Вказівки', glossary: 'Глосарій', comments: 'Коментарі', history: 'Історія' } as const)[tab];
   const show = (t: SideTab): boolean => all || tab === t;
+  if (!u) {
+    const hintEmpty = '<div class="hint">Оберіть рядок.</div>';
+    $('#i-gl').innerHTML = hintEmpty; $('#i-tm').innerHTML = ''; $('#tm-n').textContent = '';
+    for (const id of ['#cd-box', '#db-box', '#gn-box']) $(id).hidden = true;
+    $('#cm-list').innerHTML = hintEmpty; $('#hist-list').innerHTML = hintEmpty;
+    if (show('glossary')) renderGlossary(ctx);
+    return;
+  }
   if (show('hints')) {
     $('#i-gl').innerHTML = hits.length ? hits.map(g => `<div class="gloss-row"><b>${esc(g.en)}</b><span class="arr">→</span><span>${esc(g.uk)}${g.alt?.length ? `<small class="hint"> · ${esc(g.alt.join(', '))}</small>` : ''}</span>${g.kind ? `<span class="t">${esc(g.kind.slice(0, 18))}</span>` : ''}</div>`).join('') : '<div class="hint">Термінів немає</div>';
     const actor = (n: number) => { const a = s.views.find(v => v.name === 'Actors.json')?.units.find(x => x.key === `[${n}].name`); return a ? s.saved.files['Actors.json']?.[a.key]?.target || a.source : undefined; };
@@ -259,7 +276,7 @@ function setText(ctx: Ctx, u: Unit, text: string, what: string): void {
   ents[u.key] = note(edit0(ctx, u, text), what, text, ctx.s.who, Date.now());
   ctx.s.sess.n++;
   ctx.persist(); ctx.invalidateTm(); ctx.render();
-  ($('#i-tr') as HTMLTextAreaElement).focus();
+  if (ctx.s.mode !== 'table') ($('#i-tr') as HTMLTextAreaElement).focus();
 }
 
 export function step(ctx: Ctx, dir: 1 | -1): void {
@@ -295,14 +312,7 @@ export function focusClick(ctx: Ctx, t: HTMLElement): boolean {
   const { s } = ctx;
   const u = s.cur ? ctx.unit(s.cur) : undefined;
   if (!t.closest('details.more > summary')) document.querySelectorAll<HTMLDetailsElement>('details.more').forEach(d => { d.open = false; });
-  const tab = t.closest<HTMLElement>('#stabs [data-p]');
-  if (tab) {
-    if (tab.dataset.p === 'all') { s.sideStack = !(s.sideStack && !s.sideCollapsed); s.sideCollapsed = false; ctx.render(); return true; }
-    const next = ({ 's-tm': 'hints', 's-gl': 'glossary', 's-cm': 'comments', 's-hi': 'history' } as const)[tab.dataset.p as 's-tm'] ?? 'hints';
-    // The tab that is already showing folds the zone away to its rail, like the left one.
-    if (!s.phone && !s.sideStack && next === s.sideTab) s.sideCollapsed = !s.sideCollapsed; else { s.sideCollapsed = false; s.sideStack = false; s.sideTab = next; }
-    ctx.render(); return true;
-  }
+  if (sideClick(ctx, t)) return true;
   if (!u || !s.current) return false;
   const ents = ctx.entries(s.current);
   const ta = $('#i-tr') as HTMLTextAreaElement;
@@ -314,13 +324,6 @@ export function focusClick(ctx: Ctx, t: HTMLElement): boolean {
     if (!limit) { toast('Ширину рядка вимкнено в налаштуваннях'); return true; }
     const text = wrapLines(ta.value, limit);
     if (text === ta.value) toast('Рядки вже вміщаються'); else setText(ctx, u, text, 'перенесено рядки');
-    return true;
-  }
-  const gn = t.closest<HTMLElement>('[data-gn]');
-  if (gn) {
-    const g = gameNames[Number(gn.dataset.gn)];
-    const tr = g ? ctx.entries(g.file)[g.key]?.target : '';
-    if (tr) { ta.focus(); ta.setRangeText(tr, ta.selectionStart, ta.selectionEnd, 'end'); ta.dispatchEvent(new Event('input', { bubbles: true })); }
     return true;
   }
   if (t.closest('#b-code')) {
@@ -344,8 +347,23 @@ export function focusClick(ctx: Ctx, t: HTMLElement): boolean {
   if (un) { const e = ents[u.key]; if (e) { ents[u.key] = { ...e, ign: (e.ign ?? []).filter(k => k !== un.dataset.unign), mt: Date.now() }; ctx.persist(); ctx.render(); } return true; }
   const ins = t.closest<HTMLElement>('[data-ins]');
   if (ins) { setText(ctx, u, ta.value + (ins.dataset.ins ?? ''), 'додано керівні коди'); return true; }
-  const tm = t.closest<HTMLElement>('[data-tm]');
-  if (tm) { const m = tmCur[Number(tm.dataset.tm)]; if (m) setText(ctx, u, m.t, `підставлено з пам’яті (${m.score}%)`); return true; }
+  return false;
+}
+
+/** Clicks in the right-hand zone. It works with the selected row in the table and in the editing view alike. */
+export function sideClick(ctx: Ctx, t: HTMLElement): boolean {
+  const { s } = ctx;
+  const tab = t.closest<HTMLElement>('#stabs [data-p]');
+  if (tab) {
+    if (tab.dataset.p === 'all') { s.sideStack = !(s.sideStack && !s.sideCollapsed); s.sideCollapsed = false; ctx.render(); return true; }
+    const next = ({ 's-tm': 'hints', 's-gl': 'glossary', 's-cm': 'comments', 's-hi': 'history' } as const)[tab.dataset.p as 's-tm'] ?? 'hints';
+    // The tab that is already showing folds the zone away to its rail, like the left one.
+    if (!s.phone && !s.sideStack && next === s.sideTab) s.sideCollapsed = !s.sideCollapsed; else { s.sideCollapsed = false; s.sideStack = false; s.sideTab = next; }
+    ctx.render(); return true;
+  }
+  if (t.closest('#rp-close')) { s.sideCollapsed = true; ctx.render(); return true; }
+  if (!t.closest('.fs')) return false;
+  const u = s.cur ? ctx.unit(s.cur) : undefined;
   if (t.closest('#gl-add')) {
     const en = ($('#gl-en') as HTMLInputElement).value.trim(), uk = ($('#gl-uk') as HTMLInputElement).value.trim();
     if (!en || !uk) { toast('Заповніть обидва поля'); return true; }
@@ -355,10 +373,24 @@ export function focusClick(ctx: Ctx, t: HTMLElement): boolean {
     ctx.persist(); ctx.render(); toast('Термін додано');
     return true;
   }
+  if (!u || !s.current) return false;
+  const gn = t.closest<HTMLElement>('[data-gn]');
+  if (gn) {
+    const g = gameNames[Number(gn.dataset.gn)];
+    const tr = g ? ctx.entries(g.file)[g.key]?.target : '';
+    if (!tr) return true;
+    if (s.mode === 'table') { setText(ctx, u, tr, 'підставлено назву з гри'); return true; }
+    const ta = $('#i-tr') as HTMLTextAreaElement;
+    ta.focus(); ta.setRangeText(tr, ta.selectionStart, ta.selectionEnd, 'end'); ta.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  }
+  const tm = t.closest<HTMLElement>('[data-tm]');
+  if (tm) { const m = tmCur[Number(tm.dataset.tm)]; if (m) setText(ctx, u, m.t, `підставлено з пам’яті (${m.score}%)`); return true; }
   if (t.closest('#cm-add')) {
     const box = $('#cm-in') as HTMLTextAreaElement;
     const text = box.value.trim();
     if (!text) { toast('Напишіть коментар'); return true; }
+    const ents = ctx.entries(s.current);
     ents[u.key] = addComment(ents[u.key], s.who, text, Date.now());
     box.value = '';
     ctx.persist(); ctx.render();

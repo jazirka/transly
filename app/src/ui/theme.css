@@ -848,3 +848,31 @@ body.resizing{user-select:none;cursor:col-resize}
 .fs.stack #s-tm{flex:var(--pw0,1) 1 0}.fs.stack #s-gl{flex:var(--pw1,1) 1 0}.fs.stack #s-cm{flex:var(--pw2,1) 1 0}.fs.stack #s-hi{flex:var(--pw3,1) 1 0}
 .fs.stack .pane::before{content:attr(data-title);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);font-weight:500;flex:none}
 .sz-s .rz-r,.sz-s .rz-p{display:none}
+/* close/hide controls appear on hover, or on the active tab / focused panel */
+.tab .x{opacity:0;transition:opacity .12s}
+.tab:hover .x,.tab.on .x,.tab .x:focus-visible{opacity:1}
+.ph .ico{opacity:0;transition:opacity .12s}
+.tree:hover .ph .ico,.tree:focus-within .ph .ico,.ph .ico:focus-visible{opacity:1}
+@media (pointer:coarse){.tab .x,.ph .ico{opacity:1}}
+
+/* right zone = a real column of the workspace, with its rail outside the card, like the left one */
+.ide:not(.sz-s) #v-focus{grid-template-columns:minmax(0,1fr)!important}
+.ide:not(.sz-s) .fs{display:contents}
+.ide:not(.sz-s) .main{position:relative}
+.ide:not(.sz-s) .fs .ibody{order:2;display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg);border:1px solid rgba(255,255,255,.16);border-radius:var(--r3);overflow:hidden}
+.ide:not(.sz-s) .fs .ibody:not(.stackbody){overflow:auto}
+.ide:not(.sz-s) .fs .itabs{order:3;background:var(--panel);border:0;border-left:1px solid var(--line);flex-direction:column;align-items:center;gap:4px;width:auto;height:auto;padding:6px 0;overflow:visible}
+.ide:not(.sz-s) .fs .itabs button.on::before{right:auto;left:-5px}
+.ide:not(.sz-s) .fs .itabs button.on::before{left:-2px}
+.ide:not(.sz-s) .fs .itabs .ssep{width:18px}
+.ide:not(.sz-s) .rz-r{position:absolute;top:0;bottom:6px;right:calc(52px + var(--rpw,350px));left:auto;width:8px}
+.ide:not(.sz-s).rp-collapsed .rz-r,.ide:not(.sz-s).rp-collapsed .fs .ibody{display:none}
+.ide:not(.sz-s).lp-open .main,.ide:not(.sz-s).lp-open.mode-table .main,.ide:not(.sz-s).lp-open.mode-focus .main{grid-template-columns:40px var(--lpw,300px) minmax(0,1fr) var(--rpw,350px) 40px}
+.ide:not(.sz-s).lp-open.rp-collapsed .main,.ide:not(.sz-s).lp-open.rp-collapsed.mode-table .main,.ide:not(.sz-s).lp-open.rp-collapsed.mode-focus .main{grid-template-columns:40px var(--lpw,300px) minmax(0,1fr) 40px}
+.ide:not(.sz-s).lp-closed .main,.ide:not(.sz-s).lp-closed.mode-table .main,.ide:not(.sz-s).lp-closed.mode-focus .main{grid-template-columns:40px minmax(0,1fr) var(--rpw,350px) 40px}
+.ide:not(.sz-s).lp-closed.rp-collapsed .main,.ide:not(.sz-s).lp-closed.rp-collapsed.mode-table .main,.ide:not(.sz-s).lp-closed.rp-collapsed.mode-focus .main{grid-template-columns:40px minmax(0,1fr) 40px}
+.ide:not(.sz-s) .main{padding-right:0}
+/* both zones share one header: title, and a hide control that shows on hover */
+.ibody .ph{height:34px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:2}
+.ibody:hover .ph .ico,.ibody:focus-within .ph .ico{opacity:1}
+.sz-s .ibody .ph{display:none}

@@ -3,7 +3,7 @@ import type { Entry, GameFile, SavedProject, Unit } from '../core';
 import { openBuild } from './build-dialog';
 import { dataDirOf, isDesktop, rememberedGameDir, reopenGameDirDesktop } from './desktop';
 import { $, el, esc, plural, toast } from './dom';
-import { FOCUS_HTML, focusClick, focusInput, renderFocus, renderGlossary, send, step } from './focus';
+import { FOCUS_HTML, SIDE_HTML, focusClick, focusInput, renderFocus, renderGlossary, renderSidePanel, send, sideClick, step } from './focus';
 import { pickGameFolder, readFiles, reopenHandle } from './folder';
 import type { DirHandle, PickedFile } from './folder';
 import { IdbStore, loadHandle, saveHandle } from './idb';
@@ -106,6 +106,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
       </div>
       <div class="view" id="v-focus">${FOCUS_HTML}</div>
     </main>
+    ${SIDE_HTML}
   </div>
   <footer class="status">
     <span class="ok" id="sb-save"></span><span id="sb-fmt"></span><span id="sb-qa"></span><span id="st-sel"></span>
@@ -251,7 +252,7 @@ export async function start(root: HTMLElement): Promise<void> {
   function renderLayout(): void {
     const ide = $('#ide');
     const l = lp();
-    ide.className = `ide mode-${s.mode === 'table' ? 'table' : 'focus'} ${l ? 'lp-open' : 'lp-closed'}${s.phone ? ' sz-s' : ''}${s.rightOpen ? ' sheet-open' : ''}`;
+    ide.className = `ide mode-${s.mode === 'table' ? 'table' : 'focus'} ${l ? 'lp-open' : 'lp-closed'}${s.phone ? ' sz-s' : ''}${s.rightOpen ? ' sheet-open' : ''}${s.sideCollapsed && !s.phone ? ' rp-collapsed' : ''}`;
     const both = !!l && s.leftBoth && !s.phone;
     $('#lpanel').classList.toggle('split', both);
     $('#rz-y').hidden = !both;
@@ -482,6 +483,7 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#v-focus').style.display = '';
     if (lp() === 'rows' || s.leftBoth || s.mode !== 'table') renderRowsList();
     if (s.mode === 'table') renderTable(); else renderFocus(ctx, isDesktop());
+    renderSidePanel(ctx);
     renderStatus();
   }
 
@@ -890,10 +892,11 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.id === 'sd') { closeSearch(); return; }
     const si = t.closest<HTMLElement>('.si[data-key]');
     if (si) { if (s.phone) { s.leftOpen = false; } ctx.select(si.dataset.key!, s.mode === 'table' ? 'edit' : undefined); return; }
+    if (sideClick(ctx, t)) return;
     if (s.mode !== 'table' && focusClick(ctx, t)) return;
     if (s.mode === 'table') {
       const row = t.closest<HTMLElement>('.gr');
-      if (row && row.dataset.key !== s.cur && !t.closest('textarea')) { document.querySelector('.gr.sel')?.classList.remove('sel'); row.classList.add('sel'); s.cur = row.dataset.key ?? null; renderStatus(); }
+      if (row && row.dataset.key !== s.cur && !t.closest('textarea')) { document.querySelector('.gr.sel')?.classList.remove('sel'); row.classList.add('sel'); s.cur = row.dataset.key ?? null; renderStatus(); renderSidePanel(ctx); }
     }
   });
 

@@ -63,7 +63,7 @@ export function initRightResize(): void {
     if (!t) return;
     e.preventDefault(); t.setPointerCapture(e.pointerId); t.classList.add('drag'); document.body.classList.add('resizing');
     const z = read();
-    const fs = document.querySelector<HTMLElement>('.fs')!;
+    const fs = document.querySelector<HTMLElement>('.fs .ibody')!;
     const panes = [...document.querySelectorAll<HTMLElement>('.ibody .pane')];
     const heights = panes.map(p => p.getBoundingClientRect().height);
     const y0 = e.clientY, i = Number(t.dataset.rzp ?? 0);

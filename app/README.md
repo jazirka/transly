@@ -85,6 +85,10 @@ Control-code QA (`\C[2]`, `\V[1]`…) currently knows RPG Maker codes only; plac
 - **Names from the game**: when a line mentions an item, skill, character or enemy from the database, the glossary hints show how that name is translated there (click to insert it).
 - **Line width**: Settings → line width (by default taken from the original's own line lengths; narrower when a face picture is shown). Too wide a line is a QA warning, and "Wrap lines" re-flows one row (or Tools → Wrap long lines for the whole file). The length of a translation is never capped.
 
+## Glossary matching by language
+
+Words are told apart by script. **English** (the term and the source text): plurals and verb forms (`skills`, `boxes`, `bodies`, `knives`, `making`), possessives, and British/American spelling (`armour`/`armor`, `defence`/`defense`, `colour`, `grey`, `travelled`, `-ise`/`-ize`); whole words only, phrases across spaces and hyphens, control codes ignored. **Ukrainian** (the translation): every word by its stem, so any case, number and the usual alternations match (`меч` ~ `мечем`/`мечів`, `нога` ~ `нозі`, `рука` ~ `руці`, `кінь` ~ `коня`, `навичка` ~ `навичок`). Terms are looked up through an index of their first word, so a dictionary of thousands stays fast.
+
 ## Scene preview and playing a scene in the game
 
 - **Scene preview** (button next to the editor, or Navigation → View scene): all rows of the event page the current row belongs to, one after another, as message windows. Speakers, choices grouped under their question, `\C[n]` colours, `\N[n]` replaced by the actor's name from `Actors.json` (when the file is open), other codes as small chips, lines wider than the game window marked. Show the translation, the original or both; click a row to pick it. Works on the phone too (it uses only the project's rows).

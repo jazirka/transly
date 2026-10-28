@@ -1,5 +1,5 @@
 import { displayLength, missingCodes } from './controlCodes';
-import { hasTerm, targetHasTerm } from './glossary';
+import { candidateTerms, hasTermIn, prepareText, targetHasTerm } from './glossary';
 import { limitFor, maxLineWidth } from './wrap';
 import type { Unit } from './model';
 
@@ -30,9 +30,10 @@ export function check(unit: Pick<Unit, 'source'> & Partial<Pick<Unit, 'kind' | '
     const limit = limitFor(opts.lineLimit, unit.face), w = maxLineWidth(target);
     if (w > limit) out.push({ key: 'wrap', severity: 'warn', message: `Рядок задовгий для вікна: ${w} символів, зазвичай до ${limit}. Натисніть «Перенести рядки»` });
   }
-  for (const t of opts.terms) {
+  const sourceText = prepareText(unit.source);
+  for (const t of candidateTerms(sourceText, opts.terms)) {
     if (t.qa === false) continue;
-    if (hasTerm(unit.source, t.en) && !targetHasTerm(target, t.uk, t.alt)) {
+    if (hasTermIn(sourceText, t.en) && !targetHasTerm(target, t.uk, t.alt)) {
       out.push({ key: 'term', severity: 'warn', message: `Термін «${t.en}» має бути «${[t.uk, ...(t.alt ?? [])].join('» або «')}» за глосарієм` });
     }
   }

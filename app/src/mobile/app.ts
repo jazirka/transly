@@ -1,8 +1,9 @@
-import { canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, limitFor, wordsOf, gorohUrl, multitranUrl } from '../core';
+import { canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, describePage, displayLength, limitFor, wordsOf, gorohUrl, multitranUrl } from '../core';
 import type { GameFile } from '../core';
 import { artifactDb, describeClaude, loadClaudeConfig, saveClaudeConfig } from '../ui/claude';
 import { describeGithub, githubApi, githubConfigured, loadGithubConfig, saveGithubConfig } from '../ui/github';
 import { esc, plural } from '../ui/dom';
+import { gameHtml } from '../ui/gamehtml';
 import { markup } from '../ui/markup';
 import { androidBridge, publishWidget } from '../ui/android';
 import { FILTERS, STATUS_LABEL, Store } from './store';
@@ -28,6 +29,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const PAGE = 100; let page = 1, pageSig = '';
   let refLang = ''; let fq = '';
   let selecting = false; const picked = new Set<string>();
+  const scn: { mode: 'both' | 'tr' | 'src'; real: boolean; picked: string; ctx: CanvasRenderingContext2D | null } = { mode: 'both', real: false, picked: '', ctx: null };
   const gl = { q: '', en: '', uk: '', alt: '', qa: true, edit: false };
   const af = { off: new Set<string>() };
   const sp = { q: '', draft: new Map<string, string>() };
@@ -157,17 +159,48 @@ export async function start(root: HTMLElement): Promise<void> {
   }
 
   /* ---------- sub-screens (opened from the editor or «Ще») ---------- */
+  /** The scene as the message windows of the game: colours, names, choices, width check; a tap picks a line, the bar below acts on it. */
   function screenScene(): string {
     const c = store.current, v = store.view();
     if (!c || !v) return empty('Рядок не вибрано', 'Спершу оберіть рядок.', 'rows', 'До рядків');
-    const lines = sceneLines(sceneUnits(v.units, c.unit.key));
-    const one = (u: (typeof v.units)[number]): string => {
-      const e = store.entry(v.name, u.key), st = store.shown(u, e);
-      return `<button class="m-bubble ${u.key === c.unit.key ? 'cur' : ''}" data-scenekey="${esc(u.key)}"><span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span><span class="m-row-t">${store.speaker(u) ? `<small>${esc(store.speaker(u))}</small>` : ''}<span>${esc(u.source)}</span><span class="m-tr ${e?.target ? '' : 'none'}">${e?.target ? esc(e.target) : '—'}</span></span></button>`;
+    if (!scn.picked || !v.units.some(u => u.key === scn.picked)) scn.picked = c.unit.key;
+    const around = sceneUnits(v.units, c.unit.key), lines = sceneLines(around);
+    const actors = store.views.find(x => x.name === 'Actors.json');
+    const actorName = (n: number): string | undefined => { const u = actors?.units.find(x => x.key === `[${n}].name`); return u ? (store.saved.files['Actors.json']?.[u.key]?.target || u.source) : undefined; };
+    const limit = store.lineLimit();
+    const measure = (t: string): number => { scn.ctx ??= document.createElement('canvas').getContext('2d'); if (scn.ctx) scn.ctx.font = '28px sans-serif'; return scn.ctx?.measureText(t).width ?? t.length * 14; };
+    const plain = (l: string): string => l.replace(/\\[A-Za-z]+\[\d+\]|\\[{}.|!><^$]/g, '');
+    const body = (u: (typeof v.units)[number]): { html: string; missing: boolean; over: boolean } => {
+      const tr = store.entry(v.name, u.key)?.target ?? '', missing = !tr;
+      const shown = scn.mode === 'src' || (missing && scn.mode !== 'tr') ? u.source : tr || u.source;
+      const checked = (u.kind === 'dialogue' || u.kind === 'scroll') && !missing, max = checked ? limitFor(limit, u.face) : 0;
+      const wide = (l: string): boolean => (scn.real ? measure(plain(l)) > (u.face ? 612 : 780) : !!max && displayLength(l) > max);
+      const rows = shown.split('\n');
+      return { missing, over: checked && rows.some(wide), html: rows.map(l => `<div class="scn-ln${checked && wide(l) ? ' over' : ''}">${gameHtml(l, actorName, n => store.saved.sysNames?.variables[n]) || '&nbsp;'}</div>`).join('') };
     };
-    return `<div class="m-more"><p class="m-hint">Усі рядки цієї події поспіль, як їх побачить гравець. Торкніться рядка, щоб перейти до нього.</p>
-      ${lines.map(l => l.kind === 'choice' ? `<div class="m-choice"><small>Вибір</small>${l.units.map(one).join('')}</div>` : one(l.unit)).join('')}
-      <button class="m-primary wide" data-scenesend>${icon('check')}<span>${store.stage === 'translate' ? 'Надіслати всю сцену на вичитування' : 'Затвердити всю сцену'}</span></button></div>`;
+    const box = (u: (typeof v.units)[number], inner: string, cls = ''): string => {
+      const st = store.shown(u, store.entry(v.name, u.key));
+      return `<button class="scn-box ${cls} ${u.key === scn.picked ? 'cur' : ''}" data-scpick="${esc(u.key)}" aria-pressed="${u.key === scn.picked}"><span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span><span class="scn-in">${inner}</span></button>`;
+    };
+    const orig = (u: (typeof v.units)[number], missing: boolean): string => (scn.mode === 'both' && !missing ? `<div class="scn-orig">${u.source.split('\n').map(x => `<div>${esc(x)}</div>`).join('')}</div>` : '');
+    const tag = (missing: boolean, over: boolean): string => `${missing && scn.mode !== 'src' ? '<span class="scn-tag">не перекладено</span>' : ''}${over ? '<span class="scn-tag bad">рядок задовгий для вікна гри</span>' : ''}`;
+    const one = (l: ReturnType<typeof sceneLines>[number]): string => {
+      if (l.kind === 'choice') return `<div class="scn-choice" role="group" aria-label="Варіанти відповіді"><small>Вибір гравця</small>${l.units.map((u, i) => { const t = body(u); return box(u, `<span class="scn-n">${i + 1}</span><span>${t.html}${orig(u, t.missing)}${tag(t.missing, t.over)}</span>`, 'opt'); }).join('')}</div>`;
+      const u = l.unit, t = body(u), who = store.speaker(u);
+      return box(u, `${who ? `<span class="scn-who">${esc(who)}</span>` : ''}<span class="scn-win${l.kind === 'scroll' ? ' scroll' : ''}">${t.html}</span>${orig(u, t.missing)}${tag(t.missing, t.over)}`);
+    };
+    const all = lines.flatMap(l => (l.kind === 'choice' ? l.units : [l.unit]));
+    const st = all.map(u => store.entry(v.name, u.key)?.status ?? 'new');
+    const done = all.filter(u => store.entry(v.name, u.key)?.target).length, appr = st.filter(x => x === 'appr').length, wait = st.filter(x => x === 'done').length;
+    const page = around[0]?.page, cond = page ? describePage(page, store.saved.sysNames).join('; ') : '';
+    const review = store.stage === 'review';
+    const canSend = all.some(u => review ? store.entry(v.name, u.key)?.status === 'done' : store.entry(v.name, u.key)?.status === 'draft');
+    const modes: ['both' | 'tr' | 'src', string][] = [['both', 'Обидва'], ['tr', 'Переклад'], ['src', 'Оригінал']];
+    return `<div class="m-scene"><div class="scn-head"><b>${esc(v.label ?? v.name)}</b><small>${plural(all.length, ['рядок', 'рядки', 'рядків'])} · перекладено ${done} · вичитано ${appr} · чекає ${wait}</small>${cond ? `<small class="scn-cond">Умови: ${esc(cond)}</small>` : ''}</div>
+      <div class="m-dseg scn-modes" role="group" aria-label="Що показувати">${modes.map(([k, l]) => `<button data-scmode="${k}" class="${scn.mode === k ? 'on' : ''}" aria-pressed="${scn.mode === k}">${l}</button>`).join('')}</div>
+      <label class="m-check"><input type="checkbox" id="scn-real" ${scn.real ? 'checked' : ''}> Вікно як у грі: ширина в пікселях (816 px, шрифт 28)</label>
+      <div class="scn-list">${lines.map(one).join('') || '<p class="m-none">У цій сцені немає текстових рядків</p>'}</div></div>
+      <div class="scn-bar"><button class="m-secondary" data-scedit>${icon('edit')}<span>Редагувати</span></button><button class="m-primary" data-scenesend ${canSend ? '' : 'disabled'}>${icon('check')}<span>${review ? 'Затвердити сцену' : 'Надіслати сцену'}</span></button></div>`;
   }
 
   function screenFind(): string {
@@ -449,7 +482,9 @@ export async function start(root: HTMLElement): Promise<void> {
     if ((x = q('[data-cell]'))) { editCell(x); return; }
     if ((x = q('[data-scope]'))) { scope = x.dataset.scope as 'file' | 'all'; render(); return; }
     if ((x = q('[data-hit]'))) { store.open(x.dataset.hit!, x.dataset.hitkey!); scope = 'file'; go('edit'); return; }
-    if ((x = q('[data-scenekey]'))) { store.select(x.dataset.scenekey!); sub = null; render(); return; }
+    if ((x = q('[data-scpick]'))) { scn.picked = x.dataset.scpick!; const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
+    if ((x = q('[data-scmode]'))) { scn.mode = x.dataset.scmode as typeof scn.mode; const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
+    if (q('[data-scedit]')) { store.select(scn.picked); sub = null; go('edit'); return; }
     if (q('[data-scenesend]')) { const v = store.view(), c = store.current; if (v && c) { const r = store.sendMany(v.name, sceneUnits(v.units, c.unit.key)); say(`Надіслано: ${r.sent}${r.skipped ? ` · пропущено: ${r.skipped}` : ''}`, r.sent === 0); buzz(14); render(); } return; }
     if (q('[data-dofind]')) { fr.matches = store.find({ find: fr.find, replace: fr.replace, caseSensitive: fr.cs, wholeWord: fr.word }); if (!fr.find) say('Вкажіть, що шукати', true); else if (!fr.matches.length) say('Нічого не знайдено'); render(); return; }
     if (q('[data-doreplace]')) { const n = store.replaceAll(fr.matches); fr.matches = []; say(`Замінено в рядках: ${n}`); buzz(14); render(); return; }
@@ -552,6 +587,7 @@ export async function start(root: HTMLElement): Promise<void> {
   });
   root.addEventListener('change', e => {
     const t = e.target as HTMLElement;
+    if (t.id === 'scn-real') { scn.real = (t as HTMLInputElement).checked; const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
     if (t.id === 'f-word') fr.word = (t as HTMLInputElement).checked;
     else if (t.id === 'f-case') fr.cs = (t as HTMLInputElement).checked;
     else if (t.id === 's-block' || t.id === 's-prop') { store.saved.settings[t.id === 's-block' ? 'blockErrors' : 'propagate'] = (t as HTMLInputElement).checked; store.saved.settingsAt = Date.now(); store.persist(); }

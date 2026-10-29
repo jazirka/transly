@@ -11,7 +11,7 @@ android {
         minSdk 29          // Android 10: MediaStore downloads without storage permissions
         targetSdk 34
         // Every CI run is newer than the one before: Android only updates an installed app with a higher or equal version code.
-        versionCode (System.getenv('GITHUB_RUN_NUMBER') ?: '1') as int
+        versionCode((System.getenv('GITHUB_RUN_NUMBER') ?: '1') as int)
         versionName '1.0'
     }
 

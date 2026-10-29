@@ -20,7 +20,7 @@ export async function start(root: HTMLElement): Promise<void> {
   let tab: Tab = store.hasGame ? (store.key ? 'edit' : 'rows') : 'more';
   let sheet = false; let sheetTab: 'terms' | 'tm' | 'cm' | 'hist' | 'dict' | null = null; let gk: 'Тлумачення' | 'Синоніми' = 'Тлумачення';
   let busy = '';
-  type Sub = 'scene' | 'find' | 'speakers' | 'settings' | 'consistency';
+  type Sub = 'scene' | 'find' | 'speakers' | 'settings' | 'consistency' | 'glossary' | 'autofill';
   let sub: Sub | null = null;
   let scope: 'file' | 'all' = 'file';
   let layout: 'cards' | 'table' = (() => { try { return localStorage.getItem('transly-m-layout') === 'table' ? 'table' : 'cards'; } catch { return 'cards'; } })();
@@ -28,6 +28,8 @@ export async function start(root: HTMLElement): Promise<void> {
   const PAGE = 100; let page = 1, pageSig = '';
   let refLang = ''; let fq = '';
   let selecting = false; const picked = new Set<string>();
+  const gl = { q: '', en: '', uk: '', alt: '', qa: true, edit: false };
+  const af = { off: new Set<string>() };
   const sp = { q: '', draft: new Map<string, string>() };
   let upd: UpdateCheck | null = null;
   let updMsg = '';
@@ -49,7 +51,7 @@ export async function start(root: HTMLElement): Promise<void> {
   };
   const buzz = (ms = 10): void => { try { navigator.vibrate?.(ms); } catch { /* no vibrator */ } };
   const go = (t: Tab): void => { tab = t; sheet = false; sub = null; render(); };
-  const SUB_TITLE: Record<Sub, string> = { scene: 'Сцена', find: 'Знайти й замінити', speakers: 'Хто говорить', settings: 'Налаштування', consistency: 'Узгодженість' };
+  const SUB_TITLE: Record<Sub, string> = { scene: 'Сцена', find: 'Знайти й замінити', speakers: 'Хто говорить', settings: 'Налаштування', consistency: 'Узгодженість', glossary: 'Глосарій', autofill: 'Автозаповнення' };
 
   /* ---------- chrome ---------- */
   /** Top-bar button of the editor: glossary, memory, comments and history of the open row. */
@@ -186,6 +188,29 @@ export async function start(root: HTMLElement): Promise<void> {
       <button class="m-primary wide" data-spsave>Зберегти імена</button></div>`;
   }
 
+  /** The glossary: add a term, tap one to change it. */
+  function screenGlossary(): string {
+    const q = gl.q.trim().toLowerCase();
+    const list = store.saved.terms.filter(t => !q || (t.en + ' ' + t.uk).toLowerCase().includes(q)).sort((x, y) => x.en.localeCompare(y.en, 'en')).slice(0, 80);
+    return `<div class="m-more"><section class="m-card"><h3>${gl.edit ? 'Змінити термін' : 'Новий термін'}</h3>
+      <label class="m-lbl" for="g-en">Оригінал</label><input id="g-en" class="m-input" value="${esc(gl.en)}" autocomplete="off" autocapitalize="none">
+      <label class="m-lbl" for="g-uk">Переклад</label><input id="g-uk" class="m-input" value="${esc(gl.uk)}" autocomplete="off">
+      <label class="m-lbl" for="g-alt">Інші дозволені переклади (через кому)</label><input id="g-alt" class="m-input" value="${esc(gl.alt)}" autocomplete="off">
+      <label class="m-check"><input type="checkbox" id="g-qa" ${gl.qa ? 'checked' : ''}> Перевіряти в QA</label>
+      <div class="m-btnrow"><button class="m-primary" data-gsave>${gl.edit ? 'Зберегти' : 'Додати термін'}</button>${gl.edit ? '<button class="m-secondary" data-gcancel>Скасувати</button>' : ''}</div></section>
+      <label class="m-search">${icon('search')}<input id="g-q" type="search" placeholder="Пошук серед ${store.saved.terms.length} термінів" value="${esc(gl.q)}" autocomplete="off"></label>
+      ${list.map(t => `<div class="m-term"><button class="m-term-t" data-gedit="${esc(t.en)}"><b>${esc(t.en)}</b><span>→ ${esc(t.uk)}${t.alt?.length ? ` · ${esc(t.alt.join(', '))}` : ''}</span></button><button class="m-mini ghost" data-gdel="${esc(t.en)}" aria-label="Видалити термін ${esc(t.en)}">Видалити</button></div>`).join('') || '<p class="m-none">Термінів ще немає</p>'}</div>`;
+  }
+
+  /** Lines made only of words that are already known: shown first, written only after the tap. */
+  function screenAutofill(): string {
+    const list = store.autofill(), on = list.filter(p => !af.off.has(p.file + '|' + p.key));
+    return `<div class="m-more"><p class="m-hint">Застосунок знає слів: ${store.wordCount()} (з термінів і з уже перекладених коротких рядків). Нижче рядки, де відомі всі слова: переклад збирається зі слів, а порядок слів береться з оригіналу, тож перегляньте.</p>
+      ${list.length ? `<button class="m-primary wide" data-afapply ${on.length ? '' : 'disabled'}>Вписати вибрані (${on.length})</button>` : ''}
+      ${list.slice(0, 80).map(p => `<label class="m-af"><input type="checkbox" data-afk="${esc(p.file + '|' + p.key)}" ${af.off.has(p.file + '|' + p.key) ? '' : 'checked'}><span><small>${esc(store.view(p.file)?.label ?? p.file)}</small><b>${esc(p.source)}</b><i>→ ${esc(p.target)}</i></span></label>`).join('') || '<p class="m-none">Немає рядків, які можна скласти зі знайомих слів</p>'}
+      ${list.length > 80 ? `<p class="m-hint">Показано 80 із ${list.length}: після запису решта з'явиться тут.</p>` : ''}</div>`;
+  }
+
   function screenConsistency(): string {
     const groups = store.inconsistent();
     if (!groups.length) return '<div class="m-more"><p class="m-none">Однакові оригінали перекладено однаково</p></div>';
@@ -247,7 +272,7 @@ export async function start(root: HTMLElement): Promise<void> {
         <details class="m-det"><summary>Додатково</summary><label class="m-lbl" for="g-branch">Гілка</label><input id="g-branch" class="m-input" value="${esc(gh.branch)}" placeholder="основна" autocomplete="off"><label class="m-lbl" for="g-dir">Папка в репозиторії</label><input id="g-dir" class="m-input" value="${esc(gh.dir)}" placeholder="корінь" autocomplete="off"></details>
         <button class="m-primary wide" data-ghsync ${busy ? 'disabled' : ''}>${icon('sync')}<span>Синхронізувати</span></button><p class="m-hint" id="m-ghstate">${gh.last ? 'Востаннє: ' + new Date(gh.last).toLocaleString('uk-UA') : 'Ще не синхронізовано'}</p></section>
       <section class="m-card" id="m-claude" hidden><h3>Синхронізація через Claude</h3><p class="m-hint">Спільна база артефакту: працює між вашими пристроями.</p><button class="m-secondary wide" data-clsync>${icon('sync')}<span>Синхронізувати через Claude</span></button></section>
-      ${store.hasGame ? `<section class="m-card"><h3>Інструменти</h3><div class="m-links"><button data-sub="find">Знайти й замінити</button><button data-sub="speakers">Хто говорить</button><button data-sub="consistency">Узгодженість</button><button data-sub="settings">Налаштування</button></div></section>` : ''}
+      ${store.hasGame ? `<section class="m-card"><h3>Інструменти</h3><div class="m-links"><button data-sub="find">Знайти й замінити</button><button data-sub="speakers">Хто говорить</button><button data-sub="glossary">Глосарій</button><button data-sub="autofill">Автозаповнення</button><button data-sub="consistency">Узгодженість</button><button data-sub="settings">Налаштування</button></div></section>` : ''}
       ${canUpdate() ? updateSection() : ''}
       <section class="m-card"><h3>Проєкт</h3><label class="m-lbl" for="m-who">Ваше ім’я в коментарях</label><input id="m-who" class="m-input" value="${esc(store.who)}" maxlength="40" autocomplete="off">
         <button class="m-secondary wide" data-export>Зберегти проєкт у файл</button></section>
@@ -289,7 +314,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const counts = { terms: terms.length, tm: tm.length, cm: cm.length, hist: hist.length, dict: 0 };
     const tabs: ['terms' | 'tm' | 'cm' | 'hist' | 'dict', string][] = [['terms', 'Глосарій'], ['tm', 'Пам’ять'], ['dict', 'Слова'], ['cm', 'Коментарі'], ['hist', 'Історія']];
     const cur = sheetTab ?? (counts.terms ? 'terms' : counts.tm ? 'tm' : counts.cm ? 'cm' : 'terms');
-    const panel = cur === 'terms' ? (terms.length ? terms.map((t, i) => `<button class="m-hit" data-term="${i}"><b>${esc(t.en)}</b><span>→ ${esc(t.uk)}${t.alt?.length ? ` · ${esc(t.alt.join(', '))}` : ''}</span></button>`).join('') : '<p class="m-none">У цьому рядку термінів немає</p>')
+    const panel = cur === 'terms' ? (terms.length ? terms.map((t, i) => `<button class="m-hit" data-term="${i}"><b>${esc(t.en)}</b><span>→ ${esc(t.uk)}${t.alt?.length ? ` · ${esc(t.alt.join(', '))}` : ''}</span></button>`).join('') : '<p class="m-none">У цьому рядку термінів немає</p>') + '<button class="m-mini" data-gadd>Додати термін</button>'
       : cur === 'tm' ? (tm.length ? tm.map((m, i) => `<button class="m-hit" data-tm="${i}"><b class="m-score">${m.score}%</b><span>${esc(m.t)}</span></button>`).join('') : '<p class="m-none">Схожих перекладів немає</p>')
       : cur === 'cm' ? (cm.length ? cm.map(x => `<div class="m-cmc"><small><b>${esc(x.who)}</b> · ${fmtTime(x.at)}</small><p>${esc(x.text)}</p></div>`).join('') : '<p class="m-none">Коментарів ще немає</p>')
       : cur === 'dict' ? dictPanel(c.unit.source, c.entry?.target ?? '')
@@ -307,7 +332,7 @@ export async function start(root: HTMLElement): Promise<void> {
     renderChrome();
     const main = $('m-main');
     main.className = 'm-main tab-' + tab;
-    main.innerHTML = sub ? ({ scene: screenScene, find: screenFind, speakers: screenSpeakers, settings: screenSettings, consistency: screenConsistency }[sub])() : tab === 'files' ? screenFiles() : tab === 'rows' ? screenRows() : tab === 'edit' ? screenEdit() : screenMore();
+    main.innerHTML = sub ? ({ scene: screenScene, find: screenFind, speakers: screenSpeakers, settings: screenSettings, consistency: screenConsistency, glossary: screenGlossary, autofill: screenAutofill }[sub])() : tab === 'files' ? screenFiles() : tab === 'rows' ? screenRows() : tab === 'edit' ? screenEdit() : screenMore();
     renderSheet();
     if (tab === 'edit' && !sub) { refreshMeta(); autosize(); }
     if (tab === 'more') void artifactDb().then(db => { const el = document.getElementById('m-claude'); if (db && el) el.hidden = false; });
@@ -450,6 +475,17 @@ export async function start(root: HTMLElement): Promise<void> {
     if ((x = q('[data-ins]'))) { insert(x.dataset.ins ?? ''); return; }
     if (q('[data-wrap]')) { if (store.wrap()) { render(); } else say('Рядки вже вміщаються'); return; }
     if ((x = q('[data-ign]'))) { store.mutate((_f, _u, en) => ({ ...(en as NonNullable<typeof en>), ign: [...new Set([...(en?.ign ?? []), x!.dataset.ign!])], mt: Date.now() })); refreshMeta(); return; }
+    if (q('[data-gsave]')) {
+      const v = (id: string): string => $<HTMLInputElement>(id).value;
+      if (!store.saveTerm(v('g-en'), v('g-uk'), v('g-alt'), $<HTMLInputElement>('g-qa').checked)) { say('Заповніть оригінал і переклад', true); return; }
+      say(gl.edit ? 'Термін змінено' : 'Термін додано'); buzz(10); Object.assign(gl, { en: '', uk: '', alt: '', qa: true, edit: false }); render(); return;
+    }
+    if (q('[data-gcancel]')) { Object.assign(gl, { en: '', uk: '', alt: '', qa: true, edit: false }); render(); return; }
+    if ((x = q('[data-gedit]'))) { const t = store.saved.terms.find(y => y.en === x!.dataset.gedit); if (t) { Object.assign(gl, { en: t.en, uk: t.uk, alt: (t.alt ?? []).join(', '), qa: t.qa !== false, edit: true }); render(); $('m-main').scrollTop = 0; } return; }
+    if ((x = q('[data-gdel]'))) { store.removeTerm(x.dataset.gdel!); say('Термін видалено'); render(); return; }
+    if ((x = q('[data-afk]'))) { const k = x.dataset.afk!; if (af.off.has(k)) af.off.delete(k); else af.off.add(k); render(); return; }
+    if (q('[data-afapply]')) { const n = store.applyAutofill(store.autofill().filter(p => !af.off.has(p.file + '|' + p.key))); af.off.clear(); say(`Вписано рядків: ${n}`); buzz(14); render(); return; }
+    if (q('[data-gadd]')) { const c = store.current; gl.en = c && c.unit.source.length <= 40 ? c.unit.source : ''; gl.uk = ''; gl.edit = false; sheet = false; sub = 'glossary'; render(); return; }
     if ((x = q('[data-gk]'))) { gk = x.dataset.gk as typeof gk; renderSheet(); return; }
     if ((x = q('[data-stab]'))) { sheetTab = x.dataset.stab as typeof sheetTab; renderSheet(); return; }
     if (q('[data-sheet]')) { sheet = !sheet; renderSheet(); renderChrome(); return; }
@@ -495,6 +531,7 @@ export async function start(root: HTMLElement): Promise<void> {
     else if (t.id === 's-tol') { const n = Number((t as HTMLInputElement).value); if (n >= 5 && n <= 100) { store.saved.settings.tolerancePct = n; store.saved.settingsAt = Date.now(); store.persist(); } }
     else if (t.id === 's-lim') { const n = Number((t as HTMLInputElement).value); if (n >= 10 && n <= 200) { store.saved.settings.lineLimit = Math.round(n); store.saved.settingsAt = Date.now(); store.persist(); } }
     else if (t.id === 's-who') { store.saved.settings.who = (t as HTMLInputElement).value.trim() || 'Ви'; store.saved.settingsAt = Date.now(); store.persist(); }
+    else if (t.id === 'g-q') { gl.q = (t as HTMLInputElement).value; const p = (t as HTMLInputElement).selectionStart; render(); const i = $<HTMLInputElement>('g-q'); i.focus(); if (p !== null) i.setSelectionRange(p, p); }
     else if (t.id === 'm-cm') { const ta = t as HTMLTextAreaElement; ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 140) + 'px'; const b = ta.form?.querySelector<HTMLButtonElement>('.m-send'); if (b) b.disabled = !ta.value.trim(); }
     else if (t.id === 'm-tr') { store.write((t as HTMLTextAreaElement).value); refreshMeta(); autosize(); }
     else if (t.id === 'm-fq') { fq = (t as HTMLInputElement).value; const l = document.getElementById('m-flist'); if (l) l.innerHTML = filesList(); }

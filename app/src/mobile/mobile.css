@@ -250,3 +250,8 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-w:active{background:rgba(255,255,255,.14)}
 .m-dseg{display:inline-flex;margin-bottom:10px;border:1px solid var(--line);border-radius:999px;overflow:hidden}
 .m-dseg button{min-height:40px;padding:0 14px;color:var(--mute)}.m-dseg button.on{background:rgba(255,255,255,.14);color:var(--text)}
+.m-btnrow{display:flex;gap:8px}.m-btnrow .m-primary{flex:1}
+.m-term{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line)}
+.m-term-t{flex:1;min-width:0;min-height:48px;text-align:left;display:flex;flex-direction:column;gap:2px}.m-term-t span{color:var(--mute);overflow-wrap:anywhere}
+.m-af{display:flex;gap:12px;align-items:flex-start;padding:10px 12px;border-radius:var(--r2);background:var(--raised);border:1px solid var(--line);min-height:56px}
+.m-af input{margin-top:4px;width:20px;height:20px;flex:none}.m-af span{display:flex;flex-direction:column;gap:2px;min-width:0}.m-af small{color:var(--mute)}.m-af i{font-style:normal;color:var(--accent-2);overflow-wrap:anywhere}

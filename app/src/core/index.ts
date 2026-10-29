@@ -34,3 +34,4 @@ export * from './findreplace';
 export * from './consistency';
 export * from './update';
 export * from './dictlinks';
+export * from './autofill';

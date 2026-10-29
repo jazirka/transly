@@ -1,4 +1,4 @@
-import { addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
+import { learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
 import type { Entry, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
 import { IdbStore } from '../ui/idb';
 
@@ -227,6 +227,33 @@ export class Store {
     const next = withoutReference(this.saved.reference, lang);
     if (next) this.saved.reference = next; else delete this.saved.reference;
     this.saved.assetsRev = Date.now(); this.persist(); this.emit();
+  }
+  /* ---------- glossary ---------- */
+  /** Add a term, or change the one with the same original word. Returns false when a field is empty. */
+  saveTerm(en: string, uk: string, alt: string, qa: boolean): boolean {
+    en = en.trim(); uk = uk.trim(); if (!en || !uk) return false;
+    const alts = alt.split(/[;,]/).map(x => x.trim()).filter(Boolean);
+    const t = { en, uk, mt: Date.now(), ...(alts.length ? { alt: alts } : {}), ...(qa ? {} : { qa: false }) };
+    const i = this.saved.terms.findIndex(x => x.en.toLowerCase() === en.toLowerCase());
+    if (i >= 0) this.saved.terms[i] = { ...this.saved.terms[i], ...t, alt: alts.length ? alts : undefined } as typeof t; else this.saved.terms.push(t);
+    this.tmCache = null; this.persist(); this.emit(); return true;
+  }
+  removeTerm(en: string): void {
+    this.saved.terms = this.saved.terms.filter(x => x.en.toLowerCase() !== en.toLowerCase());
+    this.persist(); this.emit();
+  }
+  /* ---------- autofill by words ---------- */
+  wordCount(): number { return learnWords(this.views, this.saved).size; }
+  autofill(): ReturnType<typeof autofillProposals> { return autofillProposals(this.views, this.saved); }
+  /** Write the proposals as drafts marked as autofilled; rows that got a translation meanwhile are skipped. */
+  applyAutofill(list: { file: string; key: string; target: string }[]): number {
+    let n = 0; const now = Date.now();
+    for (const p of list) {
+      const u = this.unit(p.file, p.key); if (!u || this.entry(p.file, p.key)?.target?.trim()) continue;
+      this.entries(p.file)[p.key] = note(edit(this.entry(p.file, p.key), u, p.target, this.stage, now), 'автозаповнено за словами', p.target, this.who, now); n++;
+    }
+    if (n) { this.tmCache = null; this.persist(); this.emit(); }
+    return n;
   }
   /** The same original translated in different ways. */
   inconsistent(): ReturnType<typeof inconsistencies> { return inconsistencies(this.views, this.saved, 60); }

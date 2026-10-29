@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="app_bg">#1E1F22</color>
+    <!-- Same surface as the phone app's top and bottom bars (--panel), so the system bars blend in -->
+    <color name="app_panel">#232528</color>
     <color name="ic_bg">#8B72E8</color>
     <!-- Widget, light (One UI: soft neutral card, one accent) -->
     <color name="w_bg">#F6F6F8</color>

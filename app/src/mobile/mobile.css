@@ -98,7 +98,9 @@ h2,h3{margin:0}
 .m-mini.ghost{background:none;border-color:var(--line);color:var(--mute)}
 .m-mini svg{width:18px;height:18px}
 .m-pos{text-align:center;color:var(--dim);font-size:13px}
-.m-actions{position:sticky;bottom:0;display:flex;gap:8px;padding:8px 12px;background:linear-gradient(transparent,var(--bg) 30%)}
+.m-main.tab-edit{display:flex;flex-direction:column;padding-bottom:0}.m-main.tab-edit>.m-edit{flex:1}
+/* The action bar sits right on the navigation bar: same surface, no gap */
+.m-actions{position:sticky;bottom:0;z-index:5;display:flex;gap:8px;padding:8px 12px;background:var(--panel);border-top:1px solid var(--line)}
 .m-ic{flex:none;width:52px;height:52px;border-radius:var(--r2);background:var(--raised);border:1px solid var(--line);display:grid;place-items:center}
 .m-ic:disabled{opacity:.4}
 .m-primary{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:52px;padding:0 20px;border-radius:999px;background:var(--accent);color:#fff;font-weight:600}

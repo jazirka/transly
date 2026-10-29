@@ -1,7 +1,7 @@
 name: Android APK
 
 # Builds the Android app (app/android): the web app is copied into the APK, so it works offline and can pick files,
-# save to Downloads and show the home-screen widget. The APK is signed with the debug key: fine for installing by hand.
+# save to Downloads and show the home-screen widget. The APK is signed with the personal key: fine for installing by hand.
 # Download it from the run's "Artifacts" section (transly-apk).
 
 on:
@@ -55,8 +55,21 @@ jobs:
       - name: Accept Android SDK licenses
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
+      - name: Fixed signing key (secrets ANDROID_KEYSTORE_B64 and ANDROID_KEYSTORE_PASSWORD)
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KS" ]; then
+            echo "$KS" | base64 -d > "$RUNNER_TEMP/transly.keystore"
+            echo "TRANSLY_KEYSTORE=$RUNNER_TEMP/transly.keystore" >> "$GITHUB_ENV"
+          else
+            echo "::warning::No ANDROID_KEYSTORE_B64 secret: the APK gets a throw-away debug key and cannot update over an installed build."
+          fi
+
       - name: Build the APK
         working-directory: app/android
+        env:
+          TRANSLY_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: ./gradlew --no-daemon assembleRelease
 
       - name: Collect the APK

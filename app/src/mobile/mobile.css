@@ -110,11 +110,12 @@ h2,h3{margin:0}
 .m-primary:disabled,.m-secondary:disabled{opacity:.5}
 
 /* sheet */
-.m-sheet-wrap{position:absolute;inset:0;z-index:20}
+.m-sheet-wrap{position:absolute;top:var(--bar-h,56px);left:0;right:0;bottom:0;z-index:20}
 .m-sheet-wrap[hidden]{display:none}
-.m-scrim{position:absolute;inset:0;background:rgba(0,0,0,.55);animation:m-fade .24s}
+.m-scrim{position:absolute;inset:0;background:rgba(0,0,0,.55)}
+.m-scrim.in{animation:m-fade .24s}.m-sheet.in{animation:m-right .24s cubic-bezier(.2,.8,.2,1)}
 @keyframes m-fade{from{opacity:0}to{opacity:1}}
-.m-sheet{position:absolute;top:0;right:0;bottom:0;width:min(88%,420px);overflow:auto;overscroll-behavior:contain;background:var(--panel);border-left:1px solid var(--line);border-radius:var(--r3) 0 0 var(--r3);padding:max(16px,env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px;animation:m-right .24s cubic-bezier(.2,.8,.2,1);box-shadow:-12px 0 32px rgba(0,0,0,.45)}
+.m-sheet{position:absolute;top:0;right:0;bottom:0;width:min(92%,440px);overflow:hidden;background:var(--panel);border-left:1px solid var(--line);border-top:1px solid var(--line);border-radius:var(--r3) 0 0 0;padding:0 0 env(safe-area-inset-bottom);display:flex;flex-direction:column;box-shadow:-12px 0 32px rgba(0,0,0,.45)}
 .m-sheet h3{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin-top:8px}
 .m-grab{display:none;width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 4px}
 .m-hit{display:flex;gap:10px;align-items:baseline;width:100%;min-height:48px;padding:10px 12px;text-align:left;border-radius:var(--r2);background:var(--raised);border:1px solid var(--line)}
@@ -217,3 +218,24 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-hdr:active{background:rgba(255,255,255,.1)}.m-hdr svg{width:22px;height:22px}
 .m-badge{position:absolute;top:4px;right:2px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:var(--accent);color:#fff;font-size:11px;line-height:16px;text-align:center}
 .m-cmform{display:flex;gap:8px;align-items:center}.m-cmform .m-input{height:44px}
+
+/* hints drawer: tabs on top, one panel, comment composer pinned to the bottom */
+.m-hdr.on{background:rgba(255,255,255,.14);color:var(--accent-2)}
+.m-stabs{flex:none;display:grid;grid-template-columns:repeat(4,auto);justify-content:space-between;padding:6px 8px 0;border-bottom:1px solid var(--line)}
+.m-stabs button{position:relative;min-height:44px;padding:0 8px;color:var(--mute);font-size:14px;display:inline-flex;align-items:center;gap:5px}
+.m-stabs button.on{color:var(--text);box-shadow:inset 0 -2px 0 var(--accent)}
+.m-stabs i{font-style:normal;font-size:11px;min-width:18px;padding:1px 5px;border-radius:999px;background:rgba(255,255,255,.12);text-align:center}
+.m-spanel{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:12px;display:flex;flex-direction:column;gap:8px}
+.m-spanel .m-none{margin:auto;text-align:center;color:var(--dim)}
+.m-score{color:var(--accent-2)}
+.m-cmc{padding:10px 12px;border-radius:var(--r2);background:var(--raised);border:1px solid var(--line)}
+.m-cmc small{color:var(--mute)}.m-cmc small b{color:var(--text)}.m-cmc p{margin:4px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.m-time{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--line);display:flex;flex-direction:column;gap:14px}
+.m-time li{position:relative}.m-time li::before{content:'';position:absolute;left:-20px;top:5px;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.m-time small{color:var(--mute);display:block}.m-time p{margin:4px 0 0;overflow-wrap:anywhere}
+.m-chipx{display:inline-block;margin-top:4px;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.1);font-size:12px}
+.m-composer{flex:none;display:flex;align-items:flex-end;gap:8px;padding:8px 12px;border-top:1px solid var(--line);background:var(--panel)}
+.m-composer textarea{flex:1;min-height:48px;max-height:140px;resize:none;padding:12px;border-radius:var(--r2);background:var(--bg);border:1px solid var(--line);color:var(--text);outline:0;font-size:16px;line-height:1.35}
+.m-composer textarea:focus{border-color:var(--accent)}
+.m-send{flex:none;width:48px;height:48px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center}
+.m-send:disabled{background:rgba(255,255,255,.1);color:var(--dim)}

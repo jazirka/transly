@@ -18,7 +18,7 @@ const SHAPE: Record<Shown, string> = { new: 'sd-new', draft: 'sd-draft', done: '
 export async function start(root: HTMLElement): Promise<void> {
   const store = await Store.open();
   let tab: Tab = store.hasGame ? (store.key ? 'edit' : 'rows') : 'more';
-  let sheet = false;
+  let sheet = false; let sheetTab: 'terms' | 'tm' | 'cm' | 'hist' | null = null;
   let busy = '';
   type Sub = 'scene' | 'find' | 'speakers' | 'settings' | 'consistency';
   let sub: Sub | null = null;
@@ -56,7 +56,7 @@ export async function start(root: HTMLElement): Promise<void> {
   function helpBtn(): string {
     const c = store.current; if (tab !== 'edit' || sub || !c) return '';
     const n = store.terms(c.unit).length + store.suggestions(c.unit, c.entry).length + (c.entry?.comments?.length ?? 0);
-    return `<button class="m-hdr" data-sheet aria-label="Глосарій, пам’ять перекладів, коментарі, історія">${icon('book')}${n ? `<span class="m-badge">${n > 9 ? '9+' : n}</span>` : ''}</button>`;
+    return `<button class="m-hdr ${sheet ? 'on' : ''}" data-sheet aria-pressed="${sheet}" aria-label="Глосарій, пам’ять перекладів, коментарі, історія">${icon('book')}${n ? `<span class="m-badge">${n > 9 ? '9+' : n}</span>` : ''}</button>`;
   }
   function renderChrome(): void {
     const tot = store.totals();
@@ -64,6 +64,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const title = tab === 'files' ? 'Файли гри' : tab === 'rows' ? (store.view()?.label ?? store.file ?? 'Рядки') : tab === 'edit' ? (store.file ?? 'Переклад') : 'Ще';
     const subline = tab === 'more' || !store.hasGame || sub ? '' : `Перекладено ${pct}% · ${store.saveOk ? 'збережено' : 'не збережено!'}`;
     $('m-bar').innerHTML = `${sub ? '<button class="m-back" data-subback aria-label="Назад">' + icon('prev') + '</button>' : ''}<div class="m-title"><b>${esc(sub ? SUB_TITLE[sub] : title)}</b>${subline ? `<small class="${store.saveOk ? '' : 'bad'}">${esc(subline)}</small>` : ''}</div>${busy ? `<span class="m-busy" role="status">${esc(busy)}</span>` : ''}${helpBtn()}`;
+    document.documentElement.style.setProperty('--bar-h', $('m-bar').offsetHeight + 'px');
     $('m-nav').innerHTML = (Object.keys(TAB_LABEL) as Tab[]).map(t => `<button role="tab" data-go="${t}" aria-selected="${t === tab}" class="${t === tab ? 'on' : ''}" ${(t === 'rows' || t === 'edit') && !store.hasGame ? 'disabled' : ''}>${icon(t)}<span>${TAB_LABEL[t]}</span></button>`).join('');
     if (androidBridge()) {
       const cur = store.view();
@@ -263,18 +264,27 @@ export async function start(root: HTMLElement): Promise<void> {
   }
 
   /* ---------- the hints sheet ---------- */
+  const fmtTime = (t: number): string => new Date(t).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  /** Side panel under the top bar: one topic at a time (glossary, memory, comments, history); the top-bar button that opened it closes it. */
   function renderSheet(): void {
     const wrap = $('m-sheet'); wrap.hidden = !sheet;
     const c = store.current;
-    if (!sheet || !c) { wrap.innerHTML = ''; return; }
+    if (!sheet || !c) { wrap.innerHTML = ''; delete wrap.dataset.open; return; }
+    const fresh = wrap.dataset.open !== '1'; wrap.dataset.open = '1';
     const terms = store.terms(c.unit), tm = store.suggestions(c.unit, c.entry), cm = c.entry?.comments ?? [], hist = [...(c.entry?.history ?? [])].reverse().slice(0, 20);
-    wrap.innerHTML = `<div class="m-scrim" data-close></div><div class="m-sheet" role="dialog" aria-label="Підказки"><div class="m-grab"></div>
-      <h3>Глосарій</h3>${terms.length ? terms.map((t, i) => `<button class="m-hit" data-term="${i}"><b>${esc(t.en)}</b><span>→ ${esc(t.uk)}${t.alt?.length ? ` · ${esc(t.alt.join(', '))}` : ''}</span></button>`).join('') : '<p class="m-hint">Термінів немає</p>'}
-      <h3>Пам’ять перекладів</h3>${tm.length ? tm.map((m, i) => `<button class="m-hit" data-tm="${i}"><b>${m.score}%</b><span>${esc(m.t)}</span></button>`).join('') : '<p class="m-hint">Збігів немає</p>'}
-      <h3>Коментарі</h3>${cm.map(x => `<p class="m-cm"><b>${esc(x.who)}</b> ${esc(x.text)}</p>`).join('')}
-      <div class="m-cmform"><input id="m-cm" class="m-input" placeholder="Новий коментар" maxlength="400" autocomplete="off"><button class="m-mini" data-cmadd>Додати</button></div>
-      ${hist.length ? `<h3>Історія</h3>${hist.map(h => `<p class="m-cm"><small>${new Date(h.at).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} · ${esc(h.who)} · ${esc(h.what)}</small><br>${esc(h.text.slice(0, 160))}</p>`).join('')}` : ''}
-      <button class="m-secondary wide" data-close>Закрити</button></div>`;
+    const counts = { terms: terms.length, tm: tm.length, cm: cm.length, hist: hist.length };
+    const tabs: ['terms' | 'tm' | 'cm' | 'hist', string][] = [['terms', 'Глосарій'], ['tm', 'Пам’ять'], ['cm', 'Коментарі'], ['hist', 'Історія']];
+    const cur = sheetTab ?? (counts.terms ? 'terms' : counts.tm ? 'tm' : counts.cm ? 'cm' : 'terms');
+    const panel = cur === 'terms' ? (terms.length ? terms.map((t, i) => `<button class="m-hit" data-term="${i}"><b>${esc(t.en)}</b><span>→ ${esc(t.uk)}${t.alt?.length ? ` · ${esc(t.alt.join(', '))}` : ''}</span></button>`).join('') : '<p class="m-none">У цьому рядку термінів немає</p>')
+      : cur === 'tm' ? (tm.length ? tm.map((m, i) => `<button class="m-hit" data-tm="${i}"><b class="m-score">${m.score}%</b><span>${esc(m.t)}</span></button>`).join('') : '<p class="m-none">Схожих перекладів немає</p>')
+      : cur === 'cm' ? (cm.length ? cm.map(x => `<div class="m-cmc"><small><b>${esc(x.who)}</b> · ${fmtTime(x.at)}</small><p>${esc(x.text)}</p></div>`).join('') : '<p class="m-none">Коментарів ще немає</p>')
+      : (hist.length ? `<ol class="m-time">${hist.map(h => `<li><small>${fmtTime(h.at)} · ${esc(h.who)}</small><span class="m-chipx">${esc(h.what)}</span><p>${esc(h.text.slice(0, 200))}</p></li>`).join('')}</ol>` : '<p class="m-none">Історії ще немає</p>');
+    wrap.innerHTML = `<div class="m-scrim ${fresh ? 'in' : ''}" data-close></div><aside class="m-sheet ${fresh ? 'in' : ''}" role="dialog" aria-label="Допомога до рядка">
+      <div class="m-stabs" role="tablist">${tabs.map(([k, l]) => `<button role="tab" data-stab="${k}" aria-selected="${k === cur}" class="${k === cur ? 'on' : ''}">${l}${counts[k] ? `<i>${counts[k]}</i>` : ''}</button>`).join('')}</div>
+      <div class="m-spanel" id="m-spanel">${panel}</div>
+      ${cur === 'cm' ? `<form class="m-composer" data-cmform><textarea id="m-cm" rows="2" maxlength="400" placeholder="Написати коментар…" aria-label="Новий коментар"></textarea><button type="submit" class="m-send" aria-label="Надіслати коментар" disabled>${icon('send')}</button></form>` : ''}
+    </aside>`;
+    const sp = document.getElementById('m-spanel'); if (sp && cur === 'cm') sp.scrollTop = sp.scrollHeight;
   }
 
   /* ---------- render ---------- */
@@ -425,9 +435,9 @@ export async function start(root: HTMLElement): Promise<void> {
     if ((x = q('[data-ins]'))) { insert(x.dataset.ins ?? ''); return; }
     if (q('[data-wrap]')) { if (store.wrap()) { render(); } else say('Рядки вже вміщаються'); return; }
     if ((x = q('[data-ign]'))) { store.mutate((_f, _u, en) => ({ ...(en as NonNullable<typeof en>), ign: [...new Set([...(en?.ign ?? []), x!.dataset.ign!])], mt: Date.now() })); refreshMeta(); return; }
-    if (q('[data-cmadd]')) { const i = $<HTMLInputElement>('m-cm'); if (i.value.trim()) { store.comment(i.value.trim()); renderSheet(); renderChrome(); } return; }
-    if (q('[data-sheet]')) { sheet = true; renderSheet(); return; }
-    if (q('[data-close]')) { sheet = false; renderSheet(); return; }
+    if ((x = q('[data-stab]'))) { sheetTab = x.dataset.stab as typeof sheetTab; renderSheet(); return; }
+    if (q('[data-sheet]')) { sheet = !sheet; renderSheet(); renderChrome(); return; }
+    if (q('[data-close]')) { sheet = false; renderSheet(); renderChrome(); return; }
     if ((x = q('[data-term]'))) { const c = store.current; const tm = c ? store.terms(c.unit)[Number(x.dataset.term)] : null; if (tm) { sheet = false; renderSheet(); insert(tm.uk); } return; }
     if ((x = q('[data-tm]'))) { const c = store.current; const m = c ? store.suggestions(c.unit, c.entry)[Number(x.dataset.tm)] : null; if (m) { sheet = false; renderSheet(); ($('m-tr') as HTMLTextAreaElement).value = m.t; store.write(m.t); refreshMeta(); autosize(); } return; }
     if ((x = q('[data-stage]'))) { store.setStage(x.dataset.stage as 'translate' | 'review'); render(); return; }
@@ -455,6 +465,11 @@ export async function start(root: HTMLElement): Promise<void> {
       return;
     }
   });
+  root.addEventListener('submit', e => {
+    const f = e.target as HTMLElement; if (!f.matches('[data-cmform]')) return; e.preventDefault();
+    const ta = $<HTMLTextAreaElement>('m-cm'); const text = ta.value.trim(); if (!text) return;
+    store.comment(text); buzz(8); renderSheet(); renderChrome();
+  });
   root.addEventListener('input', e => {
     const t = e.target as HTMLElement;
     if (t.id === 'f-find') fr.find = (t as HTMLInputElement).value;
@@ -464,6 +479,7 @@ export async function start(root: HTMLElement): Promise<void> {
     else if (t.id === 's-tol') { const n = Number((t as HTMLInputElement).value); if (n >= 5 && n <= 100) { store.saved.settings.tolerancePct = n; store.saved.settingsAt = Date.now(); store.persist(); } }
     else if (t.id === 's-lim') { const n = Number((t as HTMLInputElement).value); if (n >= 10 && n <= 200) { store.saved.settings.lineLimit = Math.round(n); store.saved.settingsAt = Date.now(); store.persist(); } }
     else if (t.id === 's-who') { store.saved.settings.who = (t as HTMLInputElement).value.trim() || 'Ви'; store.saved.settingsAt = Date.now(); store.persist(); }
+    else if (t.id === 'm-cm') { const ta = t as HTMLTextAreaElement; ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 140) + 'px'; const b = ta.form?.querySelector<HTMLButtonElement>('.m-send'); if (b) b.disabled = !ta.value.trim(); }
     else if (t.id === 'm-tr') { store.write((t as HTMLTextAreaElement).value); refreshMeta(); autosize(); }
     else if (t.id === 'm-q') { store.setQuery((t as HTMLInputElement).value); const ul = document.querySelector('.m-list.rows'); if (ul) { const keep = (t as HTMLInputElement).selectionStart; render(); const qi = document.getElementById('m-q') as HTMLInputElement; qi.focus(); qi.setSelectionRange(keep, keep); } }
     else if (t.id === 'm-who') { store.saved.settings.who = (t as HTMLInputElement).value.trim() || 'Ви'; store.persist(); }

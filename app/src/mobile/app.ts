@@ -26,7 +26,7 @@ export async function start(root: HTMLElement): Promise<void> {
   let layout: 'cards' | 'table' = (() => { try { return localStorage.getItem('transly-m-layout') === 'table' ? 'table' : 'cards'; } catch { return 'cards'; } })();
   const fr = { find: '', replace: '', word: false, cs: false, matches: [] as ReturnType<typeof store.find> };
   const PAGE = 100; let page = 1, pageSig = '';
-  let refLang = '';
+  let refLang = ''; let fq = '';
   let selecting = false; const picked = new Set<string>();
   const sp = { q: '', draft: new Map<string, string>() };
   let upd: UpdateCheck | null = null;
@@ -80,7 +80,14 @@ export async function start(root: HTMLElement): Promise<void> {
 
   function screenFiles(): string {
     if (!store.hasGame) return empty('Файлів ще немає', 'Відкрийте файли гри або проєкт у розділі «Ще».', 'more', 'Відкрити файли');
-    return `<ul class="m-list">${store.views.map(v => {
+    return `<div class="m-tools"><label class="m-search">${icon('search')}<input id="m-fq" type="search" placeholder="Пошук файлу" value="${esc(fq)}" enterkeyhint="search" autocomplete="off"></label></div><div id="m-flist">${filesList()}</div>`;
+  }
+  /** The files whose name or title contains the search words. */
+  function filesList(): string {
+    const q = fq.trim().toLowerCase();
+    const views = store.views.filter(v => !q || (v.name + ' ' + (v.label ?? '')).toLowerCase().includes(q));
+    if (!views.length) return '<p class="m-none">Файлів за цим пошуком немає</p>';
+    return `<ul class="m-list">${views.map(v => {
       const st = store.stats(v.name), pc = st.total ? Math.round((100 * st.translated) / st.total) : 0;
       return `<li><button class="m-item ${v.name === store.file ? 'cur' : ''}" data-file="${esc(v.name)}"><span class="m-ico">${/^Map\d+\.json$/.test(v.name) ? 'MAP' : '{ }'}</span><span class="m-item-t"><b>${esc(v.label ?? v.name.replace(/\.json$/, ''))}</b><small>${esc(v.label ? v.name.replace(/\.json$/, '') : plural(st.total, ['рядок', 'рядки', 'рядків']))}</small>${bar(st.translated, st.total)}</span><span class="m-pc">${pc}%</span></button></li>`;
     }).join('')}</ul>`;
@@ -480,6 +487,7 @@ export async function start(root: HTMLElement): Promise<void> {
     else if (t.id === 's-who') { store.saved.settings.who = (t as HTMLInputElement).value.trim() || 'Ви'; store.saved.settingsAt = Date.now(); store.persist(); }
     else if (t.id === 'm-cm') { const ta = t as HTMLTextAreaElement; ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 140) + 'px'; const b = ta.form?.querySelector<HTMLButtonElement>('.m-send'); if (b) b.disabled = !ta.value.trim(); }
     else if (t.id === 'm-tr') { store.write((t as HTMLTextAreaElement).value); refreshMeta(); autosize(); }
+    else if (t.id === 'm-fq') { fq = (t as HTMLInputElement).value; const l = document.getElementById('m-flist'); if (l) l.innerHTML = filesList(); }
     else if (t.id === 'm-q') { store.setQuery((t as HTMLInputElement).value); const ul = document.querySelector('.m-list.rows'); if (ul) { const keep = (t as HTMLInputElement).selectionStart; render(); const qi = document.getElementById('m-q') as HTMLInputElement; qi.focus(); qi.setSelectionRange(keep, keep); } }
     else if (t.id === 'm-who') { store.saved.settings.who = (t as HTMLInputElement).value.trim() || 'Ви'; store.persist(); }
   });

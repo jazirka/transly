@@ -1,4 +1,4 @@
-import { Autosave, TmIndex, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
+import { Autosave, DupIndex, TmIndex, findReplace, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
 import type { Entry, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
 import { IdbStore } from '../ui/idb';
 
@@ -7,7 +7,7 @@ import { IdbStore } from '../ui/idb';
  * (formats, QA, merging, glossary, sync) and to the browser's storage, and knows nothing about the desktop UI.
  */
 export type Filter = 'all' | 'new' | 'draft' | 'done' | 'appr' | 'qa';
-export type Sort = 'order' | 'new' | 'qa';
+export type Sort = 'order' | 'new' | 'qa' | 'long';
 export type Shown = Status | 'qa';
 
 export const FILTERS: [Filter, string][] = [['all', 'Усі'], ['new', 'Без перекладу'], ['draft', 'Чернетки'], ['done', 'На вичитуванні'], ['appr', 'Вичитано'], ['qa', 'Проблеми']];
@@ -26,11 +26,14 @@ export class Store {
   q = '';
   /** Translate pass or review pass. */
   stage: Stage = 'translate';
+  /** How many identical rows the last send filled in too. */
+  lastSame = 0;
   saveOk = true;
   savedAt: number | null = null;
   private autosave: Autosave;
   private listeners = new Set<() => void>();
   private tmCache: TmIndex | null = null;
+  private dupCache: { views: FileView[]; idx: DupIndex } | null = null;
 
   private constructor(private idb: IdbStore, saved: SavedProject) {
     this.saved = saved;
@@ -82,6 +85,24 @@ export class Store {
   }
   suggestions(u: Unit, e: Entry | undefined): ReturnType<TmIndex['find']> { return this.tm().find(u.source, { min: 60, limit: 3, exclude: x => x.s === u.source && x.t === (e?.target ?? '') }); }
 
+  /** The same row in the reference languages (what other versions of the game say). */
+  refs(file: string, key: string): { lang: string; text: string }[] {
+    return referenceSets(this.saved.reference).map(r => ({ lang: r.lang, text: r.texts[file]?.[key] ?? '' })).filter(r => r.text);
+  }
+  /** Rows of every file that match the search words; capped so the list stays light. */
+  findAll(q: string, limit = 200): { file: string; unit: Unit }[] {
+    const needle = q.trim().toLowerCase(); if (!needle) return [];
+    const out: { file: string; unit: Unit }[] = [];
+    for (const v of this.views) {
+      const ents = this.saved.files[v.name] ?? {};
+      for (const u of v.units) {
+        if ((u.source + ' ' + (ents[u.key]?.target ?? '') + ' ' + u.key).toLowerCase().includes(needle)) { out.push({ file: v.name, unit: u }); if (out.length >= limit) return out; }
+      }
+    }
+    return out;
+  }
+  private dups(): DupIndex { if (!this.dupCache || this.dupCache.views !== this.views) this.dupCache = { views: this.views, idx: new DupIndex(this.views) }; return this.dupCache.idx; }
+
   /** Rows of the open file after the filter, the search and the sort. */
   rows(): Unit[] {
     const v = this.view(); if (!v) return [];
@@ -96,6 +117,7 @@ export class Store {
       return !q || (u.source + ' ' + (e?.target ?? '') + ' ' + u.key + ' ' + this.speaker(u)).toLowerCase().includes(q);
     });
     if (this.sort === 'new') list = [...list].sort((a, b) => Number(!!ents[a.key]?.target) - Number(!!ents[b.key]?.target));
+    else if (this.sort === 'long') list = [...list].sort((a, b) => b.source.length - a.source.length);
     else if (this.sort === 'qa') list = [...list].sort((a, b) => Number(this.shown(b, ents[b.key]) === 'qa') - Number(this.shown(a, ents[a.key]) === 'qa'));
     return list;
   }
@@ -129,13 +151,49 @@ export class Store {
     const c = this.current; if (!c) return 'Рядок не вибрано';
     const r = submit(c.entry, c.unit, this.stage, Date.now(), { blockErrors: this.saved.settings.blockErrors, qa: this.qaOpts() });
     if (!r.ok) return r.reason;
-    this.entries(c.file)[c.unit.key] = note(r.entry, this.stage === 'translate' ? 'надіслано на вичитування' : 'вичитано', r.entry.target, this.who, Date.now());
-    this.persist(); this.emit(); return null;
+    const now = Date.now();
+    this.entries(c.file)[c.unit.key] = note(r.entry, this.stage === 'translate' ? 'надіслано на вичитування' : 'вичитано', r.entry.target, this.who, now);
+    this.lastSame = this.saved.settings.propagate ? propagate(this.saved, this.dups(), c.file, c.unit, this.entries(c.file)[c.unit.key]!, this.stage, now, this.who) : 0;
+    this.tmCache = null; this.persist(); this.emit(); return null;
   }
   mutate(fn: (file: string, unit: Unit, e: Entry | undefined) => Entry): void {
     const c = this.current; if (!c) return;
     this.entries(c.file)[c.unit.key] = fn(c.file, c.unit, c.entry);
     this.tmCache = null; this.persist(); this.emit();
+  }
+  /** Send every translated row of these units that can be sent (the rest are counted, not blocked). */
+  sendMany(file: string, units: Unit[]): { sent: number; skipped: number } {
+    let sent = 0, skipped = 0; const now = Date.now();
+    for (const u of units) {
+      const e = this.entry(file, u.key);
+      if (!e?.target.trim()) { skipped++; continue; }
+      const r = submit(e, u, this.stage, now, { blockErrors: this.saved.settings.blockErrors, qa: this.qaOpts() });
+      if (!r.ok) { skipped++; continue; }
+      this.entries(file)[u.key] = note(r.entry, this.stage === 'translate' ? 'надіслано на вичитування' : 'вичитано', r.entry.target, this.who, now); sent++;
+    }
+    if (sent) { this.persist(); this.emit(); }
+    return { sent, skipped };
+  }
+  find(o: { find: string; replace: string; caseSensitive: boolean; wholeWord: boolean }): ReturnType<typeof findReplace> { return findReplace(this.views, this.saved, o); }
+  replaceAll(matches: ReturnType<typeof findReplace>): number {
+    let n = 0; const now = Date.now();
+    for (const m of matches) {
+      const u = this.unit(m.file, m.key); if (!u) continue;
+      this.entries(m.file)[m.key] = note(edit(this.entry(m.file, m.key), u, m.after, this.stage, now), 'замінено', m.after, this.who, now); n++;
+    }
+    if (n) { this.tmCache = null; this.persist(); this.emit(); }
+    return n;
+  }
+  setSpeakers(draft: Map<string, string>): number {
+    const m = (this.saved.speakers ??= {}); let changed = 0;
+    for (const [k, v] of draft) {
+      const name = v.trim();
+      if (name && m[k]?.name !== name) { m[k] = { name, mt: Date.now() }; changed++; }
+      // An emptied name stays as a dated entry, otherwise the other device's copy would bring the old name back on the next merge.
+      else if (!name && m[k]?.name) { m[k] = { name: '', mt: Date.now() }; changed++; }
+    }
+    if (changed) { this.persist(); this.emit(); }
+    return changed;
   }
   wrap(): boolean {
     const c = this.current; if (!c) return false;

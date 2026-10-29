@@ -85,10 +85,14 @@ h2,h3{margin:0}
 .m-textarea.sm{min-height:0;background:var(--bg);border:1px solid var(--line);border-radius:var(--r2);padding:10px 12px;font-size:15px}
 .code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec;background:#2e2840;border-radius:4px;padding:0 3px}
 .term-hit{border-bottom:1px dotted #b589d6;color:#d9c3ee}
-.m-issue{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:8px 12px;border-radius:var(--r2);font-size:14px;border:1px solid}
+.m-issues{display:flex;flex-direction:column;gap:8px}
+.m-issues:empty{display:none}
+.m-issue{display:flex;flex-direction:column;gap:8px;padding:10px 14px;border-radius:var(--r3);font-size:14px;border:1px solid}
+.m-issue-t{display:flex;gap:10px;align-items:flex-start}
+.m-issue-t .sd{margin-top:3px}
+.m-issue-a{display:flex;gap:8px;flex-wrap:wrap;padding-left:22px}
 .m-issue.bad{background:#35242a;border-color:#5e2f38}
 .m-issue.warn{background:#352e20;border-color:#5a4a2a}
-.m-issue>span:nth-child(2){flex:1 1 160px}
 .m-tools-row{display:flex;gap:8px;flex-wrap:wrap}
 .m-mini{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 12px;border-radius:999px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);font-size:14px}
 .m-mini.ghost{background:none;border-color:var(--line);color:var(--mute)}
@@ -142,3 +146,26 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-check{display:flex;align-items:center;gap:10px;min-height:44px}
 .m-check input{width:22px;height:22px;accent-color:var(--accent)}
 .m-hint.ok{color:var(--ok)}
+
+/* every message has the same shape: text on top, its actions in one row below, «Ігнорувати» always last on the right */
+.m-issue-a .ghost{margin-left:auto}
+.m-back{flex:none;width:44px;height:44px;margin-left:-8px;display:grid;place-items:center;border-radius:var(--r2)}
+.m-scope{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+.m-scope button{min-height:40px;color:var(--mute)}
+.m-scope button.on{background:rgba(255,255,255,.14);color:var(--text);box-shadow:inset 0 0 0 1px rgba(255,255,255,.22)}
+.m-bubble{display:flex;gap:12px;align-items:flex-start;width:100%;padding:12px 14px;text-align:left;background:var(--raised);border:1px solid var(--line);border-radius:var(--r3)}
+.m-bubble.cur{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.m-bubble .m-row-t>span:nth-child(2){white-space:pre-wrap;overflow-wrap:anywhere}
+.m-choice{display:flex;flex-direction:column;gap:6px;padding-left:12px;border-left:2px solid var(--line)}
+.m-choice>small{color:var(--mute)}
+.m-diff{display:flex;flex-direction:column;gap:2px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
+.m-diff small{color:var(--dim)}
+.m-diff s{color:var(--mute)}
+.m-sp{display:flex;flex-direction:column;gap:4px;padding:12px 14px;background:var(--raised);border:1px solid var(--line);border-radius:var(--r3)}
+.m-sp small{color:var(--mute)}
+.m-links{display:flex;flex-direction:column}
+.m-links button{display:flex;align-items:center;justify-content:space-between;min-height:52px;text-align:left;border-top:1px solid var(--line)}
+.m-links button:first-child{border-top:0}
+.m-links button::after{content:'›';color:var(--dim);font-size:22px}
+.m-ref{margin-top:4px;padding-top:8px;border-top:1px dashed var(--line);color:var(--mute);font-size:15px;white-space:pre-wrap}
+.m-ref small{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}

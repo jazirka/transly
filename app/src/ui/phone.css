@@ -85,3 +85,33 @@
 .ide.sz-s .filters .fin{flex:1 1 100%}
 .ide.sz-s .crumbs{display:none}
 .ide.sz-s .legend-bar{display:none}
+
+/* ---- Phone, mobile-first: bottom bar, full-page lists, bottom sheet for the hints, text-only editor ---- */
+.bnav{display:none}
+.ide.sz-s{--bnav:calc(58px + env(safe-area-inset-bottom,0px))}
+.ide.sz-s.kb{--bnav:0px}
+.ide.sz-s .bnav{display:flex;position:fixed;left:0;right:0;bottom:0;height:var(--bnav);padding-bottom:env(safe-area-inset-bottom,0px);background:var(--panel);border-top:1px solid var(--line);z-index:40}
+.ide.sz-s.kb .bnav{display:none}
+.bnav button{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:0;background:none;color:var(--mute);font-size:11px;letter-spacing:.02em}
+.bnav button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.bnav button.on{color:var(--accent)}
+.ide.sz-s .main{margin-bottom:var(--bnav)}
+.ide.sz-s .tree{top:52px;bottom:var(--bnav);width:100%;border-right:0;box-shadow:none}
+body:has(.ide.sz-s.sheet-open) .scrim{display:block;position:fixed;top:52px;left:0;right:0;bottom:var(--bnav);background:rgba(0,0,0,.5);z-index:28}
+.ide.sz-s .fs{left:0;right:0;top:auto;bottom:var(--bnav);width:auto;height:72vh;max-height:calc(100% - var(--bnav) - 60px);flex-direction:column;border:0;border-top:1px solid var(--line);border-radius:18px 18px 0 0;box-shadow:0 -10px 40px rgba(0,0,0,.5)}
+.ide.sz-s .fs::before{content:'';position:absolute;top:6px;left:50%;width:36px;height:4px;margin-left:-18px;border-radius:2px;background:var(--line)}
+.ide.sz-s .fs .itabs{flex-direction:row;justify-content:space-around;width:auto;height:54px;padding:12px 8px 0;border:0;border-bottom:1px solid var(--line)}
+.ide.sz-s .fs .itabs button{flex:1;width:auto;height:40px}
+.ide.sz-s.sheet-open .fs{animation:sheetUp .18s ease-out}
+@keyframes sheetUp{from{transform:translateY(24%);opacity:0}}
+.ide.sz-s .fs .ibody{overflow:auto}
+.ide.sz-s .appbar .abt b{font-size:16px}
+.ide:not(.sz-s) #b-compact{display:none}
+.ide.compact #b-compact{color:var(--accent)}
+.ide.sz-s.compact .fhd .k,.ide.sz-s.compact .ctxrow,.ide.sz-s.compact #f-meta,.ide.sz-s.compact #f-refbox,.ide.sz-s.compact .fc .lbl{display:none}
+.ide.sz-s.compact .fc textarea.tr-in{min-height:46vh}
+.ide.sz-s.compact .srcbox{max-height:24vh;overflow:auto}
+.ide.sz-s .fc textarea.tr-in{scroll-margin-bottom:120px}
+.pop.rowmenu{width:230px;z-index:90}
+.pop button:disabled{opacity:.4}
+.slist .chip#sortbtn{flex:none}

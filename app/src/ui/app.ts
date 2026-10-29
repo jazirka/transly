@@ -15,8 +15,9 @@ import { openPluginTexts } from './plugins-dialog';
 import { markup } from './markup';
 import { openSettings } from './settings';
 import { openSpeakers } from './speakers-dialog';
+import { initMobile } from './mobile';
 import { GROUP, SEP, STATUS_LABEL, buildTm, shownStatus, splitKey } from './state';
-import type { Ctx, Filter, Mode, State } from './state';
+import type { Ctx, Filter, Mode, SortMode, State } from './state';
 import { publishWidget } from './android';
 import { artifactDb, describeClaude, loadClaudeConfig, runClaudeSync } from './claude';
 import { describeGithub, githubConfigured, loadGithubConfig, runGithubSync } from './github';
@@ -41,6 +42,9 @@ const SVG = {
   panelR: '<svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M10 3v10"/></svg>',
   cmt: '<svg class="cmi" viewBox="0 0 16 16" aria-label="Є коментарі"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>',
 };
+
+const ls = (k: string): string | null => { try { return localStorage.getItem(k); } catch { return null; } };
+const UI_KEY = 'transly.ui.v1';
 
 const FILTERS: [Filter, string][] = [['all', 'Усі'], ['new', 'Без перекладу'], ['draft', 'Чернетки'], ['done', 'Чекають вичитування'], ['qa', 'Проблеми'], ['cm', 'З коментарями']];
 const LEN_LABEL = { far: 'далеко від оригіналу', longer: 'довші за оригінал', shorter: 'коротші за оригінал' } as const;
@@ -70,13 +74,9 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     <button class="tb-ic" id="settings" title="Налаштування" aria-label="Налаштування">${SVG.gear}</button>
   </header>
   <header class="appbar">
-    <button class="ab-ic" id="ab-left" aria-label="Файли й рядки" aria-pressed="false">${SVG.panelL}</button>
     <div class="abt"><b id="ab-title">Transly</b><small id="ab-sub"></small></div>
     <button class="chip on" id="ab-stage" title="Змінити етап"></button>
-    <button class="ab-ic" id="ab-view" aria-label="Таблиця" title="Таблиця всіх рядків" aria-pressed="false"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM2.5 7h11M6.5 3.5v9"/></svg></button>
-    <button class="ab-ic" id="ab-right" aria-label="Вказівки, глосарій, коментарі" aria-pressed="false">${SVG.panelR}</button>
-    <button class="ab-ic" id="ab-menu" aria-label="Меню: інструменти, збірка, пошук" aria-haspopup="menu">${SVG.menu}</button>
-    <button class="ab-ic" id="ab-set" aria-label="Налаштування">${SVG.gear}</button>
+    <button class="ab-ic" id="ab-search" aria-label="Пошук скрізь">${SVG.searchBig}</button>
   </header>
   <div class="main">
     <nav class="strip" id="strip" aria-label="Бічні панелі">
@@ -91,7 +91,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
       <div class="rz rz-y" id="rz-y" role="separator" aria-orientation="horizontal" aria-label="Розділ між файлами й рядками" aria-valuemin="15" aria-valuemax="85" tabindex="0" title="Потягніть, щоб змінити співвідношення (подвійний клік — навпіл)" hidden></div>
       <div class="slist" id="lp-rows" hidden>
         <div class="ph card-ph" data-card="rows"><span class="grow">Рядки файлу</span><span class="ico" data-hide-left="rows" role="button" tabindex="0" aria-label="Сховати панель «Рядки файлу»" title="Сховати">—</span></div>
-        <div class="fh"><div class="fin">${SVG.search}<input class="qin" id="q2" placeholder="Пошук рядків" aria-label="Пошук рядків"></div><div class="chips2"><span class="chipsHost" id="chips2"></span></div></div>
+        <div class="fh"><div class="fin">${SVG.search}<input class="qin" id="q2" placeholder="Пошук рядків" aria-label="Пошук рядків"></div><div class="chips2"><button class="chip" id="sortbtn" aria-haspopup="menu">↕ За порядком</button><span class="chipsHost" id="chips2"></span></div></div>
         <div class="sl-body" id="slist"></div>
       </div>
     </aside>
@@ -110,6 +110,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     </main>
     ${SIDE_HTML}
   </div>
+  <nav class="bnav" id="bnav" aria-label="Розділи"><button data-bn="files" aria-label="Файли"><svg viewBox="0 0 16 16"><path d="M2.5 4.5v8h11v-6.5h-6l-1.5-1.5z"/></svg><span>Файли</span></button><button data-bn="rows" aria-label="Рядки"><svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h10"/></svg><span>Рядки</span></button><button data-bn="edit" aria-label="Редактор"><svg viewBox="0 0 16 16"><path d="M3 13l.7-3L11 2.7a1.4 1.4 0 0 1 2 2L5.7 12z"/></svg><span>Редактор</span></button><button data-bn="help" aria-label="Вказівки"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M6.3 6.3a1.8 1.8 0 1 1 2.6 1.6c-.6.3-.9.7-.9 1.4M8 11.6v.1"/></svg><span>Вказівки</span></button><button data-bn="more" aria-label="Ще"><svg viewBox="0 0 16 16"><circle cx="3.5" cy="8" r="1" fill="currentColor"/><circle cx="8" cy="8" r="1" fill="currentColor"/><circle cx="12.5" cy="8" r="1" fill="currentColor"/></svg><span>Ще</span></button></nav>
   <footer class="status">
     <span class="ok" id="sb-save"></span><span id="sb-fmt"></span><span id="sb-qa"></span><span id="st-sel"></span>
     <span id="sb-sync" class="sbtn" role="button" tabindex="0" title="Налаштування синхронізації"></span><span id="sb-build" class="sbtn" role="button" tabindex="0" title="Зібрати (F5)"></span>
@@ -140,7 +141,7 @@ export async function start(root: HTMLElement): Promise<void> {
   catch { saved = emptyProject('Новий проєкт'); }
   const mq = matchMedia('(max-width: 760px)');
   const s: State = {
-    views: [], game: [], saved, current: null, open: [], group: null, picked: new Set(), cur: null, mode: mq.matches ? 'edit' : 'table', filter: 'all', q: '', speaker: null, lenFilter: 'all',
+    views: [], game: [], saved, current: null, open: [], group: null, picked: new Set(), cur: null, mode: mq.matches ? 'edit' : 'table', filter: 'all', q: '', speaker: null, lenFilter: 'all', sort: 'order', compact: ls('transly.compact') === '1', kb: false,
     checked: new Set(), sideTab: 'hints', sideOn: ['hints'], saveOk: true, savedAt: null, who: saved.settings.who, phone: mq.matches,
     leftTab: { table: 'files', edit: 'rows', review: 'rows' }, leftOpen: !mq.matches, leftBoth: false, rightOpen: false, collapsed: new Set(), sess: { n: 0, t0: Date.now() }, lastBuild: null,
   };
@@ -278,7 +279,40 @@ export async function start(root: HTMLElement): Promise<void> {
     const v = ctx.view();
     if (!v) return [];
     const ents = ctx.entries(v.name);
-    return v.units.filter(u => inContext(u, ents[u.key]) && (!withStatus || matchesStatus(u, ents[u.key], s.filter)));
+    const list = v.units.filter(u => inContext(u, ents[u.key]) && (!withStatus || matchesStatus(u, ents[u.key], s.filter)));
+    if (s.sort === 'order') return list;
+    // Array.sort is stable: rows with the same rank keep the order of the file.
+    const rank = (u: Unit): number => {
+      const e = ents[u.key];
+      if (s.sort === 'new') return e?.target ? 1 : 0;
+      if (s.sort === 'qa') return shownStatus(ctx, u, e) === 'qa' ? 0 : 1;
+      return -u.source.length;
+    };
+    return list.map(u => [rank(u), u] as const).sort((a, b) => a[0] - b[0]).map(x => x[1]);
+  }
+
+  /* ---------- where the translator was ---------- */
+  /** The open file, the selected row, filters, search, sort and the list's scroll: back where they were after a restart. */
+  let uiRestored = false;
+  function saveUi(): void {
+    if (!uiRestored || !s.current || s.current === GROUP) return;
+    try { localStorage.setItem(UI_KEY, JSON.stringify({ current: s.current, cur: s.cur, filter: s.filter, q: s.q, speaker: s.speaker, sort: s.sort, mode: s.mode, scroll: document.getElementById('slist')?.scrollTop ?? 0 })); } catch { /* private mode */ }
+  }
+  function restoreUi(): void {
+    if (uiRestored) return;
+    let u: { current?: string; cur?: string | null; filter?: Filter; q?: string; speaker?: string | null; sort?: SortMode; mode?: Mode; scroll?: number } = {};
+    try { u = JSON.parse(ls(UI_KEY) ?? '{}') as typeof u; } catch { /* damaged: start fresh */ }
+    uiRestored = true;
+    if (!u.current || !s.views.some(v => v.name === u.current)) return;
+    if (s.current !== u.current) openFile(u.current);
+    if (u.filter && FILTERS.some(f => f[0] === u.filter)) s.filter = u.filter;
+    s.q = u.q ?? ''; s.speaker = u.speaker ?? null;
+    if (u.sort && u.sort in SORT_LABEL) s.sort = u.sort;
+    if (u.mode && (!s.phone || u.mode !== 'table') && s.mode !== u.mode) s.mode = u.mode;
+    if (u.cur && unitMap.has(u.cur)) s.cur = u.cur;
+    else if (s.mode !== 'table') s.cur = ctx.visible()[0]?.key ?? null;
+    const top = u.scroll ?? 0;
+    if (top) setTimeout(() => { const l = document.getElementById('slist'); if (l) l.scrollTop = top; }, 0);
   }
 
   /* ---------- rendering ---------- */
@@ -287,7 +321,7 @@ export async function start(root: HTMLElement): Promise<void> {
   function renderLayout(): void {
     const ide = $('#ide');
     const l = lp();
-    ide.className = `ide mode-${s.mode === 'table' ? 'table' : 'focus'} ${l ? 'lp-open' : 'lp-closed'}${s.phone ? ' sz-s' : ''}${s.rightOpen ? ' sheet-open' : ''}${!s.sideOn.length && !s.phone ? ' rp-collapsed' : ''}`;
+    ide.className = `ide mode-${s.mode === 'table' ? 'table' : 'focus'} ${l ? 'lp-open' : 'lp-closed'}${s.phone ? ' sz-s' : ''}${s.rightOpen ? ' sheet-open' : ''}${!s.sideOn.length && !s.phone ? ' rp-collapsed' : ''}${s.compact ? ' compact' : ''}${s.kb ? ' kb' : ''}`;
     const both = !!l && s.leftBoth && !s.phone;
     $('#lpanel').classList.toggle('split', both);
     $('#rz-y').hidden = !both;
@@ -297,9 +331,8 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#lp-title').textContent = both ? 'Файли й рядки' : l === 'rows' ? `Рядки · ${currentLabel()}` : 'Файли гри';
     document.querySelectorAll<HTMLElement>('#mtabs [data-lt]').forEach(b => { const on = b.dataset.lt === s.leftTab[s.mode]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
     document.querySelectorAll<HTMLElement>('#seg [data-m]').forEach(b => { const on = b.dataset.m === s.mode || (s.mode === 'review' && b.dataset.m === 'edit'); b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
-    $('#ab-left').setAttribute('aria-pressed', String(s.leftOpen));
-    $('#ab-right').setAttribute('aria-pressed', String(s.rightOpen));
-    $('#ab-view').setAttribute('aria-pressed', String(s.mode === 'table'));
+    const here = s.rightOpen ? 'help' : s.leftOpen ? s.leftTab[s.mode] : s.mode === 'table' ? 'rows' : 'edit';
+    document.querySelectorAll<HTMLElement>('#bnav [data-bn]').forEach(b => { const on = b.dataset.bn === here; b.classList.toggle('on', on); b.setAttribute('aria-current', String(on)); });
   }
 
   function treeNodes(): { t: 'd' | 'f'; d: number; name: string; label: string }[] {
@@ -412,8 +445,11 @@ export async function start(root: HTMLElement): Promise<void> {
   };
   const emptyHtml = '<div class="empty-state"><b>Нічого не знайдено</b><span>Немає рядків за поточним пошуком і статусом.</span><button class="btn" data-reset>Скинути фільтри</button></div>';
 
+  const SORT_LABEL: Record<SortMode, string> = { order: 'За порядком', new: 'Без перекладу спершу', qa: 'Проблеми спершу', long: 'Найдовші спершу' };
   function renderRowsList(): void {
     $('#chips2').innerHTML = chipsHtml();
+    $('#sortbtn').textContent = `↕ ${SORT_LABEL[s.sort]}`;
+    $('#sortbtn').classList.toggle('on', s.sort !== 'order');
     const v = ctx.view();
     if (!v) { $('#slist').innerHTML = '<div class="msg-empty">Оберіть файл</div>'; return; }
     const idx = new Map(v.units.map((u, i) => [u.key, i + 1]));
@@ -536,6 +572,7 @@ export async function start(root: HTMLElement): Promise<void> {
   }
 
   function renderAll(): void {
+    saveUi();
     renderLayout();
     renderTop();
     renderTabs();
@@ -629,6 +666,7 @@ export async function start(root: HTMLElement): Promise<void> {
     else if (fromBackup) toast('Оригінали прочитано з резервної копії гри (data.transly-orig)');
     s.open = s.open.filter(n => s.views.some(v => v.name === n));
     openFile(s.current && s.views.some(v => v.name === s.current) ? s.current : s.views[0]!.name);
+    restoreUi();
     ctx.persist();
     renderAll();
     offerPluginTexts();
@@ -786,6 +824,27 @@ export async function start(root: HTMLElement): Promise<void> {
     const r = btn.getBoundingClientRect();
     p.style.left = Math.min(r.left, innerWidth - p.offsetWidth - 8) + 'px';
     p.style.top = r.bottom + 4 + 'px';
+  }
+  /** Phone: the five sections of the bottom bar. Files and rows are full pages, the hints are a bottom sheet. */
+  function bottomNav(to: string, btn: HTMLElement): void {
+    if (to === 'more') {
+      // The phone has no menu bar: the same menus, as one list.
+      showPop(btn, Object.entries(MENUS).map(([g, items]) => `<div class="group">${esc(g)}</div>${items.map((it, i) => (it === '-' ? '' : `<button data-pmi="${esc(g)}|${i}">${esc(it.t)}</button>`)).join('')}`).join(''));
+      return;
+    }
+    closePops();
+    if (to === 'help') { s.rightOpen = !s.rightOpen; s.leftOpen = false; }
+    else if (to === 'edit') {
+      s.rightOpen = false; s.leftOpen = false;
+      if (s.mode === 'table') setMode('edit', false);
+      if (!s.cur || !ctx.visible().some(u => u.key === s.cur)) s.cur = ctx.visible()[0]?.key ?? null;
+    } else {
+      s.rightOpen = false;
+      if (s.leftOpen && s.leftTab[s.mode] === to) s.leftOpen = false; else { s.leftOpen = true; s.leftTab[s.mode] = to as 'files' | 'rows'; }
+      s.leftBoth = false;
+    }
+    renderAll();
+    if (to === 'edit' && s.cur) document.querySelector<HTMLElement>(`.si[data-key="${CSS.escape(s.cur)}"]`)?.scrollIntoView({ block: 'nearest' });
   }
   const closePops = () => { fpop().hidden = true; $('#cfgpop').hidden = true; $('#projpop').hidden = true; };
 
@@ -958,7 +1017,7 @@ export async function start(root: HTMLElement): Promise<void> {
   /* ---------- events ---------- */
   root.addEventListener('click', e => {
     const t = e.target as HTMLElement;
-    if (!t.closest('#fpop,#spkbtn,#lenbtn,#ab-menu,#cfgpop,#cfg-btn,#projpop,#proj-btn')) closePops();
+    if (!t.closest('#fpop,#spkbtn,#lenbtn,#sortbtn,#bnav,#cfgpop,#cfg-btn,#projpop,#proj-btn')) closePops();
     if (!t.closest('#keypop,#hk')) $('#keypop').hidden = true;
     if (t.closest('#open,#open2')) { void openFolder(); return; }
     if (t.closest('#resume')) { void resume(); return; }
@@ -991,16 +1050,11 @@ export async function start(root: HTMLElement): Promise<void> {
     const mi = t.closest<HTMLElement>('#mdd [data-mi]');
     if (mi) { const [g, i] = mi.dataset.mi!.split('|'); const it = MENUS[g!]![Number(i)]; mbToggle(false); if (it && it !== '-') setTimeout(() => it.fn(), 0); return; }
     if (!t.closest('#menubar,#mdd,#hamb') && !$('#menubar').hidden) mbToggle(false);
-    if (t.closest('#ab-left')) { s.leftOpen = !s.leftOpen; s.rightOpen = false; renderAll(); return; }
-    if (t.closest('#ab-right')) { s.rightOpen = !s.rightOpen; s.leftOpen = false; renderAll(); return; }
     if (t.closest('#scrim')) { s.leftOpen = false; s.rightOpen = false; renderAll(); return; }
     if (t.closest('#stage-pill')) { setMode(s.mode === 'review' ? 'edit' : 'review'); return; }
-    if (t.closest('#ab-view')) { setMode(s.mode === 'table' ? 'edit' : 'table'); return; }
-    if (t.closest('#ab-menu')) {
-      // The phone has no menu bar: the same menus, as one list.
-      showPop(t.closest<HTMLElement>('#ab-menu')!, Object.entries(MENUS).map(([g, items]) => `<div class="group">${esc(g)}</div>${items.map((it, i) => (it === '-' ? '' : `<button data-pmi="${esc(g)}|${i}">${esc(it.t)}</button>`)).join('')}`).join(''));
-      return;
-    }
+    const bn = t.closest<HTMLElement>('#bnav [data-bn]');
+    if (bn) { bottomNav(bn.dataset.bn!, bn); return; }
+    if (t.closest('#ab-search')) { openSearch(); return; }
     const pmi = t.closest<HTMLElement>('[data-pmi]');
     if (pmi) { const [g, i] = pmi.dataset.pmi!.split('|'); closePops(); const it = MENUS[g!]?.[Number(i)]; if (it && it !== '-') it.fn(); return; }
     if (t.closest('#ab-stage')) { setMode(s.mode === 'review' ? 'edit' : 'review'); return; }
@@ -1057,6 +1111,9 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.closest('[data-act=speakers]')) { closePops(); openSpeakers(ctx); return; }
     const spk = t.closest<HTMLElement>('[data-spk]');
     if (spk) { s.speaker = spk.dataset.spk ?? ''; closePops(); renderAll(); return; }
+    if (t.closest('#sortbtn')) { showPop(t.closest<HTMLElement>('#sortbtn')!, `<div class="group">Сортування</div>${(Object.keys(SORT_LABEL) as SortMode[]).map(k => `<button data-sort="${k}" ${s.sort === k ? 'class="on"' : ''}>${SORT_LABEL[k]}</button>`).join('')}`); return; }
+    const so = t.closest<HTMLElement>('[data-sort]');
+    if (so) { s.sort = so.dataset.sort as SortMode; closePops(); renderAll(); return; }
     if (t.closest('#lenbtn')) { showPop(t.closest<HTMLElement>('#lenbtn')!, `<div class="group">Довжина відносно оригіналу</div>${(Object.keys(LEN_LABEL) as (keyof typeof LEN_LABEL)[]).map(k => `<button data-len="${k}">${LEN_LABEL[k]}</button>`).join('')}`); return; }
     const ln = t.closest<HTMLElement>('[data-len]');
     if (ln) { s.lenFilter = ln.dataset.len as typeof s.lenFilter; closePops(); renderAll(); return; }
@@ -1218,6 +1275,8 @@ export async function start(root: HTMLElement): Promise<void> {
   }
   Object.assign(window, { __back: backStep, __flush: () => autosave.flush(), __open: (file: string, key: string) => openRow(file, key) });
   if (s.current) { unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u])); if (s.mode !== 'table') s.cur = ctx.visible()[0]?.key ?? null; }
+  restoreUi();
+  initMobile(ctx);
   initResize();
   initRightResize();
   renderAll();

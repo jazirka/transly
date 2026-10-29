@@ -1,6 +1,6 @@
 import { activeIssues, addComment, describePage, explainCodes, sceneUnits, usageKey, displayLength, edit as editFn, lengthDeviation, limitFor, note, propagate, referenceSets, sendBack, sourceChanged, submit, termsIn, wrapLines } from '../core';
 import type { Entry, Unit } from '../core';
-import { $, esc, plural, toast } from './dom';
+import { $, buzz, esc, plural, toast } from './dom';
 import { markup } from './markup';
 import { openScene } from './scene-dialog';
 import { STATUS_CAP, shownStatus, splitKey } from './state';
@@ -16,6 +16,7 @@ const I = {
   down: '<svg viewBox="0 0 16 16"><path d="M4 6.5L8 10.5l4-4"/></svg>',
   ok: '<svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3.2L13 4.8"/></svg>',
   scene: '<svg viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="6" rx="1.5"/><rect x="2.5" y="11" width="7" height="2.5" rx="1"/></svg>',
+  compact: '<svg viewBox="0 0 16 16"><path d="M3 6V3h3M13 6V3h-3M3 10v3h3M13 10v3h-3"/></svg>',
   wrap: '<svg viewBox="0 0 16 16"><path d="M2.5 4h11M2.5 8h8.5a2.5 2.5 0 0 1 0 5H8M9.5 11l-1.7 2 1.7 2M2.5 12h2"/></svg>',
 };
 
@@ -30,6 +31,7 @@ export const FOCUS_HTML = `<div class="fc"><div class="fc-in">
     <textarea class="tr-in" id="i-tr" spellcheck="false" aria-label="Переклад"></textarea>
     <div class="edbar">
       <button class="ib lab" id="b-copy" title="Копіювати оригінал у переклад" aria-label="Копіювати оригінал у переклад">${I.copy}<span class="tl">Оригінал</span></button>
+      <button class="ib lab" id="b-compact" title="Лише текст: сховати контекст і примітки" aria-label="Режим лише тексту">${I.compact}<span class="tl">Лише текст</span></button>
       <button class="ib lab" id="b-scene" title="Переглянути сцену: усі рядки події поспіль, як у грі" aria-label="Переглянути сцену">${I.scene}<span class="tl">Сцена</span></button>
       <details class="more"><summary class="ib" title="Ще дії" aria-label="Ще дії">⋯</summary><div class="morep">
         <button id="b-code" title="Вставити відсутні керівні коди з оригіналу">${I.code}<span>Вставити керівні коди</span></button>
@@ -299,6 +301,7 @@ export function step(ctx: Ctx, dir: 1 | -1): void {
 /** Send to review / approve the current unit and move on. */
 export function send(ctx: Ctx): void {
   const { s } = ctx;
+  buzz(12);
   const u = s.cur ? ctx.unit(s.cur) : undefined;
   if (!u || !s.current) return;
   const ents = ctx.entries(s.current);

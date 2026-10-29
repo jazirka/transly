@@ -7,6 +7,8 @@ export type Filter = 'all' | 'new' | 'draft' | 'done' | 'appr' | 'qa' | 'cm';
 export type SideTab = 'hints' | 'glossary' | 'comments' | 'history';
 export type LeftTab = 'files' | 'rows';
 export type LenFilter = 'all' | 'far' | 'longer' | 'shorter';
+/** Order of the rows list: as in the file, untranslated first, problems first, longest first. */
+export type SortMode = 'order' | 'new' | 'qa' | 'long';
 
 /** `State.current` while several files are shown together: their rows get keys `file␟key` and their entries are reached through ctx.entries(GROUP). */
 export const GROUP = '⁖group';
@@ -36,6 +38,11 @@ export interface State {
   q: string;
   speaker: string | null;
   lenFilter: LenFilter;
+  sort: SortMode;
+  /** Phone: the editor shows only the text (no context, neighbours or notes). */
+  compact: boolean;
+  /** Phone: the on-screen keyboard is up, so the bottom bar gives its space to the editor. */
+  kb: boolean;
   /** Keys ticked for bulk actions in the current file. */
   checked: Set<string>;
   sideTab: SideTab;

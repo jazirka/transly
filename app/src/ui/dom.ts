@@ -39,3 +39,6 @@ export function plural(n: number, forms: [string, string, string]): string {
   const f = m10 === 1 && m100 !== 11 ? forms[0] : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? forms[1] : forms[2];
   return `${n} ${f}`;
 }
+
+/** A short vibration for deliberate actions; silently nothing where the device or the WebView has none. */
+export const buzz = (ms = 12): void => { try { navigator.vibrate?.(ms); } catch { /* no vibrator */ } };

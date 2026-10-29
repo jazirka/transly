@@ -20,7 +20,7 @@ export async function start(root: HTMLElement): Promise<void> {
   let tab: Tab = store.hasGame ? (store.key ? 'edit' : 'rows') : 'more';
   let sheet = false;
   let busy = '';
-  type Sub = 'scene' | 'find' | 'speakers' | 'settings';
+  type Sub = 'scene' | 'find' | 'speakers' | 'settings' | 'consistency';
   let sub: Sub | null = null;
   let scope: 'file' | 'all' = 'file';
   let layout: 'cards' | 'table' = (() => { try { return localStorage.getItem('transly-m-layout') === 'table' ? 'table' : 'cards'; } catch { return 'cards'; } })();
@@ -45,7 +45,7 @@ export async function start(root: HTMLElement): Promise<void> {
   };
   const buzz = (ms = 10): void => { try { navigator.vibrate?.(ms); } catch { /* no vibrator */ } };
   const go = (t: Tab): void => { tab = t; sheet = false; sub = null; render(); };
-  const SUB_TITLE: Record<Sub, string> = { scene: 'Сцена', find: 'Знайти й замінити', speakers: 'Хто говорить', settings: 'Налаштування' };
+  const SUB_TITLE: Record<Sub, string> = { scene: 'Сцена', find: 'Знайти й замінити', speakers: 'Хто говорить', settings: 'Налаштування', consistency: 'Узгодженість' };
 
   /* ---------- chrome ---------- */
   function renderChrome(): void {
@@ -164,6 +164,12 @@ export async function start(root: HTMLElement): Promise<void> {
       <button class="m-primary wide" data-spsave>Зберегти імена</button></div>`;
   }
 
+  function screenConsistency(): string {
+    const groups = store.inconsistent();
+    if (!groups.length) return '<div class="m-more"><p class="m-none">Однакові оригінали перекладено однаково</p></div>';
+    return `<div class="m-more"><p class="m-hint">Один оригінал перекладено по-різному. Оберіть варіант, і він з'явиться в усіх рядках.</p>${groups.map((g, gi) => `<section class="m-card"><b>${esc(g.source.slice(0, 120))}</b>${g.variants.map((v, vi) => `<div class="m-var"><span>${esc(v.target.slice(0, 160))}</span><small>${plural(v.where.length, ['рядок', 'рядки', 'рядків'])}</small><button class="m-mini" data-uni="${gi}|${vi}">Лишити цей</button><button class="m-mini ghost" data-hit="${esc(v.where[0]!.file)}" data-hitkey="${esc(v.where[0]!.key)}">Відкрити</button></div>`).join('')}</section>`).join('')}</div>`;
+  }
+
   function screenSettings(): string {
     const st = store.saved.settings, lim = st.lineLimit;
     return `<div class="m-more"><section class="m-card"><label class="m-lbl" for="s-tol">Допуск довжини перекладу відносно оригіналу, %</label><input id="s-tol" class="m-input" type="number" min="5" max="100" step="5" value="${st.tolerancePct}">
@@ -217,7 +223,7 @@ export async function start(root: HTMLElement): Promise<void> {
         <details class="m-det"><summary>Додатково</summary><label class="m-lbl" for="g-branch">Гілка</label><input id="g-branch" class="m-input" value="${esc(gh.branch)}" placeholder="основна" autocomplete="off"><label class="m-lbl" for="g-dir">Папка в репозиторії</label><input id="g-dir" class="m-input" value="${esc(gh.dir)}" placeholder="корінь" autocomplete="off"></details>
         <button class="m-primary wide" data-ghsync ${busy ? 'disabled' : ''}>${icon('sync')}<span>Синхронізувати</span></button><p class="m-hint" id="m-ghstate">${gh.last ? 'Востаннє: ' + new Date(gh.last).toLocaleString('uk-UA') : 'Ще не синхронізовано'}</p></section>
       <section class="m-card" id="m-claude" hidden><h3>Синхронізація через Claude</h3><p class="m-hint">Спільна база артефакту: працює між вашими пристроями.</p><button class="m-secondary wide" data-clsync>${icon('sync')}<span>Синхронізувати через Claude</span></button></section>
-      ${store.hasGame ? `<section class="m-card"><h3>Інструменти</h3><div class="m-links"><button data-sub="find">Знайти й замінити</button><button data-sub="speakers">Хто говорить</button><button data-sub="settings">Налаштування</button></div></section>` : ''}
+      ${store.hasGame ? `<section class="m-card"><h3>Інструменти</h3><div class="m-links"><button data-sub="find">Знайти й замінити</button><button data-sub="speakers">Хто говорить</button><button data-sub="consistency">Узгодженість</button><button data-sub="settings">Налаштування</button></div></section>` : ''}
       ${canUpdate() ? updateSection() : ''}
       <section class="m-card"><h3>Проєкт</h3><label class="m-lbl" for="m-who">Ваше ім’я в коментарях</label><input id="m-who" class="m-input" value="${esc(store.who)}" maxlength="40" autocomplete="off">
         <button class="m-secondary wide" data-export>Зберегти проєкт у файл</button></section>
@@ -257,7 +263,7 @@ export async function start(root: HTMLElement): Promise<void> {
     renderChrome();
     const main = $('m-main');
     main.className = 'm-main tab-' + tab;
-    main.innerHTML = sub ? ({ scene: screenScene, find: screenFind, speakers: screenSpeakers, settings: screenSettings }[sub])() : tab === 'files' ? screenFiles() : tab === 'rows' ? screenRows() : tab === 'edit' ? screenEdit() : screenMore();
+    main.innerHTML = sub ? ({ scene: screenScene, find: screenFind, speakers: screenSpeakers, settings: screenSettings, consistency: screenConsistency }[sub])() : tab === 'files' ? screenFiles() : tab === 'rows' ? screenRows() : tab === 'edit' ? screenEdit() : screenMore();
     renderSheet();
     if (tab === 'edit' && !sub) { refreshMeta(); autosize(); }
     if (tab === 'more') void artifactDb().then(db => { const el = document.getElementById('m-claude'); if (db && el) el.hidden = false; });
@@ -346,6 +352,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (q('[data-scenesend]')) { const v = store.view(), c = store.current; if (v && c) { const r = store.sendMany(v.name, sceneUnits(v.units, c.unit.key)); say(`Надіслано: ${r.sent}${r.skipped ? ` · пропущено: ${r.skipped}` : ''}`, r.sent === 0); buzz(14); render(); } return; }
     if (q('[data-dofind]')) { fr.matches = store.find({ find: fr.find, replace: fr.replace, caseSensitive: fr.cs, wholeWord: fr.word }); if (!fr.find) say('Вкажіть, що шукати', true); else if (!fr.matches.length) say('Нічого не знайдено'); render(); return; }
     if (q('[data-doreplace]')) { const n = store.replaceAll(fr.matches); fr.matches = []; say(`Замінено в рядках: ${n}`); buzz(14); render(); return; }
+    if ((x = q('[data-uni]'))) { const [gi, vi] = x.dataset.uni!.split('|').map(Number); const g = store.inconsistent()[gi!]; const v = g?.variants[vi!]; if (g && v) { const n = store.unify(g.source, v.target); say(`Уніфіковано рядків: ${n}`); buzz(14); } render(); return; }
     if (q('[data-spsave]')) { const n = store.setSpeakers(sp.draft); sp.draft.clear(); say(n ? `Мовців оновлено: ${n}` : 'Змін немає'); render(); return; }
     if ((x = q('[data-file]'))) { store.open(x.dataset.file!); go('rows'); return; }
     if ((x = q('[data-filter]'))) { store.setFilter(x.dataset.filter as Filter); render(); return; }

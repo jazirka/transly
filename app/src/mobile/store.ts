@@ -1,4 +1,4 @@
-import { Autosave, DupIndex, TmIndex, findReplace, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
+import { Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
 import type { Entry, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
 import { IdbStore } from '../ui/idb';
 
@@ -186,6 +186,22 @@ export class Store {
     for (const m of matches) {
       const u = this.unit(m.file, m.key); if (!u) continue;
       this.entries(m.file)[m.key] = note(edit(this.entry(m.file, m.key), u, m.after, this.stage, now), 'замінено', m.after, this.who, now); n++;
+    }
+    if (n) { this.tmCache = null; this.persist(); this.emit(); }
+    return n;
+  }
+  /** The same original translated in different ways. */
+  inconsistent(): ReturnType<typeof inconsistencies> { return inconsistencies(this.views, this.saved, 60); }
+  /** Give every row of one original the chosen translation; returns how many rows changed. */
+  unify(source: string, target: string): number {
+    const g = this.inconsistent().find(x => x.source === source); if (!g) return 0;
+    let n = 0; const now = Date.now();
+    for (const v of g.variants) {
+      if (v.target === target) continue;
+      for (const w of v.where) {
+        const u = this.unit(w.file, w.key); if (!u) continue;
+        this.entries(w.file)[w.key] = note(edit(this.entry(w.file, w.key), u, target, this.stage, now), 'уніфіковано', target, this.who, now); n++;
+      }
     }
     if (n) { this.tmCache = null; this.persist(); this.emit(); }
     return n;

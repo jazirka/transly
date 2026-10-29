@@ -1,7 +1,7 @@
 import { Autosave, DupIndex, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, lengthDeviation, limitFor, note, pluginCandidates, propagate, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, viewsFromSnapshot, wrapLines } from '../core';
 import type { Entry, FileView, GameFile, SavedProject, Unit } from '../core';
 import { openBuild } from './build-dialog';
-import { dataDirOf, isDesktop, rememberedGameDir, reopenGameDirDesktop } from './desktop';
+import { dataDirOf, isDesktop, rememberedGameDir, reopenGameDirDesktop, setProject } from './desktop';
 import { $, el, esc, plural, toast } from './dom';
 import { FOCUS_HTML, SIDE_HTML, focusClick, focusInput, renderFocus, renderGlossary, renderSidePanel, send, showSide, sideClick, step } from './focus';
 import { pickGameFolder, readFiles, reopenHandle } from './folder';
@@ -136,6 +136,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
 
 export async function start(root: HTMLElement): Promise<void> {
   const store = new IdbStore('default');
+  setProject('default');
   let saved: SavedProject;
   try { saved = (await store.load()) ?? emptyProject('Новий проєкт'); }
   catch { saved = emptyProject('Новий проєкт'); }

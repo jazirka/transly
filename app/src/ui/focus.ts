@@ -2,6 +2,9 @@ import { activeIssues, addComment, describePage, explainCodes, sceneUnits, usage
 import type { Entry, Unit } from '../core';
 import { $, buzz, esc, plural, toast } from './dom';
 import { markup } from './markup';
+import { isDesktop, rememberedGameDir } from './desktop';
+import { drawPic, picOfFace, picsOfRow } from './gameimg';
+import type { Pic } from './gameimg';
 import { openScene } from './scene-dialog';
 import { STATUS_CAP, shownStatus, splitKey } from './state';
 import type { Ctx, SideTab } from './state';
@@ -24,7 +27,7 @@ const I = {
 export const FOCUS_HTML = `<div class="fc"><div class="fc-in">
   <div class="fhd"><span class="k" id="f-key"></span><span class="st-pill" id="f-state"></span></div>
   <div class="offlist" id="f-off" hidden><span>Цей рядок не входить у поточний фільтр або пошук.</span><button data-reset>Показати всі рядки</button></div>
-  <div><div class="lbl">Оригінал · EN</div><div class="srcbox" id="f-src"></div></div>
+  <div><div class="lbl">Оригінал · EN</div><div class="srcbox" id="f-src"></div><div class="pics" id="f-pics" hidden></div></div>
   <div id="f-refbox" hidden></div>
   <div class="trblock">
     <div class="lbl" id="f-trlbl">Переклад · UK</div>
@@ -85,6 +88,31 @@ const when = (t: number) => new Date(t).toLocaleString('uk-UA', { day: '2-digit'
 const stageOf = (ctx: Ctx) => (ctx.s.mode === 'review' ? 'review' : 'translate') as 'review' | 'translate';
 /** The file and key a row really belongs to: in a group of files the row's key carries its file. */
 const realOf = (ctx: Ctx, u: Unit): { file: string; key: string } => splitKey(u.key) ?? { file: ctx.s.current!, key: u.key };
+let picToken = 0;
+/** Pictures from the game folder for the string (item icons, faces, enemies): desktop only, and only when the project has a game folder. */
+function renderPics(ctx: Ctx, u: Unit | undefined): void {
+  const host = $('#f-pics'), game = isDesktop() ? rememberedGameDir() : null;
+  const token = ++picToken;
+  if (!u || !game) { host.hidden = true; host.replaceChildren(); return; }
+  const r = realOf(ctx, u);
+  const pics: Pic[] = [...picsOfRow(ctx.s.game, r.file, r.key), ...picOfFace(u.face)];
+  for (const g of ctx.names().find(u.source).slice(0, 4)) pics.push(...picsOfRow(ctx.s.game, g.file, g.key));
+  const seen = new Set<string>();
+  const uniq = pics.filter(p => { const k = JSON.stringify(p); if (seen.has(k)) return false; seen.add(k); return true; });
+  void Promise.all(uniq.map(async p => ({ p, c: await drawPic(game, p) }))).then(done => {
+    if (token !== picToken) return;
+    const ok = done.filter(d => d.c);
+    host.replaceChildren(...ok.map(({ p, c }) => {
+      const fig = document.createElement('figure');
+      fig.className = `pic ${p.kind}`;
+      c!.setAttribute('role', 'img'); c!.setAttribute('aria-label', p.label || p.kind);
+      fig.append(c!);
+      if (p.label) { const cap = document.createElement('figcaption'); cap.textContent = p.label; fig.append(cap); }
+      return fig;
+    }));
+    host.hidden = !ok.length;
+  });
+}
 const entryOf = (ctx: Ctx, u: Unit): Entry | undefined => ctx.entries(ctx.s.current!)[u.key];
 
 export const SIDE_ORDER: SideTab[] = ['hints', 'glossary', 'comments', 'history'];
@@ -107,6 +135,7 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
     ($('#i-tr') as HTMLTextAreaElement).value = '';
     ($('#i-tr') as HTMLTextAreaElement).disabled = true;
     $('#f-state').textContent = '';
+    renderPics(ctx, undefined);
     $('#f-src').innerHTML = `<span class="hint">${list.length ? 'Оберіть рядок зліва.' : s.mode === 'review' ? 'Немає рядків, які очікують вичитування.' : 'За поточним фільтром рядків немає.'}</span>`;
     return;
   }
@@ -122,6 +151,7 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
   $('#f-off').hidden = pos >= 0;
   const hits = termsIn(u.source, s.saved.terms);
   $('#f-src').innerHTML = markup(u.source, hits.map(t => t.en));
+  renderPics(ctx, u);
   const refs = referenceSets(s.saved.reference).map(r => ({ lang: r.lang, text: r.texts[realOf(ctx, u).file]?.[realOf(ctx, u).key] })).filter(r => r.text);
   $('#f-refbox').hidden = !refs.length;
   $('#f-refbox').innerHTML = refs.map(r => `<div class="lbl">Довідка · ${esc(r.lang.toUpperCase())}</div><div class="srcbox ref" lang="${esc(r.lang)}">${esc(r.text!)}</div>`).join('');

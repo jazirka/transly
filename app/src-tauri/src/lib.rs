@@ -157,6 +157,27 @@ fn read_text(roots: State<'_, Roots>, path: String) -> Result<String, String> {
     fs::read_to_string(p).map_err(|e| e.to_string())
 }
 
+/// Picture from the game folder (`img/...`, also under `www/` for MV), as raw bytes. Only inside the picked folder.
+fn find_image(roots: &Roots, game: &str, rel: &str) -> Result<PathBuf, String> {
+    let r = Path::new(rel);
+    if r.is_absolute() || r.components().any(|c| !matches!(c, std::path::Component::Normal(_))) {
+        return Err("Некоректний шлях".into());
+    }
+    for base in [Path::new(game).to_path_buf(), Path::new(game).join("www")] {
+        let p = base.join(r);
+        if p.is_file() {
+            return roots.check_read(&p.to_string_lossy());
+        }
+    }
+    Err("Зображення не знайдено".into())
+}
+
+#[tauri::command]
+fn read_image(roots: State<'_, Roots>, game: String, rel: String) -> Result<tauri::ipc::Response, String> {
+    let p = find_image(&roots, &game, &rel)?;
+    fs::read(p).map(tauri::ipc::Response::new).map_err(|e| e.to_string())
+}
+
 /// Write translated files into `dir`, keeping a one-time copy of every original next to it.
 fn apply_files(dir: &Path, files: &[OutFile]) -> Result<usize, String> {
     let backup = backup_dir(dir);
@@ -369,7 +390,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Roots::default())
-        .invoke_handler(tauri::generate_handler![pick_dir, pick_exe, allow_again, list_json, read_text, apply_data, restore_data, apply_jump, restore_jump, install_update, launch])
+        .invoke_handler(tauri::generate_handler![pick_dir, pick_exe, allow_again, list_json, read_text, read_image, apply_data, restore_data, apply_jump, restore_jump, install_update, launch])
         .run(tauri::generate_context!())
         .expect("error while running Transly");
 }
@@ -398,6 +419,23 @@ mod tests {
         assert!(roots.check(inside.join("data.json").to_str().unwrap()).is_ok());
         assert!(roots.check(tmp.join("other.json").to_str().unwrap()).is_err());
         assert!(roots.check(inside.join("..").join("other.json").to_str().unwrap()).is_err());
+    }
+
+    #[test]
+    fn images_are_found_in_game_or_www_and_cannot_escape() {
+        let base = std::env::temp_dir().join("transly-test-img");
+        let _ = fs::remove_dir_all(&base);
+        let game = base.join("game");
+        fs::create_dir_all(game.join("www").join("img").join("system")).unwrap();
+        fs::write(game.join("www").join("img").join("system").join("IconSet.png"), b"png").unwrap();
+        fs::write(base.join("secret.png"), b"x").unwrap();
+        let roots = Roots::default();
+        roots.allow(&game);
+        let g = game.to_str().unwrap();
+        assert!(find_image(&roots, g, "img/system/IconSet.png").is_ok());
+        assert!(find_image(&roots, g, "img/system/Nope.png").is_err());
+        assert!(find_image(&roots, g, "../secret.png").is_err());
+        assert!(find_image(&roots, g, "/etc/passwd").is_err());
     }
 
     #[test]

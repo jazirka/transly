@@ -8,6 +8,10 @@ interface JsonFile { name: string; path: string; orig?: string }
 
 const LS_DIR = 'transly-game-dir';
 const LS_EXE = 'transly-game-exe';
+/** The game folder and the game's exe belong to a project: each project remembers its own. */
+let project = 'default';
+export const setProject = (id: string): void => { project = id; };
+const k = (base: string): string => `${base}:${project}`;
 const get = (k: string): string | null => { try { return localStorage.getItem(k); } catch { return null; } };
 const set = (k: string, v: string): void => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
 
@@ -21,18 +25,20 @@ const toPicked = (files: JsonFile[]): PickedFile[] => {
     read: () => invoke<string>('read_text', { path: f.orig ?? f.path }), fromBackup: !!f.orig }));
 };
 
-export const rememberedGameDir = (): string | null => get(LS_DIR);
-export const rememberedExe = (): string | null => get(LS_EXE);
+// Older versions kept one global value: the first project to ask inherits it.
+const read = (base: string): string | null => get(k(base)) ?? get(base);
+export const rememberedGameDir = (): string | null => read(LS_DIR);
+export const rememberedExe = (): string | null => read(LS_EXE);
 
 export async function pickGameDirDesktop(): Promise<PickedFile[] | null> {
   const dir = await invoke<string | null>('pick_dir');
   if (!dir) return null;
-  set(LS_DIR, dir);
+  set(k(LS_DIR), dir);
   return toPicked(await invoke<JsonFile[]>('list_json', { dir }));
 }
 
 export async function reopenGameDirDesktop(): Promise<PickedFile[] | null> {
-  const dir = get(LS_DIR);
+  const dir = rememberedGameDir();
   if (!dir) return null;
   try { await invoke('allow_again', { path: dir }); } catch { return null; }
   return toPicked(await invoke<JsonFile[]>('list_json', { dir }));
@@ -48,7 +54,7 @@ export function dataDirOf(files: PickedFile[]): string | null {
 
 export async function pickExe(): Promise<string | null> {
   const exe = await invoke<string | null>('pick_exe');
-  if (exe) set(LS_EXE, exe);
+  if (exe) set(k(LS_EXE), exe);
   return exe;
 }
 
@@ -65,7 +71,7 @@ export const restoreJump = (dataDir: string): Promise<boolean> => invoke<boolean
 export const restoreGame = (dataDir: string): Promise<number> => invoke<number>('restore_data', { dataDir });
 
 export async function launchGame(): Promise<void> {
-  let exe = get(LS_EXE);
+  let exe = rememberedExe();
   if (!exe) exe = await pickExe();
   if (!exe) return;
   try { await invoke('allow_again', { path: exe }); } catch { /* picked again below */ }
@@ -74,4 +80,9 @@ export async function launchGame(): Promise<void> {
     if (String(e).includes('не знайдено') || String(e).includes('не дозволено')) { const again = await pickExe(); if (again) await invoke('launch', { exe: again }); }
     else throw e;
   }
+}
+
+/** A picture from the game folder as bytes, or null when there is no folder or no such file. */
+export async function readGameImage(game: string, rel: string): Promise<ArrayBuffer | null> {
+  try { return await invoke<ArrayBuffer>('read_image', { game, rel }); } catch { return null; }
 }

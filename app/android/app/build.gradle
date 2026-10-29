@@ -19,9 +19,9 @@ android {
         // One fixed key for every build, given by the CI secrets. With the debug key of the CI runner (new on each run)
         // the phone refuses to install a build over the previous one ("App not installed").
         personal {
-            def file = System.getenv('TRANSLY_KEYSTORE')
-            if (file) {
-                storeFile file(file)
+            def ksPath = System.getenv('TRANSLY_KEYSTORE')
+            if (ksPath) {
+                storeFile file(ksPath)
                 storePassword System.getenv('TRANSLY_KEYSTORE_PASSWORD')
                 keyAlias 'transly'
                 keyPassword System.getenv('TRANSLY_KEYSTORE_PASSWORD')

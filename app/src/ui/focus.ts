@@ -1,8 +1,8 @@
-import { activeIssues, addComment, describePage, explainCodes, sceneUnits, usageKey, displayLength, edit as editFn, lengthDeviation, limitFor, note, propagate, referenceSets, sendBack, sourceChanged, submit, termsIn, wrapLines } from '../core';
+import { gorohUrl, multitranUrl, wordsOf, activeIssues, addComment, describePage, explainCodes, sceneUnits, usageKey, displayLength, edit as editFn, lengthDeviation, limitFor, note, propagate, referenceSets, sendBack, sourceChanged, submit, termsIn, wrapLines } from '../core';
 import type { Entry, Unit } from '../core';
 import { $, buzz, esc, plural, toast } from './dom';
 import { markup } from './markup';
-import { isDesktop, rememberedGameDir } from './desktop';
+import { isDesktop, openLink, rememberedGameDir } from './desktop';
 import { drawPic, picOfFace, picsOfRow } from './gameimg';
 import type { Pic } from './gameimg';
 import { openScene } from './scene-dialog';
@@ -66,7 +66,7 @@ export const SIDE_HTML = `<aside class="fs" aria-label="Вказівки до р
   </div>
   <div class="ibody">
     <div class="ph"><span class="grow" id="rp-title">Вказівки</span><span class="ico" id="rp-close" title="Сховати панель" role="button" tabindex="0" aria-label="Сховати панель">—</span></div>
-    <div class="pane on" id="s-tm" data-title="Вказівки"><div class="ph card-ph"><span class="grow">Вказівки</span><span class="ico" data-hide-pane="s-tm" role="button" tabindex="0" aria-label="Сховати панель «Вказівки»" title="Сховати">—</span></div><div><div class="lbl">Глосарій у рядку</div><div id="i-gl"></div></div><div id="cd-box" hidden><div class="lbl">Коди в рядку</div><div id="i-cd"></div></div><div id="db-box" hidden><div class="lbl">Про цей запис гри</div><div id="i-db"></div></div><div id="gn-box" hidden><div class="lbl">Назви з гри</div><div id="i-gn"></div></div><div><div class="lbl">Пам’ять перекладів <span class="r" id="tm-n"></span></div><div id="i-tm"></div></div></div>
+    <div class="pane on" id="s-tm" data-title="Вказівки"><div class="ph card-ph"><span class="grow">Вказівки</span><span class="ico" data-hide-pane="s-tm" role="button" tabindex="0" aria-label="Сховати панель «Вказівки»" title="Сховати">—</span></div><div><div class="lbl">Глосарій у рядку</div><div id="i-gl"></div></div><div id="cd-box" hidden><div class="lbl">Коди в рядку</div><div id="i-cd"></div></div><div id="db-box" hidden><div class="lbl">Про цей запис гри</div><div id="i-db"></div></div><div id="gn-box" hidden><div class="lbl">Назви з гри</div><div id="i-gn"></div></div><div id="dc-box" hidden><div class="lbl">Словники <span class="r" id="dc-kind"></span></div><div id="i-dc"></div></div><div><div class="lbl">Пам’ять перекладів <span class="r" id="tm-n"></span></div><div id="i-tm"></div></div></div>
     <div class="rz rz-p" data-rzp="0" role="separator" aria-orientation="horizontal" tabindex="0" hidden></div>
     <div class="pane" id="s-gl" data-title="Глосарій"><div class="ph card-ph"><span class="grow">Глосарій</span><span class="ico" data-hide-pane="s-gl" role="button" tabindex="0" aria-label="Сховати панель «Глосарій»" title="Сховати">—</span></div>
       <div class="fin" style="width:auto"><input id="gl-q" placeholder="Пошук у глосарії" aria-label="Пошук у глосарії"></div>
@@ -88,6 +88,16 @@ const when = (t: number) => new Date(t).toLocaleString('uk-UA', { day: '2-digit'
 const stageOf = (ctx: Ctx) => (ctx.s.mode === 'review' ? 'review' : 'translate') as 'review' | 'translate';
 /** The file and key a row really belongs to: in a group of files the row's key carries its file. */
 const realOf = (ctx: Ctx, u: Unit): { file: string; key: string } => splitKey(u.key) ?? { file: ctx.s.current!, key: u.key };
+let gorohKind: 'Тлумачення' | 'Синоніми' = 'Тлумачення';
+/** Words of the original (Multitran) and of the translation (Goroh) as links: they open in the browser. */
+function renderDict(u: Unit, target: string): void {
+  const en = wordsOf(u.source), uk = wordsOf(target);
+  $('#dc-box').hidden = !en.length && !uk.length;
+  $('#dc-kind').innerHTML = `<button class="lnk" data-gk="${gorohKind === 'Тлумачення' ? 'Синоніми' : 'Тлумачення'}" title="Що відкривати для слів перекладу на Гороху">Горох: ${gorohKind.toLowerCase()}</button>`;
+  const chip = (w: string, url: string): string => `<button class="wchip" data-ext="${esc(url)}" title="Відкрити в браузері">${esc(w)}</button>`;
+  $('#i-dc').innerHTML = `<div class="wrow"><small class="hint">Multitran</small>${en.map(w => chip(w, multitranUrl(w))).join('')}</div>${uk.length ? `<div class="wrow"><small class="hint">Горох</small>${uk.map(w => chip(w, gorohUrl(w, gorohKind))).join('')}</div>` : ''}`;
+}
+
 let picToken = 0;
 /** Pictures from the game folder for the string (item icons, faces, enemies): desktop only, and only when the project has a game folder. */
 function renderPics(ctx: Ctx, u: Unit | undefined): void {
@@ -258,6 +268,7 @@ function renderSide(ctx: Ctx, u: Unit | undefined, e: Entry | undefined, hits: R
     const used = uk ? ctx.usage().get(uk) ?? [] : [];
     $('#db-box').hidden = !u.dbNote && !used.length;
     $('#i-db').innerHTML = (u.dbNote ? `<div class="hint">Примітка в базі: <code>${esc(u.dbNote)}</code></div>` : '') + (used.length ? `<div class="hint">Гравець отримує в: ${used.map(esc).join('; ')}</div>` : '');
+    renderDict(u, e?.target ?? '');
     const gn = ctx.names().find(u.source).filter(g => !(g.file === realOf(ctx, u).file && g.key === realOf(ctx, u).key));
     gameNames = gn;
     $('#gn-box').hidden = !gn.length;
@@ -417,6 +428,10 @@ export function sideClick(ctx: Ctx, t: HTMLElement): boolean {
     ctx.persist(); ctx.render(); toast('Термін додано');
     return true;
   }
+  const ext = t.closest<HTMLElement>('[data-ext]');
+  if (ext) { void openLink(ext.dataset.ext!); return true; }
+  const gk = t.closest<HTMLElement>('[data-gk]');
+  if (gk) { gorohKind = gk.dataset.gk as typeof gorohKind; if (u) renderDict(u, entryOf(ctx, u)?.target ?? ''); return true; }
   if (!u || !s.current) return false;
   const gn = t.closest<HTMLElement>('[data-gn]');
   if (gn) {

@@ -86,3 +86,9 @@ export async function launchGame(): Promise<void> {
 export async function readGameImage(game: string, rel: string): Promise<ArrayBuffer | null> {
   try { return await invoke<ArrayBuffer>('read_image', { game, rel }); } catch { return null; }
 }
+
+/** Open a dictionary page in the system browser (the shell checks the address); a plain browser opens a tab. */
+export async function openLink(url: string): Promise<void> {
+  if (isDesktop()) { try { await invoke('open_url', { url }); } catch { /* refused or no browser */ } return; }
+  window.open(url, '_blank', 'noopener,noreferrer');
+}

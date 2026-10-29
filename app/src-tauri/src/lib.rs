@@ -385,12 +385,36 @@ fn launch(roots: State<'_, Roots>, exe: String) -> Result<(), String> {
     cmd.spawn().map(|_| ()).map_err(|e| format!("Не вдалося запустити гру: {e}"))
 }
 
+/// Only the two dictionaries the app links to: https, no credentials in the address, no spaces.
+fn dictionary_url_ok(url: &str) -> bool {
+    let Some(rest) = url.strip_prefix("https://") else { return false };
+    if url.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return false;
+    }
+    let host = rest.split(['/', '?', '#']).next().unwrap_or("");
+    matches!(host, "goroh.pp.ua" | "multitran.com" | "www.multitran.com")
+}
+
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    if !dictionary_url_ok(&url) {
+        return Err("Цю адресу не дозволено".into());
+    }
+    #[cfg(target_os = "windows")]
+    let mut cmd = Command::new("explorer.exe");
+    #[cfg(target_os = "macos")]
+    let mut cmd = Command::new("open");
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    let mut cmd = Command::new("xdg-open");
+    cmd.arg(&url).spawn().map(|_| ()).map_err(|e| format!("Не вдалося відкрити браузер: {e}"))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Roots::default())
-        .invoke_handler(tauri::generate_handler![pick_dir, pick_exe, allow_again, list_json, read_text, read_image, apply_data, restore_data, apply_jump, restore_jump, install_update, launch])
+        .invoke_handler(tauri::generate_handler![pick_dir, pick_exe, allow_again, list_json, read_text, read_image, apply_data, restore_data, apply_jump, restore_jump, install_update, launch, open_url])
         .run(tauri::generate_context!())
         .expect("error while running Transly");
 }
@@ -419,6 +443,18 @@ mod tests {
         assert!(roots.check(inside.join("data.json").to_str().unwrap()).is_ok());
         assert!(roots.check(tmp.join("other.json").to_str().unwrap()).is_err());
         assert!(roots.check(inside.join("..").join("other.json").to_str().unwrap()).is_err());
+    }
+
+    #[test]
+    fn only_the_two_dictionaries_can_be_opened() {
+        assert!(dictionary_url_ok("https://goroh.pp.ua/%D0%A2%D0%BB/%D0%BC%D0%B5%D1%87"));
+        assert!(dictionary_url_ok("https://www.multitran.com/m.exe?l1=1&l2=33&s=sword"));
+        assert!(!dictionary_url_ok("http://goroh.pp.ua/x"));
+        assert!(!dictionary_url_ok("https://evil.com/goroh.pp.ua"));
+        assert!(!dictionary_url_ok("https://goroh.pp.ua@evil.com/"));
+        assert!(!dictionary_url_ok("https://goroh.pp.ua.evil.com/"));
+        assert!(!dictionary_url_ok("javascript:alert(1)"));
+        assert!(!dictionary_url_ok("https://goroh.pp.ua/a b"));
     }
 
     #[test]

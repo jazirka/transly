@@ -119,8 +119,9 @@ export function githubRemote(api: GithubApi, cfg: GithubSettings): RemoteFiles {
       const upd = await api.request('PATCH', `${base}/git/refs/heads/${branch}`, { sha: newHead, force: false }).catch(() => { throw explain(0, 'оновлення гілки'); });
       if (upd.status === 422) {
         // A real race leaves the branch somewhere else than where we built on; anything else is GitHub refusing the update.
-        const now = await getRef(branch).catch(() => null);
-        if (now !== null && now !== id) return { ok: false };
+        // When even the re-read fails (network, 5xx) we cannot tell a race from a refusal: try again instead of aborting.
+        const now = await getRef(branch).then(r => ({ r }), () => null);
+        if (now === null || (now.r !== null && now.r !== id)) return { ok: false };
         throw new GithubError(`GitHub: оновлення гілки відхилено: ${String(asObj(upd.json).message ?? 'без пояснення')}`, 422);
       }
       if (upd.status !== 200) throw explain(upd.status, 'оновлення гілки');

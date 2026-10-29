@@ -51,6 +51,7 @@ export function initMobile(ctx: Ctx): void {
     closeMenuOnOutside(e.target as HTMLElement);
     if (!row || e.touches.length !== 1) return;
     cancel();
+    swallow = false; // a new touch begins a new gesture: the click of the previous long press is over
     const { clientX: x, clientY: y } = e.touches[0]!;
     press = { x, y, timer: setTimeout(() => { press = null; swallow = true; setTimeout(() => { swallow = false; }, 700); buzz(20); openMenu(row.dataset.key!, x, y); }, 520) };
   }, { passive: true });

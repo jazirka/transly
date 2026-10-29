@@ -448,7 +448,7 @@ export async function start(root: HTMLElement): Promise<void> {
 
   const SORT_LABEL: Record<SortMode, string> = { order: 'За порядком', new: 'Без перекладу спершу', qa: 'Проблеми спершу', long: 'Найдовші спершу' };
   function renderRowsList(): void {
-    $('#chips2').innerHTML = chipsHtml();
+    $('#chips2').innerHTML = (s.speaker !== null ? `<button class="chip on" data-clear="speaker" title="Скинути фільтр за мовцем">${esc(s.speaker || 'Без мовця')} ✕</button>` : '') + chipsHtml();
     $('#sortbtn').textContent = `↕ ${SORT_LABEL[s.sort]}`;
     $('#sortbtn').classList.toggle('on', s.sort !== 'order');
     const v = ctx.view();
@@ -472,25 +472,27 @@ export async function start(root: HTMLElement): Promise<void> {
     document.querySelector<HTMLElement>('#tabs-host .tab.on')?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
   }
 
-  /** The table is drawn in full, so a group of many files shows only the first rows of what passes the filters. */
+  /** A group of many files shows only the first rows of what passes the filters; a single file is drawn in full as before. */
   const ROW_CAP = 2500;
   function renderTable(): void {
     const v = ctx.view();
     const grid = $('#grid');
     $('#chips1').innerHTML = chipsHtml();
-    $('#tagfilter').innerHTML = '';
     renderFilterButtons();
     ($('#q') as HTMLInputElement).value = s.q;
     if (!v) { grid.innerHTML = ''; return; }
     const idx = new Map(v.units.map((u, i) => [u.key, i + 1]));
     const list = visibleUnits(true);
-    const ids = list.map(u => u.key);
+    // A group of many files draws only its first rows; select-all and the counts follow what is drawn.
+    const cap = s.current === GROUP ? ROW_CAP : Infinity;
+    const shown = list.slice(0, cap);
+    const ids = shown.map(u => u.key);
     const nSel = ids.filter(k => s.checked.has(k)).length;
     const hasWho = v.units.some(u => ctx.speaker(u));
     grid.classList.toggle('no-who', !hasWho);
     grid.style.setProperty('--cols', hasWho ? '34px 22px 110px 96px minmax(160px,.9fr) minmax(180px,1fr) 78px' : '34px 22px 110px minmax(160px,.9fr) minmax(180px,1fr) 78px');
     let h = `<div class="gh" role="row"><div class="gcheck" role="columnheader"><input type="checkbox" id="selall" aria-label="Вибрати всі видимі рядки" ${nSel && nSel === ids.length ? 'checked' : ''}></div><div title="Статус" role="columnheader" class="s"><span class="vh">Статус</span></div><div class="s" role="columnheader">Ключ</div><div class="s" role="columnheader">Мовець</div><div role="columnheader">Оригінал · EN</div><div class="s" role="columnheader">Переклад · UK</div><div class="s" role="columnheader" title="Кількість знаків: переклад / оригінал (без керівних кодів). Рекомендація: якнайближче до оригіналу" style="justify-content:flex-end;border-right:0">К-сть зн.</div></div>`;
-    h += list.length ? list.slice(0, ROW_CAP).map(u => rowHtml(u, idx.get(u.key)!)).join('') + (list.length > ROW_CAP ? `<div class="grid-note" role="row">Показано ${ROW_CAP.toLocaleString('uk-UA')} із ${list.length.toLocaleString('uk-UA')}. Уточніть пошук, мовця чи статус.</div>` : '') : `<div class="empty-wrap" role="row"><div role="gridcell">${emptyHtml}</div></div>`;
+    h += list.length ? shown.map(u => rowHtml(u, idx.get(u.key)!)).join('') + (list.length > cap ? `<div class="grid-note" role="row">Показано ${cap.toLocaleString('uk-UA')} із ${list.length.toLocaleString('uk-UA')}. Уточніть пошук, мовця чи статус.</div>` : '') : `<div class="empty-wrap" role="row"><div role="gridcell">${emptyHtml}</div></div>`;
     grid.innerHTML = h;
     grid.classList.toggle('has-sel', nSel > 0);
     const all = $('#selall') as HTMLInputElement | null;
@@ -619,9 +621,13 @@ export async function start(root: HTMLElement): Promise<void> {
 
   function closeTab(name: string): void {
     if (name === GROUP) {
-      s.group = null; s.checked.clear();
-      const next = s.open[s.open.length - 1];
-      if (next) openFile(next); else { s.current = null; s.cur = null; }
+      const viewing = s.current === GROUP;
+      s.group = null;
+      if (viewing) {
+        s.checked.clear();
+        const next = s.open[s.open.length - 1];
+        if (next) openFile(next); else { s.current = null; s.cur = null; }
+      }
       renderAll(); return;
     }
     const i = s.open.indexOf(name);
@@ -879,7 +885,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (it.t === 'term') { s.sideTab = 'glossary'; s.sideOn = showSide(s.sideOn, 'glossary'); if (s.mode === 'table') setMode('edit', false); s.rightOpen = true; renderAll(); ($('#gl-q') as HTMLInputElement).value = it.label.split(' → ')[0] ?? ''; renderGlossary(ctx); return; }
     if (it.file) {
       if (it.file !== s.current) openFile(it.file);
-      if (it.key) { s.filter = 'all'; s.q = ''; ctx.select(it.key, s.mode === 'table' ? undefined : s.mode); } else renderAll();
+      if (it.key) { s.filter = 'all'; s.q = ''; s.speaker = null; s.lenFilter = 'all'; ctx.select(it.key, s.mode === 'table' ? undefined : s.mode); } else renderAll();
     }
   }
 
@@ -1028,7 +1034,7 @@ export async function start(root: HTMLElement): Promise<void> {
       runClaudeSync(ctx, loadClaudeConfig(), adopt).then(r => toast(s.views.length ? describeClaude(r) : 'У спільній базі ще немає проєкту: спершу синхронізуйте на комп’ютері (Налаштування → Синхронізація через Claude)'), er => toast(er instanceof Error ? er.message : 'Не вдалося синхронізувати'));
       return;
     }
-    if (t.closest('#settings,#ab-set')) { openSettingsDlg(); return; }
+    if (t.closest('#settings')) { openSettingsDlg(); return; }
     if (!t.closest('#cfgpop,#cfg-btn')) closeCfgMenu();
     if (!t.closest('#projpop,#proj-btn')) closeProjMenu();
     if (t.closest('#proj-btn')) { openProjMenu(); return; }
@@ -1121,7 +1127,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.closest('#bb-ok')) { bulkSend(); return; }
     if (t.closest('#bb-tm')) { bulkTm(); return; }
     if (t.closest('#bb-clear')) { s.checked.clear(); renderAll(); return; }
-    if (t.closest('#selall')) { const all = ($('#selall') as HTMLInputElement).checked; for (const u of visibleUnits(true)) all ? s.checked.add(u.key) : s.checked.delete(u.key); renderAll(); return; }
+    if (t.closest('#selall')) { const all = ($('#selall') as HTMLInputElement).checked; for (const u of visibleUnits(true).slice(0, s.current === GROUP ? ROW_CAP : Infinity)) all ? s.checked.add(u.key) : s.checked.delete(u.key); renderAll(); return; }
     const rc = t.closest<HTMLInputElement>('.rc');
     if (rc) { const k = rc.closest<HTMLElement>('.gr')!.dataset.key!; rc.checked ? s.checked.add(k) : s.checked.delete(k); renderAll(); return; }
     const sd = t.closest<HTMLElement>('[data-sd]');

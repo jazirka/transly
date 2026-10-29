@@ -26,6 +26,15 @@ impl Roots {
 
     /// Resolve `p` and make sure it lies inside a folder the user has picked. Works for files that do not exist yet.
     fn check(&self, p: &str) -> Result<PathBuf, String> {
+        self.resolve(p, false)
+    }
+
+    /// Like `check`, and also allows the game's spare `data1` folder: for reading only, never for writing.
+    fn check_read(&self, p: &str) -> Result<PathBuf, String> {
+        self.resolve(p, true)
+    }
+
+    fn resolve(&self, p: &str, read_only: bool) -> Result<PathBuf, String> {
         let path = Path::new(p);
         let resolved = match path.canonicalize() {
             Ok(c) => c,
@@ -36,7 +45,7 @@ impl Roots {
         };
         let roots = self.0.lock().unwrap();
         // The backup of a picked folder's originals (or the game's own spare `data1`) sits next to it: reading it is allowed too.
-        if roots.iter().any(|r| resolved.starts_with(r) || resolved.starts_with(backup_dir(r)) || alt_dir(r).is_some_and(|a| resolved.starts_with(a))) {
+        if roots.iter().any(|r| resolved.starts_with(r) || resolved.starts_with(backup_dir(r)) || (read_only && alt_dir(r).is_some_and(|a| resolved.starts_with(a)))) {
             Ok(resolved)
         } else {
             Err("Цей шлях не дозволено: оберіть папку через діалог".into())
@@ -136,7 +145,7 @@ fn allow_again(roots: State<'_, Roots>, path: String) -> Result<(), String> {
 
 #[tauri::command]
 fn list_json(roots: State<'_, Roots>, dir: String) -> Result<Vec<JsonFile>, String> {
-    let d = roots.check(&dir)?;
+    let d = roots.check_read(&dir)?;
     let mut out = Vec::new();
     walk(&d, 0, &mut out);
     Ok(out)
@@ -144,7 +153,7 @@ fn list_json(roots: State<'_, Roots>, dir: String) -> Result<Vec<JsonFile>, Stri
 
 #[tauri::command]
 fn read_text(roots: State<'_, Roots>, path: String) -> Result<String, String> {
-    let p = roots.check(&path)?;
+    let p = roots.check_read(&path)?;
     fs::read_to_string(p).map_err(|e| e.to_string())
 }
 
@@ -435,7 +444,8 @@ mod tests {
         assert_eq!(fs::read_to_string(original_of(&data, "A.json").unwrap()).unwrap(), "\"Backup\"");
         let roots = Roots::default();
         roots.allow(&data);
-        assert!(roots.check(spare.join("A.json").to_str().unwrap()).is_ok());
+        assert!(roots.check_read(spare.join("A.json").to_str().unwrap()).is_ok());
+        assert!(roots.check(spare.join("A.json").to_str().unwrap()).is_err(), "the spare copy is read-only");
         assert!(alt_dir(&base.join("other")).is_none());
     }
 

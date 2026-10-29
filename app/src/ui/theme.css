@@ -638,7 +638,7 @@ td .term{color:#d9c3ee}
 .menubar[hidden]{display:none}
 .menubar button{height:28px;padding:0 10px;border:0;border-radius:var(--r2);background:none;color:var(--text);font-size:13.5px}
 .menubar button:hover,.menubar button.on{background:rgba(255,255,255,.12)}
-.topbar.menu-on #proj-btn,.topbar.menu-on #br-btn{display:none}
+.topbar.menu-on #proj-btn,.topbar.menu-on #br-btn,.topbar.menu-on #seg{display:none}
 .mdd{position:fixed;z-index:70;min-width:260px;max-width:92vw;padding:6px;background:#2b2d30;border:1px solid #43454a;border-radius:var(--r3);box-shadow:0 14px 40px rgba(0,0,0,.55)}
 .mdd[hidden]{display:none}
 #msub{z-index:71}

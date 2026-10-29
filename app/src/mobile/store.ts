@@ -146,6 +146,12 @@ export class Store {
     this.entries(c.file)[c.unit.key] = edit(c.entry, c.unit, text, this.stage, Date.now());
     this.tmCache = null; this.persist();
   }
+  /** Typing into a cell of the table: any row, not only the open one. */
+  writeAt(file: string, key: string, text: string): void {
+    const u = this.unit(file, key); if (!u) return;
+    this.entries(file)[key] = edit(this.entry(file, key), u, text, this.stage, Date.now());
+    this.tmCache = null; this.persist(); this.emit();
+  }
   /** Send to review / approve the open row. Returns a reason when it is refused. */
   send(): string | null {
     const c = this.current; if (!c) return 'Рядок не вибрано';

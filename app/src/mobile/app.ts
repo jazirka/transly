@@ -23,6 +23,7 @@ export async function start(root: HTMLElement): Promise<void> {
   type Sub = 'scene' | 'find' | 'speakers' | 'settings';
   let sub: Sub | null = null;
   let scope: 'file' | 'all' = 'file';
+  let layout: 'cards' | 'table' = (() => { try { return localStorage.getItem('transly-m-layout') === 'table' ? 'table' : 'cards'; } catch { return 'cards'; } })();
   const fr = { find: '', replace: '', word: false, cs: false, matches: [] as ReturnType<typeof store.find> };
   const sp = { q: '', draft: new Map<string, string>() };
   let upd: UpdateCheck | null = null;
@@ -79,19 +80,52 @@ export async function start(root: HTMLElement): Promise<void> {
     const rows = store.rows(), shown = rows.slice(0, 400);
     const chips = FILTERS.map(([f, l]) => `<button class="m-chip ${store.filter === f ? 'on' : ''}" data-filter="${f}" aria-pressed="${store.filter === f}">${l}</button>`).join('');
     return `<div class="m-tools"><label class="m-search">${icon('search')}<input id="m-q" type="search" placeholder="Пошук у файлі" value="${esc(store.q)}" enterkeyhint="search" autocomplete="off"></label>
-      <div class="m-scope" role="group" aria-label="Де шукати"><button class="on" data-scope="file">У цьому файлі</button><button data-scope="all">У всіх файлах</button></div>
+      <div class="m-scoperow"><div class="m-scope" role="group" aria-label="Де шукати"><button class="on" data-scope="file">Файл</button><button data-scope="all">Усі файли</button></div>
+      <div class="m-scope" role="group" aria-label="Вигляд"><button class="${layout === 'cards' ? 'on' : ''}" data-layout="cards">Картки</button><button class="${layout === 'table' ? 'on' : ''}" data-layout="table">Таблиця</button></div></div>
       <div class="m-chips" role="group" aria-label="Фільтр">${chips}</div>
       <div class="m-sortrow"><span>${rows.length} з ${v.units.length}</span><select id="m-sort" aria-label="Порядок">${(['order', 'new', 'qa', 'long'] as Sort[]).map(s => `<option value="${s}" ${store.sort === s ? 'selected' : ''}>${{ order: 'За порядком', new: 'Спершу без перекладу', qa: 'Спершу проблеми', long: 'Спершу найдовші' }[s]}</option>`).join('')}</select></div></div>
-      <ul class="m-list rows">${shown.map((u, i) => {
+      ${layout === 'table' ? tableHtml(v.name, shown, rows.length) : `<ul class="m-list rows">${shown.map((u, i) => {
         const e = store.entry(v.name, u.key), st = store.shown(u, e);
         return `<li><button class="m-row ${u.key === store.key ? 'cur' : ''}" data-key="${esc(u.key)}"><span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span><span class="m-row-t"><small>${i + 1} · ${esc(store.speaker(u) || u.kind)}</small><span class="m-src">${esc(u.source.replace(/\s+/g, ' '))}</span><span class="m-tr ${e?.target ? '' : 'none'}">${e?.target ? esc(e.target.replace(/\s+/g, ' ')) : '—'}</span></span></button></li>`;
-      }).join('') || '<li class="m-none">Нічого не знайдено</li>'}${rows.length > shown.length ? `<li class="m-none">Показано ${shown.length} з ${rows.length}: уточніть пошук</li>` : ''}</ul>`;
+      }).join('') || '<li class="m-none">Нічого не знайдено</li>'}${rows.length > shown.length ? `<li class="m-none">Показано ${shown.length} з ${rows.length}: уточніть пошук</li>` : ''}</ul>`}`;
+  }
+
+  /** The table: columns scroll sideways, a tap on a translation writes right in the cell, a tap on a number opens the row. */
+  function tableHtml(file: string, rows: ReturnType<typeof store.rows>, total: number): string {
+    const v = store.view(file); const all = v?.units ?? [];
+    const idx = new Map(all.map((u, i) => [u.key, i + 1]));
+    return `<div class="m-twrap"><table class="m-table"><thead><tr><th class="c-n">№</th><th class="c-s"></th><th class="c-o">Оригінал</th><th class="c-t">Переклад</th><th class="c-l">Знаків</th></tr></thead><tbody>${rows.map(u => {
+      const e = store.entry(file, u.key), st = store.shown(u, e), t = e?.target ?? '';
+      return `<tr data-trkey="${esc(u.key)}"><td class="c-n" data-key="${esc(u.key)}" title="Відкрити в редакторі">${idx.get(u.key)}</td><td class="c-s"><span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span></td><td class="c-o" data-key="${esc(u.key)}">${esc(u.source)}</td><td class="c-t ${t ? '' : 'none'}" data-cell="${esc(u.key)}">${t ? esc(t) : '—'}</td><td class="c-l">${t ? `${[...t].length}/${[...u.source].length}` : '—'}</td></tr>`;
+    }).join('')}</tbody></table>${total > rows.length ? `<p class="m-none">Показано ${rows.length} з ${total}: уточніть пошук</p>` : ''}</div>`;
+  }
+
+  /** Start writing in a table cell. */
+  function editCell(td: HTMLElement): void {
+    if (td.querySelector('textarea')) return;
+    const key = td.dataset.cell!, file = store.file!;
+    const cur = store.entry(file, key)?.target ?? '';
+    td.innerHTML = '<textarea class="m-cell" rows="2" spellcheck="false" aria-label="Переклад"></textarea>';
+    const ta = td.querySelector('textarea') as HTMLTextAreaElement; ta.value = cur;
+    const fit = (): void => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
+    fit(); ta.focus(); ta.setSelectionRange(cur.length, cur.length);
+    ta.addEventListener('input', fit);
+    let cancelled = false;
+    ta.addEventListener('keydown', ev => { if (ev.key === 'Escape') { cancelled = true; ta.blur(); } });
+    ta.addEventListener('blur', () => {
+      if (!cancelled && ta.value !== cur) store.writeAt(file, key, ta.value);
+      const t = store.entry(file, key)?.target ?? '';
+      td.className = 'c-t' + (t ? '' : ' none'); td.textContent = t || '—';
+      const row = td.closest('tr'); const u = store.unit(file, key);
+      const l = row?.querySelector('.c-l'); if (l && u) l.textContent = t ? `${[...t].length}/${[...u.source].length}` : '—';
+      const sd = row?.querySelector('.sd'); if (sd && u) { const st = store.shown(u, store.entry(file, key)); sd.className = 'sd ' + SHAPE[st]; }
+    });
   }
 
   function screenAll(): string {
     const hits = store.findAll(store.q);
     return `<div class="m-tools"><label class="m-search">${icon('search')}<input id="m-q" type="search" placeholder="Пошук у всіх файлах" value="${esc(store.q)}" enterkeyhint="search" autocomplete="off"></label>
-      <div class="m-scope" role="group" aria-label="Де шукати"><button data-scope="file">У цьому файлі</button><button class="on" data-scope="all">У всіх файлах</button></div></div>
+      <div class="m-scope" role="group" aria-label="Де шукати"><button data-scope="file">Файл</button><button class="on" data-scope="all">Усі файли</button></div></div>
       <ul class="m-list rows">${hits.map(h => {
         const e = store.entry(h.file, h.unit.key), st = store.shown(h.unit, e);
         return `<li><button class="m-row" data-hit="${esc(h.file)}" data-hitkey="${esc(h.unit.key)}"><span class="sd ${SHAPE[st]}"></span><span class="m-row-t"><small>${esc(store.view(h.file)?.label ?? h.file)} · ${esc(h.unit.kind)}</small><span class="m-src">${esc(h.unit.source.replace(/\s+/g, ' '))}</span><span class="m-tr ${e?.target ? '' : 'none'}">${e?.target ? esc(e.target.replace(/\s+/g, ' ')) : '—'}</span></span></button></li>`;
@@ -304,6 +338,8 @@ export async function start(root: HTMLElement): Promise<void> {
     if ((x = q('[data-go]'))) { go(x.dataset.go as Tab); return; }
     if ((x = q('[data-sub]'))) { sub = x.dataset.sub as Sub; sheet = false; render(); $('m-main').scrollTop = 0; return; }
     if (q('[data-subback]')) { sub = null; render(); return; }
+    if ((x = q('[data-layout]'))) { layout = x.dataset.layout as 'cards' | 'table'; try { localStorage.setItem('transly-m-layout', layout); } catch { /* private mode */ } render(); return; }
+    if ((x = q('[data-cell]'))) { editCell(x); return; }
     if ((x = q('[data-scope]'))) { scope = x.dataset.scope as 'file' | 'all'; render(); return; }
     if ((x = q('[data-hit]'))) { store.open(x.dataset.hit!, x.dataset.hitkey!); scope = 'file'; go('edit'); return; }
     if ((x = q('[data-scenekey]'))) { store.select(x.dataset.scenekey!); sub = null; render(); return; }

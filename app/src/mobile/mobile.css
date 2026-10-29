@@ -188,3 +188,4 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-scoperow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .m-scope button{min-height:30px;font-size:13px;padding:0 6px}.m-scoperow{gap:6px}
 .m-tools{position:static}
+.m-table th,.m-table td{border-right:1px solid var(--line)}.m-table th:last-child,.m-table td:last-child{border-right:0}.m-table{border-top:1px solid var(--line)}

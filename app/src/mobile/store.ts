@@ -1,4 +1,4 @@
-import { alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
+import { addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
 import type { Entry, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
 import { IdbStore } from '../ui/idb';
 
@@ -173,6 +173,7 @@ export class Store {
     this.lastSame = this.saved.settings.propagate ? propagate(this.saved, this.dups(), c.file, c.unit, this.entries(c.file)[c.unit.key]!, this.stage, now, this.who) : 0;
     this.tmCache = null; this.persist(); this.emit(); return null;
   }
+  comment(text: string): void { this.mutate((_f, _u, e) => addComment(e, this.who, text, Date.now())); }
   mutate(fn: (file: string, unit: Unit, e: Entry | undefined) => Entry): void {
     const c = this.current; if (!c) return;
     this.entries(c.file)[c.unit.key] = fn(c.file, c.unit, c.entry);

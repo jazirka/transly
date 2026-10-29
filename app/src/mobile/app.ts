@@ -52,12 +52,18 @@ export async function start(root: HTMLElement): Promise<void> {
   const SUB_TITLE: Record<Sub, string> = { scene: 'Сцена', find: 'Знайти й замінити', speakers: 'Хто говорить', settings: 'Налаштування', consistency: 'Узгодженість' };
 
   /* ---------- chrome ---------- */
+  /** Top-bar button of the editor: glossary, memory, comments and history of the open row. */
+  function helpBtn(): string {
+    const c = store.current; if (tab !== 'edit' || sub || !c) return '';
+    const n = store.terms(c.unit).length + store.suggestions(c.unit, c.entry).length + (c.entry?.comments?.length ?? 0);
+    return `<button class="m-hdr" data-sheet aria-label="Глосарій, пам’ять перекладів, коментарі, історія">${icon('book')}${n ? `<span class="m-badge">${n > 9 ? '9+' : n}</span>` : ''}</button>`;
+  }
   function renderChrome(): void {
     const tot = store.totals();
     const pct = tot.total ? Math.floor((100 * tot.translated) / tot.total) : 0;
     const title = tab === 'files' ? 'Файли гри' : tab === 'rows' ? (store.view()?.label ?? store.file ?? 'Рядки') : tab === 'edit' ? (store.file ?? 'Переклад') : 'Ще';
     const subline = tab === 'more' || !store.hasGame || sub ? '' : `Перекладено ${pct}% · ${store.saveOk ? 'збережено' : 'не збережено!'}`;
-    $('m-bar').innerHTML = `${sub ? '<button class="m-back" data-subback aria-label="Назад">' + icon('prev') + '</button>' : ''}<div class="m-title"><b>${esc(sub ? SUB_TITLE[sub] : title)}</b>${subline ? `<small class="${store.saveOk ? '' : 'bad'}">${esc(subline)}</small>` : ''}</div>${busy ? `<span class="m-busy" role="status">${esc(busy)}</span>` : ''}`;
+    $('m-bar').innerHTML = `${sub ? '<button class="m-back" data-subback aria-label="Назад">' + icon('prev') + '</button>' : ''}<div class="m-title"><b>${esc(sub ? SUB_TITLE[sub] : title)}</b>${subline ? `<small class="${store.saveOk ? '' : 'bad'}">${esc(subline)}</small>` : ''}</div>${busy ? `<span class="m-busy" role="status">${esc(busy)}</span>` : ''}${helpBtn()}`;
     $('m-nav').innerHTML = (Object.keys(TAB_LABEL) as Tab[]).map(t => `<button role="tab" data-go="${t}" aria-selected="${t === tab}" class="${t === tab ? 'on' : ''}" ${(t === 'rows' || t === 'edit') && !store.hasGame ? 'disabled' : ''}>${icon(t)}<span>${TAB_LABEL[t]}</span></button>`).join('');
     if (androidBridge()) {
       const cur = store.view();
@@ -200,7 +206,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const c = store.current;
     if (!c) return empty('Рядок не вибрано', 'Оберіть рядок зі списку.', 'rows', 'До рядків');
     const u = c.unit, e = c.entry, st = store.shown(u, e), v = store.view();
-    const terms = store.terms(u), hasHints = terms.length + store.suggestions(u, e).length + (e?.comments?.length ?? 0) > 0;
+    const terms = store.terms(u);
     const list = store.rows(), pos = list.findIndex(x => x.key === u.key);
     const review = store.stage === 'review';
     return `<div class="m-edit" id="m-edit">
@@ -211,7 +217,7 @@ export async function start(root: HTMLElement): Promise<void> {
       </section>
       <div id="m-prev" class="m-prev"></div>
       <div id="m-issues" class="m-issues">${issuesHtml()}</div>
-      <div class="m-tools-row"><button class="m-mini" data-copy>${icon('copy')} Оригінал</button>${hasHints ? `<button class="m-mini" data-sheet>${icon('book')} Підказки</button>` : ''}<button class="m-mini" data-sub="scene">${icon('rows')} Сцена</button><button class="m-mini ghost" data-clear>Очистити</button></div>
+      <div class="m-tools-row"><button class="m-mini" data-copy>${icon('copy')} Оригінал</button><button class="m-mini" data-sub="scene">${icon('rows')} Сцена</button><button class="m-mini ghost" data-clear>Очистити</button></div>
       <div class="m-pos">${pos >= 0 ? `${pos + 1} / ${list.length}` : ''}</div>
     </div>
     <div class="m-actions" id="m-actions"><button class="m-ic" data-step="-1" aria-label="Попередній рядок" ${store.neighbour(-1) ? '' : 'disabled'}>${icon('prev')}</button><button class="m-ic" data-step="1" aria-label="Наступний рядок" ${store.neighbour(1) ? '' : 'disabled'}>${icon('next')}</button><button class="m-primary" data-send>${icon('check')}<span>${review ? 'Затвердити' : 'Надіслати'}</span></button></div>`;
@@ -261,11 +267,13 @@ export async function start(root: HTMLElement): Promise<void> {
     const wrap = $('m-sheet'); wrap.hidden = !sheet;
     const c = store.current;
     if (!sheet || !c) { wrap.innerHTML = ''; return; }
-    const terms = store.terms(c.unit), tm = store.suggestions(c.unit, c.entry), cm = c.entry?.comments ?? [];
+    const terms = store.terms(c.unit), tm = store.suggestions(c.unit, c.entry), cm = c.entry?.comments ?? [], hist = [...(c.entry?.history ?? [])].reverse().slice(0, 20);
     wrap.innerHTML = `<div class="m-scrim" data-close></div><div class="m-sheet" role="dialog" aria-label="Підказки"><div class="m-grab"></div>
       <h3>Глосарій</h3>${terms.length ? terms.map((t, i) => `<button class="m-hit" data-term="${i}"><b>${esc(t.en)}</b><span>→ ${esc(t.uk)}${t.alt?.length ? ` · ${esc(t.alt.join(', '))}` : ''}</span></button>`).join('') : '<p class="m-hint">Термінів немає</p>'}
       <h3>Пам’ять перекладів</h3>${tm.length ? tm.map((m, i) => `<button class="m-hit" data-tm="${i}"><b>${m.score}%</b><span>${esc(m.t)}</span></button>`).join('') : '<p class="m-hint">Збігів немає</p>'}
-      ${cm.length ? `<h3>Коментарі</h3>${cm.map(x => `<p class="m-cm"><b>${esc(x.who)}</b> ${esc(x.text)}</p>`).join('')}` : ''}
+      <h3>Коментарі</h3>${cm.map(x => `<p class="m-cm"><b>${esc(x.who)}</b> ${esc(x.text)}</p>`).join('')}
+      <div class="m-cmform"><input id="m-cm" class="m-input" placeholder="Новий коментар" maxlength="400" autocomplete="off"><button class="m-mini" data-cmadd>Додати</button></div>
+      ${hist.length ? `<h3>Історія</h3>${hist.map(h => `<p class="m-cm"><small>${new Date(h.at).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} · ${esc(h.who)} · ${esc(h.what)}</small><br>${esc(h.text.slice(0, 160))}</p>`).join('')}` : ''}
       <button class="m-secondary wide" data-close>Закрити</button></div>`;
   }
 
@@ -417,6 +425,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if ((x = q('[data-ins]'))) { insert(x.dataset.ins ?? ''); return; }
     if (q('[data-wrap]')) { if (store.wrap()) { render(); } else say('Рядки вже вміщаються'); return; }
     if ((x = q('[data-ign]'))) { store.mutate((_f, _u, en) => ({ ...(en as NonNullable<typeof en>), ign: [...new Set([...(en?.ign ?? []), x!.dataset.ign!])], mt: Date.now() })); refreshMeta(); return; }
+    if (q('[data-cmadd]')) { const i = $<HTMLInputElement>('m-cm'); if (i.value.trim()) { store.comment(i.value.trim()); renderSheet(); renderChrome(); } return; }
     if (q('[data-sheet]')) { sheet = true; renderSheet(); return; }
     if (q('[data-close]')) { sheet = false; renderSheet(); return; }
     if ((x = q('[data-term]'))) { const c = store.current; const tm = c ? store.terms(c.unit)[Number(x.dataset.term)] : null; if (tm) { sheet = false; renderSheet(); insert(tm.uk); } return; }

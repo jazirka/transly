@@ -12,7 +12,7 @@ export function openSpeakers(ctx: Ctx): void {
   const { s } = ctx;
   const cands = speakerCandidates(s.views);
   const map = () => (s.saved.speakers ??= {});
-  const names = [...new Set(Object.values(map()).map(v => v.name))].sort((a, b) => a.localeCompare(b, 'uk'));
+  const names = [...new Set(Object.values(map()).map(v => v.name).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'uk'));
   const opener = document.activeElement as HTMLElement | null;
   const dlg = el('dialog', 'adlg');
   dlg.setAttribute('aria-labelledby', 'sp-t');
@@ -53,7 +53,8 @@ export function openSpeakers(ctx: Ctx): void {
     for (const [k, v] of draft) {
       const name = v.trim();
       if (name && m[k]?.name !== name) { m[k] = { name, mt: Date.now() }; changed++; }
-      else if (!name && m[k]) { delete m[k]; changed++; }
+      // An empty name stays as a dated entry: deleting it would let the other device's copy bring the old name back on the next merge.
+      else if (!name && m[k]?.name) { m[k] = { name: '', mt: Date.now() }; changed++; }
     }
     if (changed) { ctx.persist(); ctx.render(); }
     toast(changed ? `Мовців оновлено: ${changed}` : 'Змін немає');

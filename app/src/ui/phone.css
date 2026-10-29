@@ -115,3 +115,5 @@ body:has(.ide.sz-s.sheet-open) .scrim{display:block;position:fixed;top:52px;left
 .pop.rowmenu{width:230px;z-index:90}
 .pop button:disabled{opacity:.4}
 .slist .chip#sortbtn{flex:none}
+
+.ide.sz-s .gr{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}

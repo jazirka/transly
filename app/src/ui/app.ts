@@ -299,7 +299,8 @@ export async function start(root: HTMLElement): Promise<void> {
     try { localStorage.setItem(UI_KEY, JSON.stringify({ current: s.current, cur: s.cur, filter: s.filter, q: s.q, speaker: s.speaker, sort: s.sort, mode: s.mode, scroll: document.getElementById('slist')?.scrollTop ?? 0 })); } catch { /* private mode */ }
   }
   function restoreUi(): void {
-    if (uiRestored) return;
+    // Before the game's files are read there is nothing to go back to; try again once they are.
+    if (uiRestored || !s.views.length) return;
     let u: { current?: string; cur?: string | null; filter?: Filter; q?: string; speaker?: string | null; sort?: SortMode; mode?: Mode; scroll?: number } = {};
     try { u = JSON.parse(ls(UI_KEY) ?? '{}') as typeof u; } catch { /* damaged: start fresh */ }
     uiRestored = true;

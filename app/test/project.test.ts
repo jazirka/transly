@@ -60,6 +60,13 @@ describe('project', () => {
     expect(() => deserialize('{"version":9,"name":"x","files":{}}')).toThrow(/версі/);
   });
 
+  it('mergeProjects: a speaker name cleared on one device stays cleared after the merge', () => {
+    const old = { ...proj({}), speakers: { 'note:MARCOH': { name: 'Марко', mt: 10 } } };
+    const cleared = { ...proj({}), speakers: { 'note:MARCOH': { name: '', mt: 20 } } };
+    expect(mergeProjects(old, cleared).project.speakers?.['note:MARCOH']?.name).toBe('');
+    expect(mergeProjects(cleared, old).project.speakers?.['note:MARCOH']?.name).toBe('');
+  });
+
   it('statsOf counts translated, done, approved', () => {
     const units = [unit('a', 'a'), unit('b', 'b'), unit('c', 'c')];
     const s = statsOf(units, { a: { target: 'А', status: 'done', mt: 1 }, b: { target: 'Б', status: 'appr', mt: 1 } });

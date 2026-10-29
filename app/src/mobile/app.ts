@@ -25,6 +25,7 @@ export async function start(root: HTMLElement): Promise<void> {
   let scope: 'file' | 'all' = 'file';
   let layout: 'cards' | 'table' = (() => { try { return localStorage.getItem('transly-m-layout') === 'table' ? 'table' : 'cards'; } catch { return 'cards'; } })();
   const fr = { find: '', replace: '', word: false, cs: false, matches: [] as ReturnType<typeof store.find> };
+  let refLang = '';
   const sp = { q: '', draft: new Map<string, string>() };
   let upd: UpdateCheck | null = null;
   let updMsg = '';
@@ -36,6 +37,7 @@ export async function start(root: HTMLElement): Promise<void> {
     <nav class="m-nav" id="m-nav" role="tablist" aria-label="Розділи"></nav>
     <div class="m-toasts" id="m-toasts" role="status"></div>
     <input type="file" id="m-file" multiple hidden>
+    <input type="file" id="m-reffile" multiple hidden>
   </div>`;
   const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -178,6 +180,10 @@ export async function start(root: HTMLElement): Promise<void> {
       <label class="m-check"><input type="checkbox" id="s-block" ${st.blockErrors ? 'checked' : ''}> Не надсилати рядок із помилкою QA</label>
       <label class="m-check"><input type="checkbox" id="s-prop" ${st.propagate ? 'checked' : ''}> Переносити переклад в однакові рядки</label>
       <label class="m-lbl" for="s-who">Ваше ім’я в коментарях та історії</label><input id="s-who" class="m-input" value="${esc(st.who)}" maxlength="40" autocomplete="off"></section>
+      <section class="m-card"><h3>Довідкові мови</h3><p class="m-hint">Копія тієї ж гри іншою мовою: її рядки показуються під оригіналом як підказка.</p>
+        ${store.refLangs().map(l => `<div class="m-var"><span>${esc(l.toUpperCase())}</span><small></small><button class="m-mini ghost" data-refdel="${esc(l)}">Прибрати</button></div>`).join('')}
+        <label class="m-lbl" for="rf-lang">Код мови (ru, pl, en…)</label><input id="rf-lang" class="m-input" maxlength="8" value="${esc(refLang)}" autocomplete="off">
+        <button class="m-primary wide" data-refpick>Обрати файли гри цією мовою</button></section>
       <p class="m-hint">Довжина тексту не обмежується: застосунок лише попереджає, коли переклад дуже відрізняється від оригіналу або рядок ширший за вікно гри.</p></div>`;
   }
 
@@ -306,6 +312,20 @@ export async function start(root: HTMLElement): Promise<void> {
     finally { busy = ''; renderChrome(); }
   }
 
+  async function importRef(files: File[]): Promise<void> {
+    refLang = (document.getElementById('rf-lang') as HTMLInputElement | null)?.value.trim().toLowerCase() || refLang;
+    if (!refLang) { say('Вкажіть код мови, наприклад ru або pl', true); return; }
+    busy = 'Читаю довідку…'; renderChrome();
+    try {
+      const game: GameFile[] = [];
+      for (const f of files) { const name = canonicalRpgMakerName(f.name) ?? (formatOf({ name: f.name }) ? f.name : null); if (!name) continue; const text = await f.text(); game.push(isTextFormat(formatOf({ name })) ? { name, json: null, text } : { name, json: JSON.parse(text) }); }
+      const r = store.importReference(refLang, game);
+      if (!r.paired) say('Не знайдено спільних файлів: оберіть файли тієї ж гри іншою мовою', true);
+      else say(`Довідку (${refLang.toUpperCase()}) додано: ${r.paired} із ${r.total} рядків знайшли пару`);
+    } catch (e) { say(`Не вдалося прочитати: ${e instanceof Error ? e.message : 'помилка'}`, true); }
+    finally { busy = ''; renderChrome(); render(); }
+  }
+
   function readGithubForm(): ReturnType<typeof loadGithubConfig> {
     const cfg = loadGithubConfig(); const v = (id: string): string => (document.getElementById(id) as HTMLInputElement | null)?.value.trim() ?? '';
     cfg.repo = v('g-repo') || cfg.repo; cfg.token = v('g-token') || cfg.token; cfg.branch = v('g-branch'); cfg.dir = v('g-dir');
@@ -353,6 +373,8 @@ export async function start(root: HTMLElement): Promise<void> {
     if (q('[data-dofind]')) { fr.matches = store.find({ find: fr.find, replace: fr.replace, caseSensitive: fr.cs, wholeWord: fr.word }); if (!fr.find) say('Вкажіть, що шукати', true); else if (!fr.matches.length) say('Нічого не знайдено'); render(); return; }
     if (q('[data-doreplace]')) { const n = store.replaceAll(fr.matches); fr.matches = []; say(`Замінено в рядках: ${n}`); buzz(14); render(); return; }
     if ((x = q('[data-uni]'))) { const [gi, vi] = x.dataset.uni!.split('|').map(Number); const g = store.inconsistent()[gi!]; const v = g?.variants[vi!]; if (g && v) { const n = store.unify(g.source, v.target); say(`Уніфіковано рядків: ${n}`); buzz(14); } render(); return; }
+    if (q('[data-refpick]')) { refLang = ($<HTMLInputElement>('rf-lang').value || '').trim().toLowerCase(); if (!refLang) { say('Вкажіть код мови, наприклад ru або pl', true); return; } $<HTMLInputElement>('m-reffile').click(); return; }
+    if ((x = q('[data-refdel]'))) { store.removeReference(x.dataset.refdel!); say(`Довідку ${x.dataset.refdel!.toUpperCase()} прибрано`); render(); return; }
     if (q('[data-spsave]')) { const n = store.setSpeakers(sp.draft); sp.draft.clear(); say(n ? `Мовців оновлено: ${n}` : 'Змін немає'); render(); return; }
     if ((x = q('[data-file]'))) { store.open(x.dataset.file!); go('rows'); return; }
     if ((x = q('[data-filter]'))) { store.setFilter(x.dataset.filter as Filter); render(); return; }
@@ -420,6 +442,7 @@ export async function start(root: HTMLElement): Promise<void> {
     else if (t.id === 's-block' || t.id === 's-prop') { store.saved.settings[t.id === 's-block' ? 'blockErrors' : 'propagate'] = (t as HTMLInputElement).checked; store.saved.settingsAt = Date.now(); store.persist(); }
     else if (t.id === 's-mode') { const m = (t as HTMLSelectElement).value; store.saved.settings.lineLimit = m === 'off' ? -1 : m === 'custom' ? Math.round(Number((document.getElementById('s-lim') as HTMLInputElement).value)) || 50 : 0; store.saved.settingsAt = Date.now(); store.persist(); render(); }
     if (t.id === 'm-sort') { store.setSort((t as HTMLSelectElement).value as Sort); render(); }
+    if (t.id === 'm-reffile') { const f = [...((t as HTMLInputElement).files ?? [])]; (t as HTMLInputElement).value = ''; if (f.length) void importRef(f); return; }
     if (t.id === 'm-file') { const f = [...((t as HTMLInputElement).files ?? [])]; (t as HTMLInputElement).value = ''; if (f.length) void importFiles(f); }
   });
   // The keyboard takes the bottom navigation's place.

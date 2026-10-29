@@ -1,4 +1,4 @@
-import { Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
+import { alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
 import type { Entry, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
 import { IdbStore } from '../ui/idb';
 
@@ -189,6 +189,25 @@ export class Store {
     }
     if (n) { this.tmCache = null; this.persist(); this.emit(); }
     return n;
+  }
+  refLangs(): string[] { return referenceSets(this.saved.reference).map(r => r.lang); }
+  /** Another-language copy of the game: its lines are paired with the originals. Returns pairs found and rows in the paired files. */
+  importReference(lang: string, game: GameFile[]): { paired: number; total: number } {
+    const snap = this.saved.snapshot; const texts: Record<string, ReturnType<typeof alignReference>> = {};
+    let paired = 0, total = 0;
+    for (const f of game) {
+      const units = snap?.[f.name]; if (!units) continue;
+      const ref = alignReference(units, extract(f)); texts[f.name] = ref; total += units.length; paired += Object.keys(ref).length;
+    }
+    if (!paired) return { paired: 0, total: 0 };
+    this.saved.reference = withReference(this.saved.reference, { lang, texts });
+    this.saved.assetsRev = Date.now(); this.persist(); this.emit();
+    return { paired, total };
+  }
+  removeReference(lang: string): void {
+    const next = withoutReference(this.saved.reference, lang);
+    if (next) this.saved.reference = next; else delete this.saved.reference;
+    this.saved.assetsRev = Date.now(); this.persist(); this.emit();
   }
   /** The same original translated in different ways. */
   inconsistent(): ReturnType<typeof inconsistencies> { return inconsistencies(this.views, this.saved, 60); }

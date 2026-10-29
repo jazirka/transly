@@ -25,6 +25,7 @@ export async function start(root: HTMLElement): Promise<void> {
   let scope: 'file' | 'all' = 'file';
   let layout: 'cards' | 'table' = (() => { try { return localStorage.getItem('transly-m-layout') === 'table' ? 'table' : 'cards'; } catch { return 'cards'; } })();
   const fr = { find: '', replace: '', word: false, cs: false, matches: [] as ReturnType<typeof store.find> };
+  const PAGE = 100; let page = 1, pageSig = '';
   let refLang = '';
   let selecting = false; const picked = new Set<string>();
   const sp = { q: '', draft: new Map<string, string>() };
@@ -80,7 +81,9 @@ export async function start(root: HTMLElement): Promise<void> {
     const v = store.view();
     if (!v) return empty('Файл не вибрано', 'Оберіть файл у розділі «Файли».', 'files', 'До файлів');
     if (scope === 'all') return screenAll();
-    const rows = store.rows(), shown = rows.slice(0, 400);
+    const sig = `${store.file}|${store.filter}|${store.q}|${store.sort}`;
+    if (sig !== pageSig) { pageSig = sig; page = 1; }
+    const rows = store.rows(), shown = rows.slice(0, PAGE * page);
     const chips = FILTERS.map(([f, l]) => `<button class="m-chip ${store.filter === f ? 'on' : ''}" data-filter="${f}" aria-pressed="${store.filter === f}">${l}</button>`).join('');
     return `<div class="m-tools"><label class="m-search">${icon('search')}<input id="m-q" type="search" placeholder="Пошук у файлі" value="${esc(store.q)}" enterkeyhint="search" autocomplete="off"></label>
       <div class="m-scoperow"><div class="m-scope" role="group" aria-label="Де шукати"><button class="on" data-scope="file">Файл</button><button data-scope="all">Усі файли</button></div>
@@ -90,7 +93,7 @@ export async function start(root: HTMLElement): Promise<void> {
       ${layout === 'table' ? tableHtml(v.name, shown, rows.length) : `<ul class="m-list rows">${shown.map((u, i) => {
         const e = store.entry(v.name, u.key), st = store.shown(u, e);
         return `<li><button class="m-row ${u.key === store.key && !selecting ? 'cur' : ''} ${selecting && picked.has(u.key) ? 'picked' : ''}" ${selecting ? `data-pickkey="${esc(u.key)}" aria-pressed="${picked.has(u.key)}"` : `data-key="${esc(u.key)}"`}><span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span><span class="m-row-t"><small>${i + 1} · ${esc(store.speaker(u) || u.kind)}</small><span class="m-src">${esc(u.source.replace(/\s+/g, ' '))}</span><span class="m-tr ${e?.target ? '' : 'none'}">${e?.target ? esc(e.target.replace(/\s+/g, ' ')) : '—'}</span></span></button></li>`;
-      }).join('') || '<li class="m-none">Нічого не знайдено</li>'}${rows.length > shown.length ? `<li class="m-none">Показано ${shown.length} з ${rows.length}: уточніть пошук</li>` : ''}</ul>`}${selecting && layout === 'cards' ? `<div class="m-selbar" role="toolbar" aria-label="Дії з вибраним"><b>${picked.size}</b><button class="m-mini" data-selall>Усі</button><button class="m-mini" data-selsend ${picked.size ? '' : 'disabled'}>Надіслати</button><button class="m-mini" data-selcopy ${picked.size ? '' : 'disabled'}>Оригінал</button><button class="m-mini ghost" data-selclear ${picked.size ? '' : 'disabled'}>Очистити</button></div>` : ''}`;
+      }).join('') || '<li class="m-none">Нічого не знайдено</li>'}${rows.length > shown.length ? `<li class="m-more-li"><button class="m-mini" data-more>Показати ще ${Math.min(PAGE, rows.length - shown.length)} · ${shown.length} з ${rows.length}</button></li>` : ''}</ul>`}${selecting && layout === 'cards' ? `<div class="m-selbar" role="toolbar" aria-label="Дії з вибраним"><b>${picked.size}</b><button class="m-mini" data-selall>Усі</button><button class="m-mini" data-selsend ${picked.size ? '' : 'disabled'}>Надіслати</button><button class="m-mini" data-selcopy ${picked.size ? '' : 'disabled'}>Оригінал</button><button class="m-mini ghost" data-selclear ${picked.size ? '' : 'disabled'}>Очистити</button></div>` : ''}`;
   }
 
   /** The table: columns scroll sideways, a tap on a translation writes right in the cell, a tap on a number opens the row. */
@@ -100,7 +103,7 @@ export async function start(root: HTMLElement): Promise<void> {
     return `<div class="m-twrap"><table class="m-table"><thead><tr><th class="c-n">№</th><th class="c-s"></th><th class="c-o">Оригінал</th><th class="c-t">Переклад</th><th class="c-l">Знаків</th></tr></thead><tbody>${rows.map(u => {
       const e = store.entry(file, u.key), st = store.shown(u, e), t = e?.target ?? '';
       return `<tr data-trkey="${esc(u.key)}"><td class="c-n" data-key="${esc(u.key)}" title="Відкрити в редакторі">${idx.get(u.key)}</td><td class="c-s"><span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span></td><td class="c-o" data-key="${esc(u.key)}">${esc(u.source)}</td><td class="c-t ${t ? '' : 'none'}" data-cell="${esc(u.key)}">${t ? esc(t) : '—'}</td><td class="c-l">${t ? `${[...t].length}/${[...u.source].length}` : '—'}</td></tr>`;
-    }).join('')}</tbody></table>${total > rows.length ? `<p class="m-none">Показано ${rows.length} з ${total}: уточніть пошук</p>` : ''}</div>`;
+    }).join('')}</tbody></table>${total > rows.length ? `<p class="m-none"><button class="m-mini" data-more>Показати ще · ${rows.length} з ${total}</button></p>` : ''}</div>`;
   }
 
   /** Start writing in a table cell. */
@@ -388,6 +391,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (q('[data-spsave]')) { const n = store.setSpeakers(sp.draft); sp.draft.clear(); say(n ? `Мовців оновлено: ${n}` : 'Змін немає'); render(); return; }
     if ((x = q('[data-file]'))) { store.open(x.dataset.file!); go('rows'); return; }
     if ((x = q('[data-filter]'))) { store.setFilter(x.dataset.filter as Filter); render(); return; }
+    if (q('[data-more]')) { page++; const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
     if (q('[data-select]')) { selecting = !selecting; picked.clear(); render(); return; }
     if ((x = q('[data-pickkey]'))) { const k = x.dataset.pickkey!; if (picked.has(k)) picked.delete(k); else picked.add(k); render(); return; }
     if (q('[data-selall]')) { const all = store.rows(); if (picked.size === all.length) picked.clear(); else all.forEach(u => picked.add(u.key)); render(); return; }

@@ -72,7 +72,13 @@ export class Store {
   speaker(u: Unit): string { return speakerOf(u, this.saved.speakers ?? {}); }
 
   qaOpts(): { tolerancePct: number; terms: SavedProject['terms']; lineLimit: number } { return { tolerancePct: this.saved.settings.tolerancePct, terms: this.saved.terms, lineLimit: this.lineLimit() }; }
-  lineLimit(): number { const l = this.saved.settings.lineLimit; return l < 0 ? 0 : l > 0 ? l : autoLineLimit(this.views); }
+  private autoLim: { views: FileView[]; n: number } | null = null;
+  /** The automatic limit scans every file: it is computed once per set of files, not once per row. */
+  lineLimit(): number {
+    const l = this.saved.settings.lineLimit; if (l !== 0) return l < 0 ? 0 : l;
+    if (this.autoLim?.views !== this.views) this.autoLim = { views: this.views, n: autoLineLimit(this.views) };
+    return this.autoLim.n;
+  }
   issues(u: Unit, e: Entry | undefined): ReturnType<typeof activeIssues> { return e && e.target ? activeIssues(u, e, this.qaOpts()) : []; }
   shown(u: Unit, e: Entry | undefined): Shown { const st = e?.status ?? 'new'; return st !== 'new' && this.issues(u, e).length ? 'qa' : st; }
   terms(u: Unit): ReturnType<typeof termsIn<SavedProject['terms'][number]>> { return termsIn(u.source, this.saved.terms); }

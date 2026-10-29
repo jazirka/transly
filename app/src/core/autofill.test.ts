@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { learnWords, proposals, tokenize } from './autofill';
+import { almost, learnWords, proposals, tokenize } from './autofill';
 import type { FileView, SavedProject } from './project';
 
 const unit = (key: string, source: string) => ({ key, source, speaker: '', kind: 'name' as const, context: '' });
@@ -33,5 +33,17 @@ describe('autofill by words', () => {
     expect(amb.has('red')).toBe(false);
     const withTerm = learnWords(vs, saved({ 1: 'Руда кішка', 2: 'Червоний пес' }, [{ en: 'Red', uk: 'Червоний' }]));
     expect(withTerm.get('red')).toBe('червоний');
+  });
+
+  it('explains what blocks a line: an ambiguous word and an unknown one', () => {
+    const vs = [view([unit('1', 'Woodsman [head]'), unit('2', 'Woodsman [torso]'), unit('4', 'Woodsman [head] '), unit('5', 'Guard [torso]')])];
+    const sv = saved({ 1: 'Лісник [голова]', 2: 'Лісоруб [тулуб]' });
+    expect(proposals(vs, sv).map(p => p.key)).toEqual([]);
+    const a = almost(vs, sv);
+    expect(a.map(x => [x.key, x.blockers.map(b => `${b.word}:${b.reason}`)])).toEqual([['4', ['Woodsman:ambiguous']], ['5', ['Guard:unknown']]]);
+    expect(a[0]!.blockers[0]!.variants.sort()).toEqual(['лісник', 'лісоруб']);
+    // a glossary term settles the ambiguity and the line is composed
+    const fixed = saved({ 1: 'Лісник [голова]', 2: 'Лісоруб [тулуб]' }, [{ en: 'Woodsman', uk: 'Лісник' }]);
+    expect(proposals(vs, fixed).map(p => [p.key, p.target])).toEqual([['4', 'Лісник [голова]']]);
   });
 });

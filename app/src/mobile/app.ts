@@ -208,7 +208,17 @@ export async function start(root: HTMLElement): Promise<void> {
     return `<div class="m-more"><p class="m-hint">Застосунок знає слів: ${store.wordCount()} (з термінів і з уже перекладених коротких рядків). Нижче рядки, де відомі всі слова: переклад збирається зі слів, а порядок слів береться з оригіналу, тож перегляньте.</p>
       ${list.length ? `<button class="m-primary wide" data-afapply ${on.length ? '' : 'disabled'}>Вписати вибрані (${on.length})</button>` : ''}
       ${list.slice(0, 80).map(p => `<label class="m-af"><input type="checkbox" data-afk="${esc(p.file + '|' + p.key)}" ${af.off.has(p.file + '|' + p.key) ? '' : 'checked'}><span><small>${esc(store.view(p.file)?.label ?? p.file)}</small><b>${esc(p.source)}</b><i>→ ${esc(p.target)}</i></span></label>`).join('') || '<p class="m-none">Немає рядків, які можна скласти зі знайомих слів</p>'}
-      ${list.length > 80 ? `<p class="m-hint">Показано 80 із ${list.length}: після запису решта з'явиться тут.</p>` : ''}</div>`;
+      ${list.length > 80 ? `<p class="m-hint">Показано 80 із ${list.length}: після запису решта з'явиться тут.</p>` : ''}
+      ${almostHtml()}</div>`;
+  }
+  /** Lines that are one or two words short: what blocks them, and a tap to settle it. */
+  function almostHtml(): string {
+    const list = store.almost().slice(0, 30);
+    if (!list.length) return '';
+    const amb = (w: string, vs: string[]): string => `<div class="m-bl"><small>«${esc(w)}» неоднозначне:</small>${vs.map(v => `<button class="m-mini" data-afterm="${esc(w)}|${esc(v)}">${esc(v)}</button>`).join('')}</div>`;
+    const unk = (w: string): string => `<div class="m-bl"><small>«${esc(w)}» невідоме:</small><button class="m-mini ghost" data-afnew="${esc(w)}">Додати переклад</button></div>`;
+    return `<h3 class="m-h3">Майже готові: не вистачає слів</h3><p class="m-hint">Слово неоднозначне, коли в перекладених рядках воно перекладене по-різному: оберіть потрібний варіант, і він стане терміном. Невідоме слово ще не зустрічалось у перекладених рядках: додайте переклад.</p>
+      ${list.map(a => `<div class="m-af2"><b>${esc(a.source)}</b>${a.blockers.map(b => (b.reason === 'ambiguous' ? amb(b.word, b.variants) : unk(b.word))).join('')}</div>`).join('')}`;
   }
 
   function screenConsistency(): string {
@@ -483,6 +493,8 @@ export async function start(root: HTMLElement): Promise<void> {
     if (q('[data-gcancel]')) { Object.assign(gl, { en: '', uk: '', alt: '', qa: true, edit: false }); render(); return; }
     if ((x = q('[data-gedit]'))) { const t = store.saved.terms.find(y => y.en === x!.dataset.gedit); if (t) { Object.assign(gl, { en: t.en, uk: t.uk, alt: (t.alt ?? []).join(', '), qa: t.qa !== false, edit: true }); render(); $('m-main').scrollTop = 0; } return; }
     if ((x = q('[data-gdel]'))) { store.removeTerm(x.dataset.gdel!); say('Термін видалено'); render(); return; }
+    if ((x = q('[data-afterm]'))) { const [w, v] = x.dataset.afterm!.split('|'); if (store.saveTerm(w!, v!, '', true)) { say('Термін додано: ' + w + ' - ' + v); buzz(10); } render(); return; }
+    if ((x = q('[data-afnew]'))) { Object.assign(gl, { en: x.dataset.afnew!, uk: '', alt: '', qa: true, edit: false }); sub = 'glossary'; render(); $('m-main').scrollTop = 0; return; }
     if ((x = q('[data-afk]'))) { const k = x.dataset.afk!; if (af.off.has(k)) af.off.delete(k); else af.off.add(k); render(); return; }
     if (q('[data-afapply]')) { const n = store.applyAutofill(store.autofill().filter(p => !af.off.has(p.file + '|' + p.key))); af.off.clear(); say(`Вписано рядків: ${n}`); buzz(14); render(); return; }
     if (q('[data-gadd]')) { const c = store.current; gl.en = c && c.unit.source.length <= 40 ? c.unit.source : ''; gl.uk = ''; gl.edit = false; sheet = false; sub = 'glossary'; render(); return; }

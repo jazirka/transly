@@ -1,4 +1,4 @@
-import { learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
+import { almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
 import type { Entry, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
 import { IdbStore } from '../ui/idb';
 
@@ -245,6 +245,8 @@ export class Store {
   /* ---------- autofill by words ---------- */
   wordCount(): number { return learnWords(this.views, this.saved).size; }
   autofill(): ReturnType<typeof autofillProposals> { return autofillProposals(this.views, this.saved); }
+  /** Short untranslated lines that are one or two words short of being composed, with the words that block them. */
+  almost(): ReturnType<typeof autofillAlmost> { return autofillAlmost(this.views, this.saved); }
   /** Write the proposals as drafts marked as autofilled; rows that got a translation meanwhile are skipped. */
   applyAutofill(list: { file: string; key: string; target: string }[]): number {
     let n = 0; const now = Date.now();

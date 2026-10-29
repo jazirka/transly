@@ -28,7 +28,11 @@ export type WordDict = Map<string, string>;
  * translation. A word that got different translations keeps the one that wins by 2:1, otherwise it is ambiguous and
  * dropped. Single-word glossary terms always win.
  */
-export function learnWords(views: FileView[], saved: SavedProject): WordDict {
+export interface Learned { dict: WordDict; /** Words whose translations conflict: the variants with their votes. */ ambiguous: Map<string, [string, number][]> }
+
+export function learnWords(views: FileView[], saved: SavedProject): WordDict { return learnDetailed(views, saved).dict; }
+
+export function learnDetailed(views: FileView[], saved: SavedProject): Learned {
   const votes = new Map<string, Map<string, number>>();
   for (const v of views) {
     const ents = saved.files[v.name]; if (!ents) continue;
@@ -44,16 +48,17 @@ export function learnWords(views: FileView[], saved: SavedProject): WordDict {
       });
     }
   }
-  const dict: WordDict = new Map();
+  const dict: WordDict = new Map(), ambiguous = new Map<string, [string, number][]>();
   for (const [w, m] of votes) {
     const ranked = [...m].sort((x, y) => y[1] - x[1]);
     if (ranked.length === 1 || ranked[0]![1] >= 2 * ranked[1]![1]) dict.set(w, ranked[0]![0]);
+    else ambiguous.set(w, ranked);
   }
   for (const t of saved.terms) {
     const en = tokenize(t.en.trim());
-    if (en.length === 1 && en[0]!.word && t.uk.trim()) dict.set(lower(t.en.trim()), lower(t.uk.trim()));
+    if (en.length === 1 && en[0]!.word && t.uk.trim()) { dict.set(lower(t.en.trim()), lower(t.uk.trim())); ambiguous.delete(lower(t.en.trim())); }
   }
-  return dict;
+  return { dict, ambiguous };
 }
 
 export interface Proposal { file: string; key: string; source: string; target: string }
@@ -77,6 +82,34 @@ export function proposals(views: FileView[], saved: SavedProject, dict: WordDict
       }
       if (target === u.source) continue;
       out.push({ file: v.name, key: u.key, source: u.source, target });
+      if (out.length >= limit) return out;
+    }
+  }
+  return out;
+}
+
+export interface Blocker { word: string; reason: 'unknown' | 'ambiguous'; /** For ambiguous words: the competing translations. */ variants: string[] }
+export interface Almost { file: string; key: string; source: string; blockers: Blocker[] }
+
+/** Untranslated short lines that are one or two words short of being composed, with the words that block them. */
+export function almost(views: FileView[], saved: SavedProject, learned: Learned = learnDetailed(views, saved), limit = 200): Almost[] {
+  const out: Almost[] = [];
+  for (const v of views) {
+    const ents = saved.files[v.name] ?? {};
+    for (const u of v.units) {
+      if (ents[u.key]?.target?.trim()) continue;
+      const words = tokenize(u.source).filter(t => t.word);
+      if (!words.length || words.length > MAX_WORDS) continue;
+      const seen = new Set<string>(), blockers: Blocker[] = [];
+      for (const t of words) {
+        const k = lower(t.text);
+        if (learned.dict.has(k) || seen.has(k)) continue;
+        seen.add(k);
+        const amb = learned.ambiguous.get(k);
+        blockers.push({ word: t.text, reason: amb ? 'ambiguous' : 'unknown', variants: amb ? amb.map(x => x[0]) : [] });
+      }
+      if (!blockers.length || blockers.length > 2) continue;
+      out.push({ file: v.name, key: u.key, source: u.source, blockers });
       if (out.length >= limit) return out;
     }
   }

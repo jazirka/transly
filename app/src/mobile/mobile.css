@@ -186,7 +186,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-table td.c-t:has(textarea){padding:4px;background:var(--raised);box-shadow:inset 0 0 0 1px var(--accent)}
 .m-cell{width:100%;min-height:56px;background:none;border:0;outline:0;resize:none;font-size:15px;line-height:1.45;color:var(--text);padding:6px 8px}
 .m-scoperow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.m-scope button{min-height:30px;font-size:13px;padding:0 6px}.m-scoperow{gap:6px}
+.m-scope button{min-height:36px;font-size:13px;padding:0 6px}.m-scoperow{gap:6px}
 .m-tools{position:static}
 .m-table th,.m-table td{border-right:1px solid var(--line)}.m-table th:last-child,.m-table td:last-child{border-right:0}.m-table{border-top:1px solid var(--line)}
 .m-var{display:grid;grid-template-columns:1fr auto auto;gap:6px 8px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
@@ -202,3 +202,10 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-prevbox .over{color:#ff8f8f}.m-prevbox em{font-style:normal;margin-left:6px;color:#ff8f8f}
 .m-list.rows>li{content-visibility:auto;contain-intrinsic-size:auto 96px}
 .m-more-li{display:flex;justify-content:center;padding:12px}
+
+/* Tap targets: the look stays compact, the touch area grows to 44px */
+.m-mini,.m-chip,.m-scope button{position:relative}
+.m-mini::before,.m-chip::before,.m-scope button::before{content:'';position:absolute;inset:-4px -2px}
+.m-scope{overflow:visible}.m-scope button:first-child{border-radius:999px 0 0 999px}.m-scope button:last-child{border-radius:0 999px 999px 0}
+.m-chips{padding:4px 0;margin:-4px 0}
+.m-sortrow select{height:44px}

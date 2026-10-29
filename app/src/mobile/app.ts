@@ -26,6 +26,7 @@ export async function start(root: HTMLElement): Promise<void> {
   let layout: 'cards' | 'table' = (() => { try { return localStorage.getItem('transly-m-layout') === 'table' ? 'table' : 'cards'; } catch { return 'cards'; } })();
   const fr = { find: '', replace: '', word: false, cs: false, matches: [] as ReturnType<typeof store.find> };
   let refLang = '';
+  let selecting = false; const picked = new Set<string>();
   const sp = { q: '', draft: new Map<string, string>() };
   let upd: UpdateCheck | null = null;
   let updMsg = '';
@@ -85,11 +86,11 @@ export async function start(root: HTMLElement): Promise<void> {
       <div class="m-scoperow"><div class="m-scope" role="group" aria-label="Де шукати"><button class="on" data-scope="file">Файл</button><button data-scope="all">Усі файли</button></div>
       <div class="m-scope" role="group" aria-label="Вигляд"><button class="${layout === 'cards' ? 'on' : ''}" data-layout="cards">Картки</button><button class="${layout === 'table' ? 'on' : ''}" data-layout="table">Таблиця</button></div></div>
       <div class="m-chips" role="group" aria-label="Фільтр">${chips}</div>
-      <div class="m-sortrow"><span>${rows.length} з ${v.units.length}</span><select id="m-sort" aria-label="Порядок">${(['order', 'new', 'qa', 'long'] as Sort[]).map(s => `<option value="${s}" ${store.sort === s ? 'selected' : ''}>${{ order: 'За порядком', new: 'Спершу без перекладу', qa: 'Спершу проблеми', long: 'Спершу найдовші' }[s]}</option>`).join('')}</select></div></div>
+      <div class="m-sortrow"><span>${rows.length} з ${v.units.length}</span>${layout === 'cards' ? `<button class="m-mini ${selecting ? 'on' : ''}" data-select aria-pressed="${selecting}">${selecting ? 'Готово' : 'Вибрати'}</button>` : ''}<select id="m-sort" aria-label="Порядок">${(['order', 'new', 'qa', 'long'] as Sort[]).map(s => `<option value="${s}" ${store.sort === s ? 'selected' : ''}>${{ order: 'За порядком', new: 'Спершу без перекладу', qa: 'Спершу проблеми', long: 'Спершу найдовші' }[s]}</option>`).join('')}</select></div></div>
       ${layout === 'table' ? tableHtml(v.name, shown, rows.length) : `<ul class="m-list rows">${shown.map((u, i) => {
         const e = store.entry(v.name, u.key), st = store.shown(u, e);
-        return `<li><button class="m-row ${u.key === store.key ? 'cur' : ''}" data-key="${esc(u.key)}"><span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span><span class="m-row-t"><small>${i + 1} · ${esc(store.speaker(u) || u.kind)}</small><span class="m-src">${esc(u.source.replace(/\s+/g, ' '))}</span><span class="m-tr ${e?.target ? '' : 'none'}">${e?.target ? esc(e.target.replace(/\s+/g, ' ')) : '—'}</span></span></button></li>`;
-      }).join('') || '<li class="m-none">Нічого не знайдено</li>'}${rows.length > shown.length ? `<li class="m-none">Показано ${shown.length} з ${rows.length}: уточніть пошук</li>` : ''}</ul>`}`;
+        return `<li><button class="m-row ${u.key === store.key && !selecting ? 'cur' : ''} ${selecting && picked.has(u.key) ? 'picked' : ''}" ${selecting ? `data-pickkey="${esc(u.key)}" aria-pressed="${picked.has(u.key)}"` : `data-key="${esc(u.key)}"`}><span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span><span class="m-row-t"><small>${i + 1} · ${esc(store.speaker(u) || u.kind)}</small><span class="m-src">${esc(u.source.replace(/\s+/g, ' '))}</span><span class="m-tr ${e?.target ? '' : 'none'}">${e?.target ? esc(e.target.replace(/\s+/g, ' ')) : '—'}</span></span></button></li>`;
+      }).join('') || '<li class="m-none">Нічого не знайдено</li>'}${rows.length > shown.length ? `<li class="m-none">Показано ${shown.length} з ${rows.length}: уточніть пошук</li>` : ''}</ul>`}${selecting && layout === 'cards' ? `<div class="m-selbar" role="toolbar" aria-label="Дії з вибраним"><b>${picked.size}</b><button class="m-mini" data-selall>Усі</button><button class="m-mini" data-selsend ${picked.size ? '' : 'disabled'}>Надіслати</button><button class="m-mini" data-selcopy ${picked.size ? '' : 'disabled'}>Оригінал</button><button class="m-mini ghost" data-selclear ${picked.size ? '' : 'disabled'}>Очистити</button></div>` : ''}`;
   }
 
   /** The table: columns scroll sideways, a tap on a translation writes right in the cell, a tap on a number opens the row. */
@@ -378,6 +379,16 @@ export async function start(root: HTMLElement): Promise<void> {
     if (q('[data-spsave]')) { const n = store.setSpeakers(sp.draft); sp.draft.clear(); say(n ? `Мовців оновлено: ${n}` : 'Змін немає'); render(); return; }
     if ((x = q('[data-file]'))) { store.open(x.dataset.file!); go('rows'); return; }
     if ((x = q('[data-filter]'))) { store.setFilter(x.dataset.filter as Filter); render(); return; }
+    if (q('[data-select]')) { selecting = !selecting; picked.clear(); render(); return; }
+    if ((x = q('[data-pickkey]'))) { const k = x.dataset.pickkey!; if (picked.has(k)) picked.delete(k); else picked.add(k); render(); return; }
+    if (q('[data-selall]')) { const all = store.rows(); if (picked.size === all.length) picked.clear(); else all.forEach(u => picked.add(u.key)); render(); return; }
+    if (q('[data-selsend]') || q('[data-selclear]') || q('[data-selcopy]')) {
+      const v = store.view(); if (!v) return; const us = v.units.filter(u => picked.has(u.key));
+      if (q('[data-selsend]')) { const r = store.sendMany(v.name, us); say(`Надіслано: ${r.sent}${r.skipped ? ` · пропущено: ${r.skipped}` : ''}`, r.sent === 0); }
+      else if (q('[data-selclear]')) say(`Очищено: ${store.clearMany(v.name, us)}`);
+      else { const n = us.filter(u => store.writeAtCopy(v.name, u)).length; say(`Скопійовано оригінал: ${n}`); }
+      buzz(14); picked.clear(); render(); return;
+    }
     if ((x = q('[data-key]'))) { openRow(x.dataset.key!); return; }
     if ((x = q('[data-step]'))) { step(Number(x.dataset.step) as 1 | -1); return; }
     if (q('[data-send]')) {

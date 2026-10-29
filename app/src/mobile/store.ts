@@ -146,6 +146,11 @@ export class Store {
     this.entries(c.file)[c.unit.key] = edit(c.entry, c.unit, text, this.stage, Date.now());
     this.tmCache = null; this.persist();
   }
+  /** Copy the original into an empty translation; false when there already is a translation. */
+  writeAtCopy(file: string, u: Unit): boolean {
+    if (this.entry(file, u.key)?.target) return false;
+    this.writeAt(file, u.key, u.source); return true;
+  }
   /** Typing into a cell of the table: any row, not only the open one. */
   writeAt(file: string, key: string, text: string): void {
     const u = this.unit(file, key); if (!u) return;
@@ -166,6 +171,13 @@ export class Store {
     const c = this.current; if (!c) return;
     this.entries(c.file)[c.unit.key] = fn(c.file, c.unit, c.entry);
     this.tmCache = null; this.persist(); this.emit();
+  }
+  /** Empty the translation of these rows (kept in the history as a cleared edit). */
+  clearMany(file: string, units: Unit[]): number {
+    let n = 0; const now = Date.now();
+    for (const u of units) { const e = this.entry(file, u.key); if (!e?.target) continue; this.entries(file)[u.key] = edit(e, u, '', this.stage, now); n++; }
+    if (n) { this.tmCache = null; this.persist(); this.emit(); }
+    return n;
   }
   /** Send every translated row of these units that can be sent (the rest are counted, not blocked). */
   sendMany(file: string, units: Unit[]): { sent: number; skipped: number } {

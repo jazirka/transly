@@ -70,3 +70,18 @@
 .ide.sz-s #lp-rows #bulk .ghost{margin-left:auto}
 .dl-acts{display:flex;flex-direction:column;gap:6px}.dl-acts .btn{height:40px;text-align:left;padding:0 14px}
 .lphint{padding:6px 14px;color:var(--mute);font-size:11.5px}
+
+/* Table on the phone: every row is a small card (who, original, translation); a tap opens the row in the editor. */
+.ide.sz-s .grid{min-width:0}
+.ide.sz-s .gh{display:none}
+.ide.sz-s .gr{grid-template-columns:22px minmax(0,1fr);grid-template-areas:"st who" "st src" "st tr";gap:2px 8px;padding:10px 12px 10px 8px;min-height:0;align-items:start}
+.ide.sz-s .gr>:nth-child(1),.ide.sz-s .gr>:nth-child(3),.ide.sz-s .gr>:nth-child(7){display:none}
+.ide.sz-s .gr>:nth-child(2){grid-area:st;padding-top:4px}
+.ide.sz-s .gr>.who{grid-area:who;font-size:11.5px;color:var(--accent);padding:0}
+.ide.sz-s .gr>.who:empty{display:none}
+.ide.sz-s .gr>.src{grid-area:src;padding:0;font-size:14px}
+.ide.sz-s .gr>.tr{grid-area:tr;padding:0;font-size:14px;color:var(--text);opacity:.85}
+.ide.sz-s .filters{padding:6px 10px}
+.ide.sz-s .filters .fin{flex:1 1 100%}
+.ide.sz-s .crumbs{display:none}
+.ide.sz-s .legend-bar{display:none}

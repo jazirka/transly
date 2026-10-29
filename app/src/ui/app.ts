@@ -73,7 +73,9 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     <button class="ab-ic" id="ab-left" aria-label="Файли й рядки" aria-pressed="false">${SVG.panelL}</button>
     <div class="abt"><b id="ab-title">Transly</b><small id="ab-sub"></small></div>
     <button class="chip on" id="ab-stage" title="Змінити етап"></button>
+    <button class="ab-ic" id="ab-view" aria-label="Таблиця" title="Таблиця всіх рядків" aria-pressed="false"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM2.5 7h11M6.5 3.5v9"/></svg></button>
     <button class="ab-ic" id="ab-right" aria-label="Вказівки, глосарій, коментарі" aria-pressed="false">${SVG.panelR}</button>
+    <button class="ab-ic" id="ab-menu" aria-label="Меню: інструменти, збірка, пошук" aria-haspopup="menu">${SVG.menu}</button>
     <button class="ab-ic" id="ab-set" aria-label="Налаштування">${SVG.gear}</button>
   </header>
   <div class="main">
@@ -297,6 +299,7 @@ export async function start(root: HTMLElement): Promise<void> {
     document.querySelectorAll<HTMLElement>('#seg [data-m]').forEach(b => { const on = b.dataset.m === s.mode || (s.mode === 'review' && b.dataset.m === 'edit'); b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
     $('#ab-left').setAttribute('aria-pressed', String(s.leftOpen));
     $('#ab-right').setAttribute('aria-pressed', String(s.rightOpen));
+    $('#ab-view').setAttribute('aria-pressed', String(s.mode === 'table'));
   }
 
   function treeNodes(): { t: 'd' | 'f'; d: number; name: string; label: string }[] {
@@ -548,7 +551,6 @@ export async function start(root: HTMLElement): Promise<void> {
 
   /* ---------- actions ---------- */
   function setMode(m: Mode, rerender = true): void {
-    if (s.phone && m === 'table') m = 'edit';
     if (m === s.mode) return;
     const wasReview = s.mode === 'review';
     s.mode = m;
@@ -956,7 +958,7 @@ export async function start(root: HTMLElement): Promise<void> {
   /* ---------- events ---------- */
   root.addEventListener('click', e => {
     const t = e.target as HTMLElement;
-    if (!t.closest('#fpop,#spkbtn,#lenbtn,#cfgpop,#cfg-btn,#projpop,#proj-btn')) closePops();
+    if (!t.closest('#fpop,#spkbtn,#lenbtn,#ab-menu,#cfgpop,#cfg-btn,#projpop,#proj-btn')) closePops();
     if (!t.closest('#keypop,#hk')) $('#keypop').hidden = true;
     if (t.closest('#open,#open2')) { void openFolder(); return; }
     if (t.closest('#resume')) { void resume(); return; }
@@ -993,6 +995,14 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.closest('#ab-right')) { s.rightOpen = !s.rightOpen; s.leftOpen = false; renderAll(); return; }
     if (t.closest('#scrim')) { s.leftOpen = false; s.rightOpen = false; renderAll(); return; }
     if (t.closest('#stage-pill')) { setMode(s.mode === 'review' ? 'edit' : 'review'); return; }
+    if (t.closest('#ab-view')) { setMode(s.mode === 'table' ? 'edit' : 'table'); return; }
+    if (t.closest('#ab-menu')) {
+      // The phone has no menu bar: the same menus, as one list.
+      showPop(t.closest<HTMLElement>('#ab-menu')!, Object.entries(MENUS).map(([g, items]) => `<div class="group">${esc(g)}</div>${items.map((it, i) => (it === '-' ? '' : `<button data-pmi="${esc(g)}|${i}">${esc(it.t)}</button>`)).join('')}`).join(''));
+      return;
+    }
+    const pmi = t.closest<HTMLElement>('[data-pmi]');
+    if (pmi) { const [g, i] = pmi.dataset.pmi!.split('|'); closePops(); const it = MENUS[g!]?.[Number(i)]; if (it && it !== '-') it.fn(); return; }
     if (t.closest('#ab-stage')) { setMode(s.mode === 'review' ? 'edit' : 'review'); return; }
     const lt = t.closest<HTMLElement>('#mtabs [data-lt]');
     if (lt) { s.leftTab[s.mode] = lt.dataset.lt === 'rows' ? 'rows' : 'files'; renderAll(); return; }
@@ -1065,6 +1075,8 @@ export async function start(root: HTMLElement): Promise<void> {
     if (s.mode !== 'table' && focusClick(ctx, t)) return;
     if (s.mode === 'table') {
       const row = t.closest<HTMLElement>('.gr');
+      // A phone has no room to write inside the table: a tap opens the row in the editor.
+      if (s.phone && row && row.dataset.key) { ctx.select(row.dataset.key, 'edit'); return; }
       // A click on a translation cell selects its row and starts writing right there.
       if (row && t.closest('.gr .tr') && !t.closest('textarea')) {
         if (row.dataset.key !== s.cur) { document.querySelector('.gr.sel')?.classList.remove('sel'); row.classList.add('sel'); s.cur = row.dataset.key ?? null; renderStatus(); renderSidePanel(ctx); }
@@ -1177,7 +1189,6 @@ export async function start(root: HTMLElement): Promise<void> {
 
   mq.addEventListener('change', () => {
     s.phone = mq.matches; s.leftOpen = !s.phone; s.rightOpen = false;
-    if (s.phone && s.mode === 'table') setMode('edit', false);
     renderAll();
   });
 

@@ -1,4 +1,4 @@
-import { canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, limitFor } from '../core';
+import { canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, limitFor, wordsOf, gorohUrl, multitranUrl } from '../core';
 import type { GameFile } from '../core';
 import { artifactDb, describeClaude, loadClaudeConfig, saveClaudeConfig } from '../ui/claude';
 import { describeGithub, githubApi, githubConfigured, loadGithubConfig, saveGithubConfig } from '../ui/github';
@@ -18,7 +18,7 @@ const SHAPE: Record<Shown, string> = { new: 'sd-new', draft: 'sd-draft', done: '
 export async function start(root: HTMLElement): Promise<void> {
   const store = await Store.open();
   let tab: Tab = store.hasGame ? (store.key ? 'edit' : 'rows') : 'more';
-  let sheet = false; let sheetTab: 'terms' | 'tm' | 'cm' | 'hist' | null = null;
+  let sheet = false; let sheetTab: 'terms' | 'tm' | 'cm' | 'hist' | 'dict' | null = null; let gk: 'Тлумачення' | 'Синоніми' = 'Тлумачення';
   let busy = '';
   type Sub = 'scene' | 'find' | 'speakers' | 'settings' | 'consistency';
   let sub: Sub | null = null;
@@ -271,6 +271,14 @@ export async function start(root: HTMLElement): Promise<void> {
 
   /* ---------- the hints sheet ---------- */
   const fmtTime = (t: number): string => new Date(t).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  /** Words of the original (Multitran) and of the translation (Goroh): each opens its dictionary page in the browser. */
+  function dictPanel(source: string, target: string): string {
+    const chip = (w: string, url: string): string => `<a class="m-w" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(w)}</a>`;
+    const en = wordsOf(source), uk = wordsOf(target);
+    return `<div class="m-dict"><h4>Оригінал · Multitran</h4><div class="m-wchips">${en.map(w => chip(w, multitranUrl(w))).join('') || '<span class="m-hint">Слів немає</span>'}</div>
+      <h4>Переклад · Горох</h4><div class="m-dseg" role="group" aria-label="Сторінка Гороху">${(['Тлумачення', 'Синоніми'] as const).map(k => `<button data-gk="${k}" class="${k === gk ? 'on' : ''}" aria-pressed="${k === gk}">${k}</button>`).join('')}</div>
+      <div class="m-wchips">${uk.map(w => chip(w, gorohUrl(w, gk))).join('') || '<span class="m-hint">Спершу напишіть переклад</span>'}</div></div>`;
+  }
   /** Side panel under the top bar: one topic at a time (glossary, memory, comments, history); the top-bar button that opened it closes it. */
   function renderSheet(): void {
     const wrap = $('m-sheet'); wrap.hidden = !sheet;
@@ -278,12 +286,13 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!sheet || !c) { wrap.innerHTML = ''; delete wrap.dataset.open; return; }
     const fresh = wrap.dataset.open !== '1'; wrap.dataset.open = '1';
     const terms = store.terms(c.unit), tm = store.suggestions(c.unit, c.entry), cm = c.entry?.comments ?? [], hist = [...(c.entry?.history ?? [])].reverse().slice(0, 20);
-    const counts = { terms: terms.length, tm: tm.length, cm: cm.length, hist: hist.length };
-    const tabs: ['terms' | 'tm' | 'cm' | 'hist', string][] = [['terms', 'Глосарій'], ['tm', 'Пам’ять'], ['cm', 'Коментарі'], ['hist', 'Історія']];
+    const counts = { terms: terms.length, tm: tm.length, cm: cm.length, hist: hist.length, dict: 0 };
+    const tabs: ['terms' | 'tm' | 'cm' | 'hist' | 'dict', string][] = [['terms', 'Глосарій'], ['tm', 'Пам’ять'], ['dict', 'Слова'], ['cm', 'Коментарі'], ['hist', 'Історія']];
     const cur = sheetTab ?? (counts.terms ? 'terms' : counts.tm ? 'tm' : counts.cm ? 'cm' : 'terms');
     const panel = cur === 'terms' ? (terms.length ? terms.map((t, i) => `<button class="m-hit" data-term="${i}"><b>${esc(t.en)}</b><span>→ ${esc(t.uk)}${t.alt?.length ? ` · ${esc(t.alt.join(', '))}` : ''}</span></button>`).join('') : '<p class="m-none">У цьому рядку термінів немає</p>')
       : cur === 'tm' ? (tm.length ? tm.map((m, i) => `<button class="m-hit" data-tm="${i}"><b class="m-score">${m.score}%</b><span>${esc(m.t)}</span></button>`).join('') : '<p class="m-none">Схожих перекладів немає</p>')
       : cur === 'cm' ? (cm.length ? cm.map(x => `<div class="m-cmc"><small><b>${esc(x.who)}</b> · ${fmtTime(x.at)}</small><p>${esc(x.text)}</p></div>`).join('') : '<p class="m-none">Коментарів ще немає</p>')
+      : cur === 'dict' ? dictPanel(c.unit.source, c.entry?.target ?? '')
       : (hist.length ? `<ol class="m-time">${hist.map(h => `<li><small>${fmtTime(h.at)} · ${esc(h.who)}</small><span class="m-chipx">${esc(h.what)}</span><p>${esc(h.text.slice(0, 200))}</p></li>`).join('')}</ol>` : '<p class="m-none">Історії ще немає</p>');
     wrap.innerHTML = `<div class="m-scrim ${fresh ? 'in' : ''}" data-close></div><aside class="m-sheet ${fresh ? 'in' : ''}" role="dialog" aria-label="Допомога до рядка">
       <div class="m-stabs" role="tablist">${tabs.map(([k, l]) => `<button role="tab" data-stab="${k}" aria-selected="${k === cur}" class="${k === cur ? 'on' : ''}">${l}${counts[k] ? `<i>${counts[k]}</i>` : ''}</button>`).join('')}</div>
@@ -441,6 +450,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if ((x = q('[data-ins]'))) { insert(x.dataset.ins ?? ''); return; }
     if (q('[data-wrap]')) { if (store.wrap()) { render(); } else say('Рядки вже вміщаються'); return; }
     if ((x = q('[data-ign]'))) { store.mutate((_f, _u, en) => ({ ...(en as NonNullable<typeof en>), ign: [...new Set([...(en?.ign ?? []), x!.dataset.ign!])], mt: Date.now() })); refreshMeta(); return; }
+    if ((x = q('[data-gk]'))) { gk = x.dataset.gk as typeof gk; renderSheet(); return; }
     if ((x = q('[data-stab]'))) { sheetTab = x.dataset.stab as typeof sheetTab; renderSheet(); return; }
     if (q('[data-sheet]')) { sheet = !sheet; renderSheet(); renderChrome(); return; }
     if (q('[data-close]')) { sheet = false; renderSheet(); renderChrome(); return; }

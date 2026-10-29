@@ -33,3 +33,4 @@ export * from './usage';
 export * from './findreplace';
 export * from './consistency';
 export * from './update';
+export * from './dictlinks';

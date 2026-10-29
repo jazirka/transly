@@ -100,7 +100,10 @@ h2,h3{margin:0}
 .m-pos{text-align:center;color:var(--dim);font-size:13px}
 .m-main.tab-edit{display:flex;flex-direction:column;padding-bottom:0}.m-main.tab-edit>.m-edit{flex:1}
 /* The action bar sits right on the navigation bar: same surface, no gap */
-.m-actions{position:sticky;bottom:0;z-index:5;display:flex;gap:8px;padding:8px 12px;background:var(--panel);border-top:1px solid var(--line)}
+.m-actions{position:sticky;bottom:0;z-index:5;display:flex;flex-direction:column;gap:8px;padding:14px 12px 8px;isolation:isolate}
+/* a haze: the content shows through, softly, and fades into the navigation bar below */
+.m-actions::before{content:'';position:absolute;inset:0;z-index:-1;background:linear-gradient(rgba(26,27,30,0),rgba(26,27,30,.78) 38%);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);-webkit-mask-image:linear-gradient(transparent,#000 42%);mask-image:linear-gradient(transparent,#000 42%)}
+.m-act2{display:flex;gap:8px}.m-act1{display:flex;gap:8px}
 .m-ic{flex:none;width:52px;height:52px;border-radius:var(--r2);background:var(--raised);border:1px solid var(--line);display:grid;place-items:center}
 .m-ic:disabled{opacity:.4}
 .m-primary{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:52px;padding:0 20px;border-radius:999px;background:var(--accent);color:#fff;font-weight:600}
@@ -142,7 +145,7 @@ h2,h3{margin:0}
 code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 
 /* toasts */
-.m-toasts{position:absolute;left:12px;right:12px;bottom:calc(var(--nav) + 76px);z-index:30;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.m-toasts{position:absolute;left:12px;right:12px;bottom:calc(var(--nav) + 130px);z-index:30;display:flex;flex-direction:column;gap:8px;pointer-events:none}
 .kb .m-toasts{bottom:76px}
 .m-toast{align-self:center;max-width:100%;padding:10px 16px;border-radius:var(--r2);background:#33363b;border:1px solid #4a4d54;box-shadow:0 10px 30px rgba(0,0,0,.5);animation:m-up .22s cubic-bezier(.2,.8,.2,1)}
 .m-toast.bad{background:#3a2a2e;border-color:#8a3b44}

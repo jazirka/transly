@@ -62,7 +62,9 @@ export async function start(root: HTMLElement): Promise<void> {
     const tot = store.totals();
     const pct = tot.total ? Math.floor((100 * tot.translated) / tot.total) : 0;
     const title = tab === 'files' ? 'Файли гри' : tab === 'rows' ? (store.view()?.label ?? store.file ?? 'Рядки') : tab === 'edit' ? (store.file ?? 'Переклад') : 'Ще';
-    const subline = tab === 'more' || !store.hasGame || sub ? '' : `Перекладено ${pct}% · ${store.saveOk ? 'збережено' : 'не збережено!'}`;
+    let where = '';
+    if (tab === 'edit' && !sub && store.current) { const list = store.rows(), pos = list.findIndex(x => x.key === store.current!.unit.key); if (pos >= 0) where = `Рядок ${pos + 1} з ${list.length} · `; }
+    const subline = tab === 'more' || !store.hasGame || sub ? '' : `${where}${pct}% · ${store.saveOk ? 'збережено' : 'не збережено!'}`;
     $('m-bar').innerHTML = `${sub ? '<button class="m-back" data-subback aria-label="Назад">' + icon('prev') + '</button>' : ''}<div class="m-title"><b>${esc(sub ? SUB_TITLE[sub] : title)}</b>${subline ? `<small class="${store.saveOk ? '' : 'bad'}">${esc(subline)}</small>` : ''}</div>${busy ? `<span class="m-busy" role="status">${esc(busy)}</span>` : ''}${helpBtn()}`;
     document.documentElement.style.setProperty('--bar-h', $('m-bar').offsetHeight + 'px');
     $('m-nav').innerHTML = (Object.keys(TAB_LABEL) as Tab[]).map(t => `<button role="tab" data-go="${t}" aria-selected="${t === tab}" class="${t === tab ? 'on' : ''}" ${(t === 'rows' || t === 'edit') && !store.hasGame ? 'disabled' : ''}>${icon(t)}<span>${TAB_LABEL[t]}</span></button>`).join('');
@@ -208,7 +210,6 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!c) return empty('Рядок не вибрано', 'Оберіть рядок зі списку.', 'rows', 'До рядків');
     const u = c.unit, e = c.entry, st = store.shown(u, e), v = store.view();
     const terms = store.terms(u);
-    const list = store.rows(), pos = list.findIndex(x => x.key === u.key);
     const review = store.stage === 'review';
     return `<div class="m-edit" id="m-edit">
       <div class="m-ctx"><span class="m-tag">${esc(u.kind)}</span>${store.speaker(u) ? `<span class="m-tag who">${esc(store.speaker(u))}</span>` : ''}${v?.label ? `<span class="m-tag">${esc(v.label)}</span>` : ''}<span class="m-status"><span class="sd ${SHAPE[st]}"></span>${STATUS_LABEL[st]}</span></div>
@@ -218,10 +219,8 @@ export async function start(root: HTMLElement): Promise<void> {
       </section>
       <div id="m-prev" class="m-prev"></div>
       <div id="m-issues" class="m-issues">${issuesHtml()}</div>
-      <div class="m-tools-row"><button class="m-mini" data-copy>${icon('copy')} Оригінал</button><button class="m-mini" data-sub="scene">${icon('rows')} Сцена</button><button class="m-mini ghost" data-clear>Очистити</button></div>
-      <div class="m-pos">${pos >= 0 ? `${pos + 1} / ${list.length}` : ''}</div>
     </div>
-    <div class="m-actions" id="m-actions"><button class="m-ic" data-step="-1" aria-label="Попередній рядок" ${store.neighbour(-1) ? '' : 'disabled'}>${icon('prev')}</button><button class="m-ic" data-step="1" aria-label="Наступний рядок" ${store.neighbour(1) ? '' : 'disabled'}>${icon('next')}</button><button class="m-primary" data-send>${icon('check')}<span>${review ? 'Затвердити' : 'Надіслати'}</span></button></div>`;
+    <div class="m-actions" id="m-actions"><div class="m-act2"><button class="m-mini" data-sub="scene">${icon('rows')} Сцена</button><button class="m-mini ghost" data-clear>Очистити</button></div><div class="m-act1"><button class="m-ic" data-step="-1" aria-label="Попередній рядок" ${store.neighbour(-1) ? '' : 'disabled'}>${icon('prev')}</button><button class="m-ic" data-step="1" aria-label="Наступний рядок" ${store.neighbour(1) ? '' : 'disabled'}>${icon('next')}</button><button class="m-primary" data-send>${icon('check')}<span>${review ? 'Затвердити' : 'Надіслати'}</span></button></div></div>`;
   }
 
   function screenMore(): string {

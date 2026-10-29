@@ -119,3 +119,11 @@ Settings → Exchange project through a file saves everything but the game files
 - Build: the GitHub Actions workflow **Android APK** builds it with the official Android SDK and uploads `transly.apk` as an artifact (Actions → the run → Artifacts). The APK is signed with the debug key, so install it by hand (allow installs from this source) and publish with your own key if you ever distribute it.
 - Locally, with the Android SDK: `npm run build`, copy `dist/*` into `android/app/src/main/assets/`, then `cd android && ./gradlew assembleRelease`.
 - Android 10 or newer.
+
+## Two apps: desktop and phone
+
+The desktop app (`src/main.ts` → `src/ui`, packaged by Tauri) and the phone app (`src/main-mobile.ts` → `src/mobile`, packaged into the APK) are separate: each has its own shell, styles and screens. They share only `src/core` (formats, QA, merging, sync) and a few storage/sync helpers (`ui/idb`, `ui/github`, `ui/claude`, `ui/android`, `ui/markup`).
+
+- `npm run build` → `dist` (desktop, unchanged); `npm run build:mobile` → `dist-mobile` (phone, used by `.github/workflows/android.yml`).
+- `npm run dev` / `npm run dev:mobile` start the two dev servers.
+- The phone app: Файли → Рядки → Переклад → Ще, bottom navigation, swipe between rows, bottom sheet with glossary/memory, GitHub/Claude sync and in-app updates in «Ще».

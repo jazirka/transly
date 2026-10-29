@@ -8,3 +8,4 @@ android/app/build/
 android/local.properties
 # the web app is copied in at build time (see .github/workflows/android.yml)
 android/app/src/main/assets/
+dist-mobile/

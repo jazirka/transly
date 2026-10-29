@@ -39,18 +39,18 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Test and build the web app
+      - name: Test and build the phone app
         working-directory: app
         run: |
           npm ci
           npm test
-          npm run build
+          npm run build:mobile
 
       - name: Put the web app into the APK
         working-directory: app/android
         run: |
           mkdir -p app/src/main/assets
-          cp -r ../dist/. app/src/main/assets/
+          cp -r ../dist-mobile/. app/src/main/assets/
 
       - name: Accept Android SDK licenses
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true

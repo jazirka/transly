@@ -1,4 +1,4 @@
-import { canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates } from '../core';
+import { canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, limitFor } from '../core';
 import type { GameFile } from '../core';
 import { artifactDb, describeClaude, loadClaudeConfig, saveClaudeConfig } from '../ui/claude';
 import { describeGithub, githubApi, githubConfigured, loadGithubConfig, saveGithubConfig } from '../ui/github';
@@ -206,6 +206,7 @@ export async function start(root: HTMLElement): Promise<void> {
       <section class="m-card m-tr-card"><h3>${review ? 'Після вичитування' : 'Переклад'}<span class="m-count" id="m-count"></span></h3>
         <textarea id="m-tr" class="m-textarea" spellcheck="false" autocapitalize="sentences" placeholder="Напишіть переклад…" aria-label="Переклад">${esc(e?.target ?? '')}</textarea>
       </section>
+      <div id="m-prev" class="m-prev"></div>
       <div id="m-issues" class="m-issues">${issuesHtml()}</div>
       <div class="m-tools-row"><button class="m-mini" data-copy>${icon('copy')} Оригінал</button>${hasHints ? `<button class="m-mini" data-sheet>${icon('book')} Підказки</button>` : ''}<button class="m-mini" data-sub="scene">${icon('rows')} Сцена</button><button class="m-mini ghost" data-clear>Очистити</button></div>
       <div class="m-pos">${pos >= 0 ? `${pos + 1} / ${list.length}` : ''}</div>
@@ -283,6 +284,14 @@ export async function start(root: HTMLElement): Promise<void> {
     const c = store.current; if (!c) return;
     const n = document.getElementById('m-count'); const t = c.entry?.target ?? '';
     if (n) n.textContent = `${[...t].length} / ${[...c.unit.source].length}`;
+    const pv = document.getElementById('m-prev');
+    if (pv) {
+      const lim = limitFor(store.lineLimit(), c.unit.face);
+      const lines = t.split('\n');
+      pv.hidden = !lim || !t.trim();
+      pv.style.setProperty('--lim', String(lim || 0));
+      pv.innerHTML = lim ? `<small>Вікно гри: ${lim} зн. у рядку</small><div class="m-prevbox">${lines.map(l => { const plain = [...l.replace(/\\[A-Za-z]+(\[[^\]]*\])?|\\[.|!<>^{}$]/g, '')]; const over = plain.length - lim; return `<div class="${over > 0 ? 'over' : ''}">${esc(l) || '&nbsp;'}${over > 0 ? `<em>+${over}</em>` : ''}</div>`; }).join('')}</div>` : '';
+    }
     const box = document.getElementById('m-issues'); if (box) box.innerHTML = issuesHtml();
     const stEl = document.querySelector('.m-status'); if (stEl) { const st = store.shown(c.unit, c.entry); stEl.innerHTML = `<span class="sd ${SHAPE[st]}"></span>${STATUS_LABEL[st]}`; }
   }

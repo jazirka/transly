@@ -58,7 +58,12 @@ jobs:
       - name: Fixed signing key (secrets ANDROID_KEYSTORE_B64 and ANDROID_KEYSTORE_PASSWORD)
         env:
           KS: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
+          if [ -n "$KS" ] && [ -z "$PW" ]; then
+            echo "::error::Secret ANDROID_KEYSTORE_PASSWORD is missing or empty (the name must match exactly)."
+            exit 1
+          fi
           if [ -n "$KS" ]; then
             echo "$KS" | base64 -d > "$RUNNER_TEMP/transly.keystore"
             echo "TRANSLY_KEYSTORE=$RUNNER_TEMP/transly.keystore" >> "$GITHUB_ENV"

@@ -169,7 +169,7 @@ export async function start(root: HTMLElement): Promise<void> {
       <div class="m-sortrow"><span>${rows.length} з ${v.units.length}</span>${layout === 'cards' ? `<button class="m-mini ${selecting ? 'on' : ''}" data-select aria-pressed="${selecting}">${selecting ? 'Готово' : 'Вибрати'}</button>` : ''}<select id="m-sort" aria-label="Порядок">${(['order', 'new', 'qa', 'long'] as Sort[]).map(s => `<option value="${s}" ${store.sort === s ? 'selected' : ''}>${{ order: 'За порядком', new: 'Спершу без перекладу', qa: 'Спершу проблеми', long: 'Спершу найдовші' }[s]}</option>`).join('')}</select></div></div>
       ${layout === 'table' ? tableHtml(v.name, shown, rows.length) : `<ul class="m-list rows">${shown.map((u, i) => {
         const e = store.entry(v.name, u.key), st = store.shown(u, e);
-        return `<li><button class="m-row ${u.key === store.key && !selecting ? 'cur' : ''} ${selecting && picked.has(u.key) ? 'picked' : ''}" ${selecting ? `data-pickkey="${esc(u.key)}" aria-pressed="${picked.has(u.key)}"` : `data-key="${esc(u.key)}"`}><span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span><span class="m-row-t"><small>${i + 1} · ${esc(store.speaker(u) || u.kind)}</small><span class="m-src">${esc(u.source.replace(/\s+/g, ' '))}</span><span class="m-tr ${e?.target ? '' : 'none'}">${e?.target ? esc(e.target.replace(/\s+/g, ' ')) : '—'}</span></span></button></li>`;
+        return `<li><button class="m-row ${u.key === store.key && !selecting ? 'cur' : ''} ${selecting && picked.has(u.key) ? 'picked' : ''}" ${selecting ? `data-pickkey="${esc(u.key)}" aria-pressed="${picked.has(u.key)}"` : `data-key="${esc(u.key)}"`}>${selecting ? `<span class="m-chk ${picked.has(u.key) ? 'on' : ''}" aria-hidden="true"></span>` : ''}<span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span><span class="m-row-t"><small>${i + 1} · ${esc(store.speaker(u) || u.kind)}</small><span class="m-src">${esc(u.source.replace(/\s+/g, ' '))}</span><span class="m-tr ${e?.target ? '' : 'none'}">${e?.target ? esc(e.target.replace(/\s+/g, ' ')) : '—'}</span></span></button></li>`;
       }).join('') || '<li class="m-none">Нічого не знайдено</li>'}${rows.length > shown.length ? `<li class="m-more-li"><button class="m-mini" data-more>Показати ще ${Math.min(PAGE, rows.length - shown.length)} · ${shown.length} з ${rows.length}</button></li>` : ''}</ul>`}${selecting && layout === 'cards' ? `<div class="m-selbar" role="toolbar" aria-label="Дії з вибраним"><b>${picked.size}</b><button class="m-mini" data-selall>Усі</button><button class="m-mini" data-selsend ${picked.size ? '' : 'disabled'}>Надіслати</button><button class="m-mini" data-selcopy ${picked.size ? '' : 'disabled'}>Оригінал</button><button class="m-mini danger" data-selclear ${picked.size ? '' : 'disabled'}>Очистити</button></div>` : ''}`;
   }
 
@@ -327,10 +327,10 @@ export async function start(root: HTMLElement): Promise<void> {
     const list = store.autofill(), shown = list.slice(0, 80), on = list.filter(p => !af.off.has(p.file + '|' + p.key));
     const allOn = on.length === list.length;
     return `<div class="m-more m-afwrap"><p class="m-hint">Застосунок знає слів: ${store.wordCount()}.</p>
-      ${shown.map(p => { const k = p.file + '|' + p.key, sel = !af.off.has(k); return `<label class="m-af ${sel ? 'sel' : ''}" data-aflp="${esc(k)}"><input type="checkbox" data-afk="${esc(k)}" ${sel ? 'checked' : ''}><span><small>${esc(store.view(p.file)?.label ?? p.file)}</small><b>${esc(p.source)}</b><i>→ ${esc(p.target)}</i></span></label>`; }).join('') || '<p class="m-none">Немає рядків, які можна скласти зі знайомих слів</p>'}
+      ${shown.map(p => { const k = p.file + '|' + p.key, sel = !af.off.has(k); return `<label class="m-af ${sel ? 'sel' : ''}" data-aflp="${esc(k)}"><span class="m-gut"><input type="checkbox" data-afk="${esc(k)}" ${sel ? 'checked' : ''}></span><span><small>${esc(store.view(p.file)?.label ?? p.file)}</small><b>${esc(p.source)}</b><i>→ ${esc(p.target)}</i></span></label>`; }).join('') || '<p class="m-none">Немає рядків, які можна скласти зі знайомих слів</p>'}
       ${list.length > 80 ? `<p class="m-hint">Показано 80 із ${list.length}: після запису решта з'явиться тут.</p>` : ''}
       ${almostHtml()}</div>
-      ${list.length ? `<div class="m-afbar"><small>Переклад збирається зі слів, порядок слів береться з оригіналу: перегляньте. Затисніть рядок, щоб додати чи прибрати його з вибраних.</small>
+      ${list.length ? `<div class="m-afbar"><small>Переклад збирається зі слів, порядок слів береться з оригіналу: перегляньте. Щоб вибрати кілька, проведіть пальцем по прапорцях ліворуч або затисніть рядок і ведіть вниз.</small>
         <div class="m-afrow"><b>${on.length} з ${list.length}</b><button class="m-mini" data-afall>${allOn ? 'Зняти вибір' : 'Вибрати всі'}</button><button class="m-primary" data-afapply ${on.length ? '' : 'disabled'}>${icon('check')}<span>Вписати вибрані</span></button></div></div>` : ''}`;
   }
   /** Lines that are one or two words short: what blocks them, and a tap to settle it. */
@@ -787,25 +787,36 @@ export async function start(root: HTMLElement): Promise<void> {
     const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y;
     setTimeout(() => { lpFired = false; }, 350);
   }
-  root.addEventListener('pointerdown', e => {
-    const card = (e.target as HTMLElement).closest<HTMLElement>(CARD);
+  /** Start selecting: the card under the finger flips, and every card the finger passes gets the same state. */
+  function startDrag(card: HTMLElement, x: number, y: number): void {
+    lpFired = true; buzz(18);
+    if (!isAf(card)) selecting = true;
+    const add = !isOn(card);
+    paint(card, add);
+    drag = { add, last: cardKey(card) ?? '', x, y, raf: 0 };
+    drag.raf = requestAnimationFrame(dragLoop);
+  }
+  const GUT = '.m-chk, .m-gut';
+  let tl: { timer: number; x: number; y: number; card: HTMLElement; gut: boolean } | null = null;
+  const tlCancel = (): void => { if (tl) { clearTimeout(tl.timer); tl = null; } };
+  root.addEventListener('touchstart', e => {
+    const t = e.touches[0]; if (!t || e.touches.length > 1) { tlCancel(); return; }
+    const el = e.target as HTMLElement, card = el.closest<HTMLElement>(CARD);
     if (!card) return;
-    lpFired = false;
-    lp = { x: e.clientX, y: e.clientY, timer: window.setTimeout(() => {
-      lpFired = true; lp = null; buzz(18);
-      if (!isAf(card)) selecting = true;
-      const add = !isOn(card);
-      paint(card, add);
-      drag = { add, last: cardKey(card) ?? '', x: e.clientX, y: e.clientY, raf: 0 };
-      drag.raf = requestAnimationFrame(dragLoop);
-    }, 450) };
-  });
-  const lpCancel = (): void => { if (lp) { clearTimeout(lp.timer); lp = null; } };
-  root.addEventListener('pointermove', e => { if (lp && Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > 8) lpCancel(); if (drag) dragAt(e.clientX, e.clientY); });
-  // After the long-press the finger belongs to the selection: stop the browser from scrolling with it.
-  root.addEventListener('touchmove', e => { if (drag) { e.preventDefault(); const t = e.touches[0]; if (t) dragAt(t.clientX, t.clientY); } }, { passive: false });
-  const lpUp = (): void => { lpCancel(); if (drag) dragEnd(); else if (lpFired) setTimeout(() => { lpFired = false; }, 350); };
-  root.addEventListener('pointerup', lpUp); root.addEventListener('pointercancel', lpUp); root.addEventListener('touchend', lpUp); root.addEventListener('touchcancel', lpUp);
+    lpFired = false; tlCancel();
+    const gut = !!el.closest(GUT);
+    tl = { x: t.clientX, y: t.clientY, card, gut, timer: gut ? 0 : window.setTimeout(() => { if (tl) { const c = tl; tl = null; startDrag(c.card, c.x, c.y); } }, 450) };
+  }, { passive: true });
+  // After the long-press (or a drag started on the handle) the finger belongs to the selection: the browser must not scroll with it.
+  root.addEventListener('touchmove', e => {
+    const t = e.touches[0]; if (!t) return;
+    if (drag) { e.preventDefault(); dragAt(t.clientX, t.clientY); return; }
+    if (!tl) return;
+    if (Math.hypot(t.clientX - tl.x, t.clientY - tl.y) <= 8) return;
+    if (tl.gut) { const c = tl; tlCancel(); e.preventDefault(); startDrag(c.card, c.x, c.y); dragAt(t.clientX, t.clientY); } else tlCancel();
+  }, { passive: false });
+  const touchUp = (): void => { tlCancel(); if (drag) dragEnd(); else if (lpFired) setTimeout(() => { lpFired = false; }, 350); };
+  root.addEventListener('touchend', touchUp); root.addEventListener('touchcancel', touchUp);
   root.addEventListener('contextmenu', e => { if ((e.target as HTMLElement).closest('.m-row, [data-aflp]')) e.preventDefault(); });
   root.addEventListener('click', e => { if (lpFired) { lpFired = false; e.stopPropagation(); e.preventDefault(); } }, true);
   const topBtn = $('m-top'), mainEl = $('m-main');

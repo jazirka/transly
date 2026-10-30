@@ -368,3 +368,15 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-act2 .m-mini{background:rgba(42,44,48,.55);border-color:rgba(255,255,255,.18);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
 .m-act2 .m-mini.danger{background:rgba(247,84,100,.16);border-color:rgba(247,84,100,.45)}
 .m-act2 .m-mini.danger.armed{background:rgba(247,84,100,.85);border-color:var(--bad)}
+
+/* the handle on the left of a card: dragging along it selects, without scrolling the page */
+.m-chk,.m-gut{flex:none;touch-action:none;display:grid;place-items:center;width:44px;min-height:44px;margin:-8px 0 -8px -14px}
+.m-chk::before{content:'';width:22px;height:22px;border-radius:50%;border:2px solid var(--dim);box-sizing:border-box}
+.m-chk.on::before{background:var(--accent);border-color:var(--accent);box-shadow:inset 0 0 0 4px var(--bg)}
+.m-gut input{width:22px;height:22px;margin:0}
+.m-af{align-items:center}
+/* bars at the bottom: translucent with a blur like the search field */
+.m-afbar,.scn-bar{background:rgba(35,37,40,.62);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+.m-selbar{background:rgba(42,44,48,.62);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+.m-afrow .m-primary{white-space:nowrap;flex:1;justify-content:center;padding:0 12px;min-width:0}
+.m-afrow .m-mini{background:rgba(255,255,255,.1);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}

@@ -755,7 +755,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const cardKey = (el: HTMLElement): string | null => el.dataset.aflp ?? el.dataset.key ?? el.dataset.pickkey ?? null;
   const CARD = '.m-row[data-key], .m-row[data-pickkey], [data-aflp]';
   let lp: { timer: number; x: number; y: number } | null = null; let lpFired = false;
-  let drag: { add: boolean; last: string; y: number; x: number; raf: number } | null = null;
+  let drag: { add: boolean; last: number; y: number; x: number; raf: number } | null = null;
   const isAf = (el: HTMLElement): boolean => el.dataset.aflp !== undefined;
   /** Set a card selected or not without redrawing the page (the finger is on it). */
   function paint(el: HTMLElement, on: boolean): void {
@@ -764,12 +764,20 @@ export async function start(root: HTMLElement): Promise<void> {
     else { if (on) picked.add(k); else picked.delete(k); el.classList.toggle('picked', on); el.setAttribute('aria-pressed', String(on)); }
   }
   const isOn = (el: HTMLElement): boolean => { const k = cardKey(el); return !!k && (isAf(el) ? !af.off.has(k) : picked.has(k)); };
+  /** The card the finger is over by position, also when a bar or the search field floats above it; every card passed on the way is changed too. */
   function dragAt(x: number, y: number): void {
     if (!drag) return;
     drag.x = x; drag.y = y;
-    const el = document.elementFromPoint(x, y)?.closest<HTMLElement>(CARD);
-    const k = el ? cardKey(el) : null;
-    if (el && k && k !== drag.last) { drag.last = k; if (isOn(el) !== drag.add) paint(el, drag.add); }
+    const main = $('m-main'), r = main.getBoundingClientRect();
+    const bar = document.querySelector('.m-selbar, .m-afbar'), barTop = bar ? bar.getBoundingClientRect().top : r.bottom;
+    const yy = Math.min(Math.max(y, r.top + 70), barTop - 4);
+    const cards = [...main.querySelectorAll<HTMLElement>(CARD)];
+    let idx = -1, best = Infinity;
+    cards.forEach((c, i) => { const b = c.getBoundingClientRect(), d = yy < b.top ? b.top - yy : yy > b.bottom ? yy - b.bottom : 0; if (d < best) { best = d; idx = i; } });
+    if (idx < 0 || idx === drag.last) return;
+    const from = drag.last < 0 ? idx : drag.last, lo = Math.min(from, idx), hi = Math.max(from, idx);
+    for (let n = lo; n <= hi; n++) { const el = cards[n]!; if (isOn(el) !== drag.add) paint(el, drag.add); }
+    drag.last = idx;
   }
   function dragLoop(): void {
     if (!drag) return;
@@ -793,7 +801,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!isAf(card)) selecting = true;
     const add = !isOn(card);
     paint(card, add);
-    drag = { add, last: cardKey(card) ?? '', x, y, raf: 0 };
+    drag = { add, last: -1, x, y, raf: 0 };
     drag.raf = requestAnimationFrame(dragLoop);
   }
   const GUT = '.m-chk, .m-gut';

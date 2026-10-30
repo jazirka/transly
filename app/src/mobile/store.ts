@@ -129,12 +129,20 @@ export class Store {
   }
 
   /* ---------- moving around ---------- */
+  /** Open a file; without a row it returns to the row that was active in that file last time. */
   open(file: string, key: string | null = null): void {
-    this.file = file; this.key = key; this.q = ''; this.filter = 'all';
+    this.file = file; this.key = key ?? this.lastRow(file); this.q = ''; this.filter = 'all';
     this.remember(); this.emit();
   }
+  private lastRows(): Record<string, string> { try { return JSON.parse(localStorage.getItem('transly-m-rows') ?? '{}') as Record<string, string>; } catch { return {}; } }
+  private lastRow(file: string): string | null { const k = this.lastRows()[file]; return k && this.unit(file, k) ? k : null; }
   select(key: string): void { this.key = key; this.remember(); this.emit(); }
-  private remember(): void { try { localStorage.setItem('transly-m-pos', JSON.stringify({ file: this.file, key: this.key })); } catch { /* private mode */ } }
+  private remember(): void {
+    try {
+      localStorage.setItem('transly-m-pos', JSON.stringify({ file: this.file, key: this.key }));
+      if (this.file && this.key) { const m = this.lastRows(); m[this.file] = this.key; localStorage.setItem('transly-m-rows', JSON.stringify(m)); }
+    } catch { /* private mode */ }
+  }
   /** The row `d` places away in the list that is on screen; null at the ends. */
   neighbour(d: 1 | -1): Unit | null {
     const list = this.rows(); const i = list.findIndex(u => u.key === this.key);

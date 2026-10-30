@@ -124,8 +124,9 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!v) return empty('Файл не вибрано', 'Оберіть файл у розділі «Файли».', 'files', 'До файлів');
     if (scope === 'all') return screenAll();
     const sig = `${store.file}|${store.filter}|${store.q}|${store.sort}`;
-    if (sig !== pageSig) { pageSig = sig; page = 1; }
-    const rows = store.rows(), shown = rows.slice(0, PAGE * page);
+    const rows = store.rows();
+    if (sig !== pageSig) { pageSig = sig; page = 1; const at = store.key ? rows.findIndex(u => u.key === store.key) : -1; if (at >= PAGE) page = Math.ceil((at + 1) / PAGE); }
+    const shown = rows.slice(0, PAGE * page);
     const chips = FILTERS.map(([f, l]) => `<button class="m-chip ${store.filter === f ? 'on' : ''}" data-filter="${f}" aria-pressed="${store.filter === f}">${l}</button>`).join('');
     return `<div class="m-tools"><label class="m-search">${icon('search')}<input id="m-q" type="search" placeholder="Пошук у файлі" value="${esc(store.q)}" enterkeyhint="search" autocomplete="off"></label>
       <div class="m-scoperow"><div class="m-scope" role="group" aria-label="Де шукати"><button class="on" data-scope="file">Файл</button><button data-scope="all">Усі файли</button></div>
@@ -144,7 +145,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const idx = new Map(all.map((u, i) => [u.key, i + 1]));
     return `<div class="m-twrap"><table class="m-table"><thead><tr><th class="c-n">№</th><th class="c-s"></th><th class="c-o">Оригінал</th><th class="c-t">Переклад</th><th class="c-l">Знаків</th></tr></thead><tbody>${rows.map(u => {
       const e = store.entry(file, u.key), st = store.shown(u, e), t = e?.target ?? '';
-      return `<tr data-trkey="${esc(u.key)}"><td class="c-n" data-key="${esc(u.key)}" title="Відкрити в редакторі">${idx.get(u.key)}</td><td class="c-s"><span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span></td><td class="c-o" data-key="${esc(u.key)}">${esc(u.source)}</td><td class="c-t ${t ? '' : 'none'}" data-cell="${esc(u.key)}">${t ? esc(t) : '—'}</td><td class="c-l">${t ? `${[...t].length}/${[...u.source].length}` : '—'}</td></tr>`;
+      return `<tr class="${u.key === store.key ? 'cur' : ''}" data-trkey="${esc(u.key)}"><td class="c-n" data-key="${esc(u.key)}" title="Відкрити в редакторі">${idx.get(u.key)}</td><td class="c-s"><span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span></td><td class="c-o" data-key="${esc(u.key)}">${esc(u.source)}</td><td class="c-t ${t ? '' : 'none'}" data-cell="${esc(u.key)}">${t ? esc(t) : '—'}</td><td class="c-l">${t ? `${[...t].length}/${[...u.source].length}` : '—'}</td></tr>`;
     }).join('')}</tbody></table>${total > rows.length ? `<p class="m-none"><button class="m-mini" data-more>Показати ще · ${rows.length} з ${total}</button></p>` : ''}</div>`;
   }
 
@@ -455,9 +456,11 @@ export async function start(root: HTMLElement): Promise<void> {
       requestAnimationFrame(() => setTimeout(() => { if (sub === want) { ready.add(want); render(); } }, 30));
       return;
     }
-    if (vk !== viewKey) { viewKey = vk; main.classList.add('enter'); }
+    const entered = vk !== viewKey;
+    if (entered) { viewKey = vk; main.classList.add('enter'); }
     main.innerHTML = sub ? ({ scene: screenScene, find: screenFind, speakers: screenSpeakers, settings: screenSettings, consistency: screenConsistency, glossary: screenGlossary, autofill: screenAutofill, sendlog: screenSendLog }[sub])() : tab === 'files' ? screenFiles() : tab === 'rows' ? screenRows() : tab === 'edit' ? screenEdit() : screenMore();
     renderSheet();
+    if (entered && tab === 'rows' && !sub) requestAnimationFrame(() => document.querySelector('.m-row.cur, .m-table tr.cur')?.scrollIntoView({ block: 'center' }));
     if (tab === 'edit' && !sub) { refreshMeta(); autosize(); }
     if (tab === 'more') void artifactDb().then(db => { const el = document.getElementById('m-claude'); if (db && el) el.hidden = false; });
   }

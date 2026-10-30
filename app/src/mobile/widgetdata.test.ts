@@ -26,7 +26,7 @@ describe('widget data', () => {
     expect(w.cur).toMatchObject({ key: '2', pos: 2, of: 5, t: 'T2' });
     expect(w.days).toEqual([0, 0, 0, 0, 1, 1, 2]);
     expect(w.today).toBe(w.days[6]);
-    expect(w.streak).toBe(2);
+    expect(w.streak).toBe(3);
     expect(w.next?.key).toBe('5');
   });
 });

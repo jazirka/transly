@@ -74,7 +74,12 @@ final class WidgetKit {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP)
                 .putExtra(MainActivity.EXTRA_FILE, file == null ? "" : file)
                 .putExtra(MainActivity.EXTRA_KEY, key == null ? "" : key)
-                .putExtra(MainActivity.EXTRA_ACTION, action == null ? "open" : action);
+                .putExtra(MainActivity.EXTRA_ACTION, action == null ? "open" : action)
+                // Extras do not tell PendingIntents apart: without a distinct address every widget would overwrite the others' row.
+                .setData(android.net.Uri.parse("transly://widget").buildUpon()
+                        .appendQueryParameter("a", action == null ? "open" : action)
+                        .appendQueryParameter("f", file == null ? "" : file)
+                        .appendQueryParameter("k", key == null ? "" : key).build());
         return PendingIntent.getActivity(c, code, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 

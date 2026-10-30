@@ -32,7 +32,9 @@ export async function start(root: HTMLElement): Promise<void> {
   let layout: 'cards' | 'table' = (() => { try { return localStorage.getItem('transly-m-layout') === 'table' ? 'table' : 'cards'; } catch { return 'cards'; } })();
   const fr = { find: '', replace: '', word: false, cs: false, matches: [] as ReturnType<typeof store.find> };
   const PAGE = 100; let page = 1, pageSig = '';
-  let refLang = ''; let fq = ''; let sq = '';
+  let refLang = ''; let fq = '';
+  const collapsedCats = new Set<string>((() => { try { return JSON.parse(localStorage.getItem('transly-m-cats') ?? '[]') as string[]; } catch { return []; } })()); let sq = '';
+  let srTimer = 0;
   let plPick: Set<string> | null = null; let resetArmed = false;
   let selecting = false; const picked = new Set<string>();
   const scn: { mode: 'both' | 'tr' | 'src'; real: boolean; picked: string; ctx: CanvasRenderingContext2D | null } = { mode: 'both', real: false, picked: '', ctx: null };
@@ -157,17 +159,27 @@ export async function start(root: HTMLElement): Promise<void> {
 
   function screenFiles(): string {
     if (!store.hasGame) return empty('Файлів ще немає', 'Відкрийте файли гри або проєкт у розділі «Ще».', 'more', 'Відкрити файли');
-    return `<div id="m-flist">${filesList()}</div><div class="m-searchbar"><label class="m-search">${icon('search')}<input id="m-fq" type="search" placeholder="Пошук файлу" value="${esc(fq)}" enterkeyhint="search" autocomplete="off"></label></div>`;
+    return `<div id="m-flist">${filesList()}</div><div class="m-searchbar"><label class="m-search m-pill">${icon('search')}<span class="m-ph" aria-hidden="true">Пошук файлу</span><input id="m-fq" type="search" placeholder=" " aria-label="Пошук файлу" value="${esc(fq)}" enterkeyhint="search" autocomplete="off"></label></div>`;
   }
   /** The files whose name or title contains the search words. */
   function filesList(): string {
     const q = fq.trim().toLowerCase();
     const views = store.views.filter(v => !q || (v.name + ' ' + (v.label ?? '')).toLowerCase().includes(q));
     if (!views.length) return '<p class="m-none">Файлів за цим пошуком немає</p>';
-    return `<ul class="m-list">${views.map(v => {
+    const item = (v: (typeof views)[number]): string => {
       const st = store.stats(v.name), pc = st.total ? Math.round((100 * st.translated) / st.total) : 0;
       return `<li><button class="m-item ${v.name === store.file ? 'cur' : ''}" data-file="${esc(v.name)}"><span class="m-ico">${/^Map\d+\.json$/.test(v.name) ? 'MAP' : '{ }'}</span><span class="m-item-t"><b>${esc(v.label ?? v.name.replace(/\.json$/, ''))}</b><small>${esc(v.label ? v.name.replace(/\.json$/, '') : plural(st.total, ['рядок', 'рядки', 'рядків']))}</small>${bar(st.translated, st.total)}</span><span class="m-pc">${pc}%</span></button></li>`;
-    }).join('')}</ul>`;
+    };
+    // The same automatic categories as on the computer: the game's data, the maps, and each other folder.
+    const cat = (name: string): string => (name.includes('/') ? name.split('/').slice(0, -1).join('/') : /^Map\d+\.json$/.test(name) ? 'Карти' : 'Дані гри');
+    const groups = new Map<string, typeof views>();
+    for (const v of views) { const k = cat(v.name); groups.set(k, [...(groups.get(k) ?? []), v]); }
+    if (groups.size < 2) return `<ul class="m-list">${views.map(item).join('')}</ul>`;
+    return [...groups].map(([k, vs]) => {
+      const open = !!q || !collapsedCats.has(k);
+      const t = vs.reduce((n, v) => { const st = store.stats(v.name); return { tr: n.tr + st.translated, all: n.all + st.total }; }, { tr: 0, all: 0 });
+      return `<section class="m-cat ${open ? 'open' : ''}"><button class="m-cat-h" data-cat="${esc(k)}" aria-expanded="${open}"><span class="m-cat-c">${icon('down')}</span><b>${esc(k)}</b><small>${vs.length} · ${t.all ? Math.round((100 * t.tr) / t.all) : 0}%</small></button>${open ? `<ul class="m-list">${vs.map(item).join('')}</ul>` : ''}</section>`;
+    }).join('');
   }
 
   function screenRows(): string {
@@ -179,7 +191,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (sig !== pageSig) { pageSig = sig; page = 1; const at = store.key ? rows.findIndex(u => u.key === store.key) : -1; if (at >= PAGE) page = Math.ceil((at + 1) / PAGE); }
     const shown = rows.slice(0, PAGE * page);
     const chips = FILTERS.map(([f, l]) => `<button class="m-chip ${store.filter === f ? 'on' : ''}" data-filter="${f}" aria-pressed="${store.filter === f}">${l}</button>`).join('');
-    const sbar = `<div class="m-searchbar"><label class="m-search">${icon('search')}<input id="m-q" type="search" placeholder="Пошук у файлі" value="${esc(store.q)}" enterkeyhint="search" autocomplete="off"></label></div>`;
+    const sbar = `<div class="m-searchbar"><label class="m-search m-pill">${icon('search')}<span class="m-ph" aria-hidden="true">Пошук у файлі</span><input id="m-q" type="search" placeholder=" " aria-label="Пошук у файлі" value="${esc(store.q)}" enterkeyhint="search" autocomplete="off"></label></div>`;
     return `<div class="m-tools">
       <div class="m-scoperow"><div class="m-scope" role="group" aria-label="Де шукати"><button class="on" data-scope="file">Файл</button><button data-scope="all">Усі файли</button></div>
       <div class="m-scope" role="group" aria-label="Вигляд"><button class="${layout === 'cards' ? 'on' : ''}" data-layout="cards">Картки</button><button class="${layout === 'table' ? 'on' : ''}" data-layout="table">Таблиця</button></div></div>
@@ -686,6 +698,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (q('[data-doreplace]')) { const n = store.replaceAll(fr.matches); fr.matches = []; say(`Замінено в рядках: ${n}`); buzz(14); render(); return; }
     if ((x = q('[data-uni]'))) { const [gi, vi] = x.dataset.uni!.split('|').map(Number); const g = store.inconsistent()[gi!]; const v = g?.variants[vi!]; if (g && v) { const n = store.unify(g.source, v.target); say(`Уніфіковано рядків: ${n}`); buzz(14); } render(); return; }
     if (q('[data-refpick]')) { refLang = ($<HTMLInputElement>('rf-lang').value || '').trim().toLowerCase(); if (!refLang) { say('Вкажіть код мови, наприклад ru або pl', true); return; } $<HTMLInputElement>('m-reffile').click(); return; }
+    if ((x = q('[data-cat]'))) { const k = x.dataset.cat!; if (collapsedCats.has(k)) collapsedCats.delete(k); else collapsedCats.add(k); try { localStorage.setItem('transly-m-cats', JSON.stringify([...collapsedCats])); } catch { /* private mode */ } const l = document.getElementById('m-flist'); if (l) l.innerHTML = filesList(); return; }
     if (q('[data-termfile]')) { $<HTMLInputElement>('m-termfile').click(); return; }
     if (q('[data-termgo]')) { const r = store.importTermsText($<HTMLTextAreaElement>('i-terms').value); say(`Додано термінів: ${r.added}${r.rejected ? `, пропущено рядків без пари: ${r.rejected}` : ''}`, !r.added); render(); return; }
     if (q('[data-tmgo]')) { const r = store.importMemory($<HTMLTextAreaElement>('i-tm').value); say(`Імпортовано пар: ${r.added}${r.rejected ? `, пропущено рядків без табуляції: ${r.rejected}` : ''}`, !r.added); render(); return; }
@@ -778,7 +791,7 @@ export async function start(root: HTMLElement): Promise<void> {
   });
   root.addEventListener('input', e => {
     const t = e.target as HTMLElement;
-    if (t.id === 'sr-q') { sq = (t as HTMLInputElement).value; const keep = (t as HTMLInputElement).selectionStart ?? 0; render(); const qi = document.getElementById('sr-q') as HTMLInputElement; qi.focus(); qi.setSelectionRange(keep, keep); return; }
+    if (t.id === 'sr-q') { sq = (t as HTMLInputElement).value; clearTimeout(srTimer); srTimer = window.setTimeout(() => { const el = document.getElementById('sr-q') as HTMLInputElement | null; if (!el || sub !== 'search') return; const keep = el.selectionStart ?? 0; render(); const qi = document.getElementById('sr-q') as HTMLInputElement; qi.focus(); qi.setSelectionRange(keep, keep); }, 250); return; }
     if (t.id === 'f-find') fr.find = (t as HTMLInputElement).value;
     else if (t.id === 'f-rep') fr.replace = (t as HTMLInputElement).value;
     else if (t.id === 'sp-q') { sp.q = (t as HTMLInputElement).value; const keep = (t as HTMLInputElement).selectionStart ?? 0; render(); const qi = document.getElementById('sp-q') as HTMLInputElement; qi.focus(); qi.setSelectionRange(keep, keep); }

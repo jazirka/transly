@@ -748,23 +748,64 @@ export async function start(root: HTMLElement): Promise<void> {
   });
   // The keyboard takes the bottom navigation's place.
   const TEXTY = 'textarea, input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=range]):not([type=file])';
-  /** Long-press adds a card to the selection; moving the finger (scrolling) cancels it, so the page still scrolls. */
+  /**
+   * Long-press on a card toggles it; keep the finger down and drag over other cards to give them the same state
+   * (select or unselect). Near the top or bottom edge the page scrolls gently. A short swipe still just scrolls.
+   */
+  const cardKey = (el: HTMLElement): string | null => el.dataset.aflp ?? el.dataset.key ?? el.dataset.pickkey ?? null;
+  const CARD = '.m-row[data-key], .m-row[data-pickkey], [data-aflp]';
   let lp: { timer: number; x: number; y: number } | null = null; let lpFired = false;
+  let drag: { add: boolean; last: string; y: number; x: number; raf: number } | null = null;
+  const isAf = (el: HTMLElement): boolean => el.dataset.aflp !== undefined;
+  /** Set a card selected or not without redrawing the page (the finger is on it). */
+  function paint(el: HTMLElement, on: boolean): void {
+    const k = cardKey(el); if (!k) return;
+    if (isAf(el)) { if (on) af.off.delete(k); else af.off.add(k); el.classList.toggle('sel', on); const cb = el.querySelector<HTMLInputElement>('input'); if (cb) cb.checked = on; }
+    else { if (on) picked.add(k); else picked.delete(k); el.classList.toggle('picked', on); el.setAttribute('aria-pressed', String(on)); }
+  }
+  const isOn = (el: HTMLElement): boolean => { const k = cardKey(el); return !!k && (isAf(el) ? !af.off.has(k) : picked.has(k)); };
+  function dragAt(x: number, y: number): void {
+    if (!drag) return;
+    drag.x = x; drag.y = y;
+    const el = document.elementFromPoint(x, y)?.closest<HTMLElement>(CARD);
+    const k = el ? cardKey(el) : null;
+    if (el && k && k !== drag.last) { drag.last = k; if (isOn(el) !== drag.add) paint(el, drag.add); }
+  }
+  function dragLoop(): void {
+    if (!drag) return;
+    const main = $('m-main'), r = main.getBoundingClientRect(), edge = 90;
+    const bottom = r.bottom - (document.querySelector('.m-selbar, .m-afbar') ? 130 : 70);
+    let v = 0;
+    if (drag.y < r.top + edge + 56) v = -Math.min(6, 1 + (r.top + edge + 56 - drag.y) / 18);
+    else if (drag.y > bottom) v = Math.min(6, 1 + (drag.y - bottom) / 14);
+    if (v) { main.scrollTop += v; dragAt(drag.x, drag.y); }
+    drag.raf = requestAnimationFrame(dragLoop);
+  }
+  function dragEnd(): void {
+    if (!drag) return;
+    cancelAnimationFrame(drag.raf); drag = null;
+    const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y;
+    setTimeout(() => { lpFired = false; }, 350);
+  }
   root.addEventListener('pointerdown', e => {
-    const card = (e.target as HTMLElement).closest<HTMLElement>('.m-row[data-key], .m-row[data-pickkey], [data-aflp]');
+    const card = (e.target as HTMLElement).closest<HTMLElement>(CARD);
     if (!card) return;
     lpFired = false;
     lp = { x: e.clientX, y: e.clientY, timer: window.setTimeout(() => {
       lpFired = true; lp = null; buzz(18);
-      const y = $('m-main').scrollTop;
-      if (card.dataset.aflp) { const k = card.dataset.aflp; if (af.off.has(k)) af.off.delete(k); else af.off.add(k); }
-      else { const k = card.dataset.key ?? card.dataset.pickkey!; selecting = true; if (picked.has(k)) picked.delete(k); else picked.add(k); }
-      render(); $('m-main').scrollTop = y;
+      if (!isAf(card)) selecting = true;
+      const add = !isOn(card);
+      paint(card, add);
+      drag = { add, last: cardKey(card) ?? '', x: e.clientX, y: e.clientY, raf: 0 };
+      drag.raf = requestAnimationFrame(dragLoop);
     }, 450) };
   });
   const lpCancel = (): void => { if (lp) { clearTimeout(lp.timer); lp = null; } };
-  root.addEventListener('pointermove', e => { if (lp && Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > 8) lpCancel(); });
-  root.addEventListener('pointerup', () => { lpCancel(); if (lpFired) setTimeout(() => { lpFired = false; }, 350); }); root.addEventListener('pointercancel', lpCancel);
+  root.addEventListener('pointermove', e => { if (lp && Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > 8) lpCancel(); if (drag) dragAt(e.clientX, e.clientY); });
+  // After the long-press the finger belongs to the selection: stop the browser from scrolling with it.
+  root.addEventListener('touchmove', e => { if (drag) { e.preventDefault(); const t = e.touches[0]; if (t) dragAt(t.clientX, t.clientY); } }, { passive: false });
+  const lpUp = (): void => { lpCancel(); if (drag) dragEnd(); else if (lpFired) setTimeout(() => { lpFired = false; }, 350); };
+  root.addEventListener('pointerup', lpUp); root.addEventListener('pointercancel', lpUp); root.addEventListener('touchend', lpUp); root.addEventListener('touchcancel', lpUp);
   root.addEventListener('contextmenu', e => { if ((e.target as HTMLElement).closest('.m-row, [data-aflp]')) e.preventDefault(); });
   root.addEventListener('click', e => { if (lpFired) { lpFired = false; e.stopPropagation(); e.preventDefault(); } }, true);
   const topBtn = $('m-top'), mainEl = $('m-main');

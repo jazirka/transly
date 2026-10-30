@@ -19,6 +19,7 @@ const SHAPE: Record<Shown, string> = { new: 'sd-new', draft: 'sd-draft', done: '
 export async function start(root: HTMLElement): Promise<void> {
   const store = await Store.open();
   let tab: Tab = store.hasGame ? (store.key ? 'edit' : 'rows') : 'more';
+  let menu = false;
   let sheet = false; let sheetTab: 'terms' | 'tm' | 'cm' | 'hist' | 'dict' | null = null; let gk: 'Тлумачення' | 'Синоніми' = 'Тлумачення';
   let busy = '';
   type Sub = 'scene' | 'find' | 'speakers' | 'settings' | 'consistency' | 'glossary' | 'autofill' | 'sendlog';
@@ -62,10 +63,16 @@ export async function start(root: HTMLElement): Promise<void> {
     say(`Надіслати ${plural(n, ['рядок', 'рядки', 'рядків'])}? Торкніться ще раз, щоб підтвердити`);
     return false;
   };
-  const go = (t: Tab): void => { tab = t; sheet = false; sub = null; render(); };
+  const go = (t: Tab): void => { tab = t; sheet = false; menu = false; sub = null; render(); };
   const SUB_TITLE: Record<Sub, string> = { scene: 'Сцена', find: 'Знайти й замінити', speakers: 'Хто говорить', settings: 'Налаштування', consistency: 'Узгодженість', glossary: 'Глосарій', autofill: 'Автозаповнення', sendlog: 'Активність' };
 
   /* ---------- chrome ---------- */
+  /** The tools (find and replace, speakers, activity, glossary, autofill, consistency, settings): one menu pinned to the top bar of every screen. */
+  const TOOLS: [Sub, string, string][] = [['find', 'Знайти й замінити', 'search'], ['speakers', 'Хто говорить', 'rows'], ['sendlog', 'Активність', 'send'], ['glossary', 'Глосарій', 'book'], ['autofill', 'Автозаповнення', 'edit'], ['consistency', 'Узгодженість', 'check'], ['settings', 'Налаштування', 'more']];
+  function toolsBtn(): string {
+    if (sub || !store.hasGame) return '';
+    return `<button class="m-hdr ${menu ? 'on' : ''}" data-menu aria-pressed="${menu}" aria-label="Інструменти">${icon('more')}</button>`;
+  }
   /** Top-bar button of the editor: glossary, memory, comments and history of the open row. */
   function helpBtn(): string {
     const c = store.current; if (tab !== 'edit' || sub || !c) return '';
@@ -79,7 +86,7 @@ export async function start(root: HTMLElement): Promise<void> {
     let where = '';
     if (tab === 'edit' && !sub && store.current) { const list = store.rows(), pos = list.findIndex(x => x.key === store.current!.unit.key); if (pos >= 0) where = `Рядок ${pos + 1} з ${list.length} · `; }
     const subline = tab === 'more' || !store.hasGame || sub ? '' : `${where}${pct}% · ${store.saveOk ? 'збережено' : 'не збережено!'}`;
-    $('m-bar').innerHTML = `${sub ? '<button class="m-back" data-subback aria-label="Назад">' + icon('prev') + '</button>' : ''}<div class="m-title"><b>${esc(sub ? SUB_TITLE[sub] : title)}</b>${subline ? `<small class="${store.saveOk ? '' : 'bad'}">${esc(subline)}</small>` : ''}</div>${busy ? `<span class="m-busy" role="status">${esc(busy)}</span>` : ''}${helpBtn()}`;
+    $('m-bar').innerHTML = `${sub ? '<button class="m-back" data-subback aria-label="Назад">' + icon('prev') + '</button>' : ''}<div class="m-title"><b>${esc(sub ? SUB_TITLE[sub] : title)}</b>${subline ? `<small class="${store.saveOk ? '' : 'bad'}">${esc(subline)}</small>` : ''}</div>${busy ? `<span class="m-busy" role="status">${esc(busy)}</span>` : ''}${helpBtn()}${toolsBtn()}`;
     document.documentElement.style.setProperty('--bar-h', $('m-bar').offsetHeight + 'px');
     $('m-nav').innerHTML = (Object.keys(TAB_LABEL) as Tab[]).map(t => `<button role="tab" data-go="${t}" aria-selected="${t === tab}" class="${t === tab ? 'on' : ''}" ${(t === 'rows' || t === 'edit') && !store.hasGame ? 'disabled' : ''}>${icon(t)}<span>${TAB_LABEL[t]}</span></button>`).join('');
     if (androidBridge()) {
@@ -351,7 +358,6 @@ export async function start(root: HTMLElement): Promise<void> {
         <details class="m-det"><summary>Додатково</summary><label class="m-lbl" for="g-branch">Гілка</label><input id="g-branch" class="m-input" value="${esc(gh.branch)}" placeholder="основна" autocomplete="off"><label class="m-lbl" for="g-dir">Папка в репозиторії</label><input id="g-dir" class="m-input" value="${esc(gh.dir)}" placeholder="корінь" autocomplete="off"></details>
         <button class="m-primary wide" data-ghsync ${busy ? 'disabled' : ''}>${icon('sync')}<span>Синхронізувати</span></button><p class="m-hint" id="m-ghstate">${gh.last ? 'Востаннє: ' + new Date(gh.last).toLocaleString('uk-UA') : 'Ще не синхронізовано'}</p></section>
       <section class="m-card" id="m-claude" hidden><h3>Синхронізація через Claude</h3><p class="m-hint">Спільна база артефакту: працює між вашими пристроями.</p><button class="m-secondary wide" data-clsync>${icon('sync')}<span>Синхронізувати через Claude</span></button></section>
-      ${store.hasGame ? `<section class="m-card"><h3>Інструменти</h3><div class="m-links"><button data-sub="find">Знайти й замінити</button><button data-sub="speakers">Хто говорить</button><button data-sub="sendlog">Активність</button><button data-sub="glossary">Глосарій</button><button data-sub="autofill">Автозаповнення</button><button data-sub="consistency">Узгодженість</button><button data-sub="settings">Налаштування</button></div></section>` : ''}
       ${canUpdate() ? updateSection() : ''}
       <section class="m-card"><h3>Проєкт</h3><label class="m-lbl" for="m-who">Ваше ім’я в коментарях</label><input id="m-who" class="m-input" value="${esc(store.who)}" maxlength="40" autocomplete="off">
         <button class="m-secondary wide" data-export>Зберегти проєкт у файл</button></section>
@@ -385,7 +391,16 @@ export async function start(root: HTMLElement): Promise<void> {
   }
   /** Side panel under the top bar: one topic at a time (glossary, memory, comments, history); the top-bar button that opened it closes it. */
   function renderSheet(): void {
-    const wrap = $('m-sheet'); wrap.hidden = !sheet;
+    const wrap = $('m-sheet'); wrap.hidden = !sheet && !menu;
+    if (menu) {
+      wrap.dataset.open = '';
+      const badge: Partial<Record<Sub, number>> = { autofill: store.autofill().length, consistency: store.inconsistent().length, sendlog: store.sends().length };
+      const tile = ([k, l, ic]: [Sub, string, string]): string => `<button class="m-tile" data-sub="${k}">${icon(ic)}<span>${l}</span>${badge[k] ? `<i>${badge[k]! > 99 ? '99+' : badge[k]}</i>` : ''}</button>`;
+      const by = (k: Sub): [Sub, string, string] => TOOLS.find(t => t[0] === k)!;
+      wrap.innerHTML = `<div class="m-scrim" data-close></div><nav class="m-menu" aria-label="Інструменти"><div class="m-tiles">${(['find', 'autofill', 'consistency', 'speakers', 'glossary', 'sendlog'] as Sub[]).map(k => tile(by(k))).join('')}</div>
+        <button class="m-menu-set" data-sub="settings">${icon('more')}<span>Налаштування</span></button></nav>`;
+      return;
+    }
     const c = store.current;
     if (!sheet || !c) { wrap.innerHTML = ''; delete wrap.dataset.open; return; }
     const fresh = wrap.dataset.open !== '1'; wrap.dataset.open = '1';
@@ -512,7 +527,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const q = <T extends HTMLElement>(sel: string): T | null => t.closest<T>(sel);
     let x: HTMLElement | null;
     if ((x = q('[data-go]'))) { go(x.dataset.go as Tab); return; }
-    if ((x = q('[data-sub]'))) { sub = x.dataset.sub as Sub; sheet = false; render(); $('m-main').scrollTop = 0; return; }
+    if ((x = q('[data-sub]'))) { sub = x.dataset.sub as Sub; sheet = false; menu = false; render(); $('m-main').scrollTop = 0; return; }
     if (q('[data-subback]')) { sub = null; render(); return; }
     if ((x = q('[data-layout]'))) { layout = x.dataset.layout as 'cards' | 'table'; try { localStorage.setItem('transly-m-layout', layout); } catch { /* private mode */ } render(); return; }
     if ((x = q('[data-cell]'))) { editCell(x); return; }
@@ -573,8 +588,9 @@ export async function start(root: HTMLElement): Promise<void> {
     if (q('[data-gadd]')) { const c = store.current; gl.en = c && c.unit.source.length <= 40 ? c.unit.source : ''; gl.uk = ''; gl.edit = false; sheet = false; sub = 'glossary'; render(); return; }
     if ((x = q('[data-gk]'))) { gk = x.dataset.gk as typeof gk; renderSheet(); return; }
     if ((x = q('[data-stab]'))) { sheetTab = x.dataset.stab as typeof sheetTab; renderSheet(); return; }
-    if (q('[data-sheet]')) { sheet = !sheet; renderSheet(); renderChrome(); return; }
-    if (q('[data-close]')) { sheet = false; renderSheet(); renderChrome(); return; }
+    if (q('[data-menu]')) { menu = !menu; sheet = false; renderSheet(); renderChrome(); return; }
+    if (q('[data-sheet]')) { sheet = !sheet; menu = false; renderSheet(); renderChrome(); return; }
+    if (q('[data-close]')) { sheet = false; menu = false; renderSheet(); renderChrome(); return; }
     if ((x = q('[data-term]'))) { const c = store.current; const tm = c ? store.terms(c.unit)[Number(x.dataset.term)] : null; if (tm) { sheet = false; renderSheet(); insert(tm.uk); } return; }
     if ((x = q('[data-tm]'))) { const c = store.current; const m = c ? store.suggestions(c.unit, c.entry)[Number(x.dataset.tm)] : null; if (m) { sheet = false; renderSheet(); ($('m-tr') as HTMLTextAreaElement).value = m.t; store.write(m.t); refreshMeta(); autosize(); } return; }
     if ((x = q('[data-stage]'))) { store.setStage(x.dataset.stage as 'translate' | 'review'); render(); return; }
@@ -645,7 +661,7 @@ export async function start(root: HTMLElement): Promise<void> {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') void store.flush(); });
   // What the Android shell calls: the back button (close the sheet, then one screen up), saving on leaving, a row opened from the widget.
   Object.assign(window, {
-    __back: (): boolean => { if (sub) { sub = null; render(); return true; } if (sheet) { sheet = false; renderSheet(); return true; } if (tab === 'edit') { go('rows'); return true; } if (tab === 'rows' || tab === 'more') { go('files'); return true; } return false; },
+    __back: (): boolean => { if (sub) { sub = null; render(); return true; } if (sheet || menu) { sheet = false; menu = false; renderSheet(); renderChrome(); return true; } if (tab === 'edit') { go('rows'); return true; } if (tab === 'rows' || tab === 'more') { go('files'); return true; } return false; },
     __flush: (): Promise<void> => store.flush(),
     __open: (file: string, key: string): void => { if (store.view(file)) { store.open(file, key); go('edit'); } },
   });

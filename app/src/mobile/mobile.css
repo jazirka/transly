@@ -363,3 +363,8 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 /* a mark on a tab that remembers a non-standard screen */
 .m-nav button .m-mark{position:absolute;top:6px;left:calc(50% + 8px);min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:var(--accent);color:#fff;font:600 11px/16px system-ui;font-style:normal;text-align:center}
 .m-row,.m-af{touch-action:pan-y}
+
+/* the pills of the action bar share the look of the search field: translucent with a blur */
+.m-act2 .m-mini{background:rgba(42,44,48,.55);border-color:rgba(255,255,255,.18);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.m-act2 .m-mini.danger{background:rgba(247,84,100,.16);border-color:rgba(247,84,100,.45)}
+.m-act2 .m-mini.danger.armed{background:rgba(247,84,100,.85);border-color:var(--bad)}

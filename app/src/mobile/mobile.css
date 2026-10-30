@@ -392,3 +392,22 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-row-t small .sd{display:inline-block;width:10px;height:10px;margin:0 6px 0 0;vertical-align:0}
 .m-afrow.acts .m-primary{flex:1}.m-afrow.acts .m-mini{flex:none}
 .m-main:has(.m-afbar){display:flex;flex-direction:column;padding-bottom:0}.m-main:has(.m-afbar)>.m-afbar{margin-top:auto}
+
+/* selection: cells as big as the normal rows, the bar built like the editor's action bar */
+.m-chk{width:28px;min-height:28px;height:28px;margin:0 0 0 -2px;position:relative;display:block}
+.m-chk::before{position:absolute;inset:2px;width:auto;height:auto;border:2px solid var(--dim)}
+.m-chk.on::before{border-color:var(--accent)}
+.m-chk::after{content:'';position:absolute;inset:-12px -8px}
+.m-row.picked{box-shadow:0 0 0 1px var(--accent) inset!important;border-color:var(--accent)}
+.m-af{display:flex;gap:12px;align-items:flex-start;width:100%;min-height:64px;padding:12px;background:var(--raised);border:1px solid var(--line);border-radius:var(--r2)}
+.m-af-t{flex:1}.m-af-t small{font-size:12px;color:var(--mute)}
+.m-af-t b{font-weight:400;font-size:16px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.m-af-t i{font-size:16px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.m-afbar{position:sticky;bottom:0;z-index:5;display:flex;flex-direction:column;gap:8px;padding:14px 12px 8px;background:none;border-top:0;isolation:isolate;-webkit-backdrop-filter:none;backdrop-filter:none}
+.m-afbar::before{content:'';position:absolute;inset:0;z-index:-1;background:linear-gradient(rgba(26,27,30,0),rgba(26,27,30,.78) 38%);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);-webkit-mask-image:linear-gradient(transparent,#000 42%);mask-image:linear-gradient(transparent,#000 42%)}
+.m-afbar .m-act2 .m-mini{background:rgba(42,44,48,.55);border-color:rgba(255,255,255,.18);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.m-afbar .m-act2 .m-mini.danger{background:rgba(247,84,100,.16);border-color:rgba(247,84,100,.45)}
+.m-afbar .m-act2 .m-mini.danger.armed{background:rgba(247,84,100,.85);border-color:var(--bad)}
+.m-ic.cnt{font:600 14px system-ui;color:var(--mute);pointer-events:none}
+.m-afbar .m-act1 .m-primary{flex:1;min-height:52px;justify-content:center;white-space:nowrap}
+.m-selbar{display:none}

@@ -172,7 +172,7 @@ export async function start(root: HTMLElement): Promise<void> {
       ${layout === 'table' ? tableHtml(v.name, shown, rows.length) : `<ul class="m-list rows">${shown.map((u, i) => {
         const e = store.entry(v.name, u.key), st = store.shown(u, e);
         return `<li><button class="m-row ${u.key === store.key && !selecting ? 'cur' : ''} ${selecting && picked.has(u.key) ? 'picked' : ''}" ${selecting ? `data-pickkey="${esc(u.key)}" aria-pressed="${picked.has(u.key)}"` : `data-key="${esc(u.key)}"`}>${selecting ? `<span class="m-chk ${picked.has(u.key) ? 'on' : ''}" aria-hidden="true"></span>` : `<span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span>`}<span class="m-row-t"><small>${selecting ? `<span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span>` : ''}${i + 1} · ${esc(store.speaker(u) || u.kind)}</small><span class="m-src">${esc(u.source.replace(/\s+/g, ' '))}</span><span class="m-tr ${e?.target ? '' : 'none'}">${e?.target ? esc(e.target.replace(/\s+/g, ' ')) : '—'}</span></span></button></li>`;
-      }).join('') || '<li class="m-none">Нічого не знайдено</li>'}${rows.length > shown.length ? `<li class="m-more-li"><button class="m-mini" data-more>Показати ще ${Math.min(PAGE, rows.length - shown.length)} · ${shown.length} з ${rows.length}</button></li>` : ''}</ul>`}${selecting && layout === 'cards' ? selBar(picked.size, rows.length, picked.size === rows.length && rows.length > 0, 'data-selall', `<button class="m-primary" data-selsend ${picked.size ? '' : 'disabled'}>${icon('check')}<span>Надіслати</span></button><button class="m-mini" data-selcopy ${picked.size ? '' : 'disabled'}>Оригінал</button><button class="m-mini danger" data-selclear ${picked.size ? '' : 'disabled'}>Очистити</button>`, 'Ведіть пальцем по кружечках, щоб вибрати кілька.') : ''}`;
+      }).join('') || '<li class="m-none">Нічого не знайдено</li>'}${rows.length > shown.length ? `<li class="m-more-li"><button class="m-mini" data-more>Показати ще ${Math.min(PAGE, rows.length - shown.length)} · ${shown.length} з ${rows.length}</button></li>` : ''}</ul>`}${selecting && layout === 'cards' ? selBar(picked.size, rows.length, picked.size === rows.length && rows.length > 0, 'data-selall', `<button class="m-mini" data-selcopy ${picked.size ? '' : 'disabled'}>Оригінал</button><button class="m-mini danger" data-selclear ${picked.size ? '' : 'disabled'}>Очистити</button>`, `<button class="m-primary" data-selsend ${picked.size ? '' : 'disabled'}>${icon('check')}<span>Надіслати</span></button>`, 'data-select') : ''}`;
   }
 
   /** The table: columns scroll sideways, a tap on a translation writes right in the cell, a tap on a number opens the row. */
@@ -325,11 +325,10 @@ export async function start(root: HTMLElement): Promise<void> {
   }
 
   /** Lines made only of words that are already known: shown first, written only after the tap. */
-  /** The bar both selection screens share: counter and «select all / clear selection» on top, the actions below. */
-  function selBar(n: number, total: number, allOn: boolean, allAttr: string, actions: string, hint: string): string {
-    return `<div class="m-afbar" role="toolbar" aria-label="Дії з вибраним"><small>${hint}</small>
-      <div class="m-afrow"><b>${n} з ${total}</b><button class="m-mini" ${allAttr}>${allOn ? 'Зняти вибір' : 'Вибрати всі'}</button></div>
-      <div class="m-afrow acts">${actions}</div></div>`;
+  /** The bar both selection screens share, built like the editor's action bar: pills above, square buttons and the main action below. */
+  function selBar(n: number, total: number, allOn: boolean, allAttr: string, pills: string, primary: string, exitAttr: string): string {
+    return `<div class="m-afbar" role="toolbar" aria-label="Дії з вибраним"><div class="m-act2"><button class="m-mini" ${allAttr}>${allOn ? 'Зняти вибір' : 'Вибрати всі'}</button>${pills}</div>
+      <div class="m-act1"><button class="m-ic" ${exitAttr} aria-label="Вийти з вибору">${icon('x')}</button><span class="m-ic cnt" aria-label="Вибрано ${n} з ${total}">${n}/${total}</span>${primary}</div></div>`;
   }
   function screenAutofill(): string {
     const list = store.autofill(), shown = list.slice(0, 80), on = list.filter(p => !af.off.has(p.file + '|' + p.key));
@@ -338,7 +337,7 @@ export async function start(root: HTMLElement): Promise<void> {
       ${shown.map(p => { const k = p.file + '|' + p.key, sel = !af.off.has(k); return `<div class="m-af ${sel ? 'sel' : ''}" role="checkbox" aria-checked="${sel}" data-aflp="${esc(k)}" data-afk="${esc(k)}"><span class="m-chk ${sel ? 'on' : ''}" aria-hidden="true"></span><span class="m-af-t"><small>${esc(store.view(p.file)?.label ?? p.file)}</small><b>${esc(p.source)}</b><i>→ ${esc(p.target)}</i></span></div>`; }).join('') || '<p class="m-none">Немає рядків, які можна скласти зі знайомих слів</p>'}
       ${list.length > 80 ? `<p class="m-hint">Показано 80 із ${list.length}: після запису решта з'явиться тут.</p>` : ''}
       ${almostHtml()}</div>
-      ${list.length ? selBar(on.length, list.length, allOn, 'data-afall', `<button class="m-primary" data-afapply ${on.length ? '' : 'disabled'}>${icon('check')}<span>Вписати вибрані</span></button>`, 'Порядок слів з оригіналу: перегляньте. Ведіть пальцем по кружечках, щоб вибрати кілька.') : ''}`;
+      ${list.length ? selBar(on.length, list.length, allOn, 'data-afall', '', `<button class="m-primary" data-afapply ${on.length ? '' : 'disabled'}>${icon('check')}<span>Вписати вибрані</span></button>`, 'data-subback') : ''}`;
   }
   /** Lines that are one or two words short: what blocks them, and a tap to settle it. */
   function almostHtml(): string {
@@ -648,7 +647,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if ((x = q('[data-file]'))) { store.open(x.dataset.file!); go('rows'); return; }
     if ((x = q('[data-filter]'))) { store.setFilter(x.dataset.filter as Filter); render(); return; }
     if (q('[data-more]')) { page++; const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
-    if (q('[data-select]')) { selecting = !selecting; picked.clear(); render(); return; }
+    if (q('[data-select]')) { selecting = !selecting; picked.clear(); if (selecting) hintOnce(); render(); return; }
     if ((x = q('[data-pickkey]'))) { const k = x.dataset.pickkey!; if (picked.has(k)) picked.delete(k); else picked.add(k); render(); return; }
     if (q('[data-selall]')) { const all = store.rows(); if (picked.size === all.length) picked.clear(); else all.forEach(u => picked.add(u.key)); render(); return; }
     if (q('[data-selsend]') || q('[data-selclear]') || q('[data-selcopy]')) {
@@ -803,10 +802,12 @@ export async function start(root: HTMLElement): Promise<void> {
     const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y;
     setTimeout(() => { lpFired = false; }, 350);
   }
+  let hinted = false;
+  const hintOnce = (): void => { if (!hinted) { hinted = true; say('Ведіть пальцем по кружечках, щоб вибрати кілька'); } };
   /** Start selecting: the card under the finger flips, and every card the finger passes gets the same state. */
   function startDrag(card: HTMLElement, x: number, y: number): void {
     lpFired = true; buzz(18);
-    if (!isAf(card)) selecting = true;
+    if (!isAf(card)) { selecting = true; hintOnce(); }
     const add = !isOn(card);
     paint(card, add);
     drag = { add, last: -1, x, y, raf: 0 };
@@ -838,7 +839,9 @@ export async function start(root: HTMLElement): Promise<void> {
   const topBtn = $('m-top'), mainEl = $('m-main');
   const updateTop = (): void => {
     const on = (tab === 'files' || tab === 'rows') && !sub && mainEl.scrollTop > 360;
-    topBtn.hidden = !on; topBtn.classList.toggle('lift', !!document.querySelector('.m-afbar'));
+    topBtn.hidden = !on;
+    const bar = document.querySelector<HTMLElement>('.m-afbar');
+    topBtn.style.bottom = bar ? `${$('m-nav').offsetHeight + bar.offsetHeight + 12}px` : '';
   };
   mainEl.addEventListener('scroll', updateTop, { passive: true });
   topBtn.addEventListener('click', () => mainEl.scrollTo({ top: 0, behavior: 'smooth' }));

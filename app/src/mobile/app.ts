@@ -413,7 +413,7 @@ export async function start(root: HTMLElement): Promise<void> {
       : cur === 'cm' ? (cm.length ? cm.map(x => `<div class="m-cmc"><small><b>${esc(x.who)}</b> · ${fmtTime(x.at)}</small><p>${esc(x.text)}</p></div>`).join('') : '<p class="m-none">Коментарів ще немає</p>')
       : cur === 'dict' ? dictPanel(c.unit.source, c.entry?.target ?? '')
       : (hist.length ? `<ol class="m-time">${hist.map(h => `<li><small>${fmtTime(h.at)} · ${esc(h.who)}</small><span class="m-chipx">${esc(h.what)}</span><p>${esc(h.text.slice(0, 200))}</p></li>`).join('')}</ol>` : '<p class="m-none">Історії ще немає</p>');
-    wrap.innerHTML = `<div class="m-scrim ${fresh ? 'in' : ''}" data-close></div><aside class="m-sheet ${fresh ? 'in' : ''}" role="dialog" aria-label="Допомога до рядка">
+    wrap.innerHTML = `<div class="m-scrim ${fresh ? 'in' : ''}" data-close></div><aside class="m-sheet ${fresh ? 'in' : ''} ${cur === 'cm' ? 'tall' : ''}" role="dialog" aria-label="Допомога до рядка">
       <div class="m-stabs" role="tablist">${tabs.map(([k, l]) => `<button role="tab" data-stab="${k}" aria-selected="${k === cur}" class="${k === cur ? 'on' : ''}">${l}${counts[k] ? `<i>${counts[k]}</i>` : ''}</button>`).join('')}</div>
       <div class="m-spanel" id="m-spanel">${panel}</div>
       ${cur === 'cm' ? `<form class="m-composer" data-cmform><textarea id="m-cm" rows="2" maxlength="400" placeholder="Написати коментар…" aria-label="Новий коментар"></textarea><button type="submit" class="m-send" aria-label="Надіслати коментар" disabled>${icon('send')}</button></form>` : ''}

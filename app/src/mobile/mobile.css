@@ -116,9 +116,11 @@ h2,h3{margin:0}
 .m-sheet-wrap{position:absolute;top:var(--bar-h,56px);left:0;right:0;bottom:0;z-index:20}
 .m-sheet-wrap[hidden]{display:none}
 .m-scrim{position:absolute;inset:0;background:rgba(0,0,0,.55)}
-.m-scrim.in{animation:m-fade .24s}.m-sheet.in{animation:m-right .24s cubic-bezier(.2,.8,.2,1)}
+.m-scrim.in{animation:m-fade .24s}.m-sheet.in{animation:m-drop .2s cubic-bezier(.2,.8,.2,1)}
 @keyframes m-fade{from{opacity:0}to{opacity:1}}
-.m-sheet{position:absolute;top:0;right:0;bottom:0;width:min(92%,440px);overflow:hidden;background:var(--panel);border-left:1px solid var(--line);border-top:1px solid var(--line);border-radius:var(--r3) 0 0 0;padding:0 0 env(safe-area-inset-bottom);display:flex;flex-direction:column;box-shadow:-12px 0 32px rgba(0,0,0,.45)}
+/* the hints panel drops from the top bar like the tools panel (same surface, same corners) */
+.m-sheet{position:absolute;top:0;left:0;right:0;max-height:88%;overflow:hidden;background:var(--raised);border-bottom:1px solid var(--line);border-radius:0 0 18px 18px;display:flex;flex-direction:column;box-shadow:0 14px 30px rgba(0,0,0,.5)}
+.m-sheet.tall{height:88%}
 .m-sheet h3{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin-top:8px}
 .m-grab{display:none;width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 4px}
 .m-hit{display:flex;gap:10px;align-items:baseline;width:100%;min-height:48px;padding:10px 12px;text-align:left;border-radius:var(--r2);background:var(--raised);border:1px solid var(--line)}
@@ -225,7 +227,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 
 /* hints drawer: tabs on top, one panel, comment composer pinned to the bottom */
 .m-hdr.on{background:rgba(255,255,255,.14);color:var(--accent-2)}
-.m-stabs{flex:none;display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;padding:6px 8px 0;border-bottom:1px solid var(--line)}.m-stabs::-webkit-scrollbar{display:none}
+.m-stabs{flex:none;background:var(--raised);border-radius:0;display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;padding:6px 8px 0;border-bottom:1px solid var(--line)}.m-stabs::-webkit-scrollbar{display:none}
 .m-stabs button{flex:none;position:relative;min-height:44px;padding:0 9px;color:var(--mute);font-size:14px;display:inline-flex;align-items:center;gap:5px}
 .m-stabs button.on{color:var(--text);box-shadow:inset 0 -2px 0 var(--accent)}
 .m-stabs i{font-style:normal;font-size:11px;min-width:18px;padding:1px 5px;border-radius:999px;background:rgba(255,255,255,.12);text-align:center}
@@ -305,3 +307,5 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-msep{height:1px;background:var(--line);margin:6px 8px}
 .m-mi.wide{width:100%;color:var(--mute)}
 .m-hdr[data-menu][aria-expanded=true] svg{transform:rotate(180deg)}
+.m-stabs{justify-content:space-between;gap:0}.m-stabs button{padding:0 7px;font-size:13.5px}
+.m-sheet .m-composer{background:transparent}

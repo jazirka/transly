@@ -1,5 +1,5 @@
-import { autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
-import type { Entry, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
+import { usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
+import type { Entry, GlossaryTerm, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
 import { IdbStore } from '../ui/idb';
 
 /**
@@ -343,6 +343,86 @@ export class Store {
     const r = mergeProjects(this.saved, deserialize(text));
     this.saved = r.project; this.adopt();
     return r.conflicts.length;
+  }
+
+  /* ---------- importing glossary and memory, plugin texts, reset, search ---------- */
+  /** New terms are added; a known word only gets the extra variants. */
+  addTerms(terms: GlossaryTerm[]): { added: number; merged: number } {
+    let added = 0, merged = 0;
+    const have = new Map(this.saved.terms.map(t => [t.en.toLowerCase(), t]));
+    for (const t of terms) {
+      const cur = have.get(t.en.toLowerCase());
+      if (!cur) { this.saved.terms.push(t); have.set(t.en.toLowerCase(), t); added++; continue; }
+      const known = new Set([cur.uk, ...(cur.alt ?? [])].map(x => x.toLowerCase()));
+      const more = [t.uk, ...(t.alt ?? [])].filter(x => !known.has(x.toLowerCase()));
+      if (more.length) { cur.alt = [...(cur.alt ?? []), ...more]; cur.mt = Date.now(); merged++; }
+    }
+    this.tmCache = null; this.persist(); this.emit();
+    return { added, merged };
+  }
+  /** A sheet saved as .html or a .csv / .tsv with «Оригінал», «Переклад 1…» columns. */
+  importTermsFile(name: string, text: string, qa: boolean): { added: number; merged: number; skipped: number } | null {
+    const rows = /\.html?$/i.test(name) || /<table/i.test(text.slice(0, 5000)) ? parseHtmlTable(text) : parseDelimited(text);
+    const { terms, skipped } = termsFromTable(rows, Date.now(), qa);
+    return terms.length ? { ...this.addTerms(terms), skipped } : null;
+  }
+  /** Lines «english, tab, ukrainian». */
+  importTermsText(text: string): { added: number; rejected: number } {
+    const { terms, rejected } = parseTerms(text);
+    let added = 0;
+    for (const t of terms) if (!this.saved.terms.some(x => x.en.toLowerCase() === t.en.toLowerCase())) { this.saved.terms.push({ ...t, mt: Date.now() }); added++; }
+    this.tmCache = null; this.persist(); this.emit();
+    return { added, rejected };
+  }
+  /** Lines «original, tab, translation» go to the translation memory. */
+  importMemory(text: string): { added: number; rejected: number } {
+    let added = 0, rejected = 0;
+    for (const line of text.split(/\r?\n/)) {
+      if (!line.trim()) continue;
+      const [a, b] = line.split('\t');
+      if (!a?.trim() || !b?.trim()) { rejected++; continue; }
+      if (!this.saved.memory.some(m => m.s === a.trim() && m.t === b.trim())) { this.saved.memory.push({ s: a.trim(), t: b.trim(), mt: Date.now() }); added++; }
+    }
+    this.tmCache = null; this.persist(); this.emit();
+    return { added, rejected };
+  }
+  /** Everything translated and imported is dropped; the game files stay as they are. */
+  resetProject(): void {
+    const keep = this.saved.resetEpoch;
+    this.saved = { ...emptyProject(this.saved.name), resetEpoch: Math.max(keep, Date.now()) };
+    this.views = []; this.game = []; this.file = null; this.key = null; this.tmCache = null;
+    this.persist(); this.emit();
+  }
+  pluginCands(): ReturnType<typeof pluginCandidates> { return pluginCandidates(this.game); }
+  /** Which plugin commands hold text. Returns how many rows that added (or took away). */
+  setPluginCommands(names: string[]): number {
+    const st = this.saved.settings;
+    st.pluginsAsked = true;
+    if (names.length === st.pluginCommands.length && names.every(n => st.pluginCommands.includes(n))) { this.persist(); return 0; }
+    st.pluginCommands = names; this.saved.settingsAt = Date.now();
+    const total = (): number => this.views.reduce((n, v) => n + v.units.length, 0), was = total();
+    this.ingest(this.game);
+    return total() - was;
+  }
+  /** Rows, files and terms that match, newest rule of the desktop «Знайти скрізь»: original, translation or key. */
+  searchAll(q: string, limit = 60): { file: string; key: string; source: string; target: string }[] {
+    const w = q.trim().toLowerCase(); if (!w) return [];
+    const out: { file: string; key: string; source: string; target: string }[] = [];
+    for (const v of this.views) {
+      const ents = this.saved.files[v.name] ?? {};
+      for (const u of v.units) {
+        const t = ents[u.key]?.target ?? '';
+        if ((u.source + ' ' + t + ' ' + u.key).toLowerCase().includes(w)) { out.push({ file: v.name, key: u.key, source: u.source, target: t }); if (out.length >= limit) return out; }
+      }
+    }
+    return out;
+  }
+  private usageCache: { game: GameFile[]; u: ReturnType<typeof buildUsage> } | null = null;
+  /** Where the game hands out an item, weapon, armour or skill (only while the game files are loaded). */
+  usageOf(file: string, key: string): string[] {
+    if (!this.game.length || !/^(Items|Weapons|Armors|Skills)\.json$/.test(file)) return [];
+    if (!this.usageCache || this.usageCache.game !== this.game) this.usageCache = { game: this.game, u: buildUsage(this.game, f => this.saved.labels?.[f]) };
+    return this.usageCache.u.get(usageKey(file, key) ?? '') ?? [];
   }
   /** `saved` was replaced (sync, import): rebuild what is shown from it. */
   adopt(): void {

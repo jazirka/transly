@@ -26,13 +26,14 @@ export async function start(root: HTMLElement): Promise<void> {
   const TEXTY = 'textarea, input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=range]):not([type=file])';
   let sheet = false; let sheetTab: 'terms' | 'tm' | 'cm' | 'hist' | 'dict' | null = null; let gk: 'Тлумачення' | 'Синоніми' = 'Тлумачення';
   let busy = '';
-  type Sub = 'scene' | 'find' | 'speakers' | 'settings' | 'consistency' | 'glossary' | 'autofill' | 'sendlog';
+  type Sub = 'scene' | 'find' | 'speakers' | 'settings' | 'consistency' | 'glossary' | 'autofill' | 'sendlog' | 'search';
   let sub: Sub | null = null;
   let scope: 'file' | 'all' = 'file';
   let layout: 'cards' | 'table' = (() => { try { return localStorage.getItem('transly-m-layout') === 'table' ? 'table' : 'cards'; } catch { return 'cards'; } })();
   const fr = { find: '', replace: '', word: false, cs: false, matches: [] as ReturnType<typeof store.find> };
   const PAGE = 100; let page = 1, pageSig = '';
-  let refLang = ''; let fq = '';
+  let refLang = ''; let fq = ''; let sq = '';
+  let plPick: Set<string> | null = null; let resetArmed = false;
   let selecting = false; const picked = new Set<string>();
   const scn: { mode: 'both' | 'tr' | 'src'; real: boolean; picked: string; ctx: CanvasRenderingContext2D | null } = { mode: 'both', real: false, picked: '', ctx: null };
   const act = { open: new Set<string>() };
@@ -55,6 +56,7 @@ export async function start(root: HTMLElement): Promise<void> {
     <div class="m-toasts" id="m-toasts" role="status"></div>
     <input type="file" id="m-file" multiple hidden>
     <input type="file" id="m-reffile" multiple hidden>
+    <input type="file" id="m-termfile" accept=".html,.htm,.csv,.tsv,.txt,text/html,text/csv,text/plain" hidden>
   </div>`;
   const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -105,7 +107,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t === 'files') return s || fq.trim() ? '•' : '';
     return s ? '•' : '';
   }
-  const SUB_TITLE: Record<Sub, string> = { scene: 'Сцена', find: 'Знайти й замінити', speakers: 'Хто говорить', settings: 'Налаштування', consistency: 'Узгодженість', glossary: 'Глосарій', autofill: 'Автозаповнення', sendlog: 'Активність' };
+  const SUB_TITLE: Record<Sub, string> = { scene: 'Сцена', find: 'Знайти й замінити', speakers: 'Хто говорить', settings: 'Налаштування', consistency: 'Узгодженість', glossary: 'Глосарій', autofill: 'Автозаповнення', sendlog: 'Активність', search: 'Пошук скрізь' };
 
   /* ---------- widgets ---------- */
   let wTimer = 0;
@@ -125,7 +127,7 @@ export async function start(root: HTMLElement): Promise<void> {
 
   /* ---------- chrome ---------- */
   /** The tools (find and replace, speakers, activity, glossary, autofill, consistency, settings): one menu pinned to the top bar of every screen. */
-  const TOOLS: [Sub, string, string][] = [['find', 'Знайти й замінити', 'search'], ['speakers', 'Хто говорить', 'rows'], ['sendlog', 'Активність', 'send'], ['glossary', 'Глосарій', 'book'], ['autofill', 'Автозаповнення', 'edit'], ['consistency', 'Узгодженість', 'check'], ['settings', 'Налаштування', 'more']];
+  const TOOLS: [Sub, string, string][] = [['find', 'Знайти й замінити', 'sync'], ['speakers', 'Хто говорить', 'rows'], ['sendlog', 'Активність', 'send'], ['search', 'Пошук скрізь', 'search'], ['glossary', 'Глосарій', 'book'], ['autofill', 'Автозаповнення', 'edit'], ['consistency', 'Узгодженість', 'check'], ['settings', 'Налаштування', 'more']];
   function toolsBtn(): string {
     if (sub || !store.hasGame) return '';
     return `<button class="m-hdr ${menu ? 'on' : ''}" data-menu aria-pressed="${menu}" aria-label="Інструменти" aria-expanded="${menu}">${icon('down')}</button>`;
@@ -284,6 +286,14 @@ export async function start(root: HTMLElement): Promise<void> {
       ${fr.matches.length ? `<section class="m-card"><h3>Знайдено: ${fr.matches.length}</h3>${fr.matches.slice(0, 60).map(m => `<div class="m-diff"><small>${esc(m.file)}</small><s>${esc(m.before)}</s><span>${esc(m.after)}</span></div>`).join('')}${fr.matches.length > 60 ? `<p class="m-hint">Показано 60 із ${fr.matches.length}. Заміна торкнеться всіх.</p>` : ''}<button class="m-primary wide" data-doreplace>Замінити в усіх (${fr.matches.length})</button></section>` : ''}</div>`;
   }
 
+  /** Find a word in the originals, translations and keys of every file. */
+  function screenSearch(): string {
+    const res = store.searchAll(sq);
+    return `<div class="m-more"><section class="m-card"><label class="m-lbl" for="sr-q">Що шукати</label><input id="sr-q" class="m-input" value="${esc(sq)}" autocomplete="off" spellcheck="false" placeholder="слово з оригіналу, перекладу чи ключ">
+      <p class="m-hint">${!sq.trim() ? 'Шукає в усіх файлах гри: в оригіналах, перекладах і ключах.' : res.length ? `Знайдено: ${res.length}${res.length >= 60 ? '+' : ''}. Торкніться рядка, щоб відкрити.` : 'Нічого не знайдено'}</p></section>
+      ${res.map((r, i) => `<button class="m-found" data-srn="${i}"><small>${esc(r.file)}</small><b>${esc(r.source.slice(0, 120))}</b>${r.target ? `<span>${esc(r.target.slice(0, 120))}</span>` : ''}</button>`).join('')}</div>`;
+  }
+
   function screenSpeakers(): string {
     const cands = speakerCandidates(store.views), q = sp.q.trim().toLowerCase();
     const list = cands.filter(c => !q || (c.label + ' ' + c.sample).toLowerCase().includes(q));
@@ -381,7 +391,27 @@ export async function start(root: HTMLElement): Promise<void> {
         ${store.refLangs().map(l => `<div class="m-var"><span>${esc(l.toUpperCase())}</span><small></small><button class="m-mini ghost" data-refdel="${esc(l)}">Прибрати</button></div>`).join('')}
         <label class="m-lbl" for="rf-lang">Код мови (ru, pl, en…)</label><input id="rf-lang" class="m-input" maxlength="8" value="${esc(refLang)}" autocomplete="off">
         <button class="m-primary wide" data-refpick>Обрати файли гри цією мовою</button></section>
+      <section class="m-card"><h3>Імпорт глосарію</h3><p class="m-hint">З файлу: таблиця Google Sheets, збережена як веб-сторінка (.html), або .csv / .tsv із колонками «Оригінал», «Переклад 1…», «Опис», «Розділ».</p>
+        <label class="m-check"><input type="checkbox" id="i-termqa"> Перевіряти ці терміни в QA (для великого словника краще вимкнути: він лише підказує)</label>
+        <button class="m-secondary wide" data-termfile>${icon('folder')}<span>Імпортувати з файлу…</span></button>
+        <label class="m-lbl" for="i-terms">Або вставте рядки «англійською, табуляція, українською»</label><textarea id="i-terms" class="m-textarea sm" rows="3" spellcheck="false"></textarea>
+        <button class="m-secondary wide" data-termgo>Імпортувати вставлені терміни</button></section>
+      <section class="m-card"><h3>Імпорт пам’яті перекладів</h3><p class="m-hint">Рядки «оригінал, табуляція, переклад».</p><textarea id="i-tm" class="m-textarea sm" rows="3" spellcheck="false" aria-label="Пари для імпорту"></textarea>
+        <button class="m-secondary wide" data-tmgo>Імпортувати пари</button></section>
+      ${pluginsCard()}
+      <section class="m-card"><h3>Небезпечна зона</h3><p class="m-hint">Видаляє весь переклад, глосарій та імпортовану пам’ять на цьому телефоні. Файли гри не змінюються.</p>
+        <button class="m-mini danger wide" data-reset>${resetArmed ? 'Так, видалити весь переклад' : 'Скинути проєкт…'}</button></section>
       <p class="m-hint">Довжина тексту не обмежується: застосунок лише попереджає, коли переклад дуже відрізняється від оригіналу або рядок ширший за вікно гри.</p></div>`;
+  }
+
+  /** Plugins show text through their own commands; the translator ticks the ones that hold lines for the player. */
+  function pluginsCard(): string {
+    const st = store.saved.settings, cands = store.pluginCands();
+    if (!cands.length) return `<section class="m-card"><h3>Тексти плагінів</h3><p class="m-hint">${store.game.length ? 'У цій грі не знайдено команд плагінів із текстом.' : 'Файлів гри зараз немає (проєкт відкрито зі збереженого файлу). Відкрийте файли гри, щоб вибрати команди.'}${st.pluginCommands.length ? ` Увімкнено раніше: ${esc(st.pluginCommands.join(', '))}.` : ''}</p></section>`;
+    if (!plPick) { plPick = new Set(st.pluginCommands); if (!st.pluginsAsked) for (const c of cands) if (c.likely) plPick.add(c.name); }
+    return `<section class="m-card"><h3>Тексти плагінів</h3><p class="m-hint">Деякі ігри показують текст командами плагінів. Позначте команди, чий текст бачить гравець: вони з’являться як окремі рядки.</p>
+      ${cands.map(c => `<label class="m-check"><input type="checkbox" data-pl="${esc(c.name)}" ${plPick!.has(c.name) ? 'checked' : ''}> <span><b>${esc(c.name)}</b> <small>· команд з текстом: ${c.withText}${c.withText < c.count ? ` із ${c.count}` : ''}${c.likely ? ' · схоже на текст для гравця' : ''}</small>${c.samples.map(x => `<small class="m-pls">«${esc(x)}»</small>`).join('')}</span></label>`).join('')}
+      <button class="m-primary wide" data-plapply>Застосувати</button></section>`;
   }
 
   function issuesHtml(): string {
@@ -397,7 +427,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const review = store.stage === 'review';
     return `<div class="m-edit" id="m-edit">
       <div class="m-ctx"><span class="m-tag">${esc(u.kind)}</span>${store.speaker(u) ? `<span class="m-tag who">${esc(store.speaker(u))}</span>` : ''}${v?.label ? `<span class="m-tag">${esc(v.label)}</span>` : ''}<span class="m-status"><span class="sd ${SHAPE[st]}"></span>${STATUS_LABEL[st]}</span></div>
-      <section class="m-card"><h3>Оригінал</h3><div class="m-source" id="m-source">${markup(u.source, terms.map(t => t.en))}</div>${store.refs(c.file, u.key).map(r => `<div class="m-ref"><small>Довідка · ${esc(r.lang.toUpperCase())}</small>${esc(r.text)}</div>`).join('')}</section>
+      <section class="m-card"><h3>Оригінал</h3><div class="m-source" id="m-source">${markup(u.source, terms.map(t => t.en))}</div>${store.refs(c.file, u.key).map(r => `<div class="m-ref"><small>Довідка · ${esc(r.lang.toUpperCase())}</small>${esc(r.text)}</div>`).join('')}${(() => { const w = store.usageOf(c.file, u.key); return w.length ? `<div class="m-ref"><small>Де видається</small>${w.map(esc).join('<br>')}</div>` : ''; })()}</section>
       <section class="m-card m-tr-card"><h3>${review ? 'Після вичитування' : 'Переклад'}<span class="m-count" id="m-count"></span></h3>
         <textarea id="m-tr" class="m-textarea" spellcheck="false" autocapitalize="sentences" placeholder="Напишіть переклад…" aria-label="Переклад">${esc(e?.target ?? '')}</textarea>
       </section>
@@ -462,9 +492,9 @@ export async function start(root: HTMLElement): Promise<void> {
     if (menu) {
       wrap.dataset.open = '';
       const badge: Partial<Record<Sub, number>> = { autofill: store.autofill().length, consistency: store.inconsistent().length, sendlog: store.sends().length + store.autos().length };
-      const short: Partial<Record<Sub, string>> = { find: 'Заміна', autofill: 'Авто', speakers: 'Мовці' };
+      const short: Partial<Record<Sub, string>> = { find: 'Заміна', search: 'Пошук', autofill: 'Авто', speakers: 'Мовці' };
       const item = (k: Sub): string => { const [, l, ic] = TOOLS.find(t => t[0] === k)!; return `<button class="m-mi" data-sub="${k}">${icon(ic)}<span>${short[k] ?? l}</span>${badge[k] ? `<i>${badge[k]! > 99 ? '99+' : badge[k]}</i>` : ''}</button>`; };
-      wrap.innerHTML = `<div class="m-scrim" data-close></div><nav class="m-menu" aria-label="Інструменти"><div class="m-mgrid">${(['find', 'autofill', 'consistency', 'speakers', 'glossary', 'sendlog'] as Sub[]).map(item).join('')}</div>
+      wrap.innerHTML = `<div class="m-scrim" data-close></div><nav class="m-menu" aria-label="Інструменти"><div class="m-mgrid">${(['find', 'search', 'autofill', 'consistency', 'speakers', 'glossary', 'sendlog'] as Sub[]).map(item).join('')}</div>
         <div class="m-msep"></div><button class="m-mi wide" data-sub="settings">${icon('more')}<span>Налаштування</span></button></nav>`;
       return;
     }
@@ -515,7 +545,7 @@ export async function start(root: HTMLElement): Promise<void> {
     }
     const entered = vk !== viewKey;
     if (entered) { viewKey = vk; main.classList.add('enter'); }
-    main.innerHTML = sub ? ({ scene: screenScene, find: screenFind, speakers: screenSpeakers, settings: screenSettings, consistency: screenConsistency, glossary: screenGlossary, autofill: screenAutofill, sendlog: screenSendLog }[sub])() : tab === 'files' ? screenFiles() : tab === 'rows' ? screenRows() : tab === 'edit' ? screenEdit() : screenMore();
+    main.innerHTML = sub ? ({ scene: screenScene, find: screenFind, speakers: screenSpeakers, settings: screenSettings, consistency: screenConsistency, glossary: screenGlossary, autofill: screenAutofill, sendlog: screenSendLog, search: screenSearch }[sub])() : tab === 'files' ? screenFiles() : tab === 'rows' ? screenRows() : tab === 'edit' ? screenEdit() : screenMore();
     renderSheet();
     // a field that was removed by this redraw cannot report that it lost the focus
     if (!document.activeElement?.matches(TEXTY)) $('m-app').classList.remove('kb');
@@ -656,6 +686,12 @@ export async function start(root: HTMLElement): Promise<void> {
     if (q('[data-doreplace]')) { const n = store.replaceAll(fr.matches); fr.matches = []; say(`Замінено в рядках: ${n}`); buzz(14); render(); return; }
     if ((x = q('[data-uni]'))) { const [gi, vi] = x.dataset.uni!.split('|').map(Number); const g = store.inconsistent()[gi!]; const v = g?.variants[vi!]; if (g && v) { const n = store.unify(g.source, v.target); say(`Уніфіковано рядків: ${n}`); buzz(14); } render(); return; }
     if (q('[data-refpick]')) { refLang = ($<HTMLInputElement>('rf-lang').value || '').trim().toLowerCase(); if (!refLang) { say('Вкажіть код мови, наприклад ru або pl', true); return; } $<HTMLInputElement>('m-reffile').click(); return; }
+    if (q('[data-termfile]')) { $<HTMLInputElement>('m-termfile').click(); return; }
+    if (q('[data-termgo]')) { const r = store.importTermsText($<HTMLTextAreaElement>('i-terms').value); say(`Додано термінів: ${r.added}${r.rejected ? `, пропущено рядків без пари: ${r.rejected}` : ''}`, !r.added); render(); return; }
+    if (q('[data-tmgo]')) { const r = store.importMemory($<HTMLTextAreaElement>('i-tm').value); say(`Імпортовано пар: ${r.added}${r.rejected ? `, пропущено рядків без табуляції: ${r.rejected}` : ''}`, !r.added); render(); return; }
+    if (q('[data-plapply]')) { const d = store.setPluginCommands([...(plPick ?? [])]); plPick = null; say(d > 0 ? `Додано рядків із плагінів: ${d}` : d < 0 ? `Прибрано рядків із плагінів: ${-d}` : 'Рядків не змінилося'); render(); return; }
+    if (q('[data-reset]')) { if (!resetArmed) { resetArmed = true; render(); setTimeout(() => { if (resetArmed) { resetArmed = false; if (sub === 'settings') render(); } }, 6000); return; } resetArmed = false; store.resetProject(); sub = null; say('Проєкт скинуто'); go('files'); render(); return; }
+    if ((x = q('[data-srn]'))) { const r = store.searchAll(sq)[Number(x.dataset.srn)]; if (r) { sub = null; store.open(r.file, r.key); go('edit'); } return; }
     if ((x = q('[data-refdel]'))) { store.removeReference(x.dataset.refdel!); say(`Довідку ${x.dataset.refdel!.toUpperCase()} прибрано`); render(); return; }
     if (q('[data-spsave]')) { const n = store.setSpeakers(sp.draft); sp.draft.clear(); say(n ? `Мовців оновлено: ${n}` : 'Змін немає'); render(); return; }
     if ((x = q('[data-file]'))) { store.open(x.dataset.file!); go('rows'); return; }
@@ -742,6 +778,7 @@ export async function start(root: HTMLElement): Promise<void> {
   });
   root.addEventListener('input', e => {
     const t = e.target as HTMLElement;
+    if (t.id === 'sr-q') { sq = (t as HTMLInputElement).value; const keep = (t as HTMLInputElement).selectionStart ?? 0; render(); const qi = document.getElementById('sr-q') as HTMLInputElement; qi.focus(); qi.setSelectionRange(keep, keep); return; }
     if (t.id === 'f-find') fr.find = (t as HTMLInputElement).value;
     else if (t.id === 'f-rep') fr.replace = (t as HTMLInputElement).value;
     else if (t.id === 'sp-q') { sp.q = (t as HTMLInputElement).value; const keep = (t as HTMLInputElement).selectionStart ?? 0; render(); const qi = document.getElementById('sp-q') as HTMLInputElement; qi.focus(); qi.setSelectionRange(keep, keep); }
@@ -764,6 +801,8 @@ export async function start(root: HTMLElement): Promise<void> {
     else if (t.id === 'f-case') fr.cs = (t as HTMLInputElement).checked;
     else if (t.id === 's-block' || t.id === 's-prop') { store.saved.settings[t.id === 's-block' ? 'blockErrors' : 'propagate'] = (t as HTMLInputElement).checked; store.saved.settingsAt = Date.now(); store.persist(); }
     else if (t.id === 's-mode') { const m = (t as HTMLSelectElement).value; store.saved.settings.lineLimit = m === 'off' ? -1 : m === 'custom' ? Math.round(Number((document.getElementById('s-lim') as HTMLInputElement).value)) || 50 : 0; store.saved.settingsAt = Date.now(); store.persist(); render(); }
+    if ((t as HTMLInputElement).dataset?.pl !== undefined) { const c = t as HTMLInputElement; if (c.checked) plPick?.add(c.dataset.pl!); else plPick?.delete(c.dataset.pl!); return; }
+    if (t.id === 'm-termfile') { const f = (t as HTMLInputElement).files?.[0]; (t as HTMLInputElement).value = ''; if (f) void f.text().then(text => { const r = store.importTermsFile(f.name, text, $<HTMLInputElement>('i-termqa')?.checked ?? false); say(r ? `Додано термінів: ${r.added}${r.merged ? `, доповнено варіантами: ${r.merged}` : ''}${r.skipped ? `, пропущено рядків: ${r.skipped}` : ''}` : 'У файлі не знайдено термінів: потрібна колонка «Оригінал» і хоча б одна «Переклад»', !r); render(); }).catch(() => say('Не вдалося прочитати файл', true)); return; }
     if (t.id === 'm-sort') { store.setSort((t as HTMLSelectElement).value as Sort); render(); }
     if (t.id === 'm-reffile') { const f = [...((t as HTMLInputElement).files ?? [])]; (t as HTMLInputElement).value = ''; if (f.length) void importRef(f); return; }
     if (t.id === 'm-file') { const f = [...((t as HTMLInputElement).files ?? [])]; (t as HTMLInputElement).value = ''; if (f.length) void importFiles(f); }

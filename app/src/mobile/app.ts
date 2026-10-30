@@ -30,6 +30,7 @@ export async function start(root: HTMLElement): Promise<void> {
   let refLang = ''; let fq = '';
   let selecting = false; const picked = new Set<string>();
   const scn: { mode: 'both' | 'tr' | 'src'; real: boolean; picked: string; ctx: CanvasRenderingContext2D | null } = { mode: 'both', real: false, picked: '', ctx: null };
+  const act = { open: new Set<string>() };
   const gl = { q: '', en: '', uk: '', alt: '', qa: true, edit: false };
   const af = { off: new Set<string>() };
   const sp = { q: '', draft: new Map<string, string>() };
@@ -62,7 +63,7 @@ export async function start(root: HTMLElement): Promise<void> {
     return false;
   };
   const go = (t: Tab): void => { tab = t; sheet = false; sub = null; render(); };
-  const SUB_TITLE: Record<Sub, string> = { scene: 'Сцена', find: 'Знайти й замінити', speakers: 'Хто говорить', settings: 'Налаштування', consistency: 'Узгодженість', glossary: 'Глосарій', autofill: 'Автозаповнення', sendlog: 'Історія відправлень' };
+  const SUB_TITLE: Record<Sub, string> = { scene: 'Сцена', find: 'Знайти й замінити', speakers: 'Хто говорить', settings: 'Налаштування', consistency: 'Узгодженість', glossary: 'Глосарій', autofill: 'Автозаповнення', sendlog: 'Активність' };
 
   /* ---------- chrome ---------- */
   /** Top-bar button of the editor: glossary, memory, comments and history of the open row. */
@@ -230,14 +231,30 @@ export async function start(root: HTMLElement): Promise<void> {
       <button class="m-primary wide" data-spsave>Зберегти імена</button></div>`;
   }
 
-  /** What was sent for review or approved, in batches: each can be taken back while its rows are untouched. */
+  /** Activity: what was sent for review, approved or taken back, by day; a send can be undone while its rows are untouched. */
   function screenSendLog(): string {
-    const list = store.sends();
-    const when = (t: number): string => new Date(t).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-    return `<div class="m-more"><p class="m-hint">Відправлення, які ще можна скасувати: рядки повернуться в чернетки (або на вичитування, якщо це було затвердження). Якщо рядок змінили після відправлення, він сюди вже не потрапляє. Групи «без запису про відправлення» знайдені за часом останньої зміни рядків, що чекають вичитування. Якщо відправляли на іншому пристрої (наприклад, на ПК), спершу синхронізуйте проєкт у «Ще».</p>
-      ${list.map(b => `<section class="m-card m-send-card"><h3>${b.guessed ? 'Чекають вичитування, без запису про відправлення' : b.kind === 'send' ? 'Надіслано на вичитування' : 'Затверджено'} · ${when(b.at)}</h3><b>${plural(b.items.length, ['рядок', 'рядки', 'рядків'])}</b>
-        ${b.items.slice(0, 3).map(i => `<div class="m-sl"><small>${esc(i.source.replace(/\s+/g, ' ').slice(0, 60))}</small><span>${esc(i.target.replace(/\s+/g, ' ').slice(0, 80))}</span></div>`).join('')}${b.items.length > 3 ? `<small class="m-hint">і ще ${b.items.length - 3}…</small>` : ''}
-        <button class="m-secondary wide" data-undosend="${b.at}|${b.kind}|${b.guessed ? 1 : 0}">Скасувати відправлення (${b.items.length})</button></section>`).join('') || '<p class="m-none">Відправлень, які можна скасувати, немає</p>'}</div>`;
+    type Ev = { id: string; at: number; icon: string; text: string; sub?: string; rows?: { source: string; target: string }[]; undo?: string };
+    const n = (c: number): string => plural(c, ['рядок', 'рядки', 'рядків']);
+    const evs: Ev[] = [
+      ...store.sends().map((b): Ev => ({ id: `s${b.at}${b.kind}${b.guessed ? 'g' : ''}`, at: b.at, icon: b.kind === 'send' ? 'send' : 'check',
+        text: b.kind === 'send' ? `Ви надіслали ${n(b.items.length)} на вичитування` : `Ви затвердили ${n(b.items.length)}`,
+        ...(b.guessed ? { sub: 'Запису про відправлення немає, знайдено за часом зміни' } : {}), rows: b.items.slice(0, 12), undo: `${b.at}|${b.kind}|${b.guessed ? 1 : 0}` })),
+      ...store.undone().map((u): Ev => ({ id: `u${u.at}${u.kind}`, at: u.at, icon: 'prev', text: u.kind === 'send' ? `Ви скасували відправлення: ${n(u.count)}` : `Ви скасували затвердження: ${n(u.count)}` })),
+    ].sort((x, y) => y.at - x.at);
+    const dayKey = (t: number): string => new Date(t).toDateString();
+    const today = dayKey(Date.now()), yest = dayKey(Date.now() - 86400000);
+    const dayName = (t: number): string => (dayKey(t) === today ? 'Сьогодні' : dayKey(t) === yest ? 'Вчора' : new Date(t).toLocaleDateString('uk-UA', { day: 'numeric', month: 'long' }));
+    const time = (t: number): string => new Date(t).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
+    let last = '';
+    const html = evs.map(e => {
+      const head = dayKey(e.at) !== last ? `<h3 class="act-day">${dayName(e.at)}</h3>` : ''; last = dayKey(e.at);
+      const open = act.open.has(e.id);
+      return `${head}<div class="act-ev ${open ? 'open' : ''}"><span class="act-ic">${icon(e.icon)}</span>
+        <div class="act-t"><span>${esc(e.text)}</span><small>${time(e.at)}${e.sub ? ' · ' + esc(e.sub) : ''}</small>${e.undo ? `<button class="act-undo" data-undosend="${e.undo}">${icon('prev')} Скасувати відправлення</button>` : ''}</div>
+        ${e.rows ? `<button class="act-chev" data-actopen="${e.id}" aria-expanded="${open}" aria-label="Показати рядки">${icon('next')}</button>` : ''}
+        ${open && e.rows ? `<ul class="act-rows">${e.rows.map(r => `<li><small>${esc(r.source.replace(/\s+/g, ' ').slice(0, 70))}</small><span>${esc(r.target.replace(/\s+/g, ' ').slice(0, 90))}</span></li>`).join('')}</ul>` : ''}</div>`;
+    }).join('');
+    return `<div class="m-more act">${html || '<p class="m-none">Активності ще немає</p>'}<p class="m-hint">Відправлення можна скасувати, поки рядки не змінено. Якщо відправляли на іншому пристрої (наприклад, на ПК), спершу синхронізуйте проєкт у «Ще».</p></div>`;
   }
 
   /** The glossary: add a term, tap one to change it. */
@@ -334,7 +351,7 @@ export async function start(root: HTMLElement): Promise<void> {
         <details class="m-det"><summary>Додатково</summary><label class="m-lbl" for="g-branch">Гілка</label><input id="g-branch" class="m-input" value="${esc(gh.branch)}" placeholder="основна" autocomplete="off"><label class="m-lbl" for="g-dir">Папка в репозиторії</label><input id="g-dir" class="m-input" value="${esc(gh.dir)}" placeholder="корінь" autocomplete="off"></details>
         <button class="m-primary wide" data-ghsync ${busy ? 'disabled' : ''}>${icon('sync')}<span>Синхронізувати</span></button><p class="m-hint" id="m-ghstate">${gh.last ? 'Востаннє: ' + new Date(gh.last).toLocaleString('uk-UA') : 'Ще не синхронізовано'}</p></section>
       <section class="m-card" id="m-claude" hidden><h3>Синхронізація через Claude</h3><p class="m-hint">Спільна база артефакту: працює між вашими пристроями.</p><button class="m-secondary wide" data-clsync>${icon('sync')}<span>Синхронізувати через Claude</span></button></section>
-      ${store.hasGame ? `<section class="m-card"><h3>Інструменти</h3><div class="m-links"><button data-sub="find">Знайти й замінити</button><button data-sub="speakers">Хто говорить</button><button data-sub="sendlog">Історія відправлень</button><button data-sub="glossary">Глосарій</button><button data-sub="autofill">Автозаповнення</button><button data-sub="consistency">Узгодженість</button><button data-sub="settings">Налаштування</button></div></section>` : ''}
+      ${store.hasGame ? `<section class="m-card"><h3>Інструменти</h3><div class="m-links"><button data-sub="find">Знайти й замінити</button><button data-sub="speakers">Хто говорить</button><button data-sub="sendlog">Активність</button><button data-sub="glossary">Глосарій</button><button data-sub="autofill">Автозаповнення</button><button data-sub="consistency">Узгодженість</button><button data-sub="settings">Налаштування</button></div></section>` : ''}
       ${canUpdate() ? updateSection() : ''}
       <section class="m-card"><h3>Проєкт</h3><label class="m-lbl" for="m-who">Ваше ім’я в коментарях</label><input id="m-who" class="m-input" value="${esc(store.who)}" maxlength="40" autocomplete="off">
         <button class="m-secondary wide" data-export>Зберегти проєкт у файл</button></section>
@@ -547,6 +564,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (q('[data-gcancel]')) { Object.assign(gl, { en: '', uk: '', alt: '', qa: true, edit: false }); render(); return; }
     if ((x = q('[data-gedit]'))) { const t = store.saved.terms.find(y => y.en === x!.dataset.gedit); if (t) { Object.assign(gl, { en: t.en, uk: t.uk, alt: (t.alt ?? []).join(', '), qa: t.qa !== false, edit: true }); render(); $('m-main').scrollTop = 0; } return; }
     if ((x = q('[data-gdel]'))) { store.removeTerm(x.dataset.gdel!); say('Термін видалено'); render(); return; }
+    if ((x = q('[data-actopen]'))) { const k = x.dataset.actopen!; if (act.open.has(k)) act.open.delete(k); else act.open.add(k); const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
     if ((x = q('[data-undosend]'))) { const [at, kind, g] = x.dataset.undosend!.split('|'); const n = store.undoSend(Number(at), kind!, g === '1'); say(n ? `Скасовано: ${plural(n, ['рядок', 'рядки', 'рядків'])}` : 'Нічого скасовувати', !n); buzz(14); render(); return; }
     if ((x = q('[data-afterm]'))) { const [w, v] = x.dataset.afterm!.split('|'); if (store.saveTerm(w!, v!, '', true)) { say('Термін додано: ' + w + ' - ' + v); buzz(10); } render(); return; }
     if ((x = q('[data-afnew]'))) { Object.assign(gl, { en: x.dataset.afnew!, uk: '', alt: '', qa: true, edit: false }); sub = 'glossary'; render(); $('m-main').scrollTop = 0; return; }

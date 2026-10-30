@@ -283,3 +283,14 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .scn-bar{position:sticky;bottom:0;z-index:5;display:flex;gap:8px;padding:8px 12px;background:var(--panel);border-top:1px solid var(--line)}
 .scn-bar .m-secondary,.scn-bar .m-primary{flex:1}
 .m-main:has(.m-scene){display:flex;flex-direction:column;padding-bottom:0}.m-main:has(.m-scene)>.m-scene{flex:1}
+
+/* activity feed */
+.m-more.act{gap:0}
+.act-day{margin:18px 0 4px;font-size:13px;font-weight:600;color:var(--mute)}
+.act-ev{display:grid;grid-template-columns:36px 1fr auto;gap:4px 10px;align-items:start;padding:10px 0;border-bottom:1px solid var(--line)}
+.act-ic{width:36px;height:36px;border-radius:50%;background:var(--raised);display:grid;place-items:center;color:var(--accent-2)}.act-ic svg{width:18px;height:18px}
+.act-t{display:flex;flex-direction:column;min-width:0}.act-t span{overflow-wrap:anywhere}.act-t small{color:var(--mute)}
+.act-undo{align-self:flex-start;display:inline-flex;align-items:center;gap:6px;min-height:44px;margin-left:-4px;padding:0 4px;color:var(--accent-2);font-size:14px}.act-undo svg{width:16px;height:16px}
+.act-chev{width:44px;height:44px;display:grid;place-items:center;color:var(--mute);transition:transform .15s}.act-ev.open .act-chev{transform:rotate(90deg)}
+.act-rows{grid-column:2/-1;margin-top:-4px!important;list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.act-rows li{display:flex;flex-direction:column;padding-left:10px;border-left:2px solid var(--line)}.act-rows small{color:var(--mute)}

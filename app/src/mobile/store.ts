@@ -1,4 +1,4 @@
-import { sendBatches, undoBatch, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
+import { sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
 import type { Entry, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
 import { IdbStore } from '../ui/idb';
 
@@ -247,6 +247,7 @@ export class Store {
   autofill(): ReturnType<typeof autofillProposals> { return autofillProposals(this.views, this.saved); }
   /** Sends that can still be taken back (newest first). */
   sends(): ReturnType<typeof sendBatches> { return sendBatches(this.views, this.saved); }
+  undone(): ReturnType<typeof undoneBatches> { return undoneBatches(this.views, this.saved); }
   undoSend(at: number, kind: string, guessed = false): number {
     const b = this.sends().find(x => x.at === at && x.kind === kind && !!x.guessed === guessed); if (!b) return 0;
     const n = undoBatch(this.saved, b, this.who, Date.now());

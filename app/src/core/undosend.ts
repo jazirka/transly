@@ -63,3 +63,26 @@ export function undoBatch(saved: SavedProject, batch: SendBatch, who: string, no
   }
   return n;
 }
+
+/** Sends that were taken back, newest first, for the activity feed (information only). */
+export interface UndoneBatch { kind: SendKind; at: number; count: number }
+export function undoneBatches(views: FileView[], saved: SavedProject, limit = 10): UndoneBatch[] {
+  const found: { kind: SendKind; at: number }[] = [];
+  for (const v of views) {
+    const ents = saved.files[v.name]; if (!ents) continue;
+    for (const u of v.units) {
+      const last = ents[u.key]?.history?.at(-1);
+      if (last?.what === 'надсилання скасовано') found.push({ kind: 'send', at: last.at });
+      else if (last?.what === 'вичитування скасовано') found.push({ kind: 'approve', at: last.at });
+    }
+  }
+  found.sort((a, b) => b.at - a.at);
+  const out: UndoneBatch[] = [];
+  for (const f of found) {
+    const cur = out[out.length - 1];
+    if (cur && cur.kind === f.kind && cur.at - f.at <= GAP) { cur.count++; continue; }
+    if (out.length >= limit) break;
+    out.push({ kind: f.kind, at: f.at, count: 1 });
+  }
+  return out;
+}

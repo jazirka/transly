@@ -296,10 +296,12 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .act-rows li{display:flex;flex-direction:column;padding-left:10px;border-left:2px solid var(--line)}.act-rows small{color:var(--mute)}
 
 /* tools menu pinned to the top bar */
-.m-menu{position:absolute;top:6px;right:8px;width:min(92%,340px);padding:10px;border-radius:var(--r3);background:var(--raised);border:1px solid var(--line);box-shadow:0 12px 32px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:8px;animation:m-fade .15s}
-.m-tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.m-tile{position:relative;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-end;gap:8px;min-height:84px;padding:12px;text-align:left;border-radius:var(--r2);background:var(--panel);border:1px solid var(--line);line-height:1.2}
-.m-tile:active,.m-menu-set:active{background:rgba(255,255,255,.1)}
-.m-tile svg{width:22px;height:22px;color:var(--accent-2)}
-.m-tile i{position:absolute;top:8px;right:8px;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:rgba(255,255,255,.14);font:600 12px/20px system-ui;font-style:normal;text-align:center}
-.m-menu-set{display:flex;align-items:center;gap:12px;min-height:48px;padding:0 12px;border-radius:var(--r2);text-align:left;color:var(--mute)}.m-menu-set svg{width:20px;height:20px}
+.m-menu{position:absolute;left:0;right:0;top:0;padding:6px 6px 10px;background:var(--raised);border-bottom:1px solid var(--line);border-radius:0 0 18px 18px;box-shadow:0 14px 30px rgba(0,0,0,.5);animation:m-drop .18s cubic-bezier(.2,.8,.2,1)}
+@keyframes m-drop{from{transform:translateY(-12px);opacity:0}to{transform:none;opacity:1}}
+.m-mgrid{display:grid;grid-template-columns:1fr 1fr}
+.m-mi{display:flex;align-items:center;gap:12px;min-height:50px;padding:0 12px;text-align:left;border-radius:var(--r2);color:var(--text);font-size:15px;position:relative}
+.m-mi:active{background:rgba(255,255,255,.1)}.m-mi svg{width:21px;height:21px;color:var(--accent-2);flex:none}
+.m-mi i{margin-left:auto;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:rgba(255,255,255,.14);font:600 12px/20px system-ui;font-style:normal;text-align:center}
+.m-msep{height:1px;background:var(--line);margin:6px 8px}
+.m-mi.wide{width:100%;color:var(--mute)}
+.m-hdr[data-menu][aria-expanded=true] svg{transform:rotate(180deg)}

@@ -8,6 +8,7 @@ const ICONS: Record<string, string> = {
   copy: P('<rect x="8" y="8" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/>'),
   book: P('<path d="M5 4.5h10a3 3 0 0 1 3 3V20H8a3 3 0 0 1-3-3z"/><path d="M8 8h6"/>'),
   send: P('<path d="M4 12l16-8-6 16-3-6.5z"/><path d="M11 13.5L20 4"/>'),
+  down: P('<path d="M6 9l6 6 6-6"/>'),
   prev: P('<path d="M15 5l-7 7 7 7"/>'),
   next: P('<path d="M9 5l7 7-7 7"/>'),
   check: P('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),

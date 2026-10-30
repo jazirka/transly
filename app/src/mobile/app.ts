@@ -71,7 +71,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const TOOLS: [Sub, string, string][] = [['find', 'Знайти й замінити', 'search'], ['speakers', 'Хто говорить', 'rows'], ['sendlog', 'Активність', 'send'], ['glossary', 'Глосарій', 'book'], ['autofill', 'Автозаповнення', 'edit'], ['consistency', 'Узгодженість', 'check'], ['settings', 'Налаштування', 'more']];
   function toolsBtn(): string {
     if (sub || !store.hasGame) return '';
-    return `<button class="m-hdr ${menu ? 'on' : ''}" data-menu aria-pressed="${menu}" aria-label="Інструменти">${icon('more')}</button>`;
+    return `<button class="m-hdr ${menu ? 'on' : ''}" data-menu aria-pressed="${menu}" aria-label="Інструменти" aria-expanded="${menu}">${icon('down')}</button>`;
   }
   /** Top-bar button of the editor: glossary, memory, comments and history of the open row. */
   function helpBtn(): string {
@@ -395,10 +395,10 @@ export async function start(root: HTMLElement): Promise<void> {
     if (menu) {
       wrap.dataset.open = '';
       const badge: Partial<Record<Sub, number>> = { autofill: store.autofill().length, consistency: store.inconsistent().length, sendlog: store.sends().length };
-      const tile = ([k, l, ic]: [Sub, string, string]): string => `<button class="m-tile" data-sub="${k}">${icon(ic)}<span>${l}</span>${badge[k] ? `<i>${badge[k]! > 99 ? '99+' : badge[k]}</i>` : ''}</button>`;
-      const by = (k: Sub): [Sub, string, string] => TOOLS.find(t => t[0] === k)!;
-      wrap.innerHTML = `<div class="m-scrim" data-close></div><nav class="m-menu" aria-label="Інструменти"><div class="m-tiles">${(['find', 'autofill', 'consistency', 'speakers', 'glossary', 'sendlog'] as Sub[]).map(k => tile(by(k))).join('')}</div>
-        <button class="m-menu-set" data-sub="settings">${icon('more')}<span>Налаштування</span></button></nav>`;
+      const short: Partial<Record<Sub, string>> = { find: 'Заміна', autofill: 'Авто', speakers: 'Мовці' };
+      const item = (k: Sub): string => { const [, l, ic] = TOOLS.find(t => t[0] === k)!; return `<button class="m-mi" data-sub="${k}">${icon(ic)}<span>${short[k] ?? l}</span>${badge[k] ? `<i>${badge[k]! > 99 ? '99+' : badge[k]}</i>` : ''}</button>`; };
+      wrap.innerHTML = `<div class="m-scrim" data-close></div><nav class="m-menu" aria-label="Інструменти"><div class="m-mgrid">${(['find', 'autofill', 'consistency', 'speakers', 'glossary', 'sendlog'] as Sub[]).map(item).join('')}</div>
+        <div class="m-msep"></div><button class="m-mi wide" data-sub="settings">${icon('more')}<span>Налаштування</span></button></nav>`;
       return;
     }
     const c = store.current;

@@ -171,7 +171,7 @@ export async function start(root: HTMLElement): Promise<void> {
       <div class="m-sortrow"><span>${rows.length} з ${v.units.length}</span>${layout === 'cards' ? `<button class="m-mini ${selecting ? 'on' : ''}" data-select aria-pressed="${selecting}">${selecting ? 'Готово' : 'Вибрати'}</button>` : ''}<select id="m-sort" aria-label="Порядок">${(['order', 'new', 'qa', 'long'] as Sort[]).map(s => `<option value="${s}" ${store.sort === s ? 'selected' : ''}>${{ order: 'За порядком', new: 'Спершу без перекладу', qa: 'Спершу проблеми', long: 'Спершу найдовші' }[s]}</option>`).join('')}</select></div></div>
       ${layout === 'table' ? tableHtml(v.name, shown, rows.length) : `<ul class="m-list rows">${shown.map((u, i) => {
         const e = store.entry(v.name, u.key), st = store.shown(u, e);
-        return `<li><button class="m-row ${u.key === store.key && !selecting ? 'cur' : ''} ${selecting && picked.has(u.key) ? 'picked' : ''}" ${selecting ? `data-pickkey="${esc(u.key)}" aria-pressed="${picked.has(u.key)}"` : `data-key="${esc(u.key)}"`}>${selecting ? `<span class="m-chk ${picked.has(u.key) ? 'on' : ''}" aria-hidden="true"></span>` : `<span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span>`}<span class="m-row-t"><small>${selecting ? `<span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span>` : ''}${i + 1} · ${esc(store.speaker(u) || u.kind)}</small><span class="m-src">${esc(u.source.replace(/\s+/g, ' '))}</span><span class="m-tr ${e?.target ? '' : 'none'}">${e?.target ? esc(e.target.replace(/\s+/g, ' ')) : '—'}</span></span></button></li>`;
+        return `<li><button class="m-row ${u.key === store.key && !selecting ? 'cur' : ''} ${selecting && picked.has(u.key) ? 'picked' : ''}" ${selecting ? `data-pickkey="${esc(u.key)}" aria-pressed="${picked.has(u.key)}"` : `data-key="${esc(u.key)}"`}>${selecting ? '<span class="m-edge" aria-hidden="true"></span>' : ''}<span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span><span class="m-row-t"><small>${i + 1} · ${esc(store.speaker(u) || u.kind)}</small><span class="m-src">${esc(u.source.replace(/\s+/g, ' '))}</span><span class="m-tr ${e?.target ? '' : 'none'}">${e?.target ? esc(e.target.replace(/\s+/g, ' ')) : '—'}</span></span></button></li>`;
       }).join('') || '<li class="m-none">Нічого не знайдено</li>'}${rows.length > shown.length ? `<li class="m-more-li"><button class="m-mini" data-more>Показати ще ${Math.min(PAGE, rows.length - shown.length)} · ${shown.length} з ${rows.length}</button></li>` : ''}</ul>`}${selecting && layout === 'cards' ? selBar(picked.size, rows.length, picked.size === rows.length && rows.length > 0, 'data-selall', `<button class="m-mini" data-selcopy ${picked.size ? '' : 'disabled'}>Оригінал</button><button class="m-mini danger" data-selclear ${picked.size ? '' : 'disabled'}>Очистити</button>`, `<button class="m-primary" data-selsend ${picked.size ? '' : 'disabled'}>${icon('check')}<span>Надіслати</span></button>`, 'data-select') : ''}${selecting && layout === 'cards' ? '' : sbar}`;
   }
 
@@ -334,7 +334,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const list = store.autofill(), shown = list.slice(0, 80), on = list.filter(p => !af.off.has(p.file + '|' + p.key));
     const allOn = on.length === list.length;
     return `<div class="m-more m-afwrap"><p class="m-hint">Знаю слів: ${store.wordCount()} · рядків для автозаповнення: ${list.length}</p>
-      ${shown.map(p => { const k = p.file + '|' + p.key, sel = !af.off.has(k); return `<div class="m-af ${sel ? 'sel' : ''}" role="checkbox" aria-checked="${sel}" data-aflp="${esc(k)}" data-afk="${esc(k)}"><span class="m-chk ${sel ? 'on' : ''}" aria-hidden="true"></span><span class="m-af-t"><small>${esc(store.view(p.file)?.label ?? p.file)}</small><b>${esc(p.source)}</b><i>→ ${esc(p.target)}</i></span></div>`; }).join('') || '<p class="m-none">Немає рядків, які можна скласти зі знайомих слів</p>'}
+      ${shown.map(p => { const k = p.file + '|' + p.key, sel = !af.off.has(k); return `<div class="m-af ${sel ? 'sel' : ''}" role="checkbox" aria-checked="${sel}" data-aflp="${esc(k)}" data-afk="${esc(k)}"><span class="m-edge" aria-hidden="true"></span><span class="m-af-t"><small>${esc(store.view(p.file)?.label ?? p.file)}</small><b>${esc(p.source)}</b><i>→ ${esc(p.target)}</i></span></div>`; }).join('') || '<p class="m-none">Немає рядків, які можна скласти зі знайомих слів</p>'}
       ${list.length > 80 ? `<p class="m-hint">Показано 80 із ${list.length}: після запису решта з'явиться тут.</p>` : ''}
       ${almostHtml()}</div>
       ${list.length ? selBar(on.length, list.length, allOn, 'data-afall', '', `<button class="m-primary" data-afapply ${on.length ? '' : 'disabled'}>${icon('check')}<span>Вписати вибрані</span></button>`, 'data-subback') : ''}`;
@@ -767,8 +767,8 @@ export async function start(root: HTMLElement): Promise<void> {
   /** Set a card selected or not without redrawing the page (the finger is on it). */
   function paint(el: HTMLElement, on: boolean): void {
     const k = cardKey(el); if (!k) return;
-    if (isAf(el)) { if (on) af.off.delete(k); else af.off.add(k); el.classList.toggle('sel', on); el.setAttribute('aria-checked', String(on)); el.querySelector('.m-chk')?.classList.toggle('on', on); }
-    else { if (on) picked.add(k); else picked.delete(k); el.classList.toggle('picked', on); el.setAttribute('aria-pressed', String(on)); el.querySelector('.m-chk')?.classList.toggle('on', on); }
+    if (isAf(el)) { if (on) af.off.delete(k); else af.off.add(k); el.classList.toggle('sel', on); el.setAttribute('aria-checked', String(on)); }
+    else { if (on) picked.add(k); else picked.delete(k); el.classList.toggle('picked', on); el.setAttribute('aria-pressed', String(on)); }
   }
   const isOn = (el: HTMLElement): boolean => { const k = cardKey(el); return !!k && (isAf(el) ? !af.off.has(k) : picked.has(k)); };
   /** The card the finger is over by position, also when a bar or the search field floats above it; every card passed on the way is changed too. */
@@ -813,7 +813,7 @@ export async function start(root: HTMLElement): Promise<void> {
     drag = { add, last: -1, x, y, raf: 0 };
     drag.raf = requestAnimationFrame(dragLoop);
   }
-  const GUT = '.m-chk';
+  const GUT = '.m-edge';
   let tl: { timer: number; x: number; y: number; card: HTMLElement; gut: boolean } | null = null;
   const tlCancel = (): void => { if (tl) { clearTimeout(tl.timer); tl = null; } };
   root.addEventListener('touchstart', e => {

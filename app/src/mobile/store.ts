@@ -247,8 +247,8 @@ export class Store {
   autofill(): ReturnType<typeof autofillProposals> { return autofillProposals(this.views, this.saved); }
   /** Sends that can still be taken back (newest first). */
   sends(): ReturnType<typeof sendBatches> { return sendBatches(this.views, this.saved); }
-  undoSend(at: number, kind: string): number {
-    const b = this.sends().find(x => x.at === at && x.kind === kind); if (!b) return 0;
+  undoSend(at: number, kind: string, guessed = false): number {
+    const b = this.sends().find(x => x.at === at && x.kind === kind && !!x.guessed === guessed); if (!b) return 0;
     const n = undoBatch(this.saved, b, this.who, Date.now());
     if (n) { this.persist(); this.emit(); }
     return n;

@@ -234,10 +234,10 @@ export async function start(root: HTMLElement): Promise<void> {
   function screenSendLog(): string {
     const list = store.sends();
     const when = (t: number): string => new Date(t).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-    return `<div class="m-more"><p class="m-hint">Відправлення, які ще можна скасувати: рядки повернуться в чернетки (або на вичитування, якщо це було затвердження). Якщо рядок змінили після відправлення, він сюди вже не потрапляє.</p>
-      ${list.map(b => `<section class="m-card m-send-card"><h3>${b.kind === 'send' ? 'Надіслано на вичитування' : 'Затверджено'} · ${when(b.at)}</h3><b>${plural(b.items.length, ['рядок', 'рядки', 'рядків'])}</b>
+    return `<div class="m-more"><p class="m-hint">Відправлення, які ще можна скасувати: рядки повернуться в чернетки (або на вичитування, якщо це було затвердження). Якщо рядок змінили після відправлення, він сюди вже не потрапляє. Групи «без запису про відправлення» знайдені за часом останньої зміни рядків, що чекають вичитування. Якщо відправляли на іншому пристрої (наприклад, на ПК), спершу синхронізуйте проєкт у «Ще».</p>
+      ${list.map(b => `<section class="m-card m-send-card"><h3>${b.guessed ? 'Чекають вичитування, без запису про відправлення' : b.kind === 'send' ? 'Надіслано на вичитування' : 'Затверджено'} · ${when(b.at)}</h3><b>${plural(b.items.length, ['рядок', 'рядки', 'рядків'])}</b>
         ${b.items.slice(0, 3).map(i => `<div class="m-sl"><small>${esc(i.source.replace(/\s+/g, ' ').slice(0, 60))}</small><span>${esc(i.target.replace(/\s+/g, ' ').slice(0, 80))}</span></div>`).join('')}${b.items.length > 3 ? `<small class="m-hint">і ще ${b.items.length - 3}…</small>` : ''}
-        <button class="m-secondary wide" data-undosend="${b.at}|${b.kind}">Скасувати відправлення (${b.items.length})</button></section>`).join('') || '<p class="m-none">Відправлень, які можна скасувати, немає</p>'}</div>`;
+        <button class="m-secondary wide" data-undosend="${b.at}|${b.kind}|${b.guessed ? 1 : 0}">Скасувати відправлення (${b.items.length})</button></section>`).join('') || '<p class="m-none">Відправлень, які можна скасувати, немає</p>'}</div>`;
   }
 
   /** The glossary: add a term, tap one to change it. */
@@ -547,7 +547,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (q('[data-gcancel]')) { Object.assign(gl, { en: '', uk: '', alt: '', qa: true, edit: false }); render(); return; }
     if ((x = q('[data-gedit]'))) { const t = store.saved.terms.find(y => y.en === x!.dataset.gedit); if (t) { Object.assign(gl, { en: t.en, uk: t.uk, alt: (t.alt ?? []).join(', '), qa: t.qa !== false, edit: true }); render(); $('m-main').scrollTop = 0; } return; }
     if ((x = q('[data-gdel]'))) { store.removeTerm(x.dataset.gdel!); say('Термін видалено'); render(); return; }
-    if ((x = q('[data-undosend]'))) { const [at, kind] = x.dataset.undosend!.split('|'); const n = store.undoSend(Number(at), kind!); say(n ? `Скасовано: ${plural(n, ['рядок', 'рядки', 'рядків'])}` : 'Нічого скасовувати', !n); buzz(14); render(); return; }
+    if ((x = q('[data-undosend]'))) { const [at, kind, g] = x.dataset.undosend!.split('|'); const n = store.undoSend(Number(at), kind!, g === '1'); say(n ? `Скасовано: ${plural(n, ['рядок', 'рядки', 'рядків'])}` : 'Нічого скасовувати', !n); buzz(14); render(); return; }
     if ((x = q('[data-afterm]'))) { const [w, v] = x.dataset.afterm!.split('|'); if (store.saveTerm(w!, v!, '', true)) { say('Термін додано: ' + w + ' - ' + v); buzz(10); } render(); return; }
     if ((x = q('[data-afnew]'))) { Object.assign(gl, { en: x.dataset.afnew!, uk: '', alt: '', qa: true, edit: false }); sub = 'glossary'; render(); $('m-main').scrollTop = 0; return; }
     if ((x = q('[data-afk]'))) { const k = x.dataset.afk!; if (af.off.has(k)) af.off.delete(k); else af.off.add(k); render(); return; }

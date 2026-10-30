@@ -15,9 +15,11 @@ describe('undo of a send', () => {
     expect(b.map(x => x.items.length)).toEqual([1, 2]);
     expect(b[1]!.kind).toBe('send');
   });
-  it('a row edited after the send is no longer part of it', () => {
+  it('a row edited after the send is no longer part of the recorded batch (it is only a guess by change time)', () => {
     const sv = s(); (sv.files['A.json']!['1'] as { history: unknown[] }).history.push({ at: t0 + 5, who: 'я', what: 'правка', text: 'z' });
-    expect(sendBatches(views, sv).map(x => x.items.length)).toEqual([1, 1]);
+    const b = sendBatches(views, sv);
+    expect(b.filter(x => x.guessed).map(x => x.items.length)).toEqual([1]);
+    expect(b.filter(x => !x.guessed).map(x => x.items.length)).toEqual([1, 1]);
   });
   it('undo returns the rows to drafts and records it', () => {
     const sv = s(); const batch = sendBatches(views, sv)[1]!;
@@ -30,5 +32,14 @@ describe('undo of a send', () => {
     const sv = saved({ 1: { ...sent(t0, 'вичитано'), status: 'appr' } });
     const b = sendBatches(views, sv)[0]!; expect(b.kind).toBe('approve');
     undoBatch(sv, b, 'я', t0 + 1); expect(sv.files['A.json']!['1']!.status).toBe('done');
+  });
+
+  it('rows waiting for review without any history record are still offered, grouped by change time', () => {
+    const sv = saved({ 1: { target: 'T', status: 'done', mt: t0 }, 2: { target: 'T', status: 'done', mt: t0 + 1000 }, 3: { target: 'T', status: 'done', mt: t0 + 20 * 60_000 } });
+    const b = sendBatches(views, sv);
+    expect(b.map(x => [x.guessed, x.items.length])).toEqual([[true, 1], [true, 2]]);
+    expect(undoBatch(sv, b[1]!, 'я', t0 + 99)).toBe(2);
+    expect(sv.files['A.json']!['1']!.status).toBe('draft');
+    expect(sv.files['A.json']!['3']!.status).toBe('done');
   });
 });

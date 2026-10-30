@@ -141,7 +141,7 @@ export async function start(root: HTMLElement): Promise<void> {
 
   function screenFiles(): string {
     if (!store.hasGame) return empty('Файлів ще немає', 'Відкрийте файли гри або проєкт у розділі «Ще».', 'more', 'Відкрити файли');
-    return `<div class="m-searchbar"><label class="m-search">${icon('search')}<input id="m-fq" type="search" placeholder="Пошук файлу" value="${esc(fq)}" enterkeyhint="search" autocomplete="off"></label></div><div id="m-flist">${filesList()}</div>`;
+    return `<div id="m-flist">${filesList()}</div><div class="m-searchbar"><label class="m-search">${icon('search')}<input id="m-fq" type="search" placeholder="Пошук файлу" value="${esc(fq)}" enterkeyhint="search" autocomplete="off"></label></div>`;
   }
   /** The files whose name or title contains the search words. */
   function filesList(): string {
@@ -163,8 +163,8 @@ export async function start(root: HTMLElement): Promise<void> {
     if (sig !== pageSig) { pageSig = sig; page = 1; const at = store.key ? rows.findIndex(u => u.key === store.key) : -1; if (at >= PAGE) page = Math.ceil((at + 1) / PAGE); }
     const shown = rows.slice(0, PAGE * page);
     const chips = FILTERS.map(([f, l]) => `<button class="m-chip ${store.filter === f ? 'on' : ''}" data-filter="${f}" aria-pressed="${store.filter === f}">${l}</button>`).join('');
-    return `<div class="m-searchbar"><label class="m-search">${icon('search')}<input id="m-q" type="search" placeholder="Пошук у файлі" value="${esc(store.q)}" enterkeyhint="search" autocomplete="off"></label></div>
-      <div class="m-tools">
+    const sbar = `<div class="m-searchbar"><label class="m-search">${icon('search')}<input id="m-q" type="search" placeholder="Пошук у файлі" value="${esc(store.q)}" enterkeyhint="search" autocomplete="off"></label></div>`;
+    return `<div class="m-tools">
       <div class="m-scoperow"><div class="m-scope" role="group" aria-label="Де шукати"><button class="on" data-scope="file">Файл</button><button data-scope="all">Усі файли</button></div>
       <div class="m-scope" role="group" aria-label="Вигляд"><button class="${layout === 'cards' ? 'on' : ''}" data-layout="cards">Картки</button><button class="${layout === 'table' ? 'on' : ''}" data-layout="table">Таблиця</button></div></div>
       <div class="m-chips" role="group" aria-label="Фільтр">${chips}</div>
@@ -172,7 +172,7 @@ export async function start(root: HTMLElement): Promise<void> {
       ${layout === 'table' ? tableHtml(v.name, shown, rows.length) : `<ul class="m-list rows">${shown.map((u, i) => {
         const e = store.entry(v.name, u.key), st = store.shown(u, e);
         return `<li><button class="m-row ${u.key === store.key && !selecting ? 'cur' : ''} ${selecting && picked.has(u.key) ? 'picked' : ''}" ${selecting ? `data-pickkey="${esc(u.key)}" aria-pressed="${picked.has(u.key)}"` : `data-key="${esc(u.key)}"`}>${selecting ? `<span class="m-chk ${picked.has(u.key) ? 'on' : ''}" aria-hidden="true"></span>` : `<span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span>`}<span class="m-row-t"><small>${selecting ? `<span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span>` : ''}${i + 1} · ${esc(store.speaker(u) || u.kind)}</small><span class="m-src">${esc(u.source.replace(/\s+/g, ' '))}</span><span class="m-tr ${e?.target ? '' : 'none'}">${e?.target ? esc(e.target.replace(/\s+/g, ' ')) : '—'}</span></span></button></li>`;
-      }).join('') || '<li class="m-none">Нічого не знайдено</li>'}${rows.length > shown.length ? `<li class="m-more-li"><button class="m-mini" data-more>Показати ще ${Math.min(PAGE, rows.length - shown.length)} · ${shown.length} з ${rows.length}</button></li>` : ''}</ul>`}${selecting && layout === 'cards' ? selBar(picked.size, rows.length, picked.size === rows.length && rows.length > 0, 'data-selall', `<button class="m-mini" data-selcopy ${picked.size ? '' : 'disabled'}>Оригінал</button><button class="m-mini danger" data-selclear ${picked.size ? '' : 'disabled'}>Очистити</button>`, `<button class="m-primary" data-selsend ${picked.size ? '' : 'disabled'}>${icon('check')}<span>Надіслати</span></button>`, 'data-select') : ''}`;
+      }).join('') || '<li class="m-none">Нічого не знайдено</li>'}${rows.length > shown.length ? `<li class="m-more-li"><button class="m-mini" data-more>Показати ще ${Math.min(PAGE, rows.length - shown.length)} · ${shown.length} з ${rows.length}</button></li>` : ''}</ul>`}${selecting && layout === 'cards' ? selBar(picked.size, rows.length, picked.size === rows.length && rows.length > 0, 'data-selall', `<button class="m-mini" data-selcopy ${picked.size ? '' : 'disabled'}>Оригінал</button><button class="m-mini danger" data-selclear ${picked.size ? '' : 'disabled'}>Очистити</button>`, `<button class="m-primary" data-selsend ${picked.size ? '' : 'disabled'}>${icon('check')}<span>Надіслати</span></button>`, 'data-select') : ''}${selecting && layout === 'cards' ? '' : sbar}`;
   }
 
   /** The table: columns scroll sideways, a tap on a translation writes right in the cell, a tap on a number opens the row. */
@@ -840,7 +840,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const updateTop = (): void => {
     const on = (tab === 'files' || tab === 'rows') && !sub && mainEl.scrollTop > 360;
     topBtn.hidden = !on;
-    const bar = document.querySelector<HTMLElement>('.m-afbar');
+    const bar = document.querySelector<HTMLElement>('.m-afbar, .m-searchbar');
     topBtn.style.bottom = bar ? `${$('m-nav').offsetHeight + bar.offsetHeight + 12}px` : '';
   };
   mainEl.addEventListener('scroll', updateTop, { passive: true });

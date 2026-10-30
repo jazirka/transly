@@ -411,3 +411,8 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-ic.cnt{font:600 14px system-ui;color:var(--mute);pointer-events:none}
 .m-afbar .m-act1 .m-primary{flex:1;min-height:52px;justify-content:center;white-space:nowrap}
 .m-selbar{display:none}
+
+/* search sits at the bottom, in reach of the thumb: translucent haze above the nav, like the action bars */
+.m-searchbar{position:sticky;top:auto;bottom:0;z-index:4;padding:14px 12px 8px;background:none;pointer-events:none;isolation:isolate}
+.m-searchbar::before{content:'';position:absolute;inset:0;z-index:-1;background:linear-gradient(rgba(26,27,30,0),rgba(26,27,30,.78) 38%);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);-webkit-mask-image:linear-gradient(transparent,#000 42%);mask-image:linear-gradient(transparent,#000 42%)}
+.m-main:has(.m-searchbar){display:flex;flex-direction:column;padding-bottom:0}.m-main:has(.m-searchbar)>*{flex:none}.m-main:has(.m-searchbar)>.m-searchbar{margin-top:auto}

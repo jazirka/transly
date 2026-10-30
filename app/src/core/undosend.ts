@@ -1,5 +1,6 @@
 import type { Entry } from './model';
 import type { FileView, SavedProject } from './project';
+import { isAutoNote } from './autolog';
 import { note } from './workflow';
 
 export type SendKind = 'send' | 'approve';
@@ -22,7 +23,7 @@ export function sendBatches(views: FileView[], saved: SavedProject, limit = 20):
     for (const u of v.units) {
       const e = ents[u.key]; const last = e?.history?.[e.history.length - 1];
       const kind = last ? KIND(last.what) : null;
-      if (e && e.status === 'done' && !(last && kind === 'send')) { loose.push({ kind: 'send', file: v.name, key: u.key, source: u.source, target: e.target, at: e.mt, guessed: true }); continue; }
+      if (e && e.status === 'done' && !(last && kind === 'send') && !(last && isAutoNote(last.what))) { loose.push({ kind: 'send', file: v.name, key: u.key, source: u.source, target: e.target, at: e.mt, guessed: true }); continue; }
       if (!e || !last || !kind) continue;
       if (kind === 'send' ? e.status !== 'done' : e.status !== 'appr') continue;
       found.push({ kind, file: v.name, key: u.key, source: u.source, target: e.target, at: last.at });

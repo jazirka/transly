@@ -245,12 +245,16 @@ export async function start(root: HTMLElement): Promise<void> {
 
   /** Activity: what was sent for review, approved or taken back, by day; a send can be undone while its rows are untouched. */
   function screenSendLog(): string {
-    type Ev = { id: string; at: number; icon: string; text: string; sub?: string; rows?: { source: string; target: string }[]; undo?: string };
+    type Ev = { id: string; at: number; icon: string; text: string; sub?: string; rows?: { source: string; target: string }[]; undo?: string; undoLabel?: string; undoAttr?: string };
     const n = (c: number): string => plural(c, ['рядок', 'рядки', 'рядків']);
     const evs: Ev[] = [
       ...store.sends().map((b): Ev => ({ id: `s${b.at}${b.kind}${b.guessed ? 'g' : ''}`, at: b.at, icon: b.kind === 'send' ? 'send' : 'check',
         text: b.kind === 'send' ? `Ви надіслали ${n(b.items.length)} на вичитування` : `Ви затвердили ${n(b.items.length)}`,
         ...(b.guessed ? { sub: 'Запису про відправлення немає, знайдено за часом зміни' } : {}), rows: b.items.slice(0, 12), undo: `${b.at}|${b.kind}|${b.guessed ? 1 : 0}` })),
+      ...store.autos().map((b): Ev => ({ id: `a${b.at}${b.kind}`, at: b.at, icon: 'edit',
+        text: b.kind === 'words' ? `Автозаповнення за словами: ${n(b.items.length)}` : `Підставлено з однакових рядків: ${n(b.items.length)}`,
+        sub: b.kind === 'words' ? 'Чернетки, їх варто переглянути' : 'Чекають вичитування без вашого перегляду', rows: b.items.slice(0, 12), undo: `${b.at}|${b.kind}`, undoLabel: 'Скасувати заповнення', undoAttr: 'data-undoauto' })),
+      ...store.autosUndone().map((u): Ev => ({ id: `au${u.at}${u.kind}`, at: u.at, icon: 'prev', text: `Ви скасували ${u.kind === 'words' ? 'автозаповнення' : 'підстановку'}: ${n(u.count)}` })),
       ...store.undone().map((u): Ev => ({ id: `u${u.at}${u.kind}`, at: u.at, icon: 'prev', text: u.kind === 'send' ? `Ви скасували відправлення: ${n(u.count)}` : `Ви скасували затвердження: ${n(u.count)}` })),
     ].sort((x, y) => y.at - x.at);
     const dayKey = (t: number): string => new Date(t).toDateString();
@@ -262,7 +266,7 @@ export async function start(root: HTMLElement): Promise<void> {
       const head = dayKey(e.at) !== last ? `<h3 class="act-day">${dayName(e.at)}</h3>` : ''; last = dayKey(e.at);
       const open = act.open.has(e.id);
       return `${head}<div class="act-ev ${open ? 'open' : ''}"><span class="act-ic">${icon(e.icon)}</span>
-        <div class="act-t"><span>${esc(e.text)}</span><small>${time(e.at)}${e.sub ? ' · ' + esc(e.sub) : ''}</small>${e.undo ? `<button class="act-undo" data-undosend="${e.undo}">${icon('prev')} Скасувати відправлення</button>` : ''}</div>
+        <div class="act-t"><span>${esc(e.text)}</span><small>${time(e.at)}${e.sub ? ' · ' + esc(e.sub) : ''}</small>${e.undo ? `<button class="act-undo" ${e.undoAttr ?? 'data-undosend'}="${e.undo}">${icon('prev')} ${e.undoLabel ?? 'Скасувати відправлення'}</button>` : ''}</div>
         ${e.rows ? `<button class="act-chev" data-actopen="${e.id}" aria-expanded="${open}" aria-label="Показати рядки">${icon('next')}</button>` : ''}
         ${open && e.rows ? `<ul class="act-rows">${e.rows.map(r => `<li><small>${esc(r.source.replace(/\s+/g, ' ').slice(0, 70))}</small><span>${esc(r.target.replace(/\s+/g, ' ').slice(0, 90))}</span></li>`).join('')}</ul>` : ''}</div>`;
     }).join('');
@@ -399,7 +403,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const wrap = $('m-sheet'); wrap.hidden = !sheet && !menu;
     if (menu) {
       wrap.dataset.open = '';
-      const badge: Partial<Record<Sub, number>> = { autofill: store.autofill().length, consistency: store.inconsistent().length, sendlog: store.sends().length };
+      const badge: Partial<Record<Sub, number>> = { autofill: store.autofill().length, consistency: store.inconsistent().length, sendlog: store.sends().length + store.autos().length };
       const short: Partial<Record<Sub, string>> = { find: 'Заміна', autofill: 'Авто', speakers: 'Мовці' };
       const item = (k: Sub): string => { const [, l, ic] = TOOLS.find(t => t[0] === k)!; return `<button class="m-mi" data-sub="${k}">${icon(ic)}<span>${short[k] ?? l}</span>${badge[k] ? `<i>${badge[k]! > 99 ? '99+' : badge[k]}</i>` : ''}</button>`; };
       wrap.innerHTML = `<div class="m-scrim" data-close></div><nav class="m-menu" aria-label="Інструменти"><div class="m-mgrid">${(['find', 'autofill', 'consistency', 'speakers', 'glossary', 'sendlog'] as Sub[]).map(item).join('')}</div>
@@ -606,6 +610,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if ((x = q('[data-gedit]'))) { const t = store.saved.terms.find(y => y.en === x!.dataset.gedit); if (t) { Object.assign(gl, { en: t.en, uk: t.uk, alt: (t.alt ?? []).join(', '), qa: t.qa !== false, edit: true }); render(); $('m-main').scrollTop = 0; } return; }
     if ((x = q('[data-gdel]'))) { store.removeTerm(x.dataset.gdel!); say('Термін видалено'); render(); return; }
     if ((x = q('[data-actopen]'))) { const k = x.dataset.actopen!; if (act.open.has(k)) act.open.delete(k); else act.open.add(k); const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
+    if ((x = q('[data-undoauto]'))) { const [at, kind] = x.dataset.undoauto!.split('|'); const n = store.undoAutoFill(Number(at), kind!); say(n ? `Скасовано: ${plural(n, ['рядок', 'рядки', 'рядків'])}` : 'Нічого скасовувати', !n); buzz(14); render(); return; }
     if ((x = q('[data-undosend]'))) { const [at, kind, g] = x.dataset.undosend!.split('|'); const n = store.undoSend(Number(at), kind!, g === '1'); say(n ? `Скасовано: ${plural(n, ['рядок', 'рядки', 'рядків'])}` : 'Нічого скасовувати', !n); buzz(14); render(); return; }
     if ((x = q('[data-afterm]'))) { const [w, v] = x.dataset.afterm!.split('|'); if (store.saveTerm(w!, v!, '', true)) { say('Термін додано: ' + w + ' - ' + v); buzz(10); } render(); return; }
     if ((x = q('[data-afnew]'))) { Object.assign(gl, { en: x.dataset.afnew!, uk: '', alt: '', qa: true, edit: false }); sub = 'glossary'; render(); $('m-main').scrollTop = 0; return; }

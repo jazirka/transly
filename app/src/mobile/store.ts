@@ -1,4 +1,4 @@
-import { sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
+import { autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
 import type { Entry, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
 import { IdbStore } from '../ui/idb';
 
@@ -247,6 +247,14 @@ export class Store {
   autofill(): ReturnType<typeof autofillProposals> { return autofillProposals(this.views, this.saved); }
   /** Sends that can still be taken back (newest first). */
   sends(): ReturnType<typeof sendBatches> { return sendBatches(this.views, this.saved); }
+  autos(): ReturnType<typeof autoBatches> { return autoBatches(this.views, this.saved); }
+  autosUndone(): ReturnType<typeof autoUndone> { return autoUndone(this.views, this.saved); }
+  undoAutoFill(at: number, kind: string): number {
+    const b = this.autos().find(x => x.at === at && x.kind === kind); if (!b) return 0;
+    const n = undoAuto(this.saved, b, this.who, Date.now());
+    if (n) { this.tmCache = null; this.persist(); this.emit(); }
+    return n;
+  }
   undone(): ReturnType<typeof undoneBatches> { return undoneBatches(this.views, this.saved); }
   undoSend(at: number, kind: string, guessed = false): number {
     const b = this.sends().find(x => x.at === at && x.kind === kind && !!x.guessed === guessed); if (!b) return 0;

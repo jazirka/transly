@@ -64,7 +64,7 @@
         android:ellipsize="end"
         android:maxLines="4"
         android:textColor="@color/w_text"
-        android:textSize="14sp"
+        android:textSize="16sp"
         android:textStyle="bold" />
 
     <TextView
@@ -76,7 +76,8 @@
         android:ellipsize="end"
         android:maxLines="3"
         android:textColor="@color/w_sub"
-        android:textSize="12sp" />
+        android:textSize="12sp"
+        android:textStyle="italic" />
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -98,7 +99,7 @@
             android:layout_width="0dp"
             android:layout_height="36dp"
             android:layout_marginStart="8dp"
-            android:layout_weight="1"
+            android:layout_weight="1.4"
             android:background="@drawable/w_pill"
             android:contentDescription="@string/widget_send"
             android:padding="8dp"

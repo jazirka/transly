@@ -32,7 +32,7 @@
             android:ellipsize="end"
             android:singleLine="true"
             android:textColor="@color/w_text"
-            android:textSize="15sp"
+            android:textSize="16sp"
             android:textStyle="bold" />
 
         <TextView
@@ -42,7 +42,7 @@
             android:ellipsize="end"
             android:singleLine="true"
             android:textColor="@color/w_sub"
-            android:textSize="12sp" />
+            android:textSize="11sp" />
     </LinearLayout>
 
     <ImageView

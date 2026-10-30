@@ -33,7 +33,7 @@
                 android:layout_height="wrap_content"
                 android:singleLine="true"
                 android:textColor="@color/w_text"
-                android:textSize="15sp"
+                android:textSize="20sp"
                 android:textStyle="bold" />
 
             <TextView

@@ -48,5 +48,41 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_next_info" />
         </receiver>
+
+        <receiver
+            android:name=".RowWidget"
+            android:exported="true"
+            android:label="@string/widget_row_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_row_info" />
+        </receiver>
+
+        <receiver
+            android:name=".QueueWidget"
+            android:exported="true"
+            android:label="@string/widget_queue_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_queue_info" />
+        </receiver>
+
+        <receiver
+            android:name=".StatsWidget"
+            android:exported="true"
+            android:label="@string/widget_stats_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_stats_info" />
+        </receiver>
     </application>
 </manifest>

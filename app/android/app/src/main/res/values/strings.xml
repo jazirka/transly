@@ -5,9 +5,18 @@
     <string name="widget_continue">Продовжити</string>
     <string name="widget_empty_title">Почніть переклад</string>
     <string name="widget_empty_sub">Відкрийте застосунок і виберіть гру</string>
-    <string name="widget_next_label">Transly: наступний рядок</string>
-    <string name="widget_next_desc">Наступний неперекладений рядок: торкніться, щоб перекласти</string>
-    <string name="widget_next_title">Наступний рядок</string>
-    <string name="widget_next_action">Перекласти</string>
-    <string name="widget_next_empty">Усе перекладено або проєкт ще не відкрито</string>
+    <string name="widget_next_label">Transly: продовжити</string>
+    <string name="widget_next_desc">Відкриває рядок, на якому ви зупинилися; олівець одразу відкриває клавіатуру</string>
+    <string name="widget_next_action">Продовжити</string>
+    <string name="widget_next_empty">Відкрийте застосунок, щоб почати</string>
+    <string name="widget_row_label">Transly: рядок</string>
+    <string name="widget_row_desc">Рядок із черги: гортайте стрілками, пишіть або надсилайте, не відкриваючи застосунок</string>
+    <string name="widget_queue_label">Transly: черга</string>
+    <string name="widget_queue_desc">Нові, чернетки, автозаповнені й рядки на вичитуванні: торкніться, щоб відкрити</string>
+    <string name="widget_stats_label">Transly: статистика</string>
+    <string name="widget_stats_desc">Скільки зроблено сьогодні, серія днів і тиждень на діаграмі</string>
+    <string name="widget_type">Писати</string>
+    <string name="widget_send">Надіслати</string>
+    <string name="widget_prev">Назад</string>
+    <string name="widget_nextrow">Далі</string>
 </resources>

@@ -6,6 +6,8 @@ import { esc, plural } from '../ui/dom';
 import { gameHtml } from '../ui/gamehtml';
 import { markup } from '../ui/markup';
 import { androidBridge, publishWidget } from '../ui/android';
+import type { WidgetStats } from '../ui/android';
+import { buildWidget } from './widgetdata';
 import { FILTERS, STATUS_LABEL, Store } from './store';
 import type { Filter, Shown, Sort } from './store';
 import { icon } from './icons';
@@ -105,6 +107,22 @@ export async function start(root: HTMLElement): Promise<void> {
   }
   const SUB_TITLE: Record<Sub, string> = { scene: 'Сцена', find: 'Знайти й замінити', speakers: 'Хто говорить', settings: 'Налаштування', consistency: 'Узгодженість', glossary: 'Глосарій', autofill: 'Автозаповнення', sendlog: 'Активність' };
 
+  /* ---------- widgets ---------- */
+  let wTimer = 0;
+  /** The home-screen widgets get a fresh summary a moment after the last change. */
+  function scheduleWidget(): void {
+    clearTimeout(wTimer);
+    wTimer = window.setTimeout(() => publishWidget(buildWidget(store.views, store.saved, store.file && store.key ? { file: store.file, key: store.key } : null) as unknown as WidgetStats), 800);
+  }
+  /** A button on a widget: open the row, open it with the keyboard, or send it. Returns a short result for the toast. */
+  function widgetAction(action: string, file: string, key: string): string {
+    if (!store.view(file) || !store.unit(file, key)) return 'Рядка вже немає';
+    store.open(file, key); sheet = false; menu = false; sub = null; tab = 'edit'; render();
+    if (action === 'keyboard') setTimeout(() => { const t = document.getElementById('m-tr') as HTMLTextAreaElement | null; if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } }, 250);
+    if (action === 'send') { const r = store.send(); render(); if (r) { say(r, true); return r; } say(store.stage === 'translate' ? 'Надіслано на вичитування' : 'Вичитано'); return 'ok'; }
+    return 'ok';
+  }
+
   /* ---------- chrome ---------- */
   /** The tools (find and replace, speakers, activity, glossary, autofill, consistency, settings): one menu pinned to the top bar of every screen. */
   const TOOLS: [Sub, string, string][] = [['find', 'Знайти й замінити', 'search'], ['speakers', 'Хто говорить', 'rows'], ['sendlog', 'Активність', 'send'], ['glossary', 'Глосарій', 'book'], ['autofill', 'Автозаповнення', 'edit'], ['consistency', 'Узгодженість', 'check'], ['settings', 'Налаштування', 'more']];
@@ -129,11 +147,7 @@ export async function start(root: HTMLElement): Promise<void> {
     $('m-bar').classList.toggle('loading', !!(busy || updBusy));
     document.documentElement.style.setProperty('--bar-h', $('m-bar').offsetHeight + 'px');
     $('m-nav').innerHTML = (Object.keys(TAB_LABEL) as Tab[]).map(t => `<button role="tab" data-go="${t}" aria-selected="${t === tab}" class="${t === tab ? 'on' : ''}" ${(t === 'rows' || t === 'edit') && !store.hasGame ? 'disabled' : ''}>${icon(t)}<span>${TAB_LABEL[t]}</span>${tabMark(t) ? `<i class="m-mark">${tabMark(t)}</i>` : ''}</button>`).join('');
-    if (androidBridge()) {
-      const cur = store.view();
-      const next = cur?.units.find(u => !store.entry(cur.name, u.key)?.target && u.kind !== 'name' && u.kind !== 'term');
-      publishWidget({ name: store.saved.name, file: store.file ?? '', total: tot.total, approved: tot.approved, done: tot.done, draft: Math.max(0, tot.translated - tot.approved - tot.done), ...(cur && next ? { next: { file: cur.name, key: next.key, text: next.source.replace(/\s+/g, ' ').slice(0, 160) } } : {}) });
-    }
+    if (androidBridge()) scheduleWidget();
   }
 
   /* ---------- screens ---------- */
@@ -858,6 +872,7 @@ export async function start(root: HTMLElement): Promise<void> {
   Object.assign(window, {
     __back: (): boolean => { if (sub) { sub = null; render(); return true; } if (sheet || menu) { sheet = false; menu = false; renderSheet(); renderChrome(); return true; } if (tab === 'edit') { go('rows'); return true; } if (tab === 'rows' || tab === 'more') { go('files'); return true; } return false; },
     __flush: (): Promise<void> => store.flush(),
+    __widgetAction: (action: string, file: string, key: string): string => widgetAction(action, file, key),
     __open: (file: string, key: string): void => { if (store.view(file)) { store.open(file, key); go('edit'); } },
   });
   // Quietly look for a new version a few seconds after the start.

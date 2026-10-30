@@ -42,6 +42,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "Transly";
     static final String EXTRA_FILE = "file";
     static final String EXTRA_KEY = "key";
+    static final String EXTRA_ACTION = "action";
 
     private WebView web;
     private ValueCallback<Uri[]> chooser;
@@ -103,13 +104,34 @@ public class MainActivity extends Activity {
         openFromIntent(intent);
     }
 
-    /** A tap on the "next line" widget: tell the page which row to open (it waits until the project has loaded). */
+    /**
+     * A tap on a widget button: open the row, open it with the keyboard, or send it. The page may still be loading, so
+     * the call waits for it; a send is a quick action and leaves the app again, back to the home screen.
+     */
     private void openFromIntent(Intent intent) {
         String file = intent == null ? null : intent.getStringExtra(EXTRA_FILE);
         String key = intent == null ? null : intent.getStringExtra(EXTRA_KEY);
+        String action = intent == null ? null : intent.getStringExtra(EXTRA_ACTION);
         if (file == null || file.isEmpty() || key == null || key.isEmpty()) return;
         intent.removeExtra(EXTRA_FILE);
-        web.post(() -> web.evaluateJavascript("(function(){var f=" + org.json.JSONObject.quote(file) + ",k=" + org.json.JSONObject.quote(key) + ";var t=setInterval(function(){if(window.__open){clearInterval(t);window.__open(f,k)}},200);setTimeout(function(){clearInterval(t)},10000)})()", null));
+        intent.removeExtra(EXTRA_ACTION);
+        String act = action == null ? "open" : action;
+        boolean send = "send".equals(act), keyboard = "keyboard".equals(act);
+        String js = "(function(){var f=" + org.json.JSONObject.quote(file) + ",k=" + org.json.JSONObject.quote(key) + ",a=" + org.json.JSONObject.quote(act)
+                + ";var t=setInterval(function(){if(window.__widgetAction&&window.__open){clearInterval(t);window.__open(f,k);window.__widgetState=window.__widgetAction(a,f,k)}},200);setTimeout(function(){clearInterval(t)},10000)})()";
+        web.post(() -> {
+            web.evaluateJavascript(js, null);
+            if (keyboard) web.postDelayed(() -> {
+                web.requestFocus();
+                android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                if (imm != null) imm.showSoftInput(web, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+            }, 900);
+            if (send) web.postDelayed(() -> web.evaluateJavascript("(function(){return String(window.__widgetState||'')})()", v -> {
+                String r = v == null ? "" : v.replace("\"", "");
+                Toast.makeText(MainActivity.this, "ok".equals(r) ? "Надіслано" : (r.isEmpty() ? "Не вдалося надіслати" : r), Toast.LENGTH_SHORT).show();
+                if ("ok".equals(r)) moveTaskToBack(true);
+            }), 1600);
+        });
     }
 
     @Override
@@ -183,8 +205,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void setStats(String json) {
             getSharedPreferences(TranslyWidget.PREFS, MODE_PRIVATE).edit().putString(TranslyWidget.KEY, json).apply();
-            TranslyWidget.refresh(MainActivity.this);
-            NextLineWidget.refresh(MainActivity.this);
+            WidgetKit.refreshAll(MainActivity.this);
         }
 
         /** Start saving a file to the Downloads folder. */

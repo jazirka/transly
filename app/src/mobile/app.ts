@@ -21,7 +21,7 @@ export async function start(root: HTMLElement): Promise<void> {
   let tab: Tab = store.hasGame ? (store.key ? 'edit' : 'rows') : 'more';
   let sheet = false; let sheetTab: 'terms' | 'tm' | 'cm' | 'hist' | 'dict' | null = null; let gk: 'Тлумачення' | 'Синоніми' = 'Тлумачення';
   let busy = '';
-  type Sub = 'scene' | 'find' | 'speakers' | 'settings' | 'consistency' | 'glossary' | 'autofill';
+  type Sub = 'scene' | 'find' | 'speakers' | 'settings' | 'consistency' | 'glossary' | 'autofill' | 'sendlog';
   let sub: Sub | null = null;
   let scope: 'file' | 'all' = 'file';
   let layout: 'cards' | 'table' = (() => { try { return localStorage.getItem('transly-m-layout') === 'table' ? 'table' : 'cards'; } catch { return 'cards'; } })();
@@ -52,8 +52,17 @@ export async function start(root: HTMLElement): Promise<void> {
     $('m-toasts').appendChild(t); setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 220); }, bad ? 6000 : 3200);
   };
   const buzz = (ms = 10): void => { try { navigator.vibrate?.(ms); } catch { /* no vibrator */ } };
+  /** A big send (20+ rows) needs a second tap within 4 seconds, so it cannot happen by accident. */
+  let arm: { key: string; until: number } | null = null;
+  const armed = (n: number, key: string): boolean => {
+    if (n < 20) return true;
+    if (arm && arm.key === key && Date.now() < arm.until) { arm = null; return true; }
+    arm = { key, until: Date.now() + 4000 };
+    say(`Надіслати ${plural(n, ['рядок', 'рядки', 'рядків'])}? Торкніться ще раз, щоб підтвердити`);
+    return false;
+  };
   const go = (t: Tab): void => { tab = t; sheet = false; sub = null; render(); };
-  const SUB_TITLE: Record<Sub, string> = { scene: 'Сцена', find: 'Знайти й замінити', speakers: 'Хто говорить', settings: 'Налаштування', consistency: 'Узгодженість', glossary: 'Глосарій', autofill: 'Автозаповнення' };
+  const SUB_TITLE: Record<Sub, string> = { scene: 'Сцена', find: 'Знайти й замінити', speakers: 'Хто говорить', settings: 'Налаштування', consistency: 'Узгодженість', glossary: 'Глосарій', autofill: 'Автозаповнення', sendlog: 'Історія відправлень' };
 
   /* ---------- chrome ---------- */
   /** Top-bar button of the editor: glossary, memory, comments and history of the open row. */
@@ -221,6 +230,16 @@ export async function start(root: HTMLElement): Promise<void> {
       <button class="m-primary wide" data-spsave>Зберегти імена</button></div>`;
   }
 
+  /** What was sent for review or approved, in batches: each can be taken back while its rows are untouched. */
+  function screenSendLog(): string {
+    const list = store.sends();
+    const when = (t: number): string => new Date(t).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    return `<div class="m-more"><p class="m-hint">Відправлення, які ще можна скасувати: рядки повернуться в чернетки (або на вичитування, якщо це було затвердження). Якщо рядок змінили після відправлення, він сюди вже не потрапляє.</p>
+      ${list.map(b => `<section class="m-card m-send-card"><h3>${b.kind === 'send' ? 'Надіслано на вичитування' : 'Затверджено'} · ${when(b.at)}</h3><b>${plural(b.items.length, ['рядок', 'рядки', 'рядків'])}</b>
+        ${b.items.slice(0, 3).map(i => `<div class="m-sl"><small>${esc(i.source.replace(/\s+/g, ' ').slice(0, 60))}</small><span>${esc(i.target.replace(/\s+/g, ' ').slice(0, 80))}</span></div>`).join('')}${b.items.length > 3 ? `<small class="m-hint">і ще ${b.items.length - 3}…</small>` : ''}
+        <button class="m-secondary wide" data-undosend="${b.at}|${b.kind}">Скасувати відправлення (${b.items.length})</button></section>`).join('') || '<p class="m-none">Відправлень, які можна скасувати, немає</p>'}</div>`;
+  }
+
   /** The glossary: add a term, tap one to change it. */
   function screenGlossary(): string {
     const q = gl.q.trim().toLowerCase();
@@ -315,7 +334,7 @@ export async function start(root: HTMLElement): Promise<void> {
         <details class="m-det"><summary>Додатково</summary><label class="m-lbl" for="g-branch">Гілка</label><input id="g-branch" class="m-input" value="${esc(gh.branch)}" placeholder="основна" autocomplete="off"><label class="m-lbl" for="g-dir">Папка в репозиторії</label><input id="g-dir" class="m-input" value="${esc(gh.dir)}" placeholder="корінь" autocomplete="off"></details>
         <button class="m-primary wide" data-ghsync ${busy ? 'disabled' : ''}>${icon('sync')}<span>Синхронізувати</span></button><p class="m-hint" id="m-ghstate">${gh.last ? 'Востаннє: ' + new Date(gh.last).toLocaleString('uk-UA') : 'Ще не синхронізовано'}</p></section>
       <section class="m-card" id="m-claude" hidden><h3>Синхронізація через Claude</h3><p class="m-hint">Спільна база артефакту: працює між вашими пристроями.</p><button class="m-secondary wide" data-clsync>${icon('sync')}<span>Синхронізувати через Claude</span></button></section>
-      ${store.hasGame ? `<section class="m-card"><h3>Інструменти</h3><div class="m-links"><button data-sub="find">Знайти й замінити</button><button data-sub="speakers">Хто говорить</button><button data-sub="glossary">Глосарій</button><button data-sub="autofill">Автозаповнення</button><button data-sub="consistency">Узгодженість</button><button data-sub="settings">Налаштування</button></div></section>` : ''}
+      ${store.hasGame ? `<section class="m-card"><h3>Інструменти</h3><div class="m-links"><button data-sub="find">Знайти й замінити</button><button data-sub="speakers">Хто говорить</button><button data-sub="sendlog">Історія відправлень</button><button data-sub="glossary">Глосарій</button><button data-sub="autofill">Автозаповнення</button><button data-sub="consistency">Узгодженість</button><button data-sub="settings">Налаштування</button></div></section>` : ''}
       ${canUpdate() ? updateSection() : ''}
       <section class="m-card"><h3>Проєкт</h3><label class="m-lbl" for="m-who">Ваше ім’я в коментарях</label><input id="m-who" class="m-input" value="${esc(store.who)}" maxlength="40" autocomplete="off">
         <button class="m-secondary wide" data-export>Зберегти проєкт у файл</button></section>
@@ -375,7 +394,7 @@ export async function start(root: HTMLElement): Promise<void> {
     renderChrome();
     const main = $('m-main');
     main.className = 'm-main tab-' + tab;
-    main.innerHTML = sub ? ({ scene: screenScene, find: screenFind, speakers: screenSpeakers, settings: screenSettings, consistency: screenConsistency, glossary: screenGlossary, autofill: screenAutofill }[sub])() : tab === 'files' ? screenFiles() : tab === 'rows' ? screenRows() : tab === 'edit' ? screenEdit() : screenMore();
+    main.innerHTML = sub ? ({ scene: screenScene, find: screenFind, speakers: screenSpeakers, settings: screenSettings, consistency: screenConsistency, glossary: screenGlossary, autofill: screenAutofill, sendlog: screenSendLog }[sub])() : tab === 'files' ? screenFiles() : tab === 'rows' ? screenRows() : tab === 'edit' ? screenEdit() : screenMore();
     renderSheet();
     if (tab === 'edit' && !sub) { refreshMeta(); autosize(); }
     if (tab === 'more') void artifactDb().then(db => { const el = document.getElementById('m-claude'); if (db && el) el.hidden = false; });
@@ -485,7 +504,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if ((x = q('[data-scpick]'))) { scn.picked = x.dataset.scpick!; const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
     if ((x = q('[data-scmode]'))) { scn.mode = x.dataset.scmode as typeof scn.mode; const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
     if (q('[data-scedit]')) { store.select(scn.picked); sub = null; go('edit'); return; }
-    if (q('[data-scenesend]')) { const v = store.view(), c = store.current; if (v && c) { const r = store.sendMany(v.name, sceneUnits(v.units, c.unit.key)); say(`Надіслано: ${r.sent}${r.skipped ? ` · пропущено: ${r.skipped}` : ''}`, r.sent === 0); buzz(14); render(); } return; }
+    if (q('[data-scenesend]')) { const v = store.view(), c = store.current; if (v && c) { if (!armed(sceneUnits(v.units, c.unit.key).length, 'scene')) return; const r = store.sendMany(v.name, sceneUnits(v.units, c.unit.key)); say(`Надіслано: ${r.sent}${r.skipped ? ` · пропущено: ${r.skipped}` : ''}`, r.sent === 0); buzz(14); render(); } return; }
     if (q('[data-dofind]')) { fr.matches = store.find({ find: fr.find, replace: fr.replace, caseSensitive: fr.cs, wholeWord: fr.word }); if (!fr.find) say('Вкажіть, що шукати', true); else if (!fr.matches.length) say('Нічого не знайдено'); render(); return; }
     if (q('[data-doreplace]')) { const n = store.replaceAll(fr.matches); fr.matches = []; say(`Замінено в рядках: ${n}`); buzz(14); render(); return; }
     if ((x = q('[data-uni]'))) { const [gi, vi] = x.dataset.uni!.split('|').map(Number); const g = store.inconsistent()[gi!]; const v = g?.variants[vi!]; if (g && v) { const n = store.unify(g.source, v.target); say(`Уніфіковано рядків: ${n}`); buzz(14); } render(); return; }
@@ -500,7 +519,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (q('[data-selall]')) { const all = store.rows(); if (picked.size === all.length) picked.clear(); else all.forEach(u => picked.add(u.key)); render(); return; }
     if (q('[data-selsend]') || q('[data-selclear]') || q('[data-selcopy]')) {
       const v = store.view(); if (!v) return; const us = v.units.filter(u => picked.has(u.key));
-      if (q('[data-selsend]')) { const r = store.sendMany(v.name, us); say(`Надіслано: ${r.sent}${r.skipped ? ` · пропущено: ${r.skipped}` : ''}`, r.sent === 0); }
+      if (q('[data-selsend]')) { if (!armed(us.length, 'sel')) return; const r = store.sendMany(v.name, us); say(`Надіслано: ${r.sent}${r.skipped ? ` · пропущено: ${r.skipped}` : ''}`, r.sent === 0); }
       else if (q('[data-selclear]')) say(`Очищено: ${store.clearMany(v.name, us)}`);
       else { const n = us.filter(u => store.writeAtCopy(v.name, u)).length; say(`Скопійовано оригінал: ${n}`); }
       buzz(14); picked.clear(); render(); return;
@@ -528,6 +547,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (q('[data-gcancel]')) { Object.assign(gl, { en: '', uk: '', alt: '', qa: true, edit: false }); render(); return; }
     if ((x = q('[data-gedit]'))) { const t = store.saved.terms.find(y => y.en === x!.dataset.gedit); if (t) { Object.assign(gl, { en: t.en, uk: t.uk, alt: (t.alt ?? []).join(', '), qa: t.qa !== false, edit: true }); render(); $('m-main').scrollTop = 0; } return; }
     if ((x = q('[data-gdel]'))) { store.removeTerm(x.dataset.gdel!); say('Термін видалено'); render(); return; }
+    if ((x = q('[data-undosend]'))) { const [at, kind] = x.dataset.undosend!.split('|'); const n = store.undoSend(Number(at), kind!); say(n ? `Скасовано: ${plural(n, ['рядок', 'рядки', 'рядків'])}` : 'Нічого скасовувати', !n); buzz(14); render(); return; }
     if ((x = q('[data-afterm]'))) { const [w, v] = x.dataset.afterm!.split('|'); if (store.saveTerm(w!, v!, '', true)) { say('Термін додано: ' + w + ' - ' + v); buzz(10); } render(); return; }
     if ((x = q('[data-afnew]'))) { Object.assign(gl, { en: x.dataset.afnew!, uk: '', alt: '', qa: true, edit: false }); sub = 'glossary'; render(); $('m-main').scrollTop = 0; return; }
     if ((x = q('[data-afk]'))) { const k = x.dataset.afk!; if (af.off.has(k)) af.off.delete(k); else af.off.add(k); render(); return; }

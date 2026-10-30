@@ -1,4 +1,4 @@
-import { almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
+import { sendBatches, undoBatch, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
 import type { Entry, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
 import { IdbStore } from '../ui/idb';
 
@@ -245,6 +245,14 @@ export class Store {
   /* ---------- autofill by words ---------- */
   wordCount(): number { return learnWords(this.views, this.saved).size; }
   autofill(): ReturnType<typeof autofillProposals> { return autofillProposals(this.views, this.saved); }
+  /** Sends that can still be taken back (newest first). */
+  sends(): ReturnType<typeof sendBatches> { return sendBatches(this.views, this.saved); }
+  undoSend(at: number, kind: string): number {
+    const b = this.sends().find(x => x.at === at && x.kind === kind); if (!b) return 0;
+    const n = undoBatch(this.saved, b, this.who, Date.now());
+    if (n) { this.persist(); this.emit(); }
+    return n;
+  }
   /** Short untranslated lines that are one or two words short of being composed, with the words that block them. */
   almost(): ReturnType<typeof autofillAlmost> { return autofillAlmost(this.views, this.saved); }
   /** Write the proposals as drafts marked as autofilled; rows that got a translation meanwhile are skipped. */

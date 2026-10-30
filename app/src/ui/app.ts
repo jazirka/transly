@@ -12,6 +12,7 @@ import { openScene } from './scene-dialog';
 import { autoCheck } from './updates';
 import { openConsistency, openFindReplace } from './tools-dialogs';
 import { openPluginTexts } from './plugins-dialog';
+import { openActivity, openAutofill } from './activity-dialog';
 import { markup } from './markup';
 import { openSettings } from './settings';
 import { openSpeakers } from './speakers-dialog';
@@ -896,7 +897,7 @@ export async function start(root: HTMLElement): Promise<void> {
     'Файл': [{ t: 'Відкрити папку гри…', fn: () => void openFolder() }, { t: 'Відкрити файли або вставити JSON…', fn: openImportDlg }, { t: 'Зібрати…', fn: doBuild, sc: 'F5' }, '-', { t: 'Налаштування…', fn: openSettingsDlg }],
     'Вигляд': [{ t: 'Таблиця', fn: () => setMode('table') }, { t: 'Редагування', fn: () => setMode('edit') }, { t: 'Вичитування', fn: () => setMode('review') }],
     'Навігація': [{ t: 'Наступний рядок без перекладу', fn: () => jump('new', 1) }, { t: 'Наступна проблема QA', fn: () => jump('qa', 1) }, { t: 'Переглянути сцену…', fn: () => { const u = s.cur ? ctx.unit(s.cur) : undefined; if (u) openScene(ctx, u); else toast('Спершу виберіть рядок'); } }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: '⇧⇧' }],
-    'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Перевірити узгодженість…', fn: () => openConsistency(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенести довгі рядки у файлі', fn: wrapFile }, '-', { t: 'Налаштування…', fn: openSettingsDlg }],
+    'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Перевірити узгодженість…', fn: () => openConsistency(ctx) }, { t: 'Автозаповнення за словами…', fn: () => openAutofill(ctx) }, { t: 'Активність…', fn: () => openActivity(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенести довгі рядки у файлі', fn: wrapFile }, '-', { t: 'Налаштування…', fn: openSettingsDlg }],
     'Довідка': [{ t: 'Гарячі клавіші', fn: () => toggleKeys() }],
   };
   /** Re-flow every translated message of the current file whose lines are wider than the game window. */

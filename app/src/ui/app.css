@@ -108,3 +108,9 @@
 .fr-a{overflow-wrap:anywhere}
 .cs-v{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:4px 0}
 .cs-row{grid-template-columns:minmax(0,1fr)}
+
+/* Activity dialog: the text column takes the whole width. */
+.ac-ev{display:block;padding:10px 12px;margin-top:6px}
+.ac-ev .sp-b{min-width:0}
+.ac-ev .sp-b>b{display:block}
+.ac-ev .cs-v{margin-top:6px}

@@ -20,7 +20,7 @@ public class QueueWidget extends BaseWidget {
         int m = WidgetKit.mode(c, o, id);
         for (int k = 0; k < CHIPS.length; k++) {
             boolean on = k == m;
-            v.setTextViewText(CHIPS[k], WidgetKit.MODE_SHORT[k] + " " + WidgetKit.count(o, WidgetKit.MODES[k]));
+            v.setTextViewText(CHIPS[k], WidgetKit.MODE_SHORT[k] + " " + WidgetKit.num(WidgetKit.count(o, WidgetKit.MODES[k])));
             v.setInt(CHIPS[k], "setBackgroundResource", on ? R.drawable.w_chip_on : R.drawable.w_chip);
             v.setTextColor(CHIPS[k], c.getColor(on ? R.color.w_on_fill : R.color.w_text));
             v.setOnClickPendingIntent(CHIPS[k], WidgetKit.self(c, getClass(), id, k + 1, WidgetKit.ACT_MODE, k));
@@ -42,7 +42,7 @@ public class QueueWidget extends BaseWidget {
             v.setOnClickPendingIntent(ROWS[k], WidgetKit.open(c, 8 + k, "open", r.optString("file"), r.optString("key")));
         }
         int more = WidgetKit.count(o, WidgetKit.MODES[m]) - Math.min(3, q.length());
-        v.setTextViewText(R.id.q_more, more > 0 ? "ще " + more + " у черзі «" + WidgetKit.MODE_NAMES[m].toLowerCase() + "»" : "");
+        v.setTextViewText(R.id.q_more, more > 0 ? "ще " + WidgetKit.num(more) + " · торкніться рядка, щоб відкрити" : "");
         v.setOnClickPendingIntent(android.R.id.background, WidgetKit.open(c, 7, "open", "", ""));
         return v;
     }

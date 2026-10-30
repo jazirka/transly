@@ -5,10 +5,11 @@
     <color name="app_panel">#232528</color>
     <color name="ic_bg">#8B72E8</color>
     <!-- Widget, light (One UI: soft neutral card, one accent) -->
-    <color name="w_card">#F2F1F3F5</color>
-    <color name="w_text">#1C1C1E</color>
-    <color name="w_sub">#6C6C72</color>
-    <color name="w_surf">#E1E2E6</color>
-    <color name="w_fill">#1C1C1E</color>
-    <color name="w_on_fill">#FFFFFF</color>
+    <color name="w_card">#7380868C</color>
+    <color name="w_text">#FFFFFF</color>
+    <color name="w_sub">#B8FFFFFF</color>
+    <color name="w_surf">#36FFFFFF</color>
+    <color name="w_fill">#F2F2F4</color>
+    <color name="w_on_fill">#1C1C1E</color>
+    <color name="w_edge">#33FFFFFF</color>
 </resources>

@@ -26,13 +26,14 @@ public class RowWidget extends BaseWidget {
             int cand = (m + k) % WidgetKit.MODES.length;
             if (WidgetKit.count(o, WidgetKit.MODES[cand]) > 0) { next = cand; break; }
         }
-        v.setTextViewText(R.id.r_mode, WidgetKit.MODE_NAMES[m] + " · " + WidgetKit.count(o, mode));
+        v.setTextViewText(R.id.r_mode, WidgetKit.MODE_NAMES[m] + " · " + WidgetKit.num(WidgetKit.count(o, mode)));
         v.setOnClickPendingIntent(R.id.r_mode, WidgetKit.self(c, getClass(), id, 1, WidgetKit.ACT_MODE, next));
         v.setOnClickPendingIntent(R.id.r_prev, WidgetKit.self(c, getClass(), id, 2, WidgetKit.ACT_STEP, -1));
         v.setOnClickPendingIntent(R.id.r_next, WidgetKit.self(c, getClass(), id, 3, WidgetKit.ACT_STEP, 1));
 
         if (n == 0) {
             v.setTextViewText(R.id.r_pos, "");
+            v.setTextViewText(R.id.r_where, "");
             v.setTextViewText(R.id.r_src, "Тут порожньо");
             v.setTextViewText(R.id.r_tr, o.optInt("total") > 0 ? "У цій черзі нічого немає: молодець!" : c.getString(R.string.widget_next_empty));
             v.setViewVisibility(R.id.r_send, View.GONE);
@@ -45,8 +46,9 @@ public class RowWidget extends BaseWidget {
         if (r == null) r = new JSONObject();
         String file = r.optString("file"), key = r.optString("key"), tr = r.optString("t");
         v.setTextViewText(R.id.r_pos, (i + 1) + "/" + n);
+        v.setTextViewText(R.id.r_where, file.replaceAll("\\.json$", "") + " · " + WidgetKit.statusWord(r.optString("st")));
         v.setTextViewText(R.id.r_src, r.optString("s"));
-        v.setTextViewText(R.id.r_tr, tr.isEmpty() ? "Перекладу ще немає" : tr);
+        v.setTextViewText(R.id.r_tr, tr.isEmpty() ? "Перекладу ще немає: торкніться олівця" : tr);
         boolean canSend = !tr.isEmpty() && !"appr".equals(r.optString("st"));
         v.setViewVisibility(R.id.r_send, canSend ? View.VISIBLE : View.GONE);
         v.setOnClickPendingIntent(android.R.id.background, WidgetKit.open(c, 4, "open", file, key));

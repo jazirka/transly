@@ -11,7 +11,7 @@ public class NextLineWidget extends BaseWidget {
     RemoteViews build(Context c, int id, JSONObject o) {
         RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget_next);
         int total = o.optInt("total"), approved = o.optInt("approved"), waiting = o.optInt("done"), draft = o.optInt("draft");
-        v.setImageViewBitmap(R.id.n_ring, WidgetKit.ring(c, WidgetKit.percent(approved, total), WidgetKit.percent(approved + waiting + draft, total)));
+        v.setImageViewBitmap(R.id.n_ring, WidgetKit.ring(c, 0, o.has("curP") ? o.optInt("curP") : WidgetKit.percent(approved + waiting + draft, total)));
         JSONObject cur = o.optJSONObject("cur");
         String file = "", key = "";
         if (cur == null) {
@@ -20,7 +20,7 @@ public class NextLineWidget extends BaseWidget {
         } else {
             file = cur.optString("file");
             key = cur.optString("key");
-            v.setTextViewText(R.id.n_title, file.replaceAll("\\.json$", ""));
+            v.setTextViewText(R.id.n_title, o.optString("curName").isEmpty() ? file.replaceAll("\\.json$", "") : o.optString("curName"));
             v.setTextViewText(R.id.n_text, "Рядок " + cur.optInt("pos") + " з " + cur.optInt("of") + " · " + WidgetKit.statusWord(cur.optString("st")));
         }
         v.setOnClickPendingIntent(android.R.id.background, WidgetKit.open(c, 1, "open", file, key));

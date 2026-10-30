@@ -23,7 +23,7 @@ final class WidgetKit {
     static final String ACT_MODE = "app.transly.WIDGET_MODE";
     static final String[] MODES = {"new", "draft", "auto", "waiting"};
     static final String[] MODE_NAMES = {"Нові", "Чернетки", "Авто", "Вичитування"};
-    static final String[] MODE_SHORT = {"Нові", "Чернетки", "Авто", "Чекають"};
+    static final String[] MODE_SHORT = {"Нові", "Чернет.", "Авто", "Чекає"};
 
     private WidgetKit() { }
 
@@ -88,7 +88,7 @@ final class WidgetKit {
 
     static void refreshAll(Context c) {
         AppWidgetManager m = AppWidgetManager.getInstance(c);
-        BaseWidget[] all = {new TranslyWidget(), new NextLineWidget(), new RowWidget(), new QueueWidget(), new StatsWidget()};
+        BaseWidget[] all = {new TranslyWidget(), new NextLineWidget(), new RowWidget(), new QueueWidget(), new StatsWidget(), new FileWidget(), new LeftWidget()};
         for (BaseWidget w : all) {
             int[] ids = m.getAppWidgetIds(new ComponentName(c, w.getClass()));
             if (ids.length > 0) w.onUpdate(c, m, ids);
@@ -112,7 +112,7 @@ final class WidgetKit {
     /** The progress ring: translated share in a soft tone behind, approved share in white, the percentage inside. */
     static Bitmap ring(Context c, int approvedPct, int translatedPct) {
         float d = c.getResources().getDisplayMetrics().density;
-        int size = Math.round(44 * d);
+        int size = Math.round(52 * d);
         Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         float stroke = 5 * d, mid = size / 2f;
@@ -136,15 +136,15 @@ final class WidgetKit {
         t.setColor(ink);
         t.setTextAlign(Paint.Align.CENTER);
         t.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        t.setTextSize(12 * d);
-        canvas.drawText(approvedPct + "", mid, mid - (t.ascent() + t.descent()) / 2f, t);
+        t.setTextSize(13 * d);
+        canvas.drawText(translatedPct + "%", mid, mid - (t.ascent() + t.descent()) / 2f, t);
         return bitmap;
     }
 
-    /** Seven bars, today last and brightest; an empty day is a dot, so the chart never looks broken. */
+    /** Seven bars with weekday names under them, today last and brightest; an empty day is a dot. */
     static Bitmap bars(Context c, JSONArray days) {
         float d = c.getResources().getDisplayMetrics().density;
-        int w = Math.round(132 * d), h = Math.round(48 * d);
+        int w = Math.round(150 * d), h = Math.round(84 * d);
         Bitmap bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         int n = 7, max = 1;
@@ -153,15 +153,45 @@ final class WidgetKit {
             v[i] = days == null ? 0 : days.optInt(i);
             max = Math.max(max, v[i]);
         }
-        float gap = 6 * d, bw = (w - gap * (n - 1)) / n, radius = bw / 2f;
+        String[] names = {"Нд", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"};
+        java.util.Calendar cal = java.util.Calendar.getInstance();
         int ink = c.getColor(R.color.w_text);
+        float label = 13 * d, gap = 6 * d, bw = (w - gap * (n - 1)) / n, chart = h - label - 6 * d;
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        Paint t = new Paint(Paint.ANTI_ALIAS_FLAG);
+        t.setTextAlign(Paint.Align.CENTER);
+        t.setTextSize(10 * d);
         for (int i = 0; i < n; i++) {
-            float bh = v[i] == 0 ? bw : Math.max(bw, (h - 2 * d) * v[i] / max);
+            float bh = v[i] == 0 ? bw : Math.max(bw, chart * v[i] / max);
             float x = i * (bw + gap);
-            p.setColor(i == n - 1 ? ink : with(ink, v[i] == 0 ? 0x33 : 0x80));
-            canvas.drawRoundRect(new RectF(x, h - bh, x + bw, h), radius, radius, p);
+            p.setColor(i == n - 1 ? ink : with(ink, v[i] == 0 ? 0x33 : 0x8C));
+            canvas.drawRoundRect(new RectF(x, chart - bh, x + bw, chart), bw / 2f, bw / 2f, p);
+            java.util.Calendar day = (java.util.Calendar) cal.clone();
+            day.add(java.util.Calendar.DAY_OF_YEAR, i - (n - 1));
+            t.setColor(with(ink, i == n - 1 ? 0xFF : 0x99));
+            canvas.drawText(i == n - 1 ? "Сьо" : names[day.get(java.util.Calendar.DAY_OF_WEEK) - 1], x + bw / 2f, h - 2 * d, t);
         }
         return bitmap;
+    }
+
+    /** A thin rounded progress bar. */
+    static Bitmap hbar(Context c, int pct) {
+        float d = c.getResources().getDisplayMetrics().density;
+        int w = Math.round(200 * d), h = Math.round(6 * d);
+        Bitmap bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        int ink = c.getColor(R.color.w_text);
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        p.setColor(with(ink, 0x40));
+        canvas.drawRoundRect(new RectF(0, 0, w, h), h / 2f, h / 2f, p);
+        if (pct > 0) {
+            p.setColor(ink);
+            canvas.drawRoundRect(new RectF(0, 0, Math.max(h, w * pct / 100f), h), h / 2f, h / 2f, p);
+        }
+        return bitmap;
+    }
+
+    static String num(long n) {
+        return java.text.NumberFormat.getIntegerInstance(new java.util.Locale("uk", "UA")).format(n);
     }
 }

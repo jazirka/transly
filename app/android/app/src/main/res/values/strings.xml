@@ -19,4 +19,11 @@
     <string name="widget_send">Надіслати</string>
     <string name="widget_prev">Назад</string>
     <string name="widget_nextrow">Далі</string>
+    <string name="widget_today">сьогодні</string>
+    <string name="widget_file_label">Transly: файл</string>
+    <string name="widget_file_desc">Файл, у якому ви зараз працюєте, і скільки в ньому перекладено</string>
+    <string name="widget_file_lbl">Файл зараз</string>
+    <string name="widget_left_label">Transly: залишилось</string>
+    <string name="widget_left_desc">Скільки рядків ще без перекладу й за скільки днів їх буде зроблено в вашому темпі</string>
+    <string name="widget_left_lbl">Ще залишилось</string>
 </resources>

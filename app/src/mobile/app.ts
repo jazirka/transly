@@ -46,6 +46,7 @@ export async function start(root: HTMLElement): Promise<void> {
     <header class="m-bar" id="m-bar"></header>
     <main class="m-main" id="m-main"></main>
     <div class="m-sheet-wrap" id="m-sheet" hidden></div>
+    <button class="m-top" id="m-top" hidden aria-label="Нагору">${icon('up')}</button>
     <nav class="m-nav" id="m-nav" role="tablist" aria-label="Розділи"></nav>
     <div class="m-toasts" id="m-toasts" role="status"></div>
     <input type="file" id="m-file" multiple hidden>
@@ -58,6 +59,13 @@ export async function start(root: HTMLElement): Promise<void> {
     $('m-toasts').appendChild(t); setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 220); }, bad ? 6000 : 3200);
   };
   const buzz = (ms = 10): void => { try { navigator.vibrate?.(ms); } catch { /* no vibrator */ } };
+  /** A destructive button asks twice: the first tap turns it into «Точно очистити?» for 4 seconds. */
+  const confirmTap = (btn: HTMLElement, label = 'Точно очистити?'): boolean => {
+    if (btn.dataset.armed) { delete btn.dataset.armed; btn.classList.remove('armed'); return true; }
+    const was = btn.innerHTML; btn.dataset.armed = '1'; btn.classList.add('armed'); btn.textContent = label;
+    setTimeout(() => { if (btn.dataset.armed) { delete btn.dataset.armed; btn.classList.remove('armed'); btn.innerHTML = was; } }, 4000);
+    return false;
+  };
   /** A big send (20+ rows) needs a second tap within 4 seconds, so it cannot happen by accident. */
   let arm: { key: string; until: number } | null = null;
   const armed = (n: number, key: string): boolean => {
@@ -67,7 +75,32 @@ export async function start(root: HTMLElement): Promise<void> {
     say(`Надіслати ${plural(n, ['рядок', 'рядки', 'рядків'])}? Торкніться ще раз, щоб підтвердити`);
     return false;
   };
-  const go = (t: Tab): void => { tab = t; sheet = false; menu = false; sub = null; render(); };
+  /** What each tab was showing when it was left: the sub-screen and the scroll position. */
+  const mem: Record<Tab, { sub: Sub | null; scroll: number }> = { files: { sub: null, scroll: 0 }, rows: { sub: null, scroll: 0 }, edit: { sub: null, scroll: 0 }, more: { sub: null, scroll: 0 } };
+  const go = (t: Tab): void => { tab = t; sheet = false; menu = false; sub = null; mem[t] = { sub: null, scroll: 0 }; render(); };
+  /** A tap on a tab icon: another tab opens as it was left; the tab you are on returns to its standard screen. */
+  function switchTab(t: Tab): void {
+    const main = $('m-main');
+    if (t === tab) {
+      sheet = false; menu = false; sub = null; selecting = false; picked.clear(); mem[t] = { sub: null, scroll: 0 };
+      render();
+      if (t === 'rows' || t === 'files') requestAnimationFrame(() => { const cur = document.querySelector('.m-row.cur, .m-table tr.cur, .m-item.cur'); if (cur) cur.scrollIntoView({ block: 'center', behavior: 'smooth' }); else main.scrollTo({ top: 0, behavior: 'smooth' }); });
+      else main.scrollTo({ top: 0 });
+      return;
+    }
+    mem[tab] = { sub, scroll: main.scrollTop };
+    tab = t; sheet = false; menu = false; sub = mem[t].sub;
+    render();
+    main.scrollTop = mem[t].scroll;
+  }
+  /** Something other than the standard screen is waiting in a tab: an open sub-screen, a search, a filter, a selection. */
+  function tabMark(t: Tab): string {
+    if (t === 'more') return '';
+    const s = t === tab ? sub : mem[t].sub;
+    if (t === 'rows') { if (selecting && picked.size) return String(picked.size); return s || store.q.trim() || store.filter !== 'all' ? '•' : ''; }
+    if (t === 'files') return s || fq.trim() ? '•' : '';
+    return s ? '•' : '';
+  }
   const SUB_TITLE: Record<Sub, string> = { scene: 'Сцена', find: 'Знайти й замінити', speakers: 'Хто говорить', settings: 'Налаштування', consistency: 'Узгодженість', glossary: 'Глосарій', autofill: 'Автозаповнення', sendlog: 'Активність' };
 
   /* ---------- chrome ---------- */
@@ -93,7 +126,7 @@ export async function start(root: HTMLElement): Promise<void> {
     $('m-bar').innerHTML = `${sub ? '<button class="m-back" data-subback aria-label="Назад">' + icon('prev') + '</button>' : ''}<div class="m-title"><b>${esc(sub ? SUB_TITLE[sub] : title)}</b>${subline ? `<small class="${store.saveOk ? '' : 'bad'}">${esc(subline)}</small>` : ''}</div>${busy || updBusy ? `<span class="m-busy" role="status"><i class="m-spin"></i>${esc(busy || 'Перевіряю…')}</span>` : ''}${helpBtn()}${toolsBtn()}`;
     $('m-bar').classList.toggle('loading', !!(busy || updBusy));
     document.documentElement.style.setProperty('--bar-h', $('m-bar').offsetHeight + 'px');
-    $('m-nav').innerHTML = (Object.keys(TAB_LABEL) as Tab[]).map(t => `<button role="tab" data-go="${t}" aria-selected="${t === tab}" class="${t === tab ? 'on' : ''}" ${(t === 'rows' || t === 'edit') && !store.hasGame ? 'disabled' : ''}>${icon(t)}<span>${TAB_LABEL[t]}</span></button>`).join('');
+    $('m-nav').innerHTML = (Object.keys(TAB_LABEL) as Tab[]).map(t => `<button role="tab" data-go="${t}" aria-selected="${t === tab}" class="${t === tab ? 'on' : ''}" ${(t === 'rows' || t === 'edit') && !store.hasGame ? 'disabled' : ''}>${icon(t)}<span>${TAB_LABEL[t]}</span>${tabMark(t) ? `<i class="m-mark">${tabMark(t)}</i>` : ''}</button>`).join('');
     if (androidBridge()) {
       const cur = store.view();
       const next = cur?.units.find(u => !store.entry(cur.name, u.key)?.target && u.kind !== 'name' && u.kind !== 'term');
@@ -106,7 +139,7 @@ export async function start(root: HTMLElement): Promise<void> {
 
   function screenFiles(): string {
     if (!store.hasGame) return empty('Файлів ще немає', 'Відкрийте файли гри або проєкт у розділі «Ще».', 'more', 'Відкрити файли');
-    return `<div class="m-tools"><label class="m-search">${icon('search')}<input id="m-fq" type="search" placeholder="Пошук файлу" value="${esc(fq)}" enterkeyhint="search" autocomplete="off"></label></div><div id="m-flist">${filesList()}</div>`;
+    return `<div class="m-searchbar"><label class="m-search">${icon('search')}<input id="m-fq" type="search" placeholder="Пошук файлу" value="${esc(fq)}" enterkeyhint="search" autocomplete="off"></label></div><div id="m-flist">${filesList()}</div>`;
   }
   /** The files whose name or title contains the search words. */
   function filesList(): string {
@@ -128,7 +161,8 @@ export async function start(root: HTMLElement): Promise<void> {
     if (sig !== pageSig) { pageSig = sig; page = 1; const at = store.key ? rows.findIndex(u => u.key === store.key) : -1; if (at >= PAGE) page = Math.ceil((at + 1) / PAGE); }
     const shown = rows.slice(0, PAGE * page);
     const chips = FILTERS.map(([f, l]) => `<button class="m-chip ${store.filter === f ? 'on' : ''}" data-filter="${f}" aria-pressed="${store.filter === f}">${l}</button>`).join('');
-    return `<div class="m-tools"><label class="m-search">${icon('search')}<input id="m-q" type="search" placeholder="Пошук у файлі" value="${esc(store.q)}" enterkeyhint="search" autocomplete="off"></label>
+    return `<div class="m-searchbar"><label class="m-search">${icon('search')}<input id="m-q" type="search" placeholder="Пошук у файлі" value="${esc(store.q)}" enterkeyhint="search" autocomplete="off"></label></div>
+      <div class="m-tools">
       <div class="m-scoperow"><div class="m-scope" role="group" aria-label="Де шукати"><button class="on" data-scope="file">Файл</button><button data-scope="all">Усі файли</button></div>
       <div class="m-scope" role="group" aria-label="Вигляд"><button class="${layout === 'cards' ? 'on' : ''}" data-layout="cards">Картки</button><button class="${layout === 'table' ? 'on' : ''}" data-layout="table">Таблиця</button></div></div>
       <div class="m-chips" role="group" aria-label="Фільтр">${chips}</div>
@@ -136,7 +170,7 @@ export async function start(root: HTMLElement): Promise<void> {
       ${layout === 'table' ? tableHtml(v.name, shown, rows.length) : `<ul class="m-list rows">${shown.map((u, i) => {
         const e = store.entry(v.name, u.key), st = store.shown(u, e);
         return `<li><button class="m-row ${u.key === store.key && !selecting ? 'cur' : ''} ${selecting && picked.has(u.key) ? 'picked' : ''}" ${selecting ? `data-pickkey="${esc(u.key)}" aria-pressed="${picked.has(u.key)}"` : `data-key="${esc(u.key)}"`}><span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span><span class="m-row-t"><small>${i + 1} · ${esc(store.speaker(u) || u.kind)}</small><span class="m-src">${esc(u.source.replace(/\s+/g, ' '))}</span><span class="m-tr ${e?.target ? '' : 'none'}">${e?.target ? esc(e.target.replace(/\s+/g, ' ')) : '—'}</span></span></button></li>`;
-      }).join('') || '<li class="m-none">Нічого не знайдено</li>'}${rows.length > shown.length ? `<li class="m-more-li"><button class="m-mini" data-more>Показати ще ${Math.min(PAGE, rows.length - shown.length)} · ${shown.length} з ${rows.length}</button></li>` : ''}</ul>`}${selecting && layout === 'cards' ? `<div class="m-selbar" role="toolbar" aria-label="Дії з вибраним"><b>${picked.size}</b><button class="m-mini" data-selall>Усі</button><button class="m-mini" data-selsend ${picked.size ? '' : 'disabled'}>Надіслати</button><button class="m-mini" data-selcopy ${picked.size ? '' : 'disabled'}>Оригінал</button><button class="m-mini ghost" data-selclear ${picked.size ? '' : 'disabled'}>Очистити</button></div>` : ''}`;
+      }).join('') || '<li class="m-none">Нічого не знайдено</li>'}${rows.length > shown.length ? `<li class="m-more-li"><button class="m-mini" data-more>Показати ще ${Math.min(PAGE, rows.length - shown.length)} · ${shown.length} з ${rows.length}</button></li>` : ''}</ul>`}${selecting && layout === 'cards' ? `<div class="m-selbar" role="toolbar" aria-label="Дії з вибраним"><b>${picked.size}</b><button class="m-mini" data-selall>Усі</button><button class="m-mini" data-selsend ${picked.size ? '' : 'disabled'}>Надіслати</button><button class="m-mini" data-selcopy ${picked.size ? '' : 'disabled'}>Оригінал</button><button class="m-mini danger" data-selclear ${picked.size ? '' : 'disabled'}>Очистити</button></div>` : ''}`;
   }
 
   /** The table: columns scroll sideways, a tap on a translation writes right in the cell, a tap on a number opens the row. */
@@ -290,12 +324,14 @@ export async function start(root: HTMLElement): Promise<void> {
 
   /** Lines made only of words that are already known: shown first, written only after the tap. */
   function screenAutofill(): string {
-    const list = store.autofill(), on = list.filter(p => !af.off.has(p.file + '|' + p.key));
-    return `<div class="m-more"><p class="m-hint">Застосунок знає слів: ${store.wordCount()} (з термінів і з уже перекладених коротких рядків). Нижче рядки, де відомі всі слова: переклад збирається зі слів, а порядок слів береться з оригіналу, тож перегляньте.</p>
-      ${list.length ? `<button class="m-primary wide" data-afapply ${on.length ? '' : 'disabled'}>Вписати вибрані (${on.length})</button>` : ''}
-      ${list.slice(0, 80).map(p => `<label class="m-af"><input type="checkbox" data-afk="${esc(p.file + '|' + p.key)}" ${af.off.has(p.file + '|' + p.key) ? '' : 'checked'}><span><small>${esc(store.view(p.file)?.label ?? p.file)}</small><b>${esc(p.source)}</b><i>→ ${esc(p.target)}</i></span></label>`).join('') || '<p class="m-none">Немає рядків, які можна скласти зі знайомих слів</p>'}
+    const list = store.autofill(), shown = list.slice(0, 80), on = list.filter(p => !af.off.has(p.file + '|' + p.key));
+    const allOn = on.length === list.length;
+    return `<div class="m-more m-afwrap"><p class="m-hint">Застосунок знає слів: ${store.wordCount()}.</p>
+      ${shown.map(p => { const k = p.file + '|' + p.key, sel = !af.off.has(k); return `<label class="m-af ${sel ? 'sel' : ''}" data-aflp="${esc(k)}"><input type="checkbox" data-afk="${esc(k)}" ${sel ? 'checked' : ''}><span><small>${esc(store.view(p.file)?.label ?? p.file)}</small><b>${esc(p.source)}</b><i>→ ${esc(p.target)}</i></span></label>`; }).join('') || '<p class="m-none">Немає рядків, які можна скласти зі знайомих слів</p>'}
       ${list.length > 80 ? `<p class="m-hint">Показано 80 із ${list.length}: після запису решта з'явиться тут.</p>` : ''}
-      ${almostHtml()}</div>`;
+      ${almostHtml()}</div>
+      ${list.length ? `<div class="m-afbar"><small>Переклад збирається зі слів, порядок слів береться з оригіналу: перегляньте. Затисніть рядок, щоб додати чи прибрати його з вибраних.</small>
+        <div class="m-afrow"><b>${on.length} з ${list.length}</b><button class="m-mini" data-afall>${allOn ? 'Зняти вибір' : 'Вибрати всі'}</button><button class="m-primary" data-afapply ${on.length ? '' : 'disabled'}>${icon('check')}<span>Вписати вибрані</span></button></div></div>` : ''}`;
   }
   /** Lines that are one or two words short: what blocks them, and a tap to settle it. */
   function almostHtml(): string {
@@ -348,7 +384,7 @@ export async function start(root: HTMLElement): Promise<void> {
       <div id="m-prev" class="m-prev"></div>
       <div id="m-issues" class="m-issues">${issuesHtml()}</div>
     </div>
-    <div class="m-actions" id="m-actions"><div class="m-act2"><button class="m-mini" data-sub="scene">${icon('rows')} Сцена</button><button class="m-mini ghost" data-clear>Очистити</button></div><div class="m-act1"><button class="m-ic" data-step="-1" aria-label="Попередній рядок" ${store.neighbour(-1) ? '' : 'disabled'}>${icon('prev')}</button><button class="m-ic" data-step="1" aria-label="Наступний рядок" ${store.neighbour(1) ? '' : 'disabled'}>${icon('next')}</button><button class="m-primary" data-send>${icon('check')}<span>${review ? 'Затвердити' : 'Надіслати'}</span></button></div></div>`;
+    <div class="m-actions" id="m-actions"><div class="m-act2"><button class="m-mini" data-sub="scene">${icon('rows')} Сцена</button><button class="m-mini danger" data-clear>Очистити</button></div><div class="m-act1"><button class="m-ic" data-step="-1" aria-label="Попередній рядок" ${store.neighbour(-1) ? '' : 'disabled'}>${icon('prev')}</button><button class="m-ic" data-step="1" aria-label="Наступний рядок" ${store.neighbour(1) ? '' : 'disabled'}>${icon('next')}</button><button class="m-primary" data-send>${icon('check')}<span>${review ? 'Затвердити' : 'Надіслати'}</span></button></div></div>`;
   }
 
   function screenMore(): string {
@@ -366,6 +402,7 @@ export async function start(root: HTMLElement): Promise<void> {
         <label class="m-lbl" for="g-repo">Репозиторій</label><input id="g-repo" class="m-input" value="${esc(gh.repo)}" placeholder="власник/назва" autocomplete="off" spellcheck="false">
         <label class="m-lbl" for="g-token">Токен доступу</label><input id="g-token" class="m-input" type="password" value="${esc(gh.token)}" autocomplete="off" spellcheck="false">
         <details class="m-det"><summary>Додатково</summary><label class="m-lbl" for="g-branch">Гілка</label><input id="g-branch" class="m-input" value="${esc(gh.branch)}" placeholder="основна" autocomplete="off"><label class="m-lbl" for="g-dir">Папка в репозиторії</label><input id="g-dir" class="m-input" value="${esc(gh.dir)}" placeholder="корінь" autocomplete="off"></details>
+        <label class="m-check"><input type="checkbox" id="gh-auto" ${gh.everyMin ? 'checked' : ''}> Синхронізувати автоматично (при запуску, після правок, при згортанні, кожні 5 хв)</label>
         <button class="m-primary wide ${busy ? 'is-loading' : ''}" data-ghsync ${busy ? 'disabled' : ''}>${icon('sync')}<span>Синхронізувати</span></button><p class="m-hint" id="m-ghstate">${gh.last ? 'Востаннє: ' + new Date(gh.last).toLocaleString('uk-UA') : 'Ще не синхронізовано'}</p></section>
       <section class="m-card" id="m-claude" hidden><h3>Синхронізація через Claude</h3><p class="m-hint">Спільна база артефакту: працює між вашими пристроями.</p><button class="m-secondary wide ${busy ? 'is-loading' : ''}" data-clsync ${busy ? 'disabled' : ''}>${icon('sync')}<span>Синхронізувати через Claude</span></button></section>
       ${canUpdate() ? updateSection() : ''}
@@ -541,6 +578,29 @@ export async function start(root: HTMLElement): Promise<void> {
     } catch (e) { say(e instanceof Error ? e.message : 'Не вдалося синхронізувати', true); }
     finally { busy = ''; render(); }
   }
+  /** Quiet background sync of the translation with GitHub: starts only when set up, online, not typing, not already syncing. */
+  let autoBusy = false, autoFails = 0, autoTimer = 0, autoEnd = 0;
+  async function autoSync(why: string): Promise<void> {
+    const cfg = loadGithubConfig();
+    if (!cfg.everyMin || !githubConfigured(cfg) || busy || autoBusy || !navigator.onLine) return;
+    if ($('m-app').classList.contains('kb') && why !== 'hide') { autoSyncLater(8000); return; }
+    autoBusy = true; busy = 'Синхронізація…'; renderChrome();
+    try {
+      await store.flush();
+      const rep = await githubSync(githubApi(cfg), cfg, cfg.state, store.saved, { since: cfg.last });
+      store.saved = rep.project; cfg.last = Date.now(); cfg.state = rep.state; saveGithubConfig(cfg); store.adopt();
+      autoFails = 0;
+      if (rep.pulled || rep.conflicts) { say(describeGithub(rep)); if (!$('m-app').classList.contains('kb')) render(); }
+    } catch (e) { if (autoFails++ === 0) say('Автосинхронізація не вдалася: ' + (e instanceof Error ? e.message : 'помилка'), true); }
+    finally { autoBusy = false; autoEnd = Date.now(); busy = ''; renderChrome(); }
+  }
+  /** After edits: wait until the typing stops, then sync. */
+  function autoSyncLater(ms = 45000): void { clearTimeout(autoTimer); autoTimer = window.setTimeout(() => void autoSync('edit'), ms); }
+  store.onChange(() => { if (!autoBusy && Date.now() - autoEnd > 5000 && loadGithubConfig().everyMin) autoSyncLater(); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') void autoSync('hide'); else if (Date.now() - loadGithubConfig().last > 120000) void autoSync('show'); });
+  window.addEventListener('online', () => void autoSync('online'));
+  setInterval(() => { const c = loadGithubConfig(); if (c.everyMin && document.visibilityState === 'visible' && Date.now() - c.last >= c.everyMin * 60000) void autoSync('timer'); }, 60000);
+  setTimeout(() => void autoSync('start'), 2500);
   async function syncClaude(): Promise<void> {
     const db = await artifactDb(); if (!db) { say('Спільна база доступна лише в артефакті Claude', true); return; }
     busy = 'Синхронізація…'; render();
@@ -559,7 +619,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const t = e.target as HTMLElement;
     const q = <T extends HTMLElement>(sel: string): T | null => t.closest<T>(sel);
     let x: HTMLElement | null;
-    if ((x = q('[data-go]'))) { go(x.dataset.go as Tab); return; }
+    if ((x = q('[data-go]'))) { if (x.closest('#m-nav')) switchTab(x.dataset.go as Tab); else go(x.dataset.go as Tab); return; }
     if ((x = q('[data-sub]'))) { sub = x.dataset.sub as Sub; sheet = false; menu = false; render(); $('m-main').scrollTop = 0; return; }
     if (q('[data-subback]')) { sub = null; render(); return; }
     if ((x = q('[data-layout]'))) { layout = x.dataset.layout as 'cards' | 'table'; try { localStorage.setItem('transly-m-layout', layout); } catch { /* private mode */ } render(); return; }
@@ -585,7 +645,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (q('[data-selsend]') || q('[data-selclear]') || q('[data-selcopy]')) {
       const v = store.view(); if (!v) return; const us = v.units.filter(u => picked.has(u.key));
       if (q('[data-selsend]')) { if (!armed(us.length, 'sel')) return; const r = store.sendMany(v.name, us); say(`Надіслано: ${r.sent}${r.skipped ? ` · пропущено: ${r.skipped}` : ''}`, r.sent === 0); }
-      else if (q('[data-selclear]')) say(`Очищено: ${store.clearMany(v.name, us)}`);
+      else if (q('[data-selclear]')) { if (!confirmTap(q('[data-selclear]')!, `Очистити ${us.length}?`)) return; say(`Очищено: ${store.clearMany(v.name, us)}`); }
       else { const n = us.filter(u => store.writeAtCopy(v.name, u)).length; say(`Скопійовано оригінал: ${n}`); }
       buzz(14); picked.clear(); render(); return;
     }
@@ -600,7 +660,7 @@ export async function start(root: HTMLElement): Promise<void> {
       return;
     }
     if (q('[data-copy]')) { const c = store.current; if (c) { ($('m-tr') as HTMLTextAreaElement).value = c.unit.source; store.write(c.unit.source); refreshMeta(); autosize(); } return; }
-    if (q('[data-clear]')) { ($('m-tr') as HTMLTextAreaElement).value = ''; store.write(''); refreshMeta(); autosize(); return; }
+    if ((x = q('[data-clear]'))) { if (!confirmTap(x)) return; ($('m-tr') as HTMLTextAreaElement).value = ''; store.write(''); refreshMeta(); autosize(); return; }
     if ((x = q('[data-ins]'))) { insert(x.dataset.ins ?? ''); return; }
     if (q('[data-wrap]')) { if (store.wrap()) { render(); } else say('Рядки вже вміщаються'); return; }
     if ((x = q('[data-ign]'))) { store.mutate((_f, _u, en) => ({ ...(en as NonNullable<typeof en>), ign: [...new Set([...(en?.ign ?? []), x!.dataset.ign!])], mt: Date.now() })); refreshMeta(); return; }
@@ -617,7 +677,8 @@ export async function start(root: HTMLElement): Promise<void> {
     if ((x = q('[data-undosend]'))) { const [at, kind, g] = x.dataset.undosend!.split('|'); const n = store.undoSend(Number(at), kind!, g === '1'); say(n ? `Скасовано: ${plural(n, ['рядок', 'рядки', 'рядків'])}` : 'Нічого скасовувати', !n); buzz(14); render(); return; }
     if ((x = q('[data-afterm]'))) { const [w, v] = x.dataset.afterm!.split('|'); if (store.saveTerm(w!, v!, '', true)) { say('Термін додано: ' + w + ' - ' + v); buzz(10); } render(); return; }
     if ((x = q('[data-afnew]'))) { Object.assign(gl, { en: x.dataset.afnew!, uk: '', alt: '', qa: true, edit: false }); sub = 'glossary'; render(); $('m-main').scrollTop = 0; return; }
-    if ((x = q('[data-afk]'))) { const k = x.dataset.afk!; if (af.off.has(k)) af.off.delete(k); else af.off.add(k); render(); return; }
+    if (q('[data-afall]')) { const list = store.autofill(); const allOn = list.every(p => !af.off.has(p.file + '|' + p.key)); if (allOn) list.forEach(p => af.off.add(p.file + '|' + p.key)); else af.off.clear(); const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
+    if ((x = q('[data-afk]'))) { const k = x.dataset.afk!; if (af.off.has(k)) af.off.delete(k); else af.off.add(k); const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
     if (q('[data-afapply]')) { const n = store.applyAutofill(store.autofill().filter(p => !af.off.has(p.file + '|' + p.key))); af.off.clear(); say(`Вписано рядків: ${n}`); buzz(14); render(); return; }
     if (q('[data-gadd]')) { const c = store.current; gl.en = c && c.unit.source.length <= 40 ? c.unit.source : ''; gl.uk = ''; gl.edit = false; sheet = false; sub = 'glossary'; render(); return; }
     if ((x = q('[data-gk]'))) { gk = x.dataset.gk as typeof gk; renderSheet(); return; }
@@ -675,6 +736,7 @@ export async function start(root: HTMLElement): Promise<void> {
   });
   root.addEventListener('change', e => {
     const t = e.target as HTMLElement;
+    if (t.id === 'gh-auto') { const cfg = loadGithubConfig(); cfg.everyMin = (t as HTMLInputElement).checked ? 5 : 0; saveGithubConfig(cfg); say(cfg.everyMin ? 'Автосинхронізація ввімкнена' : 'Автосинхронізацію вимкнено'); if (cfg.everyMin) void autoSync('on'); return; }
     if (t.id === 'scn-real') { scn.real = (t as HTMLInputElement).checked; const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
     if (t.id === 'f-word') fr.word = (t as HTMLInputElement).checked;
     else if (t.id === 'f-case') fr.cs = (t as HTMLInputElement).checked;
@@ -685,8 +747,36 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.id === 'm-file') { const f = [...((t as HTMLInputElement).files ?? [])]; (t as HTMLInputElement).value = ''; if (f.length) void importFiles(f); }
   });
   // The keyboard takes the bottom navigation's place.
-  document.addEventListener('focusin', e => { if ((e.target as HTMLElement).matches('textarea, input')) $('m-app').classList.add('kb'); });
-  document.addEventListener('focusout', () => { setTimeout(() => { if (!document.activeElement?.matches('textarea, input')) $('m-app').classList.remove('kb'); }, 120); });
+  const TEXTY = 'textarea, input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=range]):not([type=file])';
+  /** Long-press adds a card to the selection; moving the finger (scrolling) cancels it, so the page still scrolls. */
+  let lp: { timer: number; x: number; y: number } | null = null; let lpFired = false;
+  root.addEventListener('pointerdown', e => {
+    const card = (e.target as HTMLElement).closest<HTMLElement>('.m-row[data-key], .m-row[data-pickkey], [data-aflp]');
+    if (!card) return;
+    lpFired = false;
+    lp = { x: e.clientX, y: e.clientY, timer: window.setTimeout(() => {
+      lpFired = true; lp = null; buzz(18);
+      const y = $('m-main').scrollTop;
+      if (card.dataset.aflp) { const k = card.dataset.aflp; if (af.off.has(k)) af.off.delete(k); else af.off.add(k); }
+      else { const k = card.dataset.key ?? card.dataset.pickkey!; selecting = true; if (picked.has(k)) picked.delete(k); else picked.add(k); }
+      render(); $('m-main').scrollTop = y;
+    }, 450) };
+  });
+  const lpCancel = (): void => { if (lp) { clearTimeout(lp.timer); lp = null; } };
+  root.addEventListener('pointermove', e => { if (lp && Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > 8) lpCancel(); });
+  root.addEventListener('pointerup', () => { lpCancel(); if (lpFired) setTimeout(() => { lpFired = false; }, 350); }); root.addEventListener('pointercancel', lpCancel);
+  root.addEventListener('contextmenu', e => { if ((e.target as HTMLElement).closest('.m-row, [data-aflp]')) e.preventDefault(); });
+  root.addEventListener('click', e => { if (lpFired) { lpFired = false; e.stopPropagation(); e.preventDefault(); } }, true);
+  const topBtn = $('m-top'), mainEl = $('m-main');
+  const updateTop = (): void => {
+    const on = (tab === 'files' || tab === 'rows') && !sub && mainEl.scrollTop > 360;
+    topBtn.hidden = !on; topBtn.classList.toggle('lift', !!document.querySelector('.m-selbar'));
+  };
+  mainEl.addEventListener('scroll', updateTop, { passive: true });
+  topBtn.addEventListener('click', () => mainEl.scrollTo({ top: 0, behavior: 'smooth' }));
+  new MutationObserver(updateTop).observe(mainEl, { childList: true });
+  document.addEventListener('focusin', e => { if ((e.target as HTMLElement).matches(TEXTY)) $('m-app').classList.add('kb'); });
+  document.addEventListener('focusout', () => { setTimeout(() => { if (!document.activeElement?.matches(TEXTY)) $('m-app').classList.remove('kb'); }, 120); });
   // A swipe across the editor moves to the next / previous row.
   let sx = 0, sy = 0, st = 0, sw = false;
   root.addEventListener('touchstart', e => { sw = tab === 'edit' && e.touches.length === 1 && !(e.target as HTMLElement).closest('textarea, button, input, .m-sheet'); if (sw) { sx = e.touches[0]!.clientX; sy = e.touches[0]!.clientY; st = Date.now(); } }, { passive: true });

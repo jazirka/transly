@@ -341,4 +341,24 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-nav button{position:relative}
 .m-nav button:nth-child(-n+2)::after{content:'';position:absolute;right:-5px;top:50%;width:10px;height:10px;margin-top:-5px;border-top:2px solid var(--dim);border-right:2px solid var(--dim);transform:scale(.7) rotate(45deg);pointer-events:none;z-index:1}
 .m-nav button:nth-child(3)::after{content:'';position:absolute;right:0;top:14px;bottom:14px;width:1px;background:var(--line);pointer-events:none}
-.m-nav button:nth-child(4){background:rgba(255,255,255,.03)}
+
+/* clear is a destructive action: red, and asks twice */
+.m-mini.danger{color:#ff9b9b;background:rgba(247,84,100,.12);border-color:rgba(247,84,100,.45)}
+.m-mini.danger.armed{background:var(--bad);border-color:var(--bad);color:#fff}
+/* selected cards have a contour */
+.m-row.picked{background:rgba(139,114,232,.10);box-shadow:0 0 0 2px var(--accent) inset!important;border-color:var(--accent)}
+.m-af{border-width:1px}.m-af.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset;background:rgba(139,114,232,.08)}
+.m-row,.m-af{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+/* autofill: the explanation and the actions live in a bar above the nav, like «Надіслати» */
+.m-main:has(.m-afbar){display:flex;flex-direction:column;padding-bottom:0}.m-main:has(.m-afbar)>.m-afwrap{flex:1}
+.m-afbar{position:sticky;bottom:0;z-index:5;display:flex;flex-direction:column;gap:6px;padding:8px 12px;background:var(--panel);border-top:1px solid var(--line)}
+.m-afbar small{color:var(--mute);font-size:12px;line-height:1.3}
+.m-afrow{display:flex;align-items:center;gap:8px}.m-afrow b{margin-right:auto;white-space:nowrap}.m-afrow .m-primary{min-height:44px;padding:0 16px}
+/* search is always visible, a little transparent */
+.m-searchbar{position:sticky;top:0;z-index:4;padding:8px 12px;background:rgba(26,27,30,.72);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.m-searchbar .m-search{background:rgba(42,44,48,.78)}
+/* back to the top */
+.m-top{position:absolute;right:14px;bottom:calc(var(--nav) + 14px);z-index:8;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:rgba(42,44,48,.85);border:1px solid var(--line);color:var(--text);box-shadow:0 6px 16px rgba(0,0,0,.4);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);animation:m-pop .15s ease-out}
+.m-top[hidden]{display:none}.m-top.lift{bottom:calc(var(--nav) + 76px)}.m-top svg{width:20px;height:20px}
+/* a mark on a tab that remembers a non-standard screen */
+.m-nav button .m-mark{position:absolute;top:6px;left:calc(50% + 8px);min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:var(--accent);color:#fff;font:600 11px/16px system-ui;font-style:normal;text-align:center}

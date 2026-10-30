@@ -20,6 +20,8 @@ export async function start(root: HTMLElement): Promise<void> {
   const store = await Store.open();
   let tab: Tab = store.hasGame ? (store.key ? 'edit' : 'rows') : 'more';
   let menu = false;
+  /** Fields the keyboard opens for: only these switch the app into keyboard mode (a checkbox does not). */
+  const TEXTY = 'textarea, input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=range]):not([type=file])';
   let sheet = false; let sheetTab: 'terms' | 'tm' | 'cm' | 'hist' | 'dict' | null = null; let gk: 'Тлумачення' | 'Синоніми' = 'Тлумачення';
   let busy = '';
   type Sub = 'scene' | 'find' | 'speakers' | 'settings' | 'consistency' | 'glossary' | 'autofill' | 'sendlog';
@@ -169,8 +171,8 @@ export async function start(root: HTMLElement): Promise<void> {
       <div class="m-sortrow"><span>${rows.length} з ${v.units.length}</span>${layout === 'cards' ? `<button class="m-mini ${selecting ? 'on' : ''}" data-select aria-pressed="${selecting}">${selecting ? 'Готово' : 'Вибрати'}</button>` : ''}<select id="m-sort" aria-label="Порядок">${(['order', 'new', 'qa', 'long'] as Sort[]).map(s => `<option value="${s}" ${store.sort === s ? 'selected' : ''}>${{ order: 'За порядком', new: 'Спершу без перекладу', qa: 'Спершу проблеми', long: 'Спершу найдовші' }[s]}</option>`).join('')}</select></div></div>
       ${layout === 'table' ? tableHtml(v.name, shown, rows.length) : `<ul class="m-list rows">${shown.map((u, i) => {
         const e = store.entry(v.name, u.key), st = store.shown(u, e);
-        return `<li><button class="m-row ${u.key === store.key && !selecting ? 'cur' : ''} ${selecting && picked.has(u.key) ? 'picked' : ''}" ${selecting ? `data-pickkey="${esc(u.key)}" aria-pressed="${picked.has(u.key)}"` : `data-key="${esc(u.key)}"`}>${selecting ? `<span class="m-chk ${picked.has(u.key) ? 'on' : ''}" aria-hidden="true"></span>` : ''}<span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span><span class="m-row-t"><small>${i + 1} · ${esc(store.speaker(u) || u.kind)}</small><span class="m-src">${esc(u.source.replace(/\s+/g, ' '))}</span><span class="m-tr ${e?.target ? '' : 'none'}">${e?.target ? esc(e.target.replace(/\s+/g, ' ')) : '—'}</span></span></button></li>`;
-      }).join('') || '<li class="m-none">Нічого не знайдено</li>'}${rows.length > shown.length ? `<li class="m-more-li"><button class="m-mini" data-more>Показати ще ${Math.min(PAGE, rows.length - shown.length)} · ${shown.length} з ${rows.length}</button></li>` : ''}</ul>`}${selecting && layout === 'cards' ? `<div class="m-selbar" role="toolbar" aria-label="Дії з вибраним"><b>${picked.size}</b><button class="m-mini" data-selall>Усі</button><button class="m-mini" data-selsend ${picked.size ? '' : 'disabled'}>Надіслати</button><button class="m-mini" data-selcopy ${picked.size ? '' : 'disabled'}>Оригінал</button><button class="m-mini danger" data-selclear ${picked.size ? '' : 'disabled'}>Очистити</button></div>` : ''}`;
+        return `<li><button class="m-row ${u.key === store.key && !selecting ? 'cur' : ''} ${selecting && picked.has(u.key) ? 'picked' : ''}" ${selecting ? `data-pickkey="${esc(u.key)}" aria-pressed="${picked.has(u.key)}"` : `data-key="${esc(u.key)}"`}>${selecting ? `<span class="m-chk ${picked.has(u.key) ? 'on' : ''}" aria-hidden="true"></span>` : `<span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span>`}<span class="m-row-t"><small>${selecting ? `<span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span>` : ''}${i + 1} · ${esc(store.speaker(u) || u.kind)}</small><span class="m-src">${esc(u.source.replace(/\s+/g, ' '))}</span><span class="m-tr ${e?.target ? '' : 'none'}">${e?.target ? esc(e.target.replace(/\s+/g, ' ')) : '—'}</span></span></button></li>`;
+      }).join('') || '<li class="m-none">Нічого не знайдено</li>'}${rows.length > shown.length ? `<li class="m-more-li"><button class="m-mini" data-more>Показати ще ${Math.min(PAGE, rows.length - shown.length)} · ${shown.length} з ${rows.length}</button></li>` : ''}</ul>`}${selecting && layout === 'cards' ? selBar(picked.size, rows.length, picked.size === rows.length && rows.length > 0, 'data-selall', `<button class="m-primary" data-selsend ${picked.size ? '' : 'disabled'}>${icon('check')}<span>Надіслати</span></button><button class="m-mini" data-selcopy ${picked.size ? '' : 'disabled'}>Оригінал</button><button class="m-mini danger" data-selclear ${picked.size ? '' : 'disabled'}>Очистити</button>`, 'Ведіть пальцем по кружечках, щоб вибрати кілька.') : ''}`;
   }
 
   /** The table: columns scroll sideways, a tap on a translation writes right in the cell, a tap on a number opens the row. */
@@ -323,15 +325,20 @@ export async function start(root: HTMLElement): Promise<void> {
   }
 
   /** Lines made only of words that are already known: shown first, written only after the tap. */
+  /** The bar both selection screens share: counter and «select all / clear selection» on top, the actions below. */
+  function selBar(n: number, total: number, allOn: boolean, allAttr: string, actions: string, hint: string): string {
+    return `<div class="m-afbar" role="toolbar" aria-label="Дії з вибраним"><small>${hint}</small>
+      <div class="m-afrow"><b>${n} з ${total}</b><button class="m-mini" ${allAttr}>${allOn ? 'Зняти вибір' : 'Вибрати всі'}</button></div>
+      <div class="m-afrow acts">${actions}</div></div>`;
+  }
   function screenAutofill(): string {
     const list = store.autofill(), shown = list.slice(0, 80), on = list.filter(p => !af.off.has(p.file + '|' + p.key));
     const allOn = on.length === list.length;
-    return `<div class="m-more m-afwrap"><p class="m-hint">Застосунок знає слів: ${store.wordCount()}.</p>
-      ${shown.map(p => { const k = p.file + '|' + p.key, sel = !af.off.has(k); return `<label class="m-af ${sel ? 'sel' : ''}" data-aflp="${esc(k)}"><span class="m-gut"><input type="checkbox" data-afk="${esc(k)}" ${sel ? 'checked' : ''}></span><span><small>${esc(store.view(p.file)?.label ?? p.file)}</small><b>${esc(p.source)}</b><i>→ ${esc(p.target)}</i></span></label>`; }).join('') || '<p class="m-none">Немає рядків, які можна скласти зі знайомих слів</p>'}
+    return `<div class="m-more m-afwrap"><p class="m-hint">Знаю слів: ${store.wordCount()} · рядків для автозаповнення: ${list.length}</p>
+      ${shown.map(p => { const k = p.file + '|' + p.key, sel = !af.off.has(k); return `<div class="m-af ${sel ? 'sel' : ''}" role="checkbox" aria-checked="${sel}" data-aflp="${esc(k)}" data-afk="${esc(k)}"><span class="m-chk ${sel ? 'on' : ''}" aria-hidden="true"></span><span class="m-af-t"><small>${esc(store.view(p.file)?.label ?? p.file)}</small><b>${esc(p.source)}</b><i>→ ${esc(p.target)}</i></span></div>`; }).join('') || '<p class="m-none">Немає рядків, які можна скласти зі знайомих слів</p>'}
       ${list.length > 80 ? `<p class="m-hint">Показано 80 із ${list.length}: після запису решта з'явиться тут.</p>` : ''}
       ${almostHtml()}</div>
-      ${list.length ? `<div class="m-afbar"><small>Переклад збирається зі слів, порядок слів береться з оригіналу: перегляньте. Щоб вибрати кілька, проведіть пальцем по прапорцях ліворуч або затисніть рядок і ведіть вниз.</small>
-        <div class="m-afrow"><b>${on.length} з ${list.length}</b><button class="m-mini" data-afall>${allOn ? 'Зняти вибір' : 'Вибрати всі'}</button><button class="m-primary" data-afapply ${on.length ? '' : 'disabled'}>${icon('check')}<span>Вписати вибрані</span></button></div></div>` : ''}`;
+      ${list.length ? selBar(on.length, list.length, allOn, 'data-afall', `<button class="m-primary" data-afapply ${on.length ? '' : 'disabled'}>${icon('check')}<span>Вписати вибрані</span></button>`, 'Порядок слів з оригіналу: перегляньте. Ведіть пальцем по кружечках, щоб вибрати кілька.') : ''}`;
   }
   /** Lines that are one or two words short: what blocks them, and a tap to settle it. */
   function almostHtml(): string {
@@ -497,6 +504,8 @@ export async function start(root: HTMLElement): Promise<void> {
     if (entered) { viewKey = vk; main.classList.add('enter'); }
     main.innerHTML = sub ? ({ scene: screenScene, find: screenFind, speakers: screenSpeakers, settings: screenSettings, consistency: screenConsistency, glossary: screenGlossary, autofill: screenAutofill, sendlog: screenSendLog }[sub])() : tab === 'files' ? screenFiles() : tab === 'rows' ? screenRows() : tab === 'edit' ? screenEdit() : screenMore();
     renderSheet();
+    // a field that was removed by this redraw cannot report that it lost the focus
+    if (!document.activeElement?.matches(TEXTY)) $('m-app').classList.remove('kb');
     if (entered && tab === 'rows' && !sub) requestAnimationFrame(() => document.querySelector('.m-row.cur, .m-table tr.cur')?.scrollIntoView({ block: 'center' }));
     if (tab === 'edit' && !sub) { refreshMeta(); autosize(); }
     if (tab === 'more') void artifactDb().then(db => { const el = document.getElementById('m-claude'); if (db && el) el.hidden = false; });
@@ -747,7 +756,6 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.id === 'm-file') { const f = [...((t as HTMLInputElement).files ?? [])]; (t as HTMLInputElement).value = ''; if (f.length) void importFiles(f); }
   });
   // The keyboard takes the bottom navigation's place.
-  const TEXTY = 'textarea, input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=range]):not([type=file])';
   /**
    * Long-press on a card toggles it; keep the finger down and drag over other cards to give them the same state
    * (select or unselect). Near the top or bottom edge the page scrolls gently. A short swipe still just scrolls.
@@ -760,8 +768,8 @@ export async function start(root: HTMLElement): Promise<void> {
   /** Set a card selected or not without redrawing the page (the finger is on it). */
   function paint(el: HTMLElement, on: boolean): void {
     const k = cardKey(el); if (!k) return;
-    if (isAf(el)) { if (on) af.off.delete(k); else af.off.add(k); el.classList.toggle('sel', on); const cb = el.querySelector<HTMLInputElement>('input'); if (cb) cb.checked = on; }
-    else { if (on) picked.add(k); else picked.delete(k); el.classList.toggle('picked', on); el.setAttribute('aria-pressed', String(on)); }
+    if (isAf(el)) { if (on) af.off.delete(k); else af.off.add(k); el.classList.toggle('sel', on); el.setAttribute('aria-checked', String(on)); el.querySelector('.m-chk')?.classList.toggle('on', on); }
+    else { if (on) picked.add(k); else picked.delete(k); el.classList.toggle('picked', on); el.setAttribute('aria-pressed', String(on)); el.querySelector('.m-chk')?.classList.toggle('on', on); }
   }
   const isOn = (el: HTMLElement): boolean => { const k = cardKey(el); return !!k && (isAf(el) ? !af.off.has(k) : picked.has(k)); };
   /** The card the finger is over by position, also when a bar or the search field floats above it; every card passed on the way is changed too. */
@@ -769,7 +777,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!drag) return;
     drag.x = x; drag.y = y;
     const main = $('m-main'), r = main.getBoundingClientRect();
-    const bar = document.querySelector('.m-selbar, .m-afbar'), barTop = bar ? bar.getBoundingClientRect().top : r.bottom;
+    const bar = document.querySelector('.m-afbar'), barTop = bar ? bar.getBoundingClientRect().top : r.bottom;
     const yy = Math.min(Math.max(y, r.top + 70), barTop - 4);
     const cards = [...main.querySelectorAll<HTMLElement>(CARD)];
     let idx = -1, best = Infinity;
@@ -782,7 +790,7 @@ export async function start(root: HTMLElement): Promise<void> {
   function dragLoop(): void {
     if (!drag) return;
     const main = $('m-main'), r = main.getBoundingClientRect(), edge = 90;
-    const bottom = r.bottom - (document.querySelector('.m-selbar, .m-afbar') ? 130 : 70);
+    const bottom = r.bottom - (document.querySelector('.m-afbar') ? 130 : 70);
     let v = 0;
     if (drag.y < r.top + edge + 56) v = -Math.min(6, 1 + (r.top + edge + 56 - drag.y) / 18);
     else if (drag.y > bottom) v = Math.min(6, 1 + (drag.y - bottom) / 14);
@@ -804,7 +812,7 @@ export async function start(root: HTMLElement): Promise<void> {
     drag = { add, last: -1, x, y, raf: 0 };
     drag.raf = requestAnimationFrame(dragLoop);
   }
-  const GUT = '.m-chk, .m-gut';
+  const GUT = '.m-chk';
   let tl: { timer: number; x: number; y: number; card: HTMLElement; gut: boolean } | null = null;
   const tlCancel = (): void => { if (tl) { clearTimeout(tl.timer); tl = null; } };
   root.addEventListener('touchstart', e => {
@@ -830,7 +838,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const topBtn = $('m-top'), mainEl = $('m-main');
   const updateTop = (): void => {
     const on = (tab === 'files' || tab === 'rows') && !sub && mainEl.scrollTop > 360;
-    topBtn.hidden = !on; topBtn.classList.toggle('lift', !!document.querySelector('.m-selbar'));
+    topBtn.hidden = !on; topBtn.classList.toggle('lift', !!document.querySelector('.m-afbar'));
   };
   mainEl.addEventListener('scroll', updateTop, { passive: true });
   topBtn.addEventListener('click', () => mainEl.scrollTo({ top: 0, behavior: 'smooth' }));

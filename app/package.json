@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "tauri": "tauri",
     "build:mobile": "tsc --noEmit && vite build --mode mobile",
-    "dev:mobile": "vite --mode mobile"
+    "dev:mobile": "vite --mode mobile",
+    "build:web": "npm run build && npm run build:mobile && node scripts/make-single.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.12.4",

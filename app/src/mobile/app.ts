@@ -37,6 +37,10 @@ export async function start(root: HTMLElement): Promise<void> {
   const sp = { q: '', draft: new Map<string, string>() };
   let upd: UpdateCheck | null = null;
   let updMsg = '';
+  let updBusy = false;
+  let viewKey = '';
+  const ready = new Set<string>();
+  let tabX: { from: number; w: number } | null = null; let prevTabIdx = 0;
 
   root.innerHTML = `<div class="m-app" id="m-app">
     <header class="m-bar" id="m-bar"></header>
@@ -86,7 +90,8 @@ export async function start(root: HTMLElement): Promise<void> {
     let where = '';
     if (tab === 'edit' && !sub && store.current) { const list = store.rows(), pos = list.findIndex(x => x.key === store.current!.unit.key); if (pos >= 0) where = `Рядок ${pos + 1} з ${list.length} · `; }
     const subline = tab === 'more' || !store.hasGame || sub ? '' : `${where}${pct}% · ${store.saveOk ? 'збережено' : 'не збережено!'}`;
-    $('m-bar').innerHTML = `${sub ? '<button class="m-back" data-subback aria-label="Назад">' + icon('prev') + '</button>' : ''}<div class="m-title"><b>${esc(sub ? SUB_TITLE[sub] : title)}</b>${subline ? `<small class="${store.saveOk ? '' : 'bad'}">${esc(subline)}</small>` : ''}</div>${busy ? `<span class="m-busy" role="status">${esc(busy)}</span>` : ''}${helpBtn()}${toolsBtn()}`;
+    $('m-bar').innerHTML = `${sub ? '<button class="m-back" data-subback aria-label="Назад">' + icon('prev') + '</button>' : ''}<div class="m-title"><b>${esc(sub ? SUB_TITLE[sub] : title)}</b>${subline ? `<small class="${store.saveOk ? '' : 'bad'}">${esc(subline)}</small>` : ''}</div>${busy || updBusy ? `<span class="m-busy" role="status"><i class="m-spin"></i>${esc(busy || 'Перевіряю…')}</span>` : ''}${helpBtn()}${toolsBtn()}`;
+    $('m-bar').classList.toggle('loading', !!(busy || updBusy));
     document.documentElement.style.setProperty('--bar-h', $('m-bar').offsetHeight + 'px');
     $('m-nav').innerHTML = (Object.keys(TAB_LABEL) as Tab[]).map(t => `<button role="tab" data-go="${t}" aria-selected="${t === tab}" class="${t === tab ? 'on' : ''}" ${(t === 'rows' || t === 'edit') && !store.hasGame ? 'disabled' : ''}>${icon(t)}<span>${TAB_LABEL[t]}</span></button>`).join('');
     if (androidBridge()) {
@@ -356,8 +361,8 @@ export async function start(root: HTMLElement): Promise<void> {
         <label class="m-lbl" for="g-repo">Репозиторій</label><input id="g-repo" class="m-input" value="${esc(gh.repo)}" placeholder="власник/назва" autocomplete="off" spellcheck="false">
         <label class="m-lbl" for="g-token">Токен доступу</label><input id="g-token" class="m-input" type="password" value="${esc(gh.token)}" autocomplete="off" spellcheck="false">
         <details class="m-det"><summary>Додатково</summary><label class="m-lbl" for="g-branch">Гілка</label><input id="g-branch" class="m-input" value="${esc(gh.branch)}" placeholder="основна" autocomplete="off"><label class="m-lbl" for="g-dir">Папка в репозиторії</label><input id="g-dir" class="m-input" value="${esc(gh.dir)}" placeholder="корінь" autocomplete="off"></details>
-        <button class="m-primary wide" data-ghsync ${busy ? 'disabled' : ''}>${icon('sync')}<span>Синхронізувати</span></button><p class="m-hint" id="m-ghstate">${gh.last ? 'Востаннє: ' + new Date(gh.last).toLocaleString('uk-UA') : 'Ще не синхронізовано'}</p></section>
-      <section class="m-card" id="m-claude" hidden><h3>Синхронізація через Claude</h3><p class="m-hint">Спільна база артефакту: працює між вашими пристроями.</p><button class="m-secondary wide" data-clsync>${icon('sync')}<span>Синхронізувати через Claude</span></button></section>
+        <button class="m-primary wide ${busy ? 'is-loading' : ''}" data-ghsync ${busy ? 'disabled' : ''}>${icon('sync')}<span>Синхронізувати</span></button><p class="m-hint" id="m-ghstate">${gh.last ? 'Востаннє: ' + new Date(gh.last).toLocaleString('uk-UA') : 'Ще не синхронізовано'}</p></section>
+      <section class="m-card" id="m-claude" hidden><h3>Синхронізація через Claude</h3><p class="m-hint">Спільна база артефакту: працює між вашими пристроями.</p><button class="m-secondary wide ${busy ? 'is-loading' : ''}" data-clsync ${busy ? 'disabled' : ''}>${icon('sync')}<span>Синхронізувати через Claude</span></button></section>
       ${canUpdate() ? updateSection() : ''}
       <section class="m-card"><h3>Проєкт</h3><label class="m-lbl" for="m-who">Ваше ім’я в коментарях</label><input id="m-who" class="m-input" value="${esc(store.who)}" maxlength="40" autocomplete="off">
         <button class="m-secondary wide" data-export>Зберегти проєкт у файл</button></section>
@@ -370,7 +375,7 @@ export async function start(root: HTMLElement): Promise<void> {
       ${upd?.newer ? `<p class="m-hint ok">Доступна нова версія (${esc(upd.release.sha.slice(0, 7))}).</p>` : ''}
       <label class="m-lbl" for="u-token">Токен GitHub лише для читання</label><input id="u-token" class="m-input" type="password" value="${esc(cfg.token)}" autocomplete="off" spellcheck="false">
       <label class="m-check"><input type="checkbox" id="u-auto" ${cfg.auto ? 'checked' : ''}> Перевіряти при запуску</label>
-      <button class="m-secondary wide" data-upcheck>Перевірити оновлення</button>
+      <button class="m-secondary wide ${updBusy ? 'is-loading' : ''}" data-upcheck ${updBusy ? 'disabled' : ''}>${updBusy ? '<i class="m-spin"></i>' : ''}<span>${updBusy ? 'Перевіряю…' : 'Перевірити оновлення'}</span></button>
       ${upd?.newer && upd.asset ? '<button class="m-primary wide" data-upinstall>Оновити зараз</button>' : ''}
       <p class="m-hint" id="m-upmsg">${esc(updMsg)}</p></section>`;
   }
@@ -408,24 +413,45 @@ export async function start(root: HTMLElement): Promise<void> {
     const counts = { terms: terms.length, tm: tm.length, cm: cm.length, hist: hist.length, dict: 0 };
     const tabs: ['terms' | 'tm' | 'cm' | 'hist' | 'dict', string][] = [['terms', 'Глосарій'], ['tm', 'Пам’ять'], ['dict', 'Слова'], ['cm', 'Коментарі'], ['hist', 'Історія']];
     const cur = sheetTab ?? (counts.terms ? 'terms' : counts.tm ? 'tm' : counts.cm ? 'cm' : 'terms');
+    const idx = tabs.findIndex(t => t[0] === cur), dir = fresh ? '' : idx > prevTabIdx ? 'from-r' : idx < prevTabIdx ? 'from-l' : '';
+    prevTabIdx = idx;
     const panel = cur === 'terms' ? (terms.length ? terms.map((t, i) => `<button class="m-hit" data-term="${i}"><b>${esc(t.en)}</b><span>→ ${esc(t.uk)}${t.alt?.length ? ` · ${esc(t.alt.join(', '))}` : ''}</span></button>`).join('') : '<p class="m-none">У цьому рядку термінів немає</p>') + '<button class="m-mini" data-gadd>Додати термін</button>'
       : cur === 'tm' ? (tm.length ? tm.map((m, i) => `<button class="m-hit" data-tm="${i}"><b class="m-score">${m.score}%</b><span>${esc(m.t)}</span></button>`).join('') : '<p class="m-none">Схожих перекладів немає</p>')
       : cur === 'cm' ? (cm.length ? cm.map(x => `<div class="m-cmc"><small><b>${esc(x.who)}</b> · ${fmtTime(x.at)}</small><p>${esc(x.text)}</p></div>`).join('') : '<p class="m-none">Коментарів ще немає</p>')
       : cur === 'dict' ? dictPanel(c.unit.source, c.entry?.target ?? '')
       : (hist.length ? `<ol class="m-time">${hist.map(h => `<li><small>${fmtTime(h.at)} · ${esc(h.who)}</small><span class="m-chipx">${esc(h.what)}</span><p>${esc(h.text.slice(0, 200))}</p></li>`).join('')}</ol>` : '<p class="m-none">Історії ще немає</p>');
     wrap.innerHTML = `<div class="m-scrim ${fresh ? 'in' : ''}" data-close></div><aside class="m-sheet ${fresh ? 'in' : ''} ${cur === 'cm' ? 'tall' : ''}" role="dialog" aria-label="Допомога до рядка">
-      <div class="m-stabs" role="tablist">${tabs.map(([k, l]) => `<button role="tab" data-stab="${k}" aria-selected="${k === cur}" class="${k === cur ? 'on' : ''}">${l}${counts[k] ? `<i>${counts[k]}</i>` : ''}</button>`).join('')}</div>
-      <div class="m-spanel" id="m-spanel">${panel}</div>
+      <div class="m-stabs" role="tablist">${tabs.map(([k, l]) => `<button role="tab" data-stab="${k}" aria-selected="${k === cur}" class="${k === cur ? 'on' : ''}">${l}${counts[k] ? `<i>${counts[k]}</i>` : ''}</button>`).join('')}<span class="m-stab-ind" id="m-stab-ind"></span></div>
+      <div class="m-spanel ${dir}" id="m-spanel">${panel}</div>
       ${cur === 'cm' ? `<form class="m-composer" data-cmform><textarea id="m-cm" rows="2" maxlength="400" placeholder="Написати коментар…" aria-label="Новий коментар"></textarea><button type="submit" class="m-send" aria-label="Надіслати коментар" disabled>${icon('send')}</button></form>` : ''}
     </aside>`;
     const sp = document.getElementById('m-spanel'); if (sp && cur === 'cm') sp.scrollTop = sp.scrollHeight;
+    const on = wrap.querySelector<HTMLElement>('.m-stabs button.on'), ind = document.getElementById('m-stab-ind');
+    if (on && ind) {
+      const to = on.offsetLeft, w = on.offsetWidth;
+      ind.style.width = w + 'px';
+      if (tabX && !fresh) { ind.style.transition = 'none'; ind.style.transform = `translateX(${tabX.from}px)`; ind.style.width = tabX.w + 'px'; void ind.offsetWidth; ind.style.transition = ''; }
+      ind.style.transform = `translateX(${to}px)`; ind.style.width = w + 'px';
+      tabX = { from: to, w };
+    }
   }
 
   /* ---------- render ---------- */
+  const HEAVY: Sub[] = ['autofill', 'consistency', 'sendlog'];
   function render(): void {
     renderChrome();
     const main = $('m-main');
     main.className = 'm-main tab-' + tab;
+    const vk = tab + '|' + (sub ?? '');
+    if (!sub) ready.clear();
+    if (sub && HEAVY.includes(sub) && !ready.has(sub)) {
+      main.innerHTML = '<div class="m-skel" role="status" aria-label="Перевіряю"><div class="m-skel-h"><i class="m-spin"></i><span>Перевіряю рядки…</span></div><b></b><b></b><b></b><b></b></div>';
+      main.classList.add('enter'); viewKey = vk; renderSheet();
+      const want = sub;
+      requestAnimationFrame(() => setTimeout(() => { if (sub === want) { ready.add(want); render(); } }, 30));
+      return;
+    }
+    if (vk !== viewKey) { viewKey = vk; main.classList.add('enter'); }
     main.innerHTML = sub ? ({ scene: screenScene, find: screenFind, speakers: screenSpeakers, settings: screenSettings, consistency: screenConsistency, glossary: screenGlossary, autofill: screenAutofill, sendlog: screenSendLog }[sub])() : tab === 'files' ? screenFiles() : tab === 'rows' ? screenRows() : tab === 'edit' ? screenEdit() : screenMore();
     renderSheet();
     if (tab === 'edit' && !sub) { refreshMeta(); autosize(); }
@@ -605,8 +631,8 @@ export async function start(root: HTMLElement): Promise<void> {
     }
     if (q('[data-upcheck]')) {
       const cfg = loadUpdateCfg(); cfg.token = (document.getElementById('u-token') as HTMLInputElement).value.trim(); cfg.auto = (document.getElementById('u-auto') as HTMLInputElement).checked; saveUpdateCfg(cfg);
-      updMsg = 'Перевіряю…'; render();
-      checkUpdate(cfg).then(c => { upd = c; updMsg = c.newer ? '' : 'У вас остання версія'; }).catch(err => { updMsg = err instanceof Error ? err.message : 'Не вдалося перевірити'; }).finally(render);
+      updMsg = ''; updBusy = true; render();
+      checkUpdate(cfg).then(c => { upd = c; updMsg = c.newer ? '' : 'У вас остання версія'; }).catch(err => { updMsg = err instanceof Error ? err.message : 'Не вдалося перевірити'; }).finally(() => { updBusy = false; render(); });
       return;
     }
     if (q('[data-upinstall]')) { const cfg = loadUpdateCfg(); try { installUpdate(cfg, upd!, (_s, text) => { updMsg = text; const m = document.getElementById('m-upmsg'); if (m) m.textContent = text; }); updMsg = 'Завантажую…'; render(); } catch (err) { say(err instanceof Error ? err.message : 'Не вдалося оновити', true); } return; }

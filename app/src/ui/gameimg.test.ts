@@ -17,6 +17,12 @@ describe('game pictures', () => {
     expect(picsOfRow(game as never, 'Items.json', '[2].name')).toEqual([]);
     expect(picsOfRow(game as never, 'Items.json', 'terms.basic[0]')).toEqual([]);
   });
+  it('<Picture: name> in a note gives a picture from img/pictures', () => {
+    const g = [{ name: 'Items.json', json: [null, { name: 'Suit', iconIndex: 0, note: 'Slash 90% <Picture: icon_jumpsuit>' }, { name: 'Two', note: '<picture:a> <Picture : b>' }, { name: 'Bad', note: '<Picture: ../x> <Picture: a/b>' }] }];
+    expect(picsOfRow(g as never, 'Items.json', '[1].name')).toEqual([{ kind: 'picture', name: 'icon_jumpsuit', label: 'icon_jumpsuit' }]);
+    expect(picsOfRow(g as never, 'Items.json', '[2].name').map(p => (p as { name: string }).name)).toEqual(['a', 'b']);
+    expect(picsOfRow(g as never, 'Items.json', '[3].name')).toEqual([]);
+  });
   it('message face "Actor1#3"', () => {
     expect(picOfFace('Actor1#3')).toEqual([{ kind: 'face', name: 'Actor1', index: 3, label: '' }]);
     expect(picOfFace(undefined)).toEqual([]);

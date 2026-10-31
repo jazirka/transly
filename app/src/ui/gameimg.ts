@@ -5,7 +5,9 @@ import { readGameImage } from './desktop';
 export type Pic =
   | { kind: 'icon'; n: number; label: string }
   | { kind: 'face'; name: string; index: number; label: string }
-  | { kind: 'enemy'; name: string; label: string };
+  | { kind: 'enemy'; name: string; label: string }
+  /** A `<Picture: name>` tag in the row's note: `img/pictures/name.png`. */
+  | { kind: 'picture'; name: string; label: string };
 
 const ICON_FILES = new Set(['Items.json', 'Weapons.json', 'Armors.json', 'Skills.json', 'States.json']);
 const base = (f: string): string => f.split('/').pop() ?? f;
@@ -25,10 +27,18 @@ export function picsOfRow(game: GameFile[], file: string, key: string): Pic[] {
   const r = rowOf(game, file, key);
   if (!r) return [];
   const f = base(file), label = typeof r.name === 'string' ? r.name : '';
-  if (ICON_FILES.has(f) && typeof r.iconIndex === 'number' && r.iconIndex > 0) return [{ kind: 'icon', n: r.iconIndex, label }];
-  if (f === 'Actors.json' && typeof r.faceName === 'string' && r.faceName) return [{ kind: 'face', name: r.faceName, index: Number(r.faceIndex) || 0, label }];
-  if (f === 'Enemies.json' && typeof r.battlerName === 'string' && r.battlerName) return [{ kind: 'enemy', name: r.battlerName, label }];
-  return [];
+  const out: Pic[] = [];
+  if (typeof r.note === 'string') {
+    for (const m of r.note.matchAll(/<\s*Picture\s*:\s*([^<>]+?)\s*>/gi)) {
+      const name = m[1]!;
+      if (/[\\/]/.test(name) || name.includes('..') || out.length >= 4) continue;
+      out.push({ kind: 'picture', name, label: name });
+    }
+  }
+  if (ICON_FILES.has(f) && typeof r.iconIndex === 'number' && r.iconIndex > 0) out.push({ kind: 'icon', n: r.iconIndex, label });
+  else if (f === 'Actors.json' && typeof r.faceName === 'string' && r.faceName) out.push({ kind: 'face', name: r.faceName, index: Number(r.faceIndex) || 0, label });
+  else if (f === 'Enemies.json' && typeof r.battlerName === 'string' && r.battlerName) out.push({ kind: 'enemy', name: r.battlerName, label });
+  return out;
 }
 
 /** `Actor1#3` (the face of a message) → picture. */
@@ -67,6 +77,12 @@ export async function drawPic(game: string, pic: Pic): Promise<HTMLCanvasElement
   if (pic.kind === 'icon') {
     const img = await load(game, 'img/system/IconSet.png');
     return img ? put(img, (pic.n % 16) * 32, Math.floor(pic.n / 16) * 32, 32, 32, 32, 32) : null;
+  }
+  if (pic.kind === 'picture') {
+    const img = await load(game, `img/pictures/${pic.name}.png`);
+    if (!img) return null;
+    const k = Math.min(1, 96 / img.height);
+    return put(img, 0, 0, img.width, img.height, Math.round(img.width * k), Math.round(img.height * k));
   }
   if (pic.kind === 'face') {
     const img = await load(game, `img/faces/${pic.name}.png`);

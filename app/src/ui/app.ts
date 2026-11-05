@@ -1,7 +1,9 @@
 import { Autosave, DupIndex, commitRows, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, lengthDeviation, limitFor, note, pluginCandidates, propagate, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, viewsFromSnapshot, wrapLines } from '../core';
 import type { Entry, FileView, GameFile, RowChange, SavedProject, Unit } from '../core';
 import { openBuild } from './build-dialog';
-import { dataDirOf, isDesktop, rememberedGameDir, reopenGameDirDesktop, setProject } from './desktop';
+import { dataDirOf, forgetGameDir, isDesktop, rememberedGameDir, reopenGameDir, reopenGameDirDesktop, setProject } from './desktop';
+import { classifyFolder, folderBanner, folderLine } from './folder-service';
+import type { FolderState } from './folder-service';
 import { $, el, esc, plural, toast } from './dom';
 import { FOCUS_HTML, SIDE_HTML, focusClick, focusInput, renderFocus, renderGlossary, renderSidePanel, send, showSide, sideClick, step } from './focus';
 import { pickGameFolder, readFiles, reopenHandle } from './folder';
@@ -68,8 +70,6 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     <button class="tpill run" id="cfg-btn" aria-haspopup="menu" aria-expanded="false" title="Що запускає кнопка ▶">${SVG.build}<span id="cfg-name">Збірка (файл)</span><span class="dd">▾</span></button>
     <button class="tb-ic play" id="run-btn" title="Запустити (F5)" aria-label="Запустити">${SVG.play}</button>
     <div class="tsep"></div>
-    <button class="tb-ic" id="open" title="Відкрити папку гри" aria-label="Відкрити папку гри">${SVG.folder}</button>
-    <button class="tb-ic" id="sd-open" title="Знайти скрізь (⇧⇧)" aria-label="Знайти скрізь">${SVG.searchBig}</button>
     <button class="tb-ic" id="hk" title="Гарячі клавіші" aria-label="Гарячі клавіші">${SVG.keys}</button>
     <div class="tsep"></div>
     <button class="tb-ic" id="settings" title="Налаштування" aria-label="Налаштування">${SVG.gear}</button>
@@ -79,6 +79,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     <button class="chip on" id="ab-stage" title="Змінити етап"></button>
     <button class="ab-ic" id="ab-search" aria-label="Пошук скрізь">${SVG.searchBig}</button>
   </header>
+  <div class="folder-bar" id="folder-bar" role="status" hidden></div>
   <div class="main">
     <nav class="strip" id="strip" aria-label="Бічні панелі">
       <button data-lp="files" class="on" title="Файли гри" aria-label="Файли гри">${SVG.files}</button>
@@ -87,7 +88,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     </nav>
     <aside class="tree" id="lpanel" aria-label="Бічна панель: файли й рядки">
       <div class="mtabs" id="mtabs" role="group" aria-label="Бічна панель"><button data-lt="files">Файли</button><button data-lt="rows">Рядки</button><button class="ab-ic" id="mt-open" aria-label="Відкрити файли або вставити JSON" title="Відкрити файли або вставити JSON">${SVG.import}</button><button class="ab-ic" id="mt-search" aria-label="Пошук скрізь">${SVG.searchBig}</button></div>
-      <div class="ph"><span class="grow" id="lp-title">Файли гри</span><span class="ico" id="lp-close" title="Сховати панель" role="button" aria-label="Сховати панель">—</span></div>
+      <div class="ph"><span class="grow" id="lp-title">Файли гри</span><button class="ico ico-btn" id="lp-search" type="button" aria-label="Знайти скрізь (Ctrl+K)" title="Знайти скрізь (Ctrl+K або двічі Shift)">${SVG.search}</button><span class="ico" id="lp-close" title="Сховати панель" role="button" aria-label="Сховати панель">—</span></div>
       <div class="treebody" id="tree"><div class="ph card-ph" data-card="files"><span class="grow">Файли гри</span><span class="ico" data-hide-left="files" role="button" tabindex="0" aria-label="Сховати панель «Файли гри»" title="Сховати">—</span></div><div class="tree-q"><div class="fin">${SVG.search}<input class="qin" id="fq" placeholder="Пошук у файлах гри" aria-label="Пошук у файлах гри" autocomplete="off" spellcheck="false"></div></div><div class="tree-act" id="tree-act"></div><div id="tree-list"></div></div>
       <div class="rz rz-y" id="rz-y" role="separator" aria-orientation="horizontal" aria-label="Розділ між файлами й рядками" aria-valuemin="15" aria-valuemax="85" tabindex="0" title="Потягніть, щоб змінити співвідношення (подвійний клік — навпіл)" hidden></div>
       <div class="slist" id="lp-rows" hidden>
@@ -113,7 +114,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
   </div>
   <nav class="bnav" id="bnav" aria-label="Розділи"><button data-bn="files" aria-label="Файли"><svg viewBox="0 0 16 16"><path d="M2.5 4.5v8h11v-6.5h-6l-1.5-1.5z"/></svg><span>Файли</span></button><button data-bn="rows" aria-label="Рядки"><svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h10"/></svg><span>Рядки</span></button><button data-bn="edit" aria-label="Редактор"><svg viewBox="0 0 16 16"><path d="M3 13l.7-3L11 2.7a1.4 1.4 0 0 1 2 2L5.7 12z"/></svg><span>Редактор</span></button><button data-bn="help" aria-label="Вказівки"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M6.3 6.3a1.8 1.8 0 1 1 2.6 1.6c-.6.3-.9.7-.9 1.4M8 11.6v.1"/></svg><span>Вказівки</span></button><button data-bn="more" aria-label="Ще"><svg viewBox="0 0 16 16"><circle cx="3.5" cy="8" r="1" fill="currentColor"/><circle cx="8" cy="8" r="1" fill="currentColor"/><circle cx="12.5" cy="8" r="1" fill="currentColor"/></svg><span>Ще</span></button></nav>
   <footer class="status">
-    <span class="ok" id="sb-save"></span><span id="sb-fmt"></span><span id="sb-qa"></span><span id="st-sel"></span>
+    <span class="ok" id="sb-save"></span><span id="sb-load" class="busy" role="status" hidden></span><span id="sb-fmt"></span><span id="sb-qa"></span><span id="st-sel"></span>
     <span id="sb-sync" class="sbtn" role="button" tabindex="0" title="Налаштування синхронізації"></span><span id="sb-build" class="sbtn" role="button" tabindex="0" title="Зібрати (F5)"></span>
     <div class="r"><span id="sb-file"></span><span id="sb-sess"></span></div>
   </footer>
@@ -130,7 +131,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
   <div class="kr"><span>Надіслати на вичитування / затвердити й далі</span><kbd>Ctrl</kbd><kbd>Enter</kbd></div>
   <div class="kr"><span>Змінити переклад у комірці таблиці</span><kbd>2× клік</kbd></div>
   <div class="kr"><span>Запустити вибрану збірку (файл або гра)</span><kbd>F5</kbd></div>
-  <div class="kr"><span>Знайти скрізь</span><kbd>⇧</kbd><kbd>⇧</kbd></div>
+  <div class="kr"><span>Знайти скрізь</span><kbd>Ctrl</kbd><kbd>K</kbd><kbd>⇧</kbd><kbd>⇧</kbd></div>
   <div class="kr"><span>Закрити вікно чи меню</span><kbd>Esc</kbd></div>
 </div>
 <div class="sd-wrap" id="sd" hidden><div class="sd-box" role="dialog" aria-modal="true" aria-label="Пошук скрізь"><input id="sd-in" placeholder="Рядки, файли, терміни…" aria-label="Пошук скрізь" autocomplete="off"><div id="sd-res" role="listbox" aria-label="Результати"></div><div class="sd-foot">↑↓ вибір · Enter відкрити · Esc закрити</div></div></div>`;
@@ -151,7 +152,8 @@ export async function start(root: HTMLElement): Promise<void> {
   if (fromSnapshot.length) { s.views = fromSnapshot; s.current = fromSnapshot[0]!.name; s.open = [s.current]; }
   let lastHandle: (DirHandle & { name: string }) | null = null;
   let dataDir: string | null = null;
-  const desktopDir = isDesktop() ? rememberedGameDir() : null;
+  /** The folder remembered for the project (it changes when another one is picked or forgotten). */
+  const desktopDir = (): string | null => (isDesktop() ? rememberedGameDir() : null);
   try { lastHandle = (await loadHandle('default')) as typeof lastHandle; } catch { lastHandle = null; }
   const autosave = new Autosave(store, 400, ok => { s.saveOk = ok; if (ok) s.savedAt = Date.now(); renderStatus(); });
   let tmCache: ReturnType<typeof buildTm> | null = null;
@@ -580,7 +582,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (v) { document.getElementById('start-empty')?.remove(); return false; }
     tv.style.display = 'none'; fv.style.display = 'none';
     const box = emptyBox();
-    box.innerHTML = `<h2>${s.phone ? 'Відкрийте файли' : 'Відкрийте папку гри'}</h2>${s.phone ? 'На телефоні проєкт береться з комп’ютера: на ПК виберіть «Налаштування → Обмін проєктом через файл → Зберегти проєкт у файл», передайте файл сюди й відкрийте його, або вставте його вміст як текст. Так само можна відкрити файли самої гри.' : 'Оберіть папку <b>data</b> гри на RPG Maker (або саму папку гри), папку з файлами <b>.po</b>, <b>.csv</b>, <b>.rpy</b> (Ren’Py) чи JSON-локалізацією. Ваш переклад зберігається в цьому браузері, файли гри не змінюються.'}${(lastHandle || desktopDir) ? `<p><button class="btn p" id="resume">Продовжити з папкою «${esc(lastHandle?.name ?? (desktopDir ?? '').split(/[\\/]/).filter(Boolean).pop() ?? '')}»</button></p>` : ''}${s.phone ? `${claudeAvailable ? '<p><button class="btn p" id="cl2">Отримати з іншого пристрою (через Claude)</button></p>' : ''}<p><button class="btn p" id="imp2">Відкрити файли або вставити JSON…</button></p>` : '<p><button class="btn p" id="open2">Відкрити папку гри</button></p>'}`;
+    box.innerHTML = `<h2>${s.phone ? 'Відкрийте файли' : 'Відкрийте папку гри'}</h2>${s.phone ? 'На телефоні проєкт береться з комп’ютера: на ПК виберіть «Налаштування → Обмін проєктом через файл → Зберегти проєкт у файл», передайте файл сюди й відкрийте його, або вставте його вміст як текст. Так само можна відкрити файли самої гри.' : 'Оберіть папку <b>data</b> гри на RPG Maker (або саму папку гри), папку з файлами <b>.po</b>, <b>.csv</b>, <b>.rpy</b> (Ren’Py) чи JSON-локалізацією. Ваш переклад зберігається в цьому браузері, файли гри не змінюються.'}${(lastHandle || desktopDir()) ? `<p><button class="btn p" id="resume">Продовжити з папкою «${esc(lastHandle?.name ?? (desktopDir() ?? '').split(/[\\/]/).filter(Boolean).pop() ?? '')}»</button></p>` : ''}${s.phone ? `${claudeAvailable ? '<p><button class="btn p" id="cl2">Отримати з іншого пристрою (через Claude)</button></p>' : ''}<p><button class="btn p" id="imp2">Відкрити файли або вставити JSON…</button></p>` : '<p><button class="btn p" id="open2">Відкрити папку гри</button></p>'}`;
     return true;
   }
 
@@ -664,11 +666,25 @@ export async function start(root: HTMLElement): Promise<void> {
     catch (err) { toast(`Не вдалося відкрити файли: ${err instanceof Error ? err.message : 'невідома помилка'}`); renderAll(); }
   }
 
-  async function loadPicked(picked: PickedFile[], keep: boolean): Promise<void> {
-    const box = emptyBox();
-    box.innerHTML = '<h2>Читаю файли гри…</h2><div class="progress"><i id="bar"></i></div><span id="pct"></span>';
-    $('#v-table').style.display = 'none'; $('#v-focus').style.display = 'none';
-    const { files, failed } = await readFiles(picked, (d, t) => { $('#bar').style.width = `${(d / t) * 100}%`; $('#pct').textContent = `${d} з ${t}`; });
+  /** The small "reading the game" note in the status bar, for the quiet reading of the remembered folder. */
+  const showLoad = (text: string | null): void => { const el0 = $('#sb-load'); el0.hidden = !text; el0.textContent = text ?? ''; };
+
+  /**
+   * `quiet` is for the folder remembered from an earlier session: the project is already on the screen (from its stored
+   * copy of the originals), so the files are read in the background and nothing is replaced under the translator's hands.
+   * `stale` tells that the choice was overtaken meanwhile (another folder was picked).
+   */
+  async function loadPicked(picked: PickedFile[], keep: boolean, opts: { quiet?: boolean; stale?: () => boolean } = {}): Promise<void> {
+    const quiet = !!opts.quiet;
+    if (quiet) showLoad('Читаю файли гри…');
+    else {
+      const box = emptyBox();
+      box.innerHTML = '<h2>Читаю файли гри…</h2><div class="progress"><i id="bar"></i></div><span id="pct"></span>';
+      $('#v-table').style.display = 'none'; $('#v-focus').style.display = 'none';
+    }
+    const { files, failed } = await readFiles(picked, (d, t) => { if (quiet) showLoad(`Читаю файли гри: ${d} з ${t}`); else { $('#bar').style.width = `${(d / t) * 100}%`; $('#pct').textContent = `${d} з ${t}`; } });
+    if (quiet) showLoad(null);
+    if (opts.stale?.()) return;
     const reset = ingest(files, keep);
     dataDir = isDesktop() ? dataDirOf(picked) : null;
     if (!s.views.length) { s.current = null; renderAll(); toast('У цих файлах немає тексту для перекладу'); return; }
@@ -682,8 +698,8 @@ export async function start(root: HTMLElement): Promise<void> {
     } else if (reset) toast(`Оригінал змінився в ${plural(reset, ['рядку', 'рядках', 'рядках'])}: їх повернуто в чернетки`);
     else if (fromBackup) toast('Оригінали прочитано з резервної копії гри (data.transly-orig)');
     s.open = s.open.filter(n => s.views.some(v => v.name === n));
-    openFile(s.current && s.views.some(v => v.name === s.current) ? s.current : s.views[0]!.name);
-    restoreUi();
+    if (quiet && s.current && s.current !== GROUP && s.views.some(v => v.name === s.current)) unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u]));
+    else { openFile(s.current && s.views.some(v => v.name === s.current) ? s.current : s.views[0]!.name); restoreUi(); }
     ctx.persist();
     renderAll();
     offerPluginTexts();
@@ -743,12 +759,55 @@ export async function start(root: HTMLElement): Promise<void> {
     const picked = await pickGameFolder(input);
     if (!picked) return;
     if (picked.handle) { lastHandle = picked.handle as typeof lastHandle; void saveHandle('default', picked.handle).catch(() => undefined); }
+    folderSeq++; // a folder chosen by hand beats the automatic restore that may still be running
     await loadFiles(picked.files);
+    if (isDesktop()) {
+      const root = rememberedGameDir();
+      folder = root ? { kind: 'ok', root, dataDir, files: picked.files } : { kind: 'none' };
+      folderHidden = false;
+      renderFolderBar(); renderTop();
+    }
+  }
+
+  /* ---------- the game folder of the project ---------- */
+  let folder: FolderState = { kind: 'none' };
+  /** The translator chose to work without the folder: the banner stays away until the next start. */
+  let folderHidden = false;
+  let folderSeq = 0;
+  function renderFolderBar(): void {
+    const bar = $('#folder-bar'), b = isDesktop() && !folderHidden ? folderBanner(folder) : null;
+    if (!b || (folder.kind !== 'missing' && folder.kind !== 'other')) { bar.hidden = true; bar.replaceChildren(); return; }
+    bar.hidden = false; bar.dataset.kind = folder.kind;
+    bar.innerHTML = `<span class="fb-t" title="${esc(folder.root)}">${esc(b.text)}</span><span class="fb-a">${b.actions.includes('repick') ? '<button class="btn p" id="fb-repick">Вказати заново</button>' : ''}${b.actions.includes('use') ? '<button class="btn" id="fb-use">Усе одно використати</button>' : ''}<button class="btn" id="fb-hide">Працювати без папки</button></span>`;
+  }
+  async function readFolderQuietly(files: PickedFile[], seq: number): Promise<void> {
+    try { await loadPicked(files, false, { quiet: true, stale: () => seq !== folderSeq }); }
+    catch (err) { showLoad(null); toast(`Не вдалося прочитати файли гри: ${err instanceof Error ? err.message : 'невідома помилка'}`); }
+  }
+  /** At the start: find the project's folder again, check it is the same game, and read it in the background. */
+  async function restoreFolder(): Promise<void> {
+    if (!isDesktop()) return;
+    const seq = ++folderSeq;
+    const found = await reopenGameDir();
+    if (seq !== folderSeq) return;
+    folder = classifyFolder(found, s.views.map(v => v.name));
+    // Nothing is written into a folder that is not this game's: without a data folder the build and the launch refuse.
+    dataDir = folder.kind === 'ok' ? folder.dataDir : null;
+    renderFolderBar(); renderTop();
+    if (folder.kind === 'ok' && folder.files.length && !s.game.length) await readFolderQuietly(folder.files, seq);
+  }
+  function useFolderAnyway(): void {
+    if (folder.kind !== 'other') return;
+    const f = folder;
+    folder = { kind: 'ok', root: f.root, dataDir: f.dataDir, files: f.files };
+    dataDir = f.dataDir;
+    renderFolderBar(); renderTop();
+    void readFolderQuietly(f.files, ++folderSeq);
   }
 
   async function resume(): Promise<void> {
-    if (!lastHandle && !desktopDir) return;
-    const files = desktopDir ? await reopenGameDirDesktop() : await reopenHandle(lastHandle!);
+    if (!lastHandle && !desktopDir()) return;
+    const files = desktopDir() ? await reopenGameDirDesktop() : await reopenHandle(lastHandle!);
     if (!files) { toast('Немає доступу до папки: оберіть її знову'); return; }
     await loadFiles(files);
   }
@@ -792,11 +851,11 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!pop.hidden) { pop.hidden = true; btn.setAttribute('aria-expanded', 'false'); return; }
     let total = 0, done = 0;
     for (const v of s.views) { total += v.units.length; const ents = s.saved.files[v.name] ?? {}; for (const u of v.units) if (ents[u.key]?.target) done++; }
-    const folder = rememberedGameDir();
+    const remembered = rememberedGameDir();
     pop.innerHTML = `<button role="menuitem" data-pj="folder"><span class="cfg-t">Відкрити папку гри…</span></button>
       <button role="menuitem" data-pj="files"><span class="cfg-t">Відкрити файли або вставити JSON…</span></button>
       <hr><div class="pj-h">Поточний проєкт</div>
-      <div class="pj-card"><span class="pj lg">${esc((Array.from(s.saved.name.trim())[0] ?? 'T').toUpperCase())}</span><div><b>${esc(s.saved.name)}</b><small>${folder ? esc(folder) : 'Папку гри не вибрано'}</small><small>${total ? `Перекладено ${done.toLocaleString('uk-UA')} з ${total.toLocaleString('uk-UA')}` : 'Файлів ще немає'}</small></div></div>
+      <div class="pj-card"><span class="pj lg">${esc((Array.from(s.saved.name.trim())[0] ?? 'T').toUpperCase())}</span><div><b>${esc(s.saved.name)}</b><small class="${folder.kind === 'missing' || folder.kind === 'other' ? 'warn' : ''}" title="${esc(folderLine(folder, remembered))}">${esc(folderLine(folder, remembered))}</small><small>${total ? `Перекладено ${done.toLocaleString('uk-UA')} з ${total.toLocaleString('uk-UA')}` : 'Файлів ще немає'}</small></div></div>
       <hr><button role="menuitem" data-pj="settings"><span class="cfg-t">Налаштування проєкту…</span></button>`;
     const r = btn.getBoundingClientRect();
     pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 340))}px`; pop.style.top = `${r.bottom + 6}px`;
@@ -827,6 +886,11 @@ export async function start(root: HTMLElement): Promise<void> {
         renderAll(); ctx.persist();
       },
       adopt,
+      folder: {
+        text: () => folderLine(folder, rememberedGameDir()),
+        change: () => { void openFolder(); },
+        forget: () => { forgetGameDir(); folderSeq++; folder = { kind: 'none' }; dataDir = null; renderFolderBar(); renderTop(); },
+      },
       plugins: () => openPluginTexts(ctx, setPluginCommands),
       importFiles: openImportDlg,
     });
@@ -904,7 +968,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const MENUS: Record<string, MenuItem[]> = {
     'Файл': [{ t: 'Відкрити папку гри…', fn: () => void openFolder() }, { t: 'Відкрити файли або вставити JSON…', fn: openImportDlg }, { t: 'Зібрати…', fn: doBuild, sc: 'F5' }, '-', { t: 'Налаштування…', fn: openSettingsDlg }],
     'Вигляд': [{ t: 'Таблиця', fn: () => setMode('table') }, { t: 'Редагування', fn: () => setMode('edit') }, { t: 'Вичитування', fn: () => setMode('review') }],
-    'Навігація': [{ t: 'Наступний рядок без перекладу', fn: () => jump('new', 1) }, { t: 'Наступна проблема QA', fn: () => jump('qa', 1) }, { t: 'Переглянути сцену…', fn: () => { const u = s.cur ? ctx.unit(s.cur) : undefined; if (u) openScene(ctx, u); else toast('Спершу виберіть рядок'); } }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: '⇧⇧' }],
+    'Навігація': [{ t: 'Наступний рядок без перекладу', fn: () => jump('new', 1) }, { t: 'Наступна проблема QA', fn: () => jump('qa', 1) }, { t: 'Переглянути сцену…', fn: () => { const u = s.cur ? ctx.unit(s.cur) : undefined; if (u) openScene(ctx, u); else toast('Спершу виберіть рядок'); } }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: 'Ctrl+K' }],
     'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Перевірити узгодженість…', fn: () => openConsistency(ctx) }, { t: 'Автозаповнення за словами…', fn: () => openAutofill(ctx) }, { t: 'Активність…', fn: () => openActivity(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенести довгі рядки у файлі', fn: wrapFile }, '-', { t: 'Налаштування…', fn: openSettingsDlg }],
     'Довідка': [{ t: 'Гарячі клавіші', fn: () => toggleKeys() }],
   };
@@ -1041,7 +1105,10 @@ export async function start(root: HTMLElement): Promise<void> {
     const t = e.target as HTMLElement;
     if (!t.closest('#fpop,#spkbtn,#lenbtn,#sortbtn,#bnav,#cfgpop,#cfg-btn,#projpop,#proj-btn')) closePops();
     if (!t.closest('#keypop,#hk')) $('#keypop').hidden = true;
-    if (t.closest('#open,#open2')) { void openFolder(); return; }
+    if (t.closest('#open2,#fb-repick')) { void openFolder(); return; }
+    if (t.closest('#fb-use')) { useFolderAnyway(); return; }
+    if (t.closest('#fb-hide')) { folderHidden = true; renderFolderBar(); return; }
+    if (t.closest('#b-play')) { runSelected(); return; }
     if (t.closest('#resume')) { void resume(); return; }
     if (t.closest('#imp2,#mt-open')) { openImportDlg(); return; }
     if (t.closest('#cl2')) {
@@ -1064,7 +1131,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.closest('#run-btn')) { runSelected(); return; }
     if (t.closest('#sb-build')) { doBuild(); return; }
     if (t.closest('#sb-sync')) { openSettingsDlg(); return; }
-    if (t.closest('#sd-open,#mt-search')) { openSearch(); return; }
+    if (t.closest('#lp-search,#mt-search')) { openSearch(); return; }
     if (t.closest('#hk')) { toggleKeys(); return; }
     if (t.closest('#hamb')) { mbToggle(); return; }
     const mg = t.closest<HTMLElement>('#menubar [data-mg]');
@@ -1232,6 +1299,7 @@ export async function start(root: HTMLElement): Promise<void> {
       if (s.phone && (s.leftOpen || s.rightOpen)) { s.leftOpen = false; s.rightOpen = false; renderAll(); return; }
     }
     if (document.querySelector('dialog[open]')) return;
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') { e.preventDefault(); openSearch(); return; }
     if (e.key === 'Shift' && !e.repeat) { const now = Date.now(); if (now - lastShift < 400) openSearch(); lastShift = now; return; }
     if (e.key === 'F5') { e.preventDefault(); runSelected(); return; }
     if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && s.mode !== 'table') { e.preventDefault(); step(ctx, e.key === 'ArrowDown' ? 1 : -1); return; }
@@ -1302,4 +1370,5 @@ export async function start(root: HTMLElement): Promise<void> {
   initResize();
   initRightResize();
   renderAll();
+  void restoreFolder();
 }

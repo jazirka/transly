@@ -1,0 +1,39 @@
+/* The shell of the PC app: the window frame, the bar under the title, the folder banner. Loaded last, so it wins over the older rules. */
+
+/* The window never scrolls sideways: the top bar gives way instead (see the rules below). */
+.scroll-x{overflow-x:hidden}
+.ide{min-width:0}
+
+/* Banner under the top bar: the project's game folder is missing or is another game. */
+.folder-bar{display:flex;align-items:center;gap:12px;padding:8px 14px;background:rgba(229,160,75,.12);border-bottom:1px solid rgba(229,160,75,.35);color:var(--text);font-size:12.5px;flex:none}
+.folder-bar[hidden]{display:none}
+.folder-bar[data-kind=other]{background:rgba(247,84,100,.1);border-bottom-color:rgba(247,84,100,.35)}
+.folder-bar .fb-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.folder-bar .fb-a{display:flex;gap:8px;flex:none}
+
+/* Folder row in the settings. */
+.folder-set{display:grid;gap:6px;margin-bottom:6px}
+.folder-row{display:flex;align-items:center;gap:8px}
+.folder-row .path{flex:1;min-width:0;padding:6px 10px;border:1px solid var(--line);border-radius:var(--r2,8px);background:rgba(255,255,255,.03);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+.proj-card small.warn,.pj-card small.warn{color:var(--warn)}
+
+/* "Reading the game…" in the status bar. */
+.status .busy{color:var(--info)}
+.status .busy[hidden]{display:none}
+
+/* The count badge on the last tab of the right rail stuck out of the window by a pixel. */
+.ide:not(.sz-s) .fs .itabs .cnt{right:-3px}
+
+/* The search icon in the header of the left panel. */
+.ph .ico-btn{border:0;background:none;color:inherit;padding:0;cursor:pointer}
+.ph .ico-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+
+/* Top bar on a narrow window: the least important parts go first. */
+@media (max-width:1240px){
+  .topbar #pg-txt{display:none}
+}
+@media (max-width:1100px){
+  .topbar #cfg-name{display:none}
+  .topbar .prog .bar{width:60px}
+  .topbar #proj-name{max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}

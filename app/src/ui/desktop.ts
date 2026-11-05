@@ -10,7 +10,7 @@ const LS_DIR = 'transly-game-dir';
 const LS_EXE = 'transly-game-exe';
 /** The game folder and the game's exe belong to a project: each project remembers its own. */
 let project = 'default';
-export const setProject = (id: string): void => { project = id; };
+export const setProject = (id: string): void => { project = id; migrateGameDirKeys(); };
 const k = (base: string): string => `${base}:${project}`;
 const get = (k: string): string | null => { try { return localStorage.getItem(k); } catch { return null; } };
 const set = (k: string, v: string): void => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
@@ -25,8 +25,16 @@ const toPicked = (files: JsonFile[]): PickedFile[] => {
     read: () => invoke<string>('read_text', { path: f.orig ?? f.path }), fromBackup: !!f.orig }));
 };
 
-// Older versions kept one global value: the first project to ask inherits it.
-const read = (base: string): string | null => get(k(base)) ?? get(base);
+/** Older versions kept one folder (and game exe) for the whole app. It belongs to a project now: the current project takes the shared one over once, and the shared key is dropped so no other project inherits it. */
+export function migrateGameDirKeys(): void {
+  for (const base of [LS_DIR, LS_EXE]) {
+    const old = get(base);
+    if (old === null) continue;
+    if (get(k(base)) === null) set(k(base), old);
+    try { localStorage.removeItem(base); } catch { /* ignore */ }
+  }
+}
+const read = (base: string): string | null => get(k(base));
 export const rememberedGameDir = (): string | null => read(LS_DIR);
 export const rememberedExe = (): string | null => read(LS_EXE);
 
@@ -37,11 +45,26 @@ export async function pickGameDirDesktop(): Promise<PickedFile[] | null> {
   return toPicked(await invoke<JsonFile[]>('list_json', { dir }));
 }
 
+/** The remembered game folder, found again for this session (`ok`), or the reason it could not be. `null` when the project has none. */
+export type Reopened = { ok: true; root: string; files: PickedFile[] } | { ok: false; root: string; reason: 'missing' | 'failed' };
+
+export async function reopenGameDir(): Promise<Reopened | null> {
+  const root = rememberedGameDir();
+  if (!root) return null;
+  try { await invoke('allow_again', { path: root }); }
+  catch (e) { return { ok: false, root, reason: String(e).includes('не існує') ? 'missing' : 'failed' }; }
+  try { return { ok: true, root, files: toPicked(await invoke<JsonFile[]>('list_json', { dir: root })) }; }
+  catch { return { ok: false, root, reason: 'failed' }; }
+}
+
 export async function reopenGameDirDesktop(): Promise<PickedFile[] | null> {
-  const dir = rememberedGameDir();
-  if (!dir) return null;
-  try { await invoke('allow_again', { path: dir }); } catch { return null; }
-  return toPicked(await invoke<JsonFile[]>('list_json', { dir }));
+  const r = await reopenGameDir();
+  return r?.ok ? r.files : null;
+}
+
+/** Forget the folder of the project (the translation and the originals kept in it stay). */
+export function forgetGameDir(): void {
+  try { localStorage.removeItem(k(LS_DIR)); } catch { /* ignore */ }
 }
 
 /** Folder that holds the game's JSON files, from the files that were actually read. */

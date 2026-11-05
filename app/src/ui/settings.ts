@@ -1,6 +1,7 @@
 import { touchTerms, DEFAULT_SETTINGS, emptyProject, parseDelimited, parseHtmlTable, parseTerms, referenceSets, serialize, termsFromTable, withoutReference } from '../core';
 import type { GlossaryTerm } from '../core';
 import { $, el, esc, plural, toast } from './dom';
+import { isDesktop } from './desktop';
 import type { Ctx } from './state';
 import { artifactDb, describeClaude, loadClaudeConfig, runClaudeSync, saveClaudeConfig } from './claude';
 import { DEFAULT_API, describeGithub, loadGithubConfig, runGithubSync, saveGithubConfig } from './github';
@@ -26,15 +27,17 @@ export function dialog(html: string, labelId: string): HTMLDialogElement {
 let lastSettingsTab = 0;
 
 /** Things the settings dialog starts but the shell owns. */
-export interface SettingsActions { reset: () => void; adopt: () => void; plugins: () => void; importFiles: () => void }
+export interface SettingsActions { reset: () => void; adopt: () => void; plugins: () => void; importFiles: () => void; folder: { text: () => string; change: () => void; forget: () => void } }
 
-export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugins: onPlugins, importFiles: onFiles }: SettingsActions): void {
+export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugins: onPlugins, importFiles: onFiles, folder: onFolder }: SettingsActions): void {
   const st = ctx.s.saved.settings;
   const sync = loadSyncConfig();
   const gh = loadGithubConfig();
   const cl = loadClaudeConfig();
   const autoNow = st.lineLimit === 0 ? ctx.lineLimit() : 0;
   const dlg = dialog(`<form method="dialog"><h2 id="st-t">Налаштування</h2>
+    ${isDesktop() ? `<div class="folder-set"><label for="st-folder">Папка гри цього проєкту</label><div class="folder-row"><span id="st-folder" class="path" tabindex="0"></span><button class="btn" type="button" id="st-folder-change">Змінити…</button><button class="btn" type="button" id="st-folder-forget">Забути</button></div>
+      <p class="hint">Папка запам’ятовується для проєкту й відновлюється під час запуску. Якщо її перенесено чи видалено, програма покаже банер із вибором нової, а переклад і оригінали в проєкті збережуться.</p></div>` : ''}
     <div class="grid"><label for="st-tol">Допуск довжини перекладу відносно оригіналу, %</label><input id="st-tol" type="number" min="5" max="100" step="5" value="${st.tolerancePct}">
       <label for="st-who">Ваше ім’я в коментарях та історії</label><input id="st-who" maxlength="40" value="${st.who}"></div>
     <label class="achk"><input type="checkbox" id="st-block" ${st.blockErrors ? 'checked' : ''}> Не надсилати рядок із помилкою QA</label>
@@ -138,6 +141,10 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
     ctx.persist(); ctx.render();
     return { added, merged };
   };
+  const showFolder = (): void => { const el0 = dlg.querySelector<HTMLElement>('#st-folder'); if (el0) { el0.textContent = onFolder.text(); el0.title = el0.textContent; } };
+  showFolder();
+  dlg.querySelector('#st-folder-change')?.addEventListener('click', () => { dlg.close(); onFolder.change(); });
+  dlg.querySelector('#st-folder-forget')?.addEventListener('click', () => { onFolder.forget(); showFolder(); toast('Папку гри забуто. Переклад лишився; збірка й запуск гри недоступні, поки папку не вказано'); });
   const termsFile = $('#st-terms-file', dlg) as HTMLInputElement;
   $('#st-terms-file-btn', dlg).addEventListener('click', () => termsFile.click());
   termsFile.addEventListener('change', async () => {

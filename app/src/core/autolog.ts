@@ -23,8 +23,8 @@ export function autoBatches(views: FileView[], saved: SavedProject, limit = 20):
   for (const v of views) {
     const ents = saved.files[v.name]; if (!ents) continue;
     for (const u of v.units) {
-      const e = ents[u.key], last = e?.history?.at(-1), kind = last ? kindOf(last.what) : null;
-      if (e && last && kind) found.push({ kind, file: v.name, key: u.key, source: u.source, target: e.target, at: last.at });
+      const e = ents[u.key], last = e?.history?.at(-1), kind = last && !last.batch ? kindOf(last.what) : null;
+      if (e && last && kind && e.mt <= last.at) found.push({ kind, file: v.name, key: u.key, source: u.source, target: e.target, at: last.at });
     }
   }
   found.sort((a, b) => b.at - a.at);
@@ -43,7 +43,7 @@ export function undoAuto(saved: SavedProject, batch: AutoBatch, who: string, now
   let n = 0;
   for (const it of batch.items) {
     const e: Entry | undefined = saved.files[it.file]?.[it.key], last = e?.history?.at(-1);
-    if (!e || !last || last.at !== it.at || kindOf(last.what) !== batch.kind) continue;
+    if (!e || !last || last.at !== it.at || kindOf(last.what) !== batch.kind || e.mt > last.at) continue;
     const empty: Entry = { ...e, target: '', status: 'new', mt: now, returned: false };
     delete empty.orig;
     saved.files[it.file]![it.key] = note(empty, UNDONE[batch.kind], it.target, who, now);

@@ -84,6 +84,12 @@ interface Token { start: number; end: number; keys: string[] }
 
 const WORD = /[\p{L}\p{N}]+(?:['’ʼ`][\p{L}]+)*/gu;
 
+/** A word of a text with its place and the keys it is compared by (see `tokens`). */
+export type WordToken = Token;
+export const wordTokens = (text: string): WordToken[] => tokens(text);
+/** Do two keys of Ukrainian words belong to one word? One has to be the beginning of the other, and a very short key must match fully. */
+export const ukStemsAgree = (hay: string, need: string): boolean => hay === need || (need.length >= 3 && hay.startsWith(need)) || (hay.length >= 3 && need.startsWith(hay));
+
 function tokens(text: string): Token[] {
   const out: Token[] = [];
   for (const m of text.matchAll(WORD)) {
@@ -139,10 +145,26 @@ export function termRanges(text: string, en: string): [number, number][] {
 }
 
 /** Terms by the key of their first word, so a line is only tried against terms that could possibly start in it. */
-const indexCache = new WeakMap<object, { n: number; map: Map<string, Term[]> }>();
+const indexCache = new WeakMap<object, { n: number; rev: number; map: Map<string, Term[]> }>();
+
+const termRevs = new WeakMap<object, number>();
+const termIds = new WeakMap<object, number>();
+let nextTermsId = 1;
+/**
+ * Call after a term list was changed in place. A term that is replaced (not added) leaves the length as it was, so the
+ * caches built from the list (the word index, QA results) could not tell by themselves.
+ */
+export const touchTerms = (terms: object): void => { termRevs.set(terms, (termRevs.get(terms) ?? 0) + 1); };
+/** Identity and state of a term list as one short text: equal while the list is the same and unchanged. */
+export function termsStamp(terms: object & { length: number }): string {
+  let id = termIds.get(terms);
+  if (!id) termIds.set(terms, id = nextTermsId++);
+  return `${id}.${termRevs.get(terms) ?? 0}.${terms.length}`;
+}
+
 function termIndex(terms: Term[]): Map<string, Term[]> {
   const hit = indexCache.get(terms);
-  if (hit && hit.n === terms.length) return hit.map;
+  if (hit && hit.n === terms.length && hit.rev === (termRevs.get(terms) ?? 0)) return hit.map;
   const map = new Map<string, Term[]>();
   for (const t of terms) {
     const first = termKeys(t.en.trim())[0];
@@ -150,7 +172,7 @@ function termIndex(terms: Term[]): Map<string, Term[]> {
     const a = map.get(first);
     if (a) a.push(t); else map.set(first, [t]);
   }
-  indexCache.set(terms, { n: terms.length, map });
+  indexCache.set(terms, { n: terms.length, rev: termRevs.get(terms) ?? 0, map });
   return map;
 }
 

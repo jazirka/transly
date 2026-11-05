@@ -1,4 +1,4 @@
-import { canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, describePage, displayLength, limitFor, wordsOf, gorohUrl, multitranUrl } from '../core';
+import { batchTitle, batchUndoLabel, undoReport, setIgnored, canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, describePage, displayLength, limitFor, wordsOf, gorohUrl, multitranUrl } from '../core';
 import type { GameFile } from '../core';
 import { artifactDb, describeClaude, loadClaudeConfig, saveClaudeConfig } from '../ui/claude';
 import { describeGithub, githubApi, githubConfigured, loadGithubConfig, saveGithubConfig } from '../ui/github';
@@ -327,6 +327,8 @@ export async function start(root: HTMLElement): Promise<void> {
       ...store.autos().map((b): Ev => ({ id: `a${b.at}${b.kind}`, at: b.at, icon: 'edit',
         text: b.kind === 'words' ? `Автозаповнення за словами: ${n(b.items.length)}` : `Підставлено з однакових рядків: ${n(b.items.length)}`,
         sub: b.kind === 'words' ? 'Чернетки, їх варто переглянути' : 'Чекають вичитування без вашого перегляду', rows: b.items.slice(0, 12), undo: `${b.at}|${b.kind}`, undoLabel: 'Скасувати заповнення', undoAttr: 'data-undoauto' })),
+      ...store.journal().map((b): Ev => ({ id: `j${b.id}`, at: b.at, icon: b.kind === 'undo' || b.kind === 'redo' ? 'prev' : 'check', text: batchTitle(b),
+        ...(b.total > b.items.length ? { sub: `ще ${n(b.total - b.items.length)} змінено після цього` } : {}), rows: b.items.slice(0, 12), undo: b.id, undoLabel: batchUndoLabel(b), undoAttr: 'data-undojournal' })),
       ...store.autosUndone().map((u): Ev => ({ id: `au${u.at}${u.kind}`, at: u.at, icon: 'prev', text: `Ви скасували ${u.kind === 'words' ? 'автозаповнення' : 'підстановку'}: ${n(u.count)}` })),
       ...store.undone().map((u): Ev => ({ id: `u${u.at}${u.kind}`, at: u.at, icon: 'prev', text: u.kind === 'send' ? `Ви скасували відправлення: ${n(u.count)}` : `Ви скасували затвердження: ${n(u.count)}` })),
     ].sort((x, y) => y.at - x.at);
@@ -343,7 +345,7 @@ export async function start(root: HTMLElement): Promise<void> {
         ${e.rows ? `<button class="act-chev" data-actopen="${e.id}" aria-expanded="${open}" aria-label="Показати рядки">${icon('next')}</button>` : ''}
         ${open && e.rows ? `<ul class="act-rows">${e.rows.map(r => `<li><small>${esc(r.source.replace(/\s+/g, ' ').slice(0, 70))}</small><span>${esc(r.target.replace(/\s+/g, ' ').slice(0, 90))}</span></li>`).join('')}</ul>` : ''}</div>`;
     }).join('');
-    return `<div class="m-more act">${html || '<p class="m-none">Активності ще немає</p>'}<p class="m-hint">Відправлення можна скасувати, поки рядки не змінено. Якщо відправляли на іншому пристрої (наприклад, на ПК), спершу синхронізуйте проєкт у «Ще».</p></div>`;
+    return `<div class="m-more act">${html || '<p class="m-none">Активності ще немає</p>'}<p class="m-hint">Масові дії (надсилання, автозаповнення, заміни, перенесення рядків, очищення) можна скасувати, поки рядки не змінено, і потім повторити. Якщо дія була на іншому пристрої (наприклад, на ПК), спершу синхронізуйте проєкт у «Ще».</p></div>`;
   }
 
   /** The glossary: add a term, tap one to change it. */
@@ -503,7 +505,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const wrap = $('m-sheet'); wrap.hidden = !sheet && !menu;
     if (menu) {
       wrap.dataset.open = '';
-      const badge: Partial<Record<Sub, number>> = { autofill: store.autofill().length, consistency: store.inconsistent().length, sendlog: store.sends().length + store.autos().length };
+      const badge: Partial<Record<Sub, number>> = { autofill: store.autofill().length, consistency: store.inconsistent().length, sendlog: store.sends().length + store.autos().length + store.journal().length };
       const short: Partial<Record<Sub, string>> = { find: 'Заміна', search: 'Пошук', autofill: 'Авто', speakers: 'Мовці' };
       const item = (k: Sub): string => { const [, l, ic] = TOOLS.find(t => t[0] === k)!; return `<button class="m-mi" data-sub="${k}">${icon(ic)}<span>${short[k] ?? l}</span>${badge[k] ? `<i>${badge[k]! > 99 ? '99+' : badge[k]}</i>` : ''}</button>`; };
       wrap.innerHTML = `<div class="m-scrim" data-close></div><nav class="m-menu" aria-label="Інструменти"><div class="m-mgrid">${(['find', 'search', 'autofill', 'consistency', 'speakers', 'glossary', 'sendlog'] as Sub[]).map(item).join('')}</div>
@@ -731,10 +733,15 @@ export async function start(root: HTMLElement): Promise<void> {
       return;
     }
     if (q('[data-copy]')) { const c = store.current; if (c) { ($('m-tr') as HTMLTextAreaElement).value = c.unit.source; store.write(c.unit.source); refreshMeta(); autosize(); } return; }
-    if ((x = q('[data-clear]'))) { if (!confirmTap(x)) return; ($('m-tr') as HTMLTextAreaElement).value = ''; store.write(''); refreshMeta(); autosize(); return; }
+    if ((x = q('[data-clear]'))) {
+      if (!confirmTap(x)) return;
+      const c = store.current;
+      if (c?.entry?.target) { store.clearMany(c.file, [c.unit]); say('Очищено. Скасувати можна в «Активності»'); }
+      ($('m-tr') as HTMLTextAreaElement).value = ''; refreshMeta(); autosize(); return;
+    }
     if ((x = q('[data-ins]'))) { insert(x.dataset.ins ?? ''); return; }
     if (q('[data-wrap]')) { if (store.wrap()) { render(); } else say('Рядки вже вміщаються'); return; }
-    if ((x = q('[data-ign]'))) { store.mutate((_f, _u, en) => ({ ...(en as NonNullable<typeof en>), ign: [...new Set([...(en?.ign ?? []), x!.dataset.ign!])], mt: Date.now() })); refreshMeta(); return; }
+    if ((x = q('[data-ign]'))) { store.mutate((_f, _u, en) => setIgnored(en as NonNullable<typeof en>, x!.dataset.ign!, true, Date.now())); refreshMeta(); return; }
     if (q('[data-gsave]')) {
       const v = (id: string): string => $<HTMLInputElement>(id).value;
       if (!store.saveTerm(v('g-en'), v('g-uk'), v('g-alt'), $<HTMLInputElement>('g-qa').checked)) { say('Заповніть оригінал і переклад', true); return; }
@@ -744,6 +751,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if ((x = q('[data-gedit]'))) { const t = store.saved.terms.find(y => y.en === x!.dataset.gedit); if (t) { Object.assign(gl, { en: t.en, uk: t.uk, alt: (t.alt ?? []).join(', '), qa: t.qa !== false, edit: true }); render(); $('m-main').scrollTop = 0; } return; }
     if ((x = q('[data-gdel]'))) { store.removeTerm(x.dataset.gdel!); say('Термін видалено'); render(); return; }
     if ((x = q('[data-actopen]'))) { const k = x.dataset.actopen!; if (act.open.has(k)) act.open.delete(k); else act.open.add(k); const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
+    if ((x = q('[data-undojournal]'))) { const r = store.undoJournalBatch(x.dataset.undojournal!); say(r.done ? undoReport(r) : 'Рядки вже змінено: скасувати нічого', !r.done); buzz(14); render(); return; }
     if ((x = q('[data-undoauto]'))) { const [at, kind] = x.dataset.undoauto!.split('|'); const n = store.undoAutoFill(Number(at), kind!); say(n ? `Скасовано: ${plural(n, ['рядок', 'рядки', 'рядків'])}` : 'Нічого скасовувати', !n); buzz(14); render(); return; }
     if ((x = q('[data-undosend]'))) { const [at, kind, g] = x.dataset.undosend!.split('|'); const n = store.undoSend(Number(at), kind!, g === '1'); say(n ? `Скасовано: ${plural(n, ['рядок', 'рядки', 'рядків'])}` : 'Нічого скасовувати', !n); buzz(14); render(); return; }
     if ((x = q('[data-afterm]'))) { const [w, v] = x.dataset.afterm!.split('|'); if (store.saveTerm(w!, v!, '', true)) { say('Термін додано: ' + w + ' - ' + v); buzz(10); } render(); return; }

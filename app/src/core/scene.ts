@@ -6,6 +6,9 @@ import type { Unit } from './model';
  */
 const LIST_KEY = /^(.*\.list)\[(\d+)\](?:\.(choice\[(\d+)\]|cmd))?$/;
 
+/** The scene a row key belongs to (the key up to `.list`), or null for rows that are not part of an event page. */
+export const sceneKey = (key: string): string | null => LIST_KEY.exec(key)?.[1] ?? null;
+
 /** The rows of the scene `key` belongs to, in game order. Formats without scenes get the rows around it. */
 export function sceneUnits(units: Unit[], key: string, around = 12): Unit[] {
   const m = LIST_KEY.exec(key);

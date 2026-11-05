@@ -49,7 +49,7 @@ describe('history and comments', () => {
     expect(e.history).toHaveLength(50);
     expect(e.history![49]!.text).toBe('59');
     const c = addComment(undefined, 'Я', 'Питання', 5);
-    expect(c.comments).toEqual([{ who: 'Я', at: 5, text: 'Питання' }]);
-    expect(c.mt).toBe(5);
+    expect(c.comments).toEqual([{ who: 'Я', at: 5, text: 'Питання', id: expect.any(String) }]);
+    expect(c.mt).toBe(0); // a comment is not a change of the translation, so it never wins a merge over a newer one
   });
 });

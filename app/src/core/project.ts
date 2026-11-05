@@ -38,7 +38,21 @@ export interface SavedProject {
   speakers?: Record<string, { name: string; mt: number }>;
   /** Time the snapshot/reference last changed. The device with the larger value owns the newer copy. */
   assetsRev?: number;
+  /**
+   * Version of the data layout the writing app understands. Files written before it existed have none (read as 1).
+   * 2: unknown top-level fields are carried along untouched, rows merge field by field, deleted terms leave a trace.
+   */
+  schema?: number;
+  /** Terms that were deleted: key = lower-case original word, value = when. A term not edited since is dropped by a merge, so it does not come back. */
+  deletedTerms?: Record<string, number>;
 }
+
+/** The layout this build writes (see `SavedProject.schema`). */
+export const SCHEMA = 2;
+
+/** Top-level fields this build knows. Everything else in a project file belongs to a newer version and is passed through unchanged. */
+const KNOWN = new Set(['version', 'name', 'sourceLang', 'targetLang', 'resetEpoch', 'files', 'memory', 'terms', 'settings', 'settingsAt', 'snapshot', 'reference', 'labels', 'sysNames', 'speakers', 'assetsRev', 'schema', 'deletedTerms']);
+const extrasOf = (p: object): Record<string, unknown> => Object.fromEntries(Object.entries(p).filter(([k]) => !KNOWN.has(k)));
 
 export interface ProjectSettings {
   /** Allowed length deviation from the original, percent. Only a recommendation, never a hard limit. */
@@ -60,7 +74,7 @@ export interface ProjectSettings {
 export const DEFAULT_SETTINGS: ProjectSettings = { tolerancePct: 25, blockErrors: true, who: 'Ви', propagate: true, pluginCommands: [], pluginsAsked: false, lineLimit: 0 };
 
 export const emptyProject = (name: string, sourceLang = 'en', targetLang = 'uk'): SavedProject => ({
-  version: 1, name, sourceLang, targetLang, resetEpoch: 0, files: {}, memory: [], terms: [], settings: { ...DEFAULT_SETTINGS },
+  version: 1, schema: SCHEMA, name, sourceLang, targetLang, resetEpoch: 0, files: {}, memory: [], terms: [], settings: { ...DEFAULT_SETTINGS },
 });
 
 export interface FileView { name: string; units: Unit[]; /** Place the file takes place in (map name). */ label?: string }
@@ -134,6 +148,7 @@ export function deserialize(text: string): SavedProject {
   if (o.version !== 1) throw new Error(`Непідтримувана версія проєкту: ${String(o.version)}`);
   if (typeof o.name !== 'string' || typeof o.files !== 'object' || o.files === null) throw new Error('Файл проєкту пошкоджено');
   return {
+    ...extrasOf(o),
     version: 1, name: o.name, sourceLang: o.sourceLang ?? 'en', targetLang: o.targetLang ?? 'uk',
     resetEpoch: o.resetEpoch ?? 0, files: o.files, memory: o.memory ?? [], terms: o.terms ?? [],
     settings: { ...DEFAULT_SETTINGS, ...(o.settings ?? {}) },
@@ -144,13 +159,57 @@ export function deserialize(text: string): SavedProject {
     ...(o.labels ? { labels: o.labels } : {}),
     ...(o.sysNames ? { sysNames: o.sysNames } : {}),
     ...(o.settingsAt ? { settingsAt: o.settingsAt } : {}),
+    ...(o.schema ? { schema: o.schema } : {}),
+    ...(o.deletedTerms ? { deletedTerms: o.deletedTerms } : {}),
   };
 }
 
+/** What a row keeps after a reset at `epoch`: nothing when it is older, and only the newer comments and history when it is not. */
+function liveEntry(e: Entry, epoch: number): Entry | null {
+  if (epoch <= 0) return e;
+  const newComments = e.comments?.some(c => c.at > epoch);
+  if (e.mt <= epoch && !newComments) return null;
+  const comments = e.comments?.filter(c => c.at > epoch), history = e.history?.filter(h => h.at > epoch);
+  const out: Entry = { ...e };
+  if (comments && comments.length !== e.comments!.length) { if (comments.length) out.comments = comments; else delete out.comments; }
+  if (history && history.length !== e.history!.length) { if (history.length) out.history = history; else delete out.history; }
+  return out;
+}
+
+const isMtRecord = (v: unknown): v is Record<string, { mt: number }> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v) && Object.values(v).every(e => typeof e === 'object' && e !== null && typeof (e as { mt?: unknown }).mt === 'number');
+
+/**
+ * A top-level field this build does not know (written by a newer one). Records of items with an `mt` merge item by item,
+ * newest wins, and items older than the last reset are dropped; anything else keeps the local value, so it is never lost.
+ */
+function mergeUnknown(x: unknown, y: unknown, epoch: number): unknown {
+  if (x === undefined) return y;
+  if (y === undefined) return x;
+  if (isMtRecord(x) && isMtRecord(y)) {
+    const out: Record<string, { mt: number }> = {};
+    for (const src of [x, y]) for (const [k, v] of Object.entries(src)) if (v.mt > epoch && (!out[k] || v.mt > out[k]!.mt)) out[k] = v;
+    return out;
+  }
+  return x;
+}
+
+export interface ProjectMerge {
+  project: SavedProject;
+  conflicts: { file: string; key: string }[];
+  /** The second project was written by an older build (without `schema`): data only a newer build keeps may be missing from it. */
+  olderPeer: boolean;
+}
+
 /** Merge two copies of the same project (e.g. PC and phone). Entries from before the newest reset are dropped. */
-export function mergeProjects(a: SavedProject, b: SavedProject, since = 0): { project: SavedProject; conflicts: { file: string; key: string }[] } {
+export function mergeProjects(a: SavedProject, b: SavedProject, since = 0): ProjectMerge {
   const epoch = Math.max(a.resetEpoch, b.resetEpoch);
-  const live = (t: Translations): Translations => Object.fromEntries(Object.entries(t).filter(([, e]) => e.mt > epoch));
+  const live = (t: Translations): Translations => {
+    if (epoch <= 0) return t;
+    const out: Translations = {};
+    for (const [k, e] of Object.entries(t)) { const l = liveEntry(e, epoch); if (l) out[k] = l; }
+    return out;
+  };
   const files: Record<string, Translations> = {};
   const conflicts: { file: string; key: string }[] = [];
   for (const name of new Set([...Object.keys(a.files), ...Object.keys(b.files)])) {
@@ -174,17 +233,24 @@ export function mergeProjects(a: SavedProject, b: SavedProject, since = 0): { pr
   const assetsRev = Math.max(a.assetsRev ?? 0, b.assetsRev ?? 0);
   const speakers: Record<string, { name: string; mt: number }> = {};
   for (const src of [a.speakers ?? {}, b.speakers ?? {}]) for (const [k, v] of Object.entries(src)) if (v.mt > epoch && (!speakers[k] || v.mt > speakers[k]!.mt)) speakers[k] = v;
-  return {
-    project: {
-      ...newer, settings: { ...settingsFrom.settings, pluginsAsked: a.settings.pluginsAsked || b.settings.pluginsAsked }, ...(settingsAt ? { settingsAt } : {}), resetEpoch: epoch, files, ...(snapshot ? { snapshot } : {}), ...(reference ? { reference } : {}), ...(assetsRev ? { assetsRev } : {}),
+  const deleted: Record<string, number> = {};
+  for (const src of [a.deletedTerms ?? {}, b.deletedTerms ?? {}]) for (const [k, t] of Object.entries(src)) if (t > epoch && t > (deleted[k] ?? 0)) deleted[k] = t;
+  const terms = union(a.terms, b.terms, v => v.en.toLowerCase()).filter(t => (deleted[t.en.toLowerCase()] ?? 0) < t.mt);
+  const extra: Record<string, unknown> = {};
+  const xa = extrasOf(a), xb = extrasOf(b);
+  for (const k of new Set([...Object.keys(xa), ...Object.keys(xb)])) { const v = mergeUnknown(xa[k], xb[k], epoch); if (v !== undefined) extra[k] = v; }
+  const project: SavedProject = {
+      ...newer, ...extra, schema: Math.max(a.schema ?? 1, b.schema ?? 1, SCHEMA),
+      settings: { ...settingsFrom.settings, pluginsAsked: a.settings.pluginsAsked || b.settings.pluginsAsked }, ...(settingsAt ? { settingsAt } : {}), resetEpoch: epoch, files, ...(snapshot ? { snapshot } : {}), ...(reference ? { reference } : {}), ...(assetsRev ? { assetsRev } : {}),
       ...(Object.keys(speakers).length ? { speakers } : {}),
       ...(a.sysNames || b.sysNames ? { sysNames: a.sysNames ?? b.sysNames } : {}),
       ...(a.labels || b.labels ? { labels: { ...(b.labels ?? {}), ...(a.labels ?? {}) } } : {}),
       memory: union(a.memory, b.memory, v => v.s + '\u0001' + v.t),
-      terms: union(a.terms, b.terms, v => v.en.toLowerCase()),
-    },
-    conflicts,
+      terms,
+      ...(Object.keys(deleted).length ? { deletedTerms: deleted } : {}),
   };
+  if (!Object.keys(deleted).length) delete project.deletedTerms;
+  return { project, conflicts, olderPeer: (b.schema ?? 1) < SCHEMA };
 }
 
 export type { Entry };

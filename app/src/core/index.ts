@@ -37,3 +37,7 @@ export * from './dictlinks';
 export * from './autofill';
 export * from './undosend';
 export * from './autolog';
+export * from './plural';
+export * from './journal';
+export * from './sceneindex';
+export * from './termmatch';

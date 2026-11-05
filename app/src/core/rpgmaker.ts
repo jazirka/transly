@@ -57,7 +57,17 @@ export const hasText = (source: string): boolean => /\p{L}/u.test(source.replace
 
 /** Extract every translatable unit from one game file. Unknown files yield no units. */
 export function extractRpgMaker(file: GameFile, opts: ExtractOptions = {}): Unit[] {
-  return extractAll(file, opts).filter(u => hasText(u.source));
+  const out: Unit[] = [];
+  // The conditions of a page sit on its first row; when that row has no text of its own, the next row of the page takes them over.
+  let carried: PageInfo | undefined, carriedList = '';
+  for (const u of extractAll(file, opts)) {
+    const list = /^(.*\.list)\[/.exec(u.key)?.[1] ?? '';
+    if (!hasText(u.source)) { if (u.page) { carried = u.page; carriedList = list; } continue; }
+    if (carried && !u.page && list === carriedList) u.page = carried;
+    if (u.page || list !== carriedList) { carried = undefined; carriedList = ''; }
+    out.push(u);
+  }
+  return out;
 }
 
 function extractAll(file: GameFile, opts: ExtractOptions): Unit[] {

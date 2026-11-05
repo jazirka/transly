@@ -1,5 +1,5 @@
-import { Autosave, DupIndex, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, lengthDeviation, limitFor, note, pluginCandidates, propagate, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, viewsFromSnapshot, wrapLines } from '../core';
-import type { Entry, FileView, GameFile, SavedProject, Unit } from '../core';
+import { Autosave, DupIndex, commitRows, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, lengthDeviation, limitFor, note, pluginCandidates, propagate, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, viewsFromSnapshot, wrapLines } from '../core';
+import type { Entry, FileView, GameFile, RowChange, SavedProject, Unit } from '../core';
 import { openBuild } from './build-dialog';
 import { dataDirOf, isDesktop, rememberedGameDir, reopenGameDirDesktop, setProject } from './desktop';
 import { $, el, esc, plural, toast } from './dom';
@@ -155,6 +155,7 @@ export async function start(root: HTMLElement): Promise<void> {
   try { lastHandle = (await loadHandle('default')) as typeof lastHandle; } catch { lastHandle = null; }
   const autosave = new Autosave(store, 400, ok => { s.saveOk = ok; if (ok) s.savedAt = Date.now(); renderStatus(); });
   let tmCache: ReturnType<typeof buildTm> | null = null;
+  let tmStale = false, tmBuiltAt = 0;
   let unitMap = new Map<string, Unit>();
   let dupCache: { views: State['views']; idx: DupIndex } | null = null;
 
@@ -211,10 +212,16 @@ export async function start(root: HTMLElement): Promise<void> {
     view: () => (s.current === GROUP ? groupView() : s.views.find(v => v.name === s.current) ?? null),
     unit: key => unitMap.get(key),
     visible: () => visibleUnits(true),
-    tm: () => (tmCache ??= buildTm(s)),
-    invalidateTm: () => { tmCache = null; },
+    tm: () => {
+      if (!tmCache || (tmStale && Date.now() - tmBuiltAt > 1000)) { tmCache = buildTm(s); tmBuiltAt = Date.now(); tmStale = false; }
+      return tmCache;
+    },
+    invalidateTm: () => { tmCache = null; tmStale = false; },
+    softTm: () => { tmStale = true; },
     dups: () => { if (!dupCache || dupCache.views !== s.views) dupCache = { views: s.views, idx: new DupIndex(s.views) }; return dupCache.idx; },
     persist: () => autosave.queue(s.saved),
+    stage: () => (s.mode === 'review' ? 'review' : 'translate'),
+    commit: (changes, kind, what) => { const id = commitRows(file => ctx.entries(file), changes, kind, s.who, Date.now(), what); s.sess.n += changes.length; return id; },
     render: () => renderAll(),
     select: (key, mode) => {
       s.cur = key;
@@ -266,13 +273,12 @@ export async function start(root: HTMLElement): Promise<void> {
     return true;
   };
   const matchesStatus = (u: Unit, e: Entry | undefined, f: Filter): boolean => {
-    const st = shownStatus(ctx, u, e);
     switch (f) {
       case 'new': return (e?.status ?? 'new') === 'new';
       case 'draft': return e?.status === 'draft';
       case 'done': return e?.status === 'done';
       case 'appr': return e?.status === 'appr';
-      case 'qa': return st === 'qa';
+      case 'qa': return shownStatus(ctx, u, e) === 'qa';
       case 'cm': return !!e?.comments?.length;
       default: return true;
     }
@@ -407,8 +413,10 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!v) return '';
     const ents = ctx.entries(v.name);
     const ctxUnits = v.units.filter(u => inContext(u, ents[u.key]));
-    const cnt = (f: Filter) => (f === 'all' ? ctxUnits.length : ctxUnits.filter(u => matchesStatus(u, ents[u.key], f)).length);
-    return FILTERS.map(([f, l]) => `<button class="chip ${s.filter === f ? 'on' : cnt(f) === 0 && f !== 'all' ? 'zero' : ''}" data-filter="${f}" aria-pressed="${s.filter === f}">${l} <span class="n">${cnt(f)}</span></button>`).join('');
+    return FILTERS.map(([f, l]) => {
+      const n = f === 'all' ? ctxUnits.length : ctxUnits.filter(u => matchesStatus(u, ents[u.key], f)).length;
+      return `<button class="chip ${s.filter === f ? 'on' : n === 0 && f !== 'all' ? 'zero' : ''}" data-filter="${f}" aria-pressed="${s.filter === f}">${l} <span class="n">${n}</span></button>`;
+    }).join('');
   }
 
   /** The speaker and length buttons show the chosen value themselves, with a cross to drop it. */
@@ -907,15 +915,16 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!v) { toast('Спершу відкрийте файл'); return; }
     if (!limit) { toast('Ширину рядка вимкнено в налаштуваннях'); return; }
     const ents = ctx.entries(v.name);
-    let n = 0;
+    const changes: RowChange[] = [];
     for (const u of v.units) {
       const e = ents[u.key];
       if (!e?.target || (u.kind !== 'dialogue' && u.kind !== 'scroll')) continue;
       if (!activeIssues(u, e, qaOpts()).some(i => i.key === 'wrap')) continue;
       const text = wrapLines(e.target, limitFor(limit, u.face));
-      if (text !== e.target) { ents[u.key] = note(edit(e, u, text, s.mode === 'review' ? 'review' : 'translate', Date.now()), 'перенесено рядки', text, s.who, Date.now()); n++; }
+      if (text !== e.target) changes.push({ file: v.name, key: u.key, next: edit(e, u, text, ctx.stage(), Date.now()), text });
     }
-    if (n) { s.sess.n += n; ctx.persist(); ctx.invalidateTm(); renderAll(); }
+    const n = changes.length;
+    if (n) { ctx.commit(changes, 'wrap'); ctx.persist(); ctx.invalidateTm(); renderAll(); }
     toast(n ? `Перенесено рядки: ${plural(n, ['репліка', 'репліки', 'реплік'])}` : 'Задовгих рядків у файлі немає');
   }
   function jump(kind: 'new' | 'qa', dir: 1 | -1): void {
@@ -971,15 +980,17 @@ export async function start(root: HTMLElement): Promise<void> {
     const v = ctx.view();
     if (!v) return;
     const ents = ctx.entries(v.name);
-    let ok = 0; const skipped = new Map<string, number>();
+    const changes: RowChange[] = []; const skipped = new Map<string, number>();
+    const visible = new Set(visibleUnits(true));
     for (const k of s.checked) {
       const u = unitMap.get(k);
-      if (!u || !visibleUnits(true).includes(u)) continue;
-      const r = submit(ents[k], u, 'translate', Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: qaOpts() });
-      if (r.ok) { ents[k] = note(r.entry, 'надіслано на вичитування', r.entry.target, s.who, Date.now()); ok++; }
+      if (!u || !visible.has(u)) continue;
+      const r = submit(ents[k], u, ctx.stage(), Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: qaOpts() });
+      if (r.ok) changes.push({ file: v.name, key: k, next: r.entry, text: r.entry.target });
       else skipped.set(r.reason.slice(0, 40), (skipped.get(r.reason.slice(0, 40)) ?? 0) + 1);
     }
-    s.sess.n += ok;
+    const ok = changes.length;
+    if (ok) ctx.commit(changes, ctx.stage() === 'translate' ? 'send' : 'approve');
     ctx.persist(); ctx.invalidateTm(); renderAll();
     const nSkip = [...skipped.values()].reduce((a, b) => a + b, 0);
     toast(`Надіслано на вичитування: ${ok}${nSkip ? `. Пропущено: ${nSkip} (${[...skipped.keys()].slice(0, 2).join('; ')})` : ''}`, { sticky: nSkip > 0 });
@@ -988,14 +999,16 @@ export async function start(root: HTMLElement): Promise<void> {
     const v = ctx.view();
     if (!v) return;
     const ents = ctx.entries(v.name);
-    let n = 0;
+    const changes: RowChange[] = [];
     for (const k of s.checked) {
       const u = unitMap.get(k);
       if (!u || ents[k]?.target) continue;
       const m = ctx.tm().find(u.source, { min: 70, limit: 1, exclude: x => x.s === u.source && false })[0];
-      if (m) { ents[k] = note(edit(ents[k], u, m.t, 'translate', Date.now()), `підставлено з пам’яті (${m.score}%)`, m.t, s.who, Date.now()); n++; }
+      if (m) changes.push({ file: v.name, key: k, next: edit(ents[k], u, m.t, ctx.stage(), Date.now()), text: m.t, what: `підставлено з пам’яті (${m.score}%)` });
     }
-    ctx.persist(); renderAll();
+    const n = changes.length;
+    if (n) ctx.commit(changes, 'memory');
+    ctx.persist(); ctx.invalidateTm(); renderAll();
     toast(n ? `Підставлено з пам’яті: ${n}` : 'Збігів від 70% для порожніх вибраних рядків немає');
   }
 
@@ -1011,8 +1024,8 @@ export async function start(root: HTMLElement): Promise<void> {
     const finish = () => {
       if (!cancelled && ta.value !== (entryOf(u)?.target ?? '')) {
         const ents = ctx.entries(s.current!);
-        ents[key] = edit(ents[key], u, ta.value, 'translate', Date.now());
-        s.sess.n++; ctx.persist(); ctx.invalidateTm();
+        ents[key] = edit(ents[key], u, ta.value, ctx.stage(), Date.now());
+        s.sess.n++; ctx.persist(); ctx.softTm();
       }
       renderAll();
     };

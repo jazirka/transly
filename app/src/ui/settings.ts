@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, emptyProject, parseDelimited, parseHtmlTable, parseTerms, referenceSets, serialize, termsFromTable, withoutReference } from '../core';
+import { touchTerms, DEFAULT_SETTINGS, emptyProject, parseDelimited, parseHtmlTable, parseTerms, referenceSets, serialize, termsFromTable, withoutReference } from '../core';
 import type { GlossaryTerm } from '../core';
 import { $, el, esc, plural, toast } from './dom';
 import type { Ctx } from './state';
@@ -134,6 +134,7 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
       const more = [t.uk, ...(t.alt ?? [])].filter(x => !known.has(x.toLowerCase()));
       if (more.length) { cur.alt = [...(cur.alt ?? []), ...more]; cur.mt = Date.now(); merged++; }
     }
+    touchTerms(ctx.s.saved.terms);
     ctx.persist(); ctx.render();
     return { added, merged };
   };
@@ -156,6 +157,7 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
     const { terms, rejected } = parseTerms(($('#st-terms', dlg) as HTMLTextAreaElement).value);
     let added = 0;
     for (const t of terms) if (!ctx.s.saved.terms.some(x => x.en.toLowerCase() === t.en.toLowerCase())) { ctx.s.saved.terms.push({ ...t, mt: Date.now() }); added++; }
+    touchTerms(ctx.s.saved.terms);
     ctx.persist(); ctx.render();
     toast(`Додано термінів: ${added}${rejected ? `, пропущено рядків без пари: ${rejected}` : ''}`);
   });

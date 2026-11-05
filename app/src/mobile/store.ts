@@ -1,5 +1,5 @@
-import { usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
-import type { Entry, GlossaryTerm, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
+import { touchTerms, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
+import type { BatchKind, Entry, GlossaryTerm, RowChange, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
 import { IdbStore } from '../ui/idb';
 
 /**
@@ -177,8 +177,8 @@ export class Store {
     const r = submit(c.entry, c.unit, this.stage, Date.now(), { blockErrors: this.saved.settings.blockErrors, qa: this.qaOpts() });
     if (!r.ok) return r.reason;
     const now = Date.now();
-    this.entries(c.file)[c.unit.key] = note(r.entry, this.stage === 'translate' ? 'надіслано на вичитування' : 'вичитано', r.entry.target, this.who, now);
-    this.lastSame = this.saved.settings.propagate ? propagate(this.saved, this.dups(), c.file, c.unit, this.entries(c.file)[c.unit.key]!, this.stage, now, this.who) : 0;
+    this.entries(c.file)[c.unit.key] = recordChange(c.entry, r.entry, this.stage === 'translate' ? 'надіслано на вичитування' : 'вичитано', r.entry.target, this.who, now);
+    this.lastSame = this.saved.settings.propagate ? propagate(this.saved, this.dups(), c.file, c.unit, this.entries(c.file)[c.unit.key]!, this.stage, now, this.who, newBatch(this.stage === 'translate' ? 'twin' : 'approve', now)) : 0;
     this.tmCache = null; this.persist(); this.emit(); return null;
   }
   comment(text: string): void { this.mutate((_f, _u, e) => addComment(e, this.who, text, Date.now())); }
@@ -187,35 +187,37 @@ export class Store {
     this.entries(c.file)[c.unit.key] = fn(c.file, c.unit, c.entry);
     this.tmCache = null; this.persist(); this.emit();
   }
-  /** Empty the translation of these rows (kept in the history as a cleared edit). */
+  /** Write rows as one action of the journal (each gets a history record with what it was before; the whole action can be taken back). */
+  commit(changes: RowChange[], kind: BatchKind, what?: string): string { return commitRows(f => this.entries(f), changes, kind, this.who, Date.now(), what); }
+  /** Empty the translation of these rows; an action of the journal, so it can be taken back from the activity feed. */
   clearMany(file: string, units: Unit[]): number {
-    let n = 0; const now = Date.now();
-    for (const u of units) { const e = this.entry(file, u.key); if (!e?.target) continue; this.entries(file)[u.key] = edit(e, u, '', this.stage, now); n++; }
-    if (n) { this.tmCache = null; this.persist(); this.emit(); }
-    return n;
+    const now = Date.now(), changes: RowChange[] = [];
+    for (const u of units) { const e = this.entry(file, u.key); if (!e?.target) continue; changes.push({ file, key: u.key, next: edit(e, u, '', this.stage, now), text: '' }); }
+    if (changes.length) { this.commit(changes, 'clear'); this.tmCache = null; this.persist(); this.emit(); }
+    return changes.length;
   }
   /** Send every translated row of these units that can be sent (the rest are counted, not blocked). */
   sendMany(file: string, units: Unit[]): { sent: number; skipped: number } {
-    let sent = 0, skipped = 0; const now = Date.now();
+    let skipped = 0; const now = Date.now(), changes: RowChange[] = [];
     for (const u of units) {
       const e = this.entry(file, u.key);
       if (!e?.target.trim()) { skipped++; continue; }
       const r = submit(e, u, this.stage, now, { blockErrors: this.saved.settings.blockErrors, qa: this.qaOpts() });
       if (!r.ok) { skipped++; continue; }
-      this.entries(file)[u.key] = note(r.entry, this.stage === 'translate' ? 'надіслано на вичитування' : 'вичитано', r.entry.target, this.who, now); sent++;
+      changes.push({ file, key: u.key, next: r.entry, text: r.entry.target });
     }
-    if (sent) { this.persist(); this.emit(); }
-    return { sent, skipped };
+    if (changes.length) { this.commit(changes, this.stage === 'translate' ? 'send' : 'approve', this.stage === 'translate' ? 'надіслано на вичитування' : 'вичитано'); this.persist(); this.emit(); }
+    return { sent: changes.length, skipped };
   }
   find(o: { find: string; replace: string; caseSensitive: boolean; wholeWord: boolean }): ReturnType<typeof findReplace> { return findReplace(this.views, this.saved, o); }
   replaceAll(matches: ReturnType<typeof findReplace>): number {
-    let n = 0; const now = Date.now();
+    const now = Date.now(), changes: RowChange[] = [];
     for (const m of matches) {
       const u = this.unit(m.file, m.key); if (!u) continue;
-      this.entries(m.file)[m.key] = note(edit(this.entry(m.file, m.key), u, m.after, this.stage, now), 'замінено', m.after, this.who, now); n++;
+      changes.push({ file: m.file, key: m.key, next: edit(this.entry(m.file, m.key), u, m.after, this.stage, now), text: m.after });
     }
-    if (n) { this.tmCache = null; this.persist(); this.emit(); }
-    return n;
+    if (changes.length) { this.commit(changes, 'replace'); this.tmCache = null; this.persist(); this.emit(); }
+    return changes.length;
   }
   refLangs(): string[] { return referenceSets(this.saved.reference).map(r => r.lang); }
   /** Another-language copy of the game: its lines are paired with the originals. Returns pairs found and rows in the paired files. */
@@ -244,10 +246,13 @@ export class Store {
     const t = { en, uk, mt: Date.now(), ...(alts.length ? { alt: alts } : {}), ...(qa ? {} : { qa: false }) };
     const i = this.saved.terms.findIndex(x => x.en.toLowerCase() === en.toLowerCase());
     if (i >= 0) this.saved.terms[i] = { ...this.saved.terms[i], ...t, alt: alts.length ? alts : undefined } as typeof t; else this.saved.terms.push(t);
+    touchTerms(this.saved.terms);
     this.tmCache = null; this.persist(); this.emit(); return true;
   }
   removeTerm(en: string): void {
     this.saved.terms = this.saved.terms.filter(x => x.en.toLowerCase() !== en.toLowerCase());
+    // A trace of the deletion, so that another device's copy of the term does not bring it back in a merge.
+    this.saved.deletedTerms = { ...(this.saved.deletedTerms ?? {}), [en.toLowerCase()]: Date.now() };
     this.persist(); this.emit();
   }
   /* ---------- autofill by words ---------- */
@@ -264,6 +269,13 @@ export class Store {
     return n;
   }
   undone(): ReturnType<typeof undoneBatches> { return undoneBatches(this.views, this.saved); }
+  /** Bulk actions of the journal that can still be taken back. */
+  journal(): ReturnType<typeof journalBatches> { return journalBatches(this.views, this.saved); }
+  undoJournalBatch(id: string): ReturnType<typeof undoJournal> {
+    const r = undoJournal(this.saved, id, this.who, Date.now());
+    if (r.done) { this.tmCache = null; this.persist(); this.emit(); }
+    return r;
+  }
   undoSend(at: number, kind: string, guessed = false): number {
     const b = this.sends().find(x => x.at === at && x.kind === kind && !!x.guessed === guessed); if (!b) return 0;
     const n = undoBatch(this.saved, b, this.who, Date.now());
@@ -274,28 +286,29 @@ export class Store {
   almost(): ReturnType<typeof autofillAlmost> { return autofillAlmost(this.views, this.saved); }
   /** Write the proposals as drafts marked as autofilled; rows that got a translation meanwhile are skipped. */
   applyAutofill(list: { file: string; key: string; target: string }[]): number {
-    let n = 0; const now = Date.now();
+    const now = Date.now(), changes: RowChange[] = [];
     for (const p of list) {
       const u = this.unit(p.file, p.key); if (!u || this.entry(p.file, p.key)?.target?.trim()) continue;
-      this.entries(p.file)[p.key] = note(edit(this.entry(p.file, p.key), u, p.target, this.stage, now), 'автозаповнено за словами', p.target, this.who, now); n++;
+      changes.push({ file: p.file, key: p.key, next: edit(this.entry(p.file, p.key), u, p.target, this.stage, now), text: p.target });
     }
-    if (n) { this.tmCache = null; this.persist(); this.emit(); }
-    return n;
+    if (changes.length) { this.commit(changes, 'words'); this.tmCache = null; this.persist(); this.emit(); }
+    return changes.length;
   }
   /** The same original translated in different ways. */
   inconsistent(): ReturnType<typeof inconsistencies> { return inconsistencies(this.views, this.saved, 60); }
   /** Give every row of one original the chosen translation; returns how many rows changed. */
   unify(source: string, target: string): number {
     const g = this.inconsistent().find(x => x.source === source); if (!g) return 0;
-    let n = 0; const now = Date.now();
+    const now = Date.now(), changes: RowChange[] = [];
     for (const v of g.variants) {
       if (v.target === target) continue;
       for (const w of v.where) {
         const u = this.unit(w.file, w.key); if (!u) continue;
-        this.entries(w.file)[w.key] = note(edit(this.entry(w.file, w.key), u, target, this.stage, now), 'уніфіковано', target, this.who, now); n++;
+        changes.push({ file: w.file, key: w.key, next: edit(this.entry(w.file, w.key), u, target, this.stage, now), text: target });
       }
     }
-    if (n) { this.tmCache = null; this.persist(); this.emit(); }
+    const n = changes.length;
+    if (n) { this.commit(changes, 'unify'); this.tmCache = null; this.persist(); this.emit(); }
     return n;
   }
   setSpeakers(draft: Map<string, string>): number {
@@ -314,7 +327,7 @@ export class Store {
     const lim = limitFor(this.lineLimit(), c.unit.face); if (!lim) return false;
     const text = wrapLines(c.entry?.target ?? '', lim);
     if (text === (c.entry?.target ?? '')) return false;
-    this.mutate((_f, u, e) => note(edit(e, u, text, this.stage, Date.now()), 'перенесено рядки', text, this.who, Date.now()));
+    this.mutate((_f, u, e) => { const now = Date.now(); return recordChange(e, edit(e, u, text, this.stage, now), 'перенесено рядки', text, this.who, now); });
     return true;
   }
 
@@ -357,6 +370,7 @@ export class Store {
       const more = [t.uk, ...(t.alt ?? [])].filter(x => !known.has(x.toLowerCase()));
       if (more.length) { cur.alt = [...(cur.alt ?? []), ...more]; cur.mt = Date.now(); merged++; }
     }
+    touchTerms(this.saved.terms);
     this.tmCache = null; this.persist(); this.emit();
     return { added, merged };
   }
@@ -371,6 +385,7 @@ export class Store {
     const { terms, rejected } = parseTerms(text);
     let added = 0;
     for (const t of terms) if (!this.saved.terms.some(x => x.en.toLowerCase() === t.en.toLowerCase())) { this.saved.terms.push({ ...t, mt: Date.now() }); added++; }
+    touchTerms(this.saved.terms);
     this.tmCache = null; this.persist(); this.emit();
     return { added, rejected };
   }

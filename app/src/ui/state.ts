@@ -1,5 +1,5 @@
 import { TmIndex, activeIssues } from '../core';
-import type { GameNameIndex, Usage } from '../core';
+import type { BatchKind, GameNameIndex, RowChange, Usage } from '../core';
 import type { Autosave, DupIndex, Entry, FileView, GameFile, SavedProject, Status, Unit } from '../core';
 
 export type Mode = 'table' | 'edit' | 'review';
@@ -88,8 +88,14 @@ export interface Ctx {
   visible(): Unit[];
   tm(): TmIndex;
   invalidateTm(): void;
+  /** The memory is a little out of date (a row was typed in): it is rebuilt on its next use, but not more than about once a second. */
+  softTm(): void;
   dups(): DupIndex;
   persist(): void;
+  /** Which pass the user is in: translating, or reviewing (what a text edit and a send mean depends on it). */
+  stage(): 'translate' | 'review';
+  /** Write rows as one action of the journal: each gets a history record with what it was before, and the whole action can be taken back. Returns the action's id. */
+  commit(changes: RowChange[], kind: BatchKind, what?: string): string;
   render(): void;
   select(key: string, mode?: Mode): void;
 }

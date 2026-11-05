@@ -1,5 +1,5 @@
-import { gorohUrl, multitranUrl, wordsOf, activeIssues, addComment, describePage, explainCodes, sceneUnits, usageKey, displayLength, edit as editFn, lengthDeviation, limitFor, note, propagate, referenceSets, sendBack, sourceChanged, submit, termsIn, wrapLines } from '../core';
-import type { Entry, Unit } from '../core';
+import { gorohUrl, multitranUrl, wordsOf, activeIssues, addComment, describePage, explainCodes, sceneUnits, usageKey, displayLength, edit as editFn, lengthDeviation, limitFor, newBatch, touchTerms, propagate, recordChange, referenceSets, sendBack, setIgnored, sourceChanged, submit, termsIn, wrapLines } from '../core';
+import type { BatchKind, Entry, Unit } from '../core';
 import { $, buzz, esc, plural, toast } from './dom';
 import { markup } from './markup';
 import { isDesktop, openLink, rememberedGameDir } from './desktop';
@@ -85,7 +85,7 @@ export const SIDE_HTML = `<aside class="fs" aria-label="Вказівки до р
 </aside>`;
 
 const when = (t: number) => new Date(t).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-const stageOf = (ctx: Ctx) => (ctx.s.mode === 'review' ? 'review' : 'translate') as 'review' | 'translate';
+const stageOf = (ctx: Ctx): 'review' | 'translate' => ctx.stage();
 /** The file and key a row really belongs to: in a group of files the row's key carries its file. */
 const realOf = (ctx: Ctx, u: Unit): { file: string; key: string } => splitKey(u.key) ?? { file: ctx.s.current!, key: u.key };
 let gorohKind: 'Тлумачення' | 'Синоніми' = 'Тлумачення';
@@ -152,7 +152,7 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
   ($('#i-tr') as HTMLTextAreaElement).disabled = false;
   const e = entryOf(ctx, u);
   const st = shownStatus(ctx, u, e);
-  const review = s.mode === 'review';
+  const review = ctx.stage() === 'review';
   const pos = list.findIndex(x => x.key === u.key);
   $('#f-key').textContent = `${realOf(ctx, u).file.replace(/\.[^.]+$/, '')} › ${u.context}${ctx.speaker(u) ? ' › ' + ctx.speaker(u) : ''} › ${u.key.replace(/^.*\.list/, 'list')}`;
   $('#f-state').innerHTML = `<span class="sd ${st}"></span>${e?.returned && e.status === 'draft' ? 'повернено на доопрацювання' : STATUS_CAP[st]}`;
@@ -210,7 +210,7 @@ function refreshQa(ctx: Ctx, u: Unit): void {
   if (sourceChanged(e, u)) h += `<div class="qa-row warn"><span class="dot"></span><span class="qa-msg">Оригінал змінено в грі після перекладу. Було: «${esc(e?.src ?? '')}». Перевірте переклад</span></div>`;
   if (t) {
     if (!iss.length) h += `<div class="qa-row good"><span class="dot"></span>${ignored.length ? 'QA: активних проблем немає' : 'QA: проблем не знайдено'}</div>`;
-    h += iss.map(x => `<div class="qa-row ${x.severity}"><span class="dot"></span><span class="qa-msg">${esc(x.message)}</span><span class="qa-act">${x.codes?.length ? `<button class="fix" data-ins="${esc(x.codes.join(''))}">Вставити ${esc(x.codes.join(' '))}</button>` : ''}${x.key === 'wrap' ? '<button class="fix" data-wrap>Перенести рядки</button>' : ''}<button class="ign" data-ign="${x.key}" title="Не вважати проблемою для цього рядка">Ігнорувати</button></span></div>`).join('');
+    h += iss.map(x => `<div class="qa-row ${x.severity}"><span class="dot"></span><span class="qa-msg">${esc(x.message)}</span><span class="qa-act">${x.fix ? `<button class="fix" data-fix="${esc(x.key)}" title="Застосувати виправлення (можна скасувати в історії рядка)">${esc(x.fix.label)}</button>` : ''}<button class="ign" data-ign="${x.key}" title="Не вважати проблемою для цього рядка">Ігнорувати</button></span></div>`).join('');
     h += ignored.map(x => `<div class="qa-row muted"><span class="dot"></span><span class="qa-msg">${esc(x.message)}</span><span class="qa-act"><span class="tagi">ігноровано</span><button class="ign" data-unign="${x.key}">Повернути</button></span></div>`).join('');
   }
   $('#f-qa').innerHTML = h;
@@ -320,13 +320,15 @@ export function focusInput(ctx: Ctx, ta: HTMLTextAreaElement): void {
   ctx.s.sess.n++;
   ctx.persist();
   meter(ctx, u); refreshQa(ctx, u);
-  ctx.invalidateTm();
+  ctx.softTm();
 }
 
-function setText(ctx: Ctx, u: Unit, text: string, what: string): void {
+/** Change the text of the open row; `kind` makes it an action of the journal that can be taken back from the activity feed. */
+function setText(ctx: Ctx, u: Unit, text: string, what: string, kind?: BatchKind): void {
   const ents = ctx.entries(ctx.s.current!);
-  ents[u.key] = note(edit0(ctx, u, text), what, text, ctx.s.who, Date.now());
-  ctx.s.sess.n++;
+  const next = edit0(ctx, u, text);
+  if (kind) ctx.commit([{ file: ctx.s.current!, key: u.key, next, text }], kind, what);
+  else { ents[u.key] = recordChange(ents[u.key], next, what, text, ctx.s.who, Date.now()); ctx.s.sess.n++; }
   ctx.persist(); ctx.invalidateTm(); ctx.render();
   if (ctx.s.mode !== 'table') ($('#i-tr') as HTMLTextAreaElement).focus();
 }
@@ -349,8 +351,9 @@ export function send(ctx: Ctx): void {
   const stage = stageOf(ctx);
   const r = submit(ents[u.key], u, stage, Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: ctx.qaOpts() });
   if (!r.ok) { toast(r.reason, { sticky: true }); return; }
-  ents[u.key] = note(r.entry, stage === 'translate' ? 'надіслано на вичитування' : 'вичитано', r.entry.target, s.who, Date.now());
-  const same = s.saved.settings.propagate ? propagate(s.saved, ctx.dups(), realOf(ctx, u).file, { ...u, key: realOf(ctx, u).key }, ents[u.key]!, stage, Date.now(), s.who) : 0;
+  const now = Date.now();
+  ents[u.key] = recordChange(ents[u.key], r.entry, stage === 'translate' ? 'надіслано на вичитування' : 'вичитано', r.entry.target, s.who, now);
+  const same = s.saved.settings.propagate ? propagate(s.saved, ctx.dups(), realOf(ctx, u).file, { ...u, key: realOf(ctx, u).key }, ents[u.key]!, stage, now, s.who, newBatch(stage === 'translate' ? 'twin' : 'approve', now)) : 0;
   s.sess.n++;
   ctx.persist(); ctx.invalidateTm();
   toast((stage === 'translate' ? 'Надіслано на вичитування' : 'Вичитано') + (same ? `. Також у ${plural(same, ['однаковому рядку', 'однакових рядках', 'однакових рядках'])}` : ''));
@@ -370,7 +373,10 @@ export function focusClick(ctx: Ctx, t: HTMLElement): boolean {
   const ents = ctx.entries(s.current);
   const ta = $('#i-tr') as HTMLTextAreaElement;
   if (t.closest('#b-copy')) { setText(ctx, u, u.source, 'скопійовано оригінал'); return true; }
-  if (t.closest('#b-clear')) { setText(ctx, u, '', 'очищено'); return true; }
+  if (t.closest('#b-clear')) {
+    if (!ta.value && !ents[u.key]?.target) { toast('Переклад уже порожній'); return true; }
+    setText(ctx, u, '', 'очищено', 'clear'); toast('Переклад очищено. Скасувати можна в «Активності»'); return true;
+  }
   if (t.closest('#b-scene')) { openScene(ctx, u); return true; }
   if (t.closest('#b-wrap,[data-wrap]')) {
     const limit = limitFor(ctx.lineLimit(), u.face);
@@ -391,13 +397,19 @@ export function focusClick(ctx: Ctx, t: HTMLElement): boolean {
   if (t.closest('#b-return')) {
     const cur = ents[u.key];
     if (!cur) return true;
-    ents[u.key] = note(sendBack(cur, Date.now()), 'повернуто перекладачу', '', s.who, Date.now());
+    ents[u.key] = recordChange(cur, sendBack(cur, Date.now()), 'повернуто перекладачу', '', s.who, Date.now());
     ctx.persist(); toast('Повернуто перекладачу'); step(ctx, 1); return true;
   }
   const ign = t.closest<HTMLElement>('[data-ign]');
-  if (ign) { const e = ents[u.key]; if (e) { ents[u.key] = { ...e, ign: [...new Set([...(e.ign ?? []), ign.dataset.ign!])], mt: Date.now() }; ctx.persist(); ctx.render(); } return true; }
+  if (ign) { const e = ents[u.key]; if (e) { ents[u.key] = setIgnored(e, ign.dataset.ign!, true, Date.now()); ctx.persist(); ctx.render(); } return true; }
   const un = t.closest<HTMLElement>('[data-unign]');
-  if (un) { const e = ents[u.key]; if (e) { ents[u.key] = { ...e, ign: (e.ign ?? []).filter(k => k !== un.dataset.unign), mt: Date.now() }; ctx.persist(); ctx.render(); } return true; }
+  if (un) { const e = ents[u.key]; if (e) { ents[u.key] = setIgnored(e, un.dataset.unign!, false, Date.now()); ctx.persist(); ctx.render(); } return true; }
+  const fix = t.closest<HTMLElement>('[data-fix]');
+  if (fix) {
+    const issue = activeIssues(u, { ...(ents[u.key] ?? { mt: 0, status: 'new' as const }), target: ta.value }, ctx.qaOpts()).find(i => i.key === fix.dataset.fix);
+    if (issue?.fix) setText(ctx, u, issue.fix.text, `виправлено: ${issue.fix.label}`);
+    return true;
+  }
   const ins = t.closest<HTMLElement>('[data-ins]');
   if (ins) { setText(ctx, u, ta.value + (ins.dataset.ins ?? ''), 'додано керівні коди'); return true; }
   return false;
@@ -424,6 +436,7 @@ export function sideClick(ctx: Ctx, t: HTMLElement): boolean {
     if (!en || !uk) { toast('Заповніть обидва поля'); return true; }
     if (s.saved.terms.some(x => x.en.toLowerCase() === en.toLowerCase())) { toast('Такий термін уже є'); return true; }
     s.saved.terms.push({ en, uk, mt: Date.now() });
+    touchTerms(s.saved.terms);
     ($('#gl-en') as HTMLInputElement).value = ''; ($('#gl-uk') as HTMLInputElement).value = '';
     ctx.persist(); ctx.render(); toast('Термін додано');
     return true;

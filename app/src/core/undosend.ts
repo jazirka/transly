@@ -22,10 +22,12 @@ export function sendBatches(views: FileView[], saved: SavedProject, limit = 20):
     const ents = saved.files[v.name]; if (!ents) continue;
     for (const u of v.units) {
       const e = ents[u.key]; const last = e?.history?.[e.history.length - 1];
+      if (last?.batch) continue; // bulk actions of the journal are listed (and taken back) there
       const kind = last ? KIND(last.what) : null;
       if (e && e.status === 'done' && !(last && kind === 'send') && !(last && isAutoNote(last.what))) { loose.push({ kind: 'send', file: v.name, key: u.key, source: u.source, target: e.target, at: e.mt, guessed: true }); continue; }
       if (!e || !last || !kind) continue;
       if (kind === 'send' ? e.status !== 'done' : e.status !== 'appr') continue;
+      if (e.mt > last.at) continue; // edited after the send: not taken back
       found.push({ kind, file: v.name, key: u.key, source: u.source, target: e.target, at: last.at });
     }
   }
@@ -57,7 +59,7 @@ export function undoBatch(saved: SavedProject, batch: SendBatch, who: string, no
     const last = e?.history?.[e.history.length - 1];
     if (!e) continue;
     if (it.guessed) { if (e.status !== 'done' || e.mt !== it.at) continue; }
-    else if (!last || last.at !== it.at || KIND(last.what) !== batch.kind) continue;
+    else if (!last || last.at !== it.at || KIND(last.what) !== batch.kind || e.mt > last.at) continue;
     const back = { ...e, status: batch.kind === 'send' ? 'draft' as const : 'done' as const, mt: now };
     saved.files[it.file]![it.key] = note(back, batch.kind === 'send' ? 'надсилання скасовано' : 'вичитування скасовано', e.target, who, now);
     n++;

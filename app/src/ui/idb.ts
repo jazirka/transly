@@ -1,4 +1,4 @@
-import { deserialize, serialize } from '../core';
+import { SCHEMA, deserialize, serialize } from '../core';
 import type { ProjectStore, SavedProject } from '../core';
 
 const DB = 'transly';
@@ -40,6 +40,7 @@ export class IdbStore implements ProjectStore {
       const text = await get<string>(db, STORE, this.id);
       if (typeof text !== 'string') return null;
       const p = deserialize(text);
+      p.schema = SCHEMA; // what is on this device is read and written by this build
       const snap = await get<SavedProject['snapshot']>(db, SNAPS, this.id);
       if (snap) { p.snapshot = snap; this.lastSnap = snap; }
       const ref = await get<SavedProject['reference']>(db, SNAPS, `${this.id}:ref`);

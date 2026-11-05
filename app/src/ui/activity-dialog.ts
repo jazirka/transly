@@ -1,4 +1,5 @@
-import { almost, autoBatches, autoUndone, edit, learnWords, note, proposals, sendBatches, undoAuto, undoBatch, undoneBatches } from '../core';
+import { touchTerms, almost, autoBatches, autoUndone, batchTitle, batchUndoLabel, edit, journalBatches, learnWords, proposals, sendBatches, undoAuto, undoBatch, undoJournal, undoReport, undoneBatches } from '../core';
+import type { RowChange } from '../core';
 import { dialog } from './settings';
 import { $, esc, plural, toast } from './dom';
 import type { Ctx } from './state';
@@ -29,7 +30,7 @@ export function openAutofill(ctx: Ctx): void {
     const b = (e.target as HTMLElement).closest<HTMLElement>('[data-w]');
     if (!b) return;
     const en = b.dataset.w!, uk = b.dataset.v!;
-    if (!s.saved.terms.some(t => t.en.toLowerCase() === en.toLowerCase())) s.saved.terms.push({ en, uk, mt: Date.now() });
+    if (!s.saved.terms.some(t => t.en.toLowerCase() === en.toLowerCase())) { s.saved.terms.push({ en, uk, mt: Date.now() }); touchTerms(s.saved.terms); }
     ctx.invalidateTm(); ctx.persist(); draw();
     toast(`Термін додано: ${en} → ${uk}`);
   });
@@ -40,34 +41,36 @@ export function openAutofill(ctx: Ctx): void {
   });
   $('#af-go', dlg).addEventListener('click', () => {
     const now = Date.now();
-    let n = 0;
+    const changes: RowChange[] = [];
     for (const p of proposals(s.views, s.saved)) {
       if (off.has(p.file + '\u0001' + p.key)) continue;
       const u = s.views.find(v => v.name === p.file)?.units.find(x => x.key === p.key);
       const ents = ctx.entries(p.file);
       if (!u || ents[p.key]?.target?.trim()) continue;
-      ents[p.key] = note(edit(ents[p.key], u, p.target, 'translate', now), 'автозаповнено за словами', p.target, s.who, now);
-      n++;
+      changes.push({ file: p.file, key: p.key, next: edit(ents[p.key], u, p.target, ctx.stage(), now), text: p.target });
     }
-    s.sess.n += n; ctx.invalidateTm(); ctx.persist(); ctx.render(); dlg.close();
+    const n = changes.length;
+    if (n) ctx.commit(changes, 'words');
+    ctx.invalidateTm(); ctx.persist(); ctx.render(); dlg.close();
     toast(`Вписано чернеток: ${n}. Скасувати можна в «Активності»`);
   });
   draw();
 }
 
-type Ev = { id: string; at: number; text: string; sub?: string; rows?: { source: string; target: string }[]; undo?: () => number; undoLabel?: string };
+type Ev = { id: string; at: number; text: string; sub?: string; rows?: { source: string; target: string }[]; undo?: () => { done: number; skipped: number; report?: string }; undoLabel?: string };
 
 /** What was sent, approved and filled in automatically, with a way back while the rows are still untouched. */
 export function openActivity(ctx: Ctx): void {
   const { s } = ctx;
   const dlg = dialog(`<form method="dialog"><h2 id="ac-t">Активність</h2>
-    <p class="hint">Відправлення й автозаповнення можна скасувати, поки рядки не змінено. Якщо відправляли на іншому пристрої, спершу синхронізуйте проєкт.</p>
+    <p class="hint">Масові дії (надсилання, автозаповнення, заміни, перенесення рядків, очищення) можна скасувати, поки рядки не змінено, і потім повторити. Якщо дія була на іншому пристрої, спершу синхронізуйте проєкт.</p>
     <div id="ac-list"></div><div class="acts"><button class="btn" value="cancel">Закрити</button></div></form>`, 'ac-t');
   const open = new Set<string>();
   const n = (c: number): string => plural(c, ['рядок', 'рядки', 'рядків']);
   const events = (): Ev[] => [
-    ...sendBatches(s.views, s.saved).map((b): Ev => ({ id: `s${b.at}${b.kind}${b.guessed ? 'g' : ''}`, at: b.at, text: b.kind === 'send' ? `Ви надіслали ${n(b.items.length)} на вичитування` : `Ви затвердили ${n(b.items.length)}`, ...(b.guessed ? { sub: 'Запису про відправлення немає, знайдено за часом зміни' } : {}), rows: b.items.slice(0, 12), undo: () => undoBatch(s.saved, b, s.who, Date.now()), undoLabel: 'Скасувати відправлення' })),
-    ...autoBatches(s.views, s.saved).map((b): Ev => ({ id: `a${b.at}${b.kind}`, at: b.at, text: b.kind === 'words' ? `Автозаповнення за словами: ${n(b.items.length)}` : `Підставлено з однакових рядків: ${n(b.items.length)}`, sub: b.kind === 'words' ? 'Чернетки, їх варто переглянути' : 'Чекають вичитування без вашого перегляду', rows: b.items.slice(0, 12), undo: () => undoAuto(s.saved, b, s.who, Date.now()), undoLabel: 'Скасувати заповнення' })),
+    ...sendBatches(s.views, s.saved).map((b): Ev => ({ id: `s${b.at}${b.kind}${b.guessed ? 'g' : ''}`, at: b.at, text: b.kind === 'send' ? `Ви надіслали ${n(b.items.length)} на вичитування` : `Ви затвердили ${n(b.items.length)}`, ...(b.guessed ? { sub: 'Запису про відправлення немає, знайдено за часом зміни' } : {}), rows: b.items.slice(0, 12), undo: () => ({ done: undoBatch(s.saved, b, s.who, Date.now()), skipped: 0 }), undoLabel: 'Скасувати відправлення' })),
+    ...autoBatches(s.views, s.saved).map((b): Ev => ({ id: `a${b.at}${b.kind}`, at: b.at, text: b.kind === 'words' ? `Автозаповнення за словами: ${n(b.items.length)}` : `Підставлено з однакових рядків: ${n(b.items.length)}`, sub: b.kind === 'words' ? 'Чернетки, їх варто переглянути' : 'Чекають вичитування без вашого перегляду', rows: b.items.slice(0, 12), undo: () => ({ done: undoAuto(s.saved, b, s.who, Date.now()), skipped: 0 }), undoLabel: 'Скасувати заповнення' })),
+    ...journalBatches(s.views, s.saved).map((b): Ev => ({ id: `j${b.id}`, at: b.at, text: batchTitle(b), ...(b.total > b.items.length ? { sub: `ще ${n(b.total - b.items.length)} змінено після цього` } : {}), rows: b.items.slice(0, 12), undo: () => { const r = undoJournal(s.saved, b.id, s.who, Date.now()); return { done: r.done, skipped: r.skipped, report: undoReport(r) }; }, undoLabel: batchUndoLabel(b) })),
     ...autoUndone(s.views, s.saved).map((u): Ev => ({ id: `au${u.at}${u.kind}`, at: u.at, text: `Ви скасували ${u.kind === 'words' ? 'автозаповнення' : 'підстановку'}: ${n(u.count)}` })),
     ...undoneBatches(s.views, s.saved).map((u): Ev => ({ id: `u${u.at}${u.kind}`, at: u.at, text: u.kind === 'send' ? `Ви скасували відправлення: ${n(u.count)}` : `Ви скасували затвердження: ${n(u.count)}` })),
   ].sort((a, b) => b.at - a.at);
@@ -90,9 +93,9 @@ export function openActivity(ctx: Ctx): void {
     if (!b) return;
     if (b.dataset.open) { const ev = evs[Number(b.dataset.open)]!; open.has(ev.id) ? open.delete(ev.id) : open.add(ev.id); draw(); return; }
     const ev = evs[Number(b.dataset.undo)]!;
-    const count = ev.undo!();
+    const r = ev.undo!();
     ctx.invalidateTm(); ctx.persist(); ctx.render(); draw();
-    toast(count ? `Скасовано: ${n(count)}` : 'Рядки вже змінено: скасувати нічого');
+    toast(r.report ?? (r.done ? `Скасовано: ${n(r.done)}` : 'Рядки вже змінено: скасувати нічого'));
   });
   draw();
 }

@@ -1,4 +1,5 @@
-import { edit, findReplace, inconsistencies, note } from '../core';
+import { edit, findReplace, inconsistencies } from '../core';
+import type { RowChange } from '../core';
 import { dialog } from './settings';
 import { $, esc, plural, toast } from './dom';
 import type { Ctx } from './state';
@@ -27,17 +28,18 @@ export function openFindReplace(ctx: Ctx): void {
     if (t.dataset.i !== undefined) { const m = found[Number(t.dataset.i)]!; const k = m.file + '\u0001' + m.key; t.checked ? off.delete(k) : off.add(k); } else run();
   });
   $('#fr-go', dlg).addEventListener('click', () => {
-    let n = 0;
+    const changes: RowChange[] = [];
     for (const m of found) {
       if (off.has(m.file + '\u0001' + m.key)) continue;
       const u = s.views.find(v => v.name === m.file)?.units.find(x => x.key === m.key);
       const ents = ctx.entries(m.file);
       if (!u || !ents[m.key]) continue;
-      ents[m.key] = note(edit(ents[m.key], u, m.after, 'translate', Date.now()), 'знайти й замінити', m.after, s.who, Date.now());
-      n++;
+      changes.push({ file: m.file, key: m.key, next: edit(ents[m.key]!, u, m.after, ctx.stage(), Date.now()), text: m.after });
     }
-    s.sess.n += n; ctx.persist(); ctx.invalidateTm(); ctx.render(); dlg.close();
-    toast(`Замінено: ${plural(n, ['переклад', 'переклади', 'перекладів'])}. Змінені рядки повернулися в чернетки`);
+    const n = changes.length;
+    if (n) ctx.commit(changes, 'replace');
+    ctx.persist(); ctx.invalidateTm(); ctx.render(); dlg.close();
+    toast(`Замінено: ${plural(n, ['переклад', 'переклади', 'перекладів'])}${ctx.stage() === 'translate' ? '. Змінені рядки повернулися в чернетки' : ''}`);
   });
   run();
 }
@@ -58,17 +60,18 @@ export function openConsistency(ctx: Ctx): void {
     const b = (e.target as HTMLElement).closest<HTMLElement>('[data-g]');
     if (!b) return;
     const g = groups[Number(b.dataset.g)]!, keep = g.variants[Number(b.dataset.v)]!;
-    let n = 0;
+    const changes: RowChange[] = [];
     for (const v of g.variants) {
       if (v === keep) continue;
       for (const w of v.where) {
         const u = s.views.find(x => x.name === w.file)?.units.find(x => x.key === w.key);
         const ents = ctx.entries(w.file);
         if (!u || !ents[w.key]) continue;
-        ents[w.key] = note(edit(ents[w.key], u, keep.target, 'translate', Date.now()), 'узгоджено з іншими', keep.target, s.who, Date.now());
-        n++;
+        changes.push({ file: w.file, key: w.key, next: edit(ents[w.key]!, u, keep.target, ctx.stage(), Date.now()), text: keep.target });
       }
     }
+    const n = changes.length;
+    if (n) ctx.commit(changes, 'unify');
     groups.splice(groups.indexOf(g), 1);
     ctx.persist(); ctx.invalidateTm(); ctx.render(); draw();
     toast(`Узгоджено: ${plural(n, ['рядок', 'рядки', 'рядків'])}`);

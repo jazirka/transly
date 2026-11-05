@@ -1,5 +1,5 @@
-import { describePage, displayLength, jumpTarget, limitFor, note, sceneLines, sceneUnits, submit } from '../core';
-import type { SceneLine, Unit } from '../core';
+import { describePage, displayLength, jumpTarget, limitFor, sceneLines, sceneUnits, submit } from '../core';
+import type { RowChange, SceneLine, Unit } from '../core';
 import { isDesktop } from './desktop';
 import { $, el, esc, plural, toast } from './dom';
 import { gameHtml } from './gamehtml';
@@ -28,7 +28,7 @@ export function openScene(ctx: Ctx, start: Unit): void {
   let mode: Mode = 'both';
   let picked = start.key;
   let real = false;
-  const review = s.mode === 'review';
+  const review = ctx.stage() === 'review';
   const measure = (() => { const c = document.createElement('canvas').getContext('2d'); if (c) c.font = '28px sans-serif'; return (t: string) => c?.measureText(t).width ?? t.length * 14; })();
   const plain = (l: string) => l.replace(/\\[A-Za-z]+\[\d+\]|\\[{}.|!><^$]/g, '');
   const limit = ctx.lineLimit();
@@ -113,14 +113,17 @@ export function openScene(ctx: Ctx, start: Unit): void {
     if (t.id === 'sc-real') { real = (t as HTMLInputElement).checked; render(); return; }
     if (t.id === 'sc-all') {
       const stage = review ? 'review' : 'translate';
-      let ok = 0, skipped = 0;
+      const changes: RowChange[] = [];
+      let skipped = 0;
       for (const l of lines) for (const u of l.kind === 'choice' ? l.units : [l.unit]) {
         const cur = entries[u.key];
         if (!cur || (review ? cur.status !== 'done' : cur.status !== 'draft')) continue;
         const r = submit(cur, u, stage, Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: ctx.qaOpts() });
-        if (r.ok) { entries[u.key] = note(r.entry, review ? 'вичитано (вся сцена)' : 'надіслано на вичитування (вся сцена)', r.entry.target, s.who, Date.now()); ok++; } else skipped++;
+        if (r.ok) changes.push({ file, key: u.key, next: r.entry, text: r.entry.target }); else skipped++;
       }
-      ctx.persist(); ctx.invalidateTm(); render();
+      const ok = changes.length;
+      if (ok) ctx.commit(changes, review ? 'approve' : 'scene', review ? 'вичитано (вся сцена)' : undefined);
+      ctx.persist(); ctx.invalidateTm(); render(); ctx.render();
       toast(`${review ? 'Затверджено' : 'Надіслано'}: ${ok}${skipped ? `. Пропущено через помилки QA: ${skipped}` : ''}`);
       return;
     }

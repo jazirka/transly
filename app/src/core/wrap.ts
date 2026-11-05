@@ -36,3 +36,11 @@ export function autoLineLimit(views: FileView[]): number {
 
 /** Limit for one unit: a message with a face picture has a narrower text area. */
 export const limitFor = (limit: number, face?: string): number => (limit && face ? Math.floor(limit * 0.8) : limit);
+
+/**
+ * The text as one flowing paragraph, for comparing and searching (translation memory, links, QA, search): line breaks
+ * only shaped the text for the game window. A word broken with a hyphen at the end of a line is joined again.
+ */
+export function unwrap(text: string): string {
+  return text.replace(/(\p{L})-\n(\p{Ll})/gu, '$1$2').replace(/[ \t]*\n[ \t]*/g, ' ').trim();
+}

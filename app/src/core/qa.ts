@@ -1,10 +1,29 @@
 import { displayLength, missingCodes } from './controlCodes';
-import { candidateTerms, hasTermIn, prepareText, targetHasTerm } from './glossary';
-import { limitFor, maxLineWidth } from './wrap';
-import type { Unit } from './model';
+import { candidateTerms, hasTermIn, prepareText, targetHasTerm, termsStamp } from './glossary';
+import { limitFor, maxLineWidth, wrapLines } from './wrap';
+import type { Entry, Unit } from './model';
 
 export type Severity = 'bad' | 'warn';
-export interface Issue { key: 'codes' | 'len' | 'term' | 'wrap' | 'empty-src-changed'; severity: Severity; message: string; /** Control codes missing from the translation (key `codes`). */ codes?: string[] }
+/**
+ * What kind of remark it is, so the translator does not mix a recommendation up with a must-fix:
+ * `error` breaks the game text, `term` disagrees with the glossary, `context` comes from the situation of the line,
+ * `style` is a recommendation, `info` is reference only.
+ */
+export type IssueCat = 'error' | 'term' | 'context' | 'style' | 'info';
+/** A ready correction: `text` replaces the whole translation. */
+export interface IssueFix { label: string; text: string }
+export interface Issue {
+  /** The rule that raised it. Ignoring a warning stores this key (`Entry.ign`). */
+  key: 'codes' | 'len' | 'term' | 'wrap' | 'empty-src-changed' | (string & {});
+  severity: Severity;
+  cat: IssueCat;
+  message: string;
+  /** Why it matters or how to read it, shown on demand. */
+  detail?: string;
+  fix?: IssueFix;
+  /** Control codes missing from the translation (key `codes`). */
+  codes?: string[];
+}
 export interface Term { en: string; uk: string; alt?: string[]; /** false = hint only */ qa?: boolean }
 export interface QaOptions { tolerancePct: number; terms: Term[]; /** Longest allowed line of a message; 0 or missing = not checked. */ lineLimit?: number }
 
@@ -17,32 +36,57 @@ export function lengthDeviation(source: string, target: string): number {
   return Math.round(((displayLength(target) - s) / s) * 100);
 }
 
-export function check(unit: Pick<Unit, 'source'> & Partial<Pick<Unit, 'kind' | 'face'>>, target: string, opts: QaOptions = DEFAULT_QA): Issue[] {
+type UnitLike = Pick<Unit, 'source'> & Partial<Pick<Unit, 'kind' | 'face'>>;
+
+export function check(unit: UnitLike, target: string, opts: QaOptions = DEFAULT_QA): Issue[] {
   if (!target.trim()) return [];
   const out: Issue[] = [];
   const miss = missingCodes(unit.source, target);
-  if (miss.length) out.push({ key: 'codes', severity: 'bad', message: `Пропущено керівні коди: ${miss.join(' ')}`, codes: miss });
+  if (miss.length) out.push({ key: 'codes', severity: 'bad', cat: 'error', message: `Пропущено керівні коди: ${miss.join(' ')}`, detail: 'Керівні коди (кольори, імена, змінні) гра підставляє сама; без них текст у грі зламається.', fix: { label: `Вставити ${miss.join(' ')}`, text: target + miss.join('') }, codes: miss });
   const dev = lengthDeviation(unit.source, target);
   if (Math.abs(dev) > opts.tolerancePct) {
-    out.push({ key: 'len', severity: 'warn', message: `Довжина відрізняється від оригіналу на ${dev > 0 ? '+' : ''}${dev}%. Рекомендація: якнайближче до оригіналу` });
+    out.push({ key: 'len', severity: 'warn', cat: 'style', message: `Довжина відрізняється від оригіналу на ${dev > 0 ? '+' : ''}${dev}%. Рекомендація: якнайближче до оригіналу` });
   }
   if (opts.lineLimit && (unit.kind === 'dialogue' || unit.kind === 'scroll')) {
     const limit = limitFor(opts.lineLimit, unit.face), w = maxLineWidth(target);
-    if (w > limit) out.push({ key: 'wrap', severity: 'warn', message: `Рядок задовгий для вікна: ${w} символів, зазвичай до ${limit}. Натисніть «Перенести рядки»` });
+    if (w > limit) {
+      const wrapped = wrapLines(target, limit);
+      out.push({ key: 'wrap', severity: 'warn', cat: 'style', message: `Рядок задовгий для вікна: ${w} символів, зазвичай до ${limit}. Натисніть «Перенести рядки»`, ...(wrapped !== target ? { fix: { label: 'Перенести рядки', text: wrapped } } : {}) });
+    }
   }
   const sourceText = prepareText(unit.source);
   for (const t of candidateTerms(sourceText, opts.terms)) {
     if (t.qa === false) continue;
     if (hasTermIn(sourceText, t.en) && !targetHasTerm(target, t.uk, t.alt)) {
-      out.push({ key: 'term', severity: 'warn', message: `Термін «${t.en}» має бути «${[t.uk, ...(t.alt ?? [])].join('» або «')}» за глосарієм` });
+      out.push({ key: 'term', severity: 'warn', cat: 'term', message: `Термін «${t.en}» має бути «${[t.uk, ...(t.alt ?? [])].join('» або «')}» за глосарієм` });
     }
   }
   return out;
 }
 
+/**
+ * Results of `check` for a row, remembered per row object. Rows are replaced, never changed in place, so a row that is
+ * still the same object with the same original and the same settings gives the same answer. A page draws a file several
+ * times (filters, tabs, status bar); this makes every draw after the first cheap.
+ */
+const memo = new WeakMap<Entry, { sig: string; source: string; kind?: string; face?: string; issues: Issue[] }>();
+
+/** Everything `check` depends on besides the row and its original, as one short text. */
+const optsSig = (o: QaOptions): string => `${o.tolerancePct}|${o.lineLimit ?? 0}|${termsStamp(o.terms)}`;
+
+/** Issues of a row (before the translator's ignores). */
+function issuesOf(unit: UnitLike, entry: Entry, opts: QaOptions): Issue[] {
+  const sig = optsSig(opts), hit = memo.get(entry);
+  if (hit && hit.sig === sig && hit.source === unit.source && hit.kind === unit.kind && hit.face === unit.face) return hit.issues;
+  const issues = check(unit, entry.target, opts);
+  memo.set(entry, { sig, source: unit.source, kind: unit.kind, face: unit.face, issues });
+  return issues;
+}
+
 /** Issues the translator has not ignored. */
-export function activeIssues(unit: Pick<Unit, 'source'> & Partial<Pick<Unit, 'kind' | 'face'>>, entry: { target: string; ign?: string[] } | undefined, opts: QaOptions = DEFAULT_QA): Issue[] {
+export function activeIssues(unit: UnitLike, entry: { target: string; ign?: string[] } | undefined, opts: QaOptions = DEFAULT_QA): Issue[] {
   if (!entry?.target) return [];
-  const ign = entry.ign ?? [];
-  return check(unit, entry.target, opts).filter(i => !ign.includes(i.key));
+  const all = 'mt' in entry ? issuesOf(unit, entry as Entry, opts) : check(unit, entry.target, opts);
+  const ign = entry.ign;
+  return ign?.length ? all.filter(i => !ign.includes(i.key)) : all;
 }

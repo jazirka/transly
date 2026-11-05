@@ -1,12 +1,12 @@
 import { activeIssues, DEFAULT_QA } from './qa';
 import type { QaOptions } from './qa';
-import type { Entry, Unit } from './model';
+import type { Comment, Entry, Unit } from './model';
 
 /** Which pass the user is working in. */
 export type Stage = 'translate' | 'review';
 
 const blank = (): Entry => ({ target: '', status: 'new', mt: 0 });
-const HISTORY_LIMIT = 50;
+export const HISTORY_LIMIT = 50;
 
 /** Append a history record (immutably), keeping only the newest entries. */
 export function note(e: Entry, what: string, text: string, who: string, now: number): Entry {
@@ -14,9 +14,26 @@ export function note(e: Entry, what: string, text: string, who: string, now: num
   return { ...e, history };
 }
 
-export function addComment(e: Entry | undefined, who: string, text: string, now: number): Entry {
+/** Short stable hash of a text (FNV-1a), enough to tell two comments of the same author and second apart. */
+const hash = (t: string): string => { let h = 0x811c9dc5; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(36); };
+
+/** Id of a comment: the one it was given, or one derived from its author, time and text (older comments have none). */
+export const commentId = (c: Comment): string => c.id ?? `${c.at}.${hash(c.who + '\u0001' + c.text)}`;
+
+/**
+ * Add a comment. A comment is not a change of the translation, so `mt` stays as it is: a comment written on a device
+ * that has not seen the newest translation yet must not win a merge over it.
+ */
+export function addComment(e: Entry | undefined, who: string, text: string, now: number, replyTo?: string): Entry {
   const base = e ?? blank();
-  return { ...base, mt: Math.max(base.mt, now), comments: [...(base.comments ?? []), { who, at: now, text }] };
+  const c: Comment = { who, at: now, text, id: `${now}.${hash(who + '\u0001' + text)}`, ...(replyTo ? { re: replyTo } : {}) };
+  return { ...base, comments: [...(base.comments ?? []), c] };
+}
+
+/** Ignore (or stop ignoring) one QA warning of a row. It has its own clock and does not touch `mt`. */
+export function setIgnored(e: Entry, key: string, on: boolean, now: number): Entry {
+  const cur = e.ign ?? [];
+  return { ...e, ign: on ? [...new Set([...cur, key])] : cur.filter(k => k !== key), ignAt: now };
 }
 
 /** Apply a text edit. Returns the new entry (the input is never mutated). */

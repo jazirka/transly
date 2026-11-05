@@ -54,13 +54,31 @@ export interface Entry {
   returned?: boolean;
   /** QA issue keys the translator chose to ignore for this unit. */
   ign?: string[];
+  /** When `ign` last changed (it has its own clock, so ignoring a warning never overrides a newer translation in a merge). */
+  ignAt?: number;
   comments?: Comment[];
   /** Newest last; capped so a long-lived unit does not grow the project without bound. */
   history?: HistoryItem[];
 }
 
-export interface Comment { who: string; at: number; text: string }
-export interface HistoryItem { at: number; who: string; what: string; text: string }
+export interface Comment {
+  who: string; at: number; text: string;
+  /** Stable id of a comment (new ones get it; older ones are identified by `commentId`). */
+  id?: string;
+  /** Id of the comment this one answers. */
+  re?: string;
+  /** Resolved (or reopened again): who and when. The newest one wins in a merge. */
+  res?: { who: string; at: number; open?: boolean };
+  /** When the text was last edited. */
+  ed?: number;
+}
+export interface HistoryItem {
+  at: number; who: string; what: string; text: string;
+  /** Id of the bulk action (send, auto-fill, replace…) this record belongs to: lets the whole action be undone and redone. */
+  batch?: string;
+  /** The translation, status and notes before this record (what undo restores). */
+  prev?: { target: string; status: Status; returned?: boolean };
+}
 
 export type Translations = Record<string, Entry>;
 

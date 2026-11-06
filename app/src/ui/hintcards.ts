@@ -226,9 +226,7 @@ export function chipsHtml(ctx: Ctx, u: Unit): string {
     u.note ? st(`позначка: ${u.note}`, 'Позначка розробників') : '',
     limit ? st(`рядок до ${limit} зн.`, `Ширина рядка в грі${u.face ? ' (поруч обличчя)' : ''}`) : '',
   ].filter(Boolean);
-  const grp = ctx.groupOf(r.file, r.key);
   const acts = [
-    `<button type="button" class="cc act" id="f-grp" data-grpmenu="row" aria-haspopup="menu" title="Група, до якої належить рядок: змінити">${grp ? `<span class="gdot" style="background:${esc(grp.color ?? '#8b72e8')}" aria-hidden="true"></span>${esc(grp.name)}` : 'у групу'} <span aria-hidden="true">▾</span></button>`,
     first?.page ? act('cond', 'умови сторінки', 'Коли показується ця сцена') : '',
     used.length ? act('used', 'де видається', 'Де гравець це отримує') : '',
     u.dbNote ? act('db', 'примітка в базі', 'Примітка розробників у базі даних') : '',

@@ -1,6 +1,6 @@
 import { Autosave, DupIndex, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, lengthDeviation, limitFor, note, pluginCandidates, propagate, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, viewsFromSnapshot, wrapLines } from '../core';
 import { GroupIndex, groupRows, liveGroups } from '../core';
-import type { Entry, FileView, GameFile, Group, RowChange, RowRef, SavedProject, Unit } from '../core';
+import type { Entry, FileView, GameFile, Group, RowChange, SavedProject, Unit } from '../core';
 import { openBuild } from './build-dialog';
 import { dataDirOf, forgetGameDir, isDesktop, rememberedGameDir, reopenGameDir, reopenGameDirDesktop, setProject } from './desktop';
 import { classifyFolder, folderBanner, folderLine } from './folder-service';
@@ -11,7 +11,7 @@ import { wireDiscuss } from './discuss';
 import { wireTermCard } from './termcard';
 import { wireLinks } from './links';
 import { SCENES_HTML, renderScenesPanel, scenesClick, wireScenes } from './scenes-panel';
-import { GROUPS_HTML, ROWS_MIME, applyPlace, dragPayload, groupsClick, placeMenuHtml, renderGroupsPanel, wireGroups } from './groups-panel';
+import { FILES_DRAG, GROUPS_HTML, dragFiles, groupsClick, placeMenuHtml, renderGroupsBlock, wireGroups } from './groups-panel';
 import type { PlaceTarget } from './groups-panel';
 import { GLOSSARY_HTML, editTerm, glossaryClick, renderGlossaryPanel, showTerm, wireGlossary } from './glossary-panel';
 import { pickGameFolder, readFiles, reopenHandle } from './folder';
@@ -55,7 +55,6 @@ const SVG = {
   panelL: '<svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M6 3v10"/></svg>',
   panelR: '<svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M10 3v10"/></svg>',
   scene: '<svg viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="6" rx="1.5"/><rect x="2.5" y="11" width="7" height="2.5" rx="1"/></svg>',
-  groups: '<svg viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><rect x="9" y="9" width="4.5" height="4.5" rx="1"/></svg>',
   book: '<svg viewBox="0 0 16 16"><path d="M3.5 2.5h8a1 1 0 0 1 1 1v10H4.5a1 1 0 0 1-1-1z"/><path d="M6 5.5h4"/></svg>',
   cmt: '<svg class="cmi" viewBox="0 0 16 16" aria-label="Є відкриті обговорення"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>',
   cmtDone: '<svg class="cmi done" viewBox="0 0 16 16" aria-label="Обговорення розв’язані"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/><path d="M5.8 7l1.5 1.5L10.3 5.6"/></svg>',
@@ -103,14 +102,12 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
       <hr class="ssep">
       <button data-lp="scenes" title="Сцени файлу" aria-label="Сцени файлу">${SVG.scene}</button>
       <hr class="ssep">
-      <button data-lp="groups" title="Групи рядків" aria-label="Групи рядків">${SVG.groups}</button>
-      <hr class="ssep">
       <button data-lp="glossary" title="Глосарій проєкту" aria-label="Глосарій проєкту">${SVG.book}</button>
     </nav>
     <aside class="tree" id="lpanel" aria-label="Бічна панель: файли й рядки">
-      <div class="mtabs" id="mtabs" role="group" aria-label="Бічна панель"><button data-lt="files">Файли</button><button data-lt="rows">Рядки</button><button data-lt="scenes">Сцени</button><button data-lt="groups">Групи</button><button data-lt="glossary">Глосарій</button><button class="ab-ic" id="mt-open" aria-label="Відкрити файли або вставити JSON" title="Відкрити файли або вставити JSON">${SVG.import}</button><button class="ab-ic" id="mt-search" aria-label="Пошук скрізь">${SVG.searchBig}</button></div>
+      <div class="mtabs" id="mtabs" role="group" aria-label="Бічна панель"><button data-lt="files">Файли</button><button data-lt="rows">Рядки</button><button data-lt="scenes">Сцени</button><button data-lt="glossary">Глосарій</button><button class="ab-ic" id="mt-open" aria-label="Відкрити файли або вставити JSON" title="Відкрити файли або вставити JSON">${SVG.import}</button><button class="ab-ic" id="mt-search" aria-label="Пошук скрізь">${SVG.searchBig}</button></div>
       <div class="ph"><span class="grow" id="lp-title">Файли гри</span><button class="ico ico-btn" id="lp-search" type="button" aria-label="Знайти скрізь (Ctrl+K)" title="Знайти скрізь (Ctrl+K або двічі Shift)">${SVG.search}</button><span class="ico" id="lp-close" title="Сховати панель" role="button" aria-label="Сховати панель">—</span></div>
-      <div class="treebody" id="tree"><div class="ph card-ph" data-card="files"><span class="grow">Файли гри</span><span class="ico" data-hide-left="files" role="button" tabindex="0" aria-label="Сховати панель «Файли гри»" title="Сховати">—</span></div><div class="tree-q"><div class="fin">${SVG.search}<input class="qin" id="fq" placeholder="Пошук у файлах гри" aria-label="Пошук у файлах гри" autocomplete="off" spellcheck="false"></div></div><div class="tree-act" id="tree-act"></div><div id="tree-list"></div></div>
+      <div class="treebody" id="tree"><div class="ph card-ph" data-card="files"><span class="grow">Файли гри</span><span class="ico" data-hide-left="files" role="button" tabindex="0" aria-label="Сховати панель «Файли гри»" title="Сховати">—</span></div><div class="tree-q"><div class="fin">${SVG.search}<input class="qin" id="fq" placeholder="Пошук у файлах гри" aria-label="Пошук у файлах гри" autocomplete="off" spellcheck="false"></div></div><div class="tree-act" id="tree-act"></div>${GROUPS_HTML}<div id="tree-list"></div></div>
       <div class="rz rz-y" id="rz-y" role="separator" aria-orientation="horizontal" aria-label="Розділ між файлами й рядками" aria-valuemin="15" aria-valuemax="85" tabindex="0" title="Потягніть, щоб змінити співвідношення (подвійний клік — навпіл)" hidden></div>
       <div class="slist" id="lp-rows" hidden>
         <div class="ph card-ph" data-card="rows"><span class="grow">Рядки файлу</span><span class="ico" data-hide-left="rows" role="button" tabindex="0" aria-label="Сховати панель «Рядки файлу»" title="Сховати">—</span></div>
@@ -118,7 +115,6 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
         <div class="sl-body" id="slist"></div>
       </div>
       ${SCENES_HTML}
-      ${GROUPS_HTML}
       ${GLOSSARY_HTML}
     </aside>
     <div class="rz rz-x" id="rz-x" role="separator" aria-orientation="vertical" aria-label="Ширина бічної панелі" aria-valuemin="200" aria-valuemax="640" tabindex="0" title="Потягніть, щоб змінити ширину (подвійний клік — стандартна)"></div>
@@ -128,7 +124,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
         <div class="crumbs" id="crumbs"></div>
         <div class="filters"><div class="fin">${SVG.search}<input class="qin" id="q" placeholder="Фільтр у цьому файлі" aria-label="Фільтр"></div><span class="chipsHost" id="chips1"></span><span id="tagfilter"></span>
           <div class="r"><button class="chip" id="spkbtn">Мовець ▾</button><button class="chip" id="lenbtn">Довжина ▾</button></div></div>
-        <div class="bulk" id="bulk"><b id="bulkn">0</b><span id="bulkt"></span><button id="bb-ok">Надіслати на вичитування</button><button id="bb-tm" title="Підставити збіг із пам’яті перекладів (від 70%) у порожні вибрані рядки">Застосувати з ПП</button><button id="bb-grp" aria-haspopup="menu" title="Додати вибрані рядки до групи">У групу ▾</button><button id="bb-clear" class="ghost">Скасувати вибір</button></div>
+        <div class="bulk" id="bulk"><b id="bulkn">0</b><span id="bulkt"></span><button id="bb-ok">Надіслати на вичитування</button><button id="bb-tm" title="Підставити збіг із пам’яті перекладів (від 70%) у порожні вибрані рядки">Застосувати з ПП</button><button id="bb-clear" class="ghost">Скасувати вибір</button></div>
         <div class="gridwrap"><div class="grid" id="grid" role="grid" aria-label="Рядки файлу"></div></div>
         <div class="legend-bar" aria-label="Умовні позначення"><span><i class="sd new"></i>без перекладу</span><span><i class="sd draft"></i>чернетка</span><span><i class="sd done"></i>чекає вичитування</span><span><i class="sd appr"></i>вичитано</span><span><i class="sd qa"></i>є проблема QA</span><span>${SVG.cmt}коментар</span></div>
       </div>
@@ -265,6 +261,7 @@ export async function start(root: HTMLElement): Promise<void> {
     render: () => renderAll(),
     open: (file, key) => openRow(file, key),
     openRows: (title, rows, gid) => openRows(title, rows, gid),
+    openFile: file => { openFile(file); renderAll(); },
     groupsChanged: () => groupsChanged(),
     groupOf: (file, key) => { const g = groupIndex(); const id = g.idx.groupOf(file, key); return id ? g.byId.get(id) ?? null : null; },
     select: (key, mode) => {
@@ -383,8 +380,7 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#lp-rows').hidden = !both && l !== 'rows';
     $('#lp-gl').hidden = l !== 'glossary';
     $('#lp-sc').hidden = l !== 'scenes';
-    $('#lp-gr').hidden = l !== 'groups';
-    $('#lp-title').textContent = both ? 'Файли й рядки' : l === 'rows' ? `Рядки · ${currentLabel()}` : l === 'glossary' ? 'Глосарій' : l === 'scenes' ? `Сцени · ${currentLabel()}` : l === 'groups' ? 'Групи' : 'Файли гри';
+    $('#lp-title').textContent = both ? 'Файли й рядки' : l === 'rows' ? `Рядки · ${currentLabel()}` : l === 'glossary' ? 'Глосарій' : l === 'scenes' ? `Сцени · ${currentLabel()}` : 'Файли гри';
     document.querySelectorAll<HTMLElement>('#mtabs [data-lt]').forEach(b => { const on = b.dataset.lt === s.leftTab[s.mode]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
     document.querySelectorAll<HTMLElement>('#seg [data-m]').forEach(b => { const on = b.dataset.m === s.mode || (s.mode === 'review' && b.dataset.m === 'edit'); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
     const here = s.rightOpen ? 'help' : s.leftOpen ? s.leftTab[s.mode] : s.mode === 'table' ? 'rows' : 'edit';
@@ -421,7 +417,13 @@ export async function start(root: HTMLElement): Promise<void> {
   }
 
   let fileQ = '';
+  /** The coloured dot of the group a file is in. */
+  const fileGroupDot = (name: string): string => {
+    const g = ctx.groupOf(name, '\u0000');
+    return g ? `<span class="gdot" style="background:${esc(g.color ?? '#8b72e8')}" role="img" aria-label="Група: ${esc(g.name)}" title="Група: ${esc(g.name)}"></span>` : '';
+  };
   function renderTree(): void {
+    renderGroupsBlock(ctx);
     const box = $('#tree-list');
     $('#tree-act').innerHTML = s.views.length > 1 ? `<button class="btn" data-act="group-all" title="Усі рядки всіх файлів в одній таблиці">Усі файли разом</button>${s.picked.size ? `<button class="btn p" data-act="group-picked">Відкрити вибрані (${s.picked.size})</button><button class="btn" id="tree-grp" aria-haspopup="menu" title="Додати вибрані файли до групи">У групу ▾</button><button class="btn" data-act="group-clear" title="Зняти позначки">✕</button>` : '<span class="hint">Ctrl-клік по файлах, щоб відкрити їх разом</span>'}` : '';
     if (!s.views.length) { box.innerHTML = '<div class="msg-empty">Папку гри ще не відкрито</div>'; return; }
@@ -451,7 +453,7 @@ export async function start(root: HTMLElement): Promise<void> {
       const pc = Math.round(100 * st.approved / st.total);
       const [ic, lab] = fileIcon(n.name);
       const cur = n.name === s.current;
-      return `<div class="node ${cur ? 'cur' : ''} ${s.picked.has(n.name) ? 'pick' : ''} ${!pc && !st.translated ? 'idle' : ''}" style="--d:${n.d}" data-file="${esc(n.name)}" role="button" tabindex="0" title="${cur ? 'Відкрито · ' : ''}${v.label ? esc(v.label) + ' · ' : ''}Вичитано ${pc}% · перекладено ${Math.round(100 * st.translated / st.total)}%"><span class="chev"></span><span class="ic ${ic}">${lab}</span><span class="nm">${v.label ? `${esc(v.label)}<span class="lc">${esc(n.label.replace(/\.json$/, ''))}</span>` : esc(n.label)}</span><span class="mini"><i class="${pc === 100 ? 'f' : ''}" style="width:${Math.max(pc, Math.round(100 * st.translated / st.total))}%"></i></span><span class="pc ${pc === 100 ? 'full' : ''}">${pc}%</span></div>`;
+      return `<div class="node ${cur ? 'cur' : ''} ${s.picked.has(n.name) ? 'pick' : ''} ${!pc && !st.translated ? 'idle' : ''}" style="--d:${n.d}" data-file="${esc(n.name)}" draggable="true" role="button" tabindex="0" title="${cur ? 'Відкрито · ' : ''}${v.label ? esc(v.label) + ' · ' : ''}Вичитано ${pc}% · перекладено ${Math.round(100 * st.translated / st.total)}%"><span class="chev"></span><span class="ic ${ic}">${lab}</span><span class="nm">${fileGroupDot(n.name)}${v.label ? `${esc(v.label)}<span class="lc">${esc(n.label.replace(/\.json$/, ''))}</span>` : esc(n.label)}</span><span class="mini"><i class="${pc === 100 ? 'f' : ''}" style="width:${Math.max(pc, Math.round(100 * st.translated / st.total))}%"></i></span><span class="pc ${pc === 100 ? 'full' : ''}">${pc}%</span></div>`;
     }).join('');
   }
 
@@ -482,21 +484,15 @@ export async function start(root: HTMLElement): Promise<void> {
     const th = e?.comments?.length ? threadsOf(e.comments) : [];
     return !th.length ? '' : th.some(x => !x.resolved) ? SVG.cmt : SVG.cmtDone;
   };
-  /** The coloured dot of the group a row is in. */
-  const gdot = (u: Unit): string => {
-    const r = s.current === GROUP ? splitKey(u.key) : s.current ? { file: s.current, key: u.key } : null;
-    const g = r ? ctx.groupOf(r.file, r.key) : null;
-    return g ? `<span class="gdot" style="background:${esc(g.color ?? '#8b72e8')}" role="img" aria-label="Група: ${esc(g.name)}" title="Група: ${esc(g.name)}"></span>` : '';
-  };
   function rowHtml(u: Unit, n: number): string {
     const e = entryOf(u), sel = u.key === s.cur, chk = s.checked.has(u.key);
     const st = shownStatus(ctx, u, e);
     const hits = enforced();
     const len = e?.target ? `${displayLength(e.target)}/${displayLength(u.source)}` : '—';
     return `<div class="gr ${sel ? 'sel' : ''} ${chk ? 'chk' : ''}" role="row" tabindex="${sel ? 0 : -1}" aria-selected="${sel}" data-key="${esc(u.key)}">
-      <div class="ln" role="gridcell" draggable="true" title="Потягніть у групу"><span class="num">${n}</span><input type="checkbox" class="rc" ${chk ? 'checked' : ''} aria-label="Вибрати рядок ${n}"></div>
+      <div class="ln" role="gridcell"><span class="num">${n}</span><input type="checkbox" class="rc" ${chk ? 'checked' : ''} aria-label="Вибрати рядок ${n}"></div>
       <div class="st" role="gridcell"><span class="sd ${st}" title="${STATUS_LABEL[st]}"${st === 'qa' ? ` data-hc="qa" data-hk="${esc(u.key)}"` : ''}></span><span class="vh">${STATUS_LABEL[st]}</span></div>
-      <div role="gridcell">${gdot(u)}<span class="key" title="${esc(u.key)}">${esc(shortKey(u.key))}</span>${cmIcon(e)}</div>
+      <div role="gridcell"><span class="key" title="${esc(u.key)}">${esc(shortKey(u.key))}</span>${cmIcon(e)}</div>
       <div class="who" role="gridcell">${esc(ctx.speaker(u))}</div>
       <div class="src" role="gridcell">${markup(flow(u.source), hits)}</div>
       <div class="tr ${e?.target ? '' : 'empty'}" role="gridcell" title="Клікніть, щоб писати прямо тут">${e?.target ? markup(flow(e.target)) : '—'}</div>
@@ -510,7 +506,7 @@ export async function start(root: HTMLElement): Promise<void> {
 
   const siHtml = (u: Unit, n: number): string => {
     const e = entryOf(u), st = shownStatus(ctx, u, e);
-    return `<div class="si ${u.key === s.cur ? 'sel' : ''}" data-key="${esc(u.key)}" role="button" tabindex="0"><span class="sd ${st}" title="${STATUS_LABEL[st]}"></span><div><div class="a"><span>${n}</span><b>${esc(ctx.speaker(u) || u.kind)}</b><span>${gdot(u)}${esc(shortKey(u.key))}</span>${cmIcon(e)}</div><div class="s">${esc(flow(u.source))}</div><div class="t">${e?.target ? esc(flow(e.target)) : '—'}</div></div></div>`;
+    return `<div class="si ${u.key === s.cur ? 'sel' : ''}" data-key="${esc(u.key)}" role="button" tabindex="0"><span class="sd ${st}" title="${STATUS_LABEL[st]}"></span><div><div class="a"><span>${n}</span><b>${esc(ctx.speaker(u) || u.kind)}</b><span>${esc(shortKey(u.key))}</span>${cmIcon(e)}</div><div class="s">${esc(flow(u.source))}</div><div class="t">${e?.target ? esc(flow(e.target)) : '—'}</div></div></div>`;
   };
   const emptyHtml = '<div class="empty-state"><b>Нічого не знайдено</b><span>Немає рядків за поточним пошуком і статусом.</span><button class="btn" data-reset>Скинути фільтри</button></div>';
 
@@ -653,7 +649,6 @@ export async function start(root: HTMLElement): Promise<void> {
     if (lp() === 'rows' || s.leftBoth || s.mode !== 'table') renderRowsList();
     if (lp() === 'glossary') renderGlossaryPanel(ctx);
     if (lp() === 'scenes') renderScenesPanel(ctx);
-    if (lp() === 'groups') renderGroupsPanel(ctx);
     if (s.mode === 'table') renderTable(); else renderFocus(ctx, isDesktop());
     renderSidePanel(ctx);
     renderStatus();
@@ -690,15 +685,13 @@ export async function start(root: HTMLElement): Promise<void> {
   }
 
   /** Show some rows of the game in one table: the table, not the editor, so the rows can be gone through and sent together. */
-  function openRows(title: string, rows: RowRef[], gid?: string): void {
+  function openRows(title: string, rows: { file: string; key: string }[], gid?: string): void {
     const keys = new Map<string, Set<string>>();
     for (const r of rows) { if (!s.views.some(v => v.name === r.file)) continue; let k = keys.get(r.file); if (!k) keys.set(r.file, k = new Set()); k.add(r.key); }
     if (!keys.size) { toast('Тут ще немає рядків'); return; }
     s.group = [...keys.keys()]; s.groupSel = { title, ...(gid ? { gid } : {}), keys };
     s.current = GROUP; s.q = ''; s.lenFilter = 'all'; s.checked.clear();
     if (s.mode === 'review') s.filter = 'done'; else s.filter = 'all';
-    // A group is read as a table; the left panel keeps showing the groups.
-    if (s.mode === 'edit') { s.leftTab.table = s.leftTab.edit; s.mode = 'table'; }
     unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u]));
     s.cur = null;
     renderAll();
@@ -1026,14 +1019,9 @@ export async function start(root: HTMLElement): Promise<void> {
     p.style.left = Math.max(8, Math.min(x, innerWidth - p.offsetWidth - 8)) + 'px';
     p.style.top = Math.max(8, Math.min(y, innerHeight - p.offsetHeight - 8)) + 'px';
   }
-  /** Row keys of the table or the list as references to rows of files (in a group table the key carries its file). */
-  const rowRefs = (keys: Iterable<string>): RowRef[] => { const out: RowRef[] = []; for (const k of keys) { const r = s.current === GROUP ? splitKey(k) : s.current ? { file: s.current, key: k } : null; if (r) out.push(r); } return out; };
-  const rowsTarget = (keys: Iterable<string>): PlaceTarget => { const rows = rowRefs(keys); return { kind: 'rows', rows, label: rows.length === 1 ? 'рядок' : plural(rows.length, ['рядок', 'рядки', 'рядків']) }; };
-  /** The rows an action on a row of the table or list means: the ticked ones when the row is among them, else just it. */
-  const rowsAt = (key: string): string[] => (s.checked.has(key) ? [...s.checked] : [key]);
   const filesTarget = (name: string): PlaceTarget => {
     const many = s.picked.has(name) && s.picked.size > 1;
-    return many ? { kind: 'files', files: [...s.picked], label: plural(s.picked.size, ['файл', 'файли', 'файлів']) } : { kind: 'file', file: name, label: name.replace(/\.json$/, '') };
+    return many ? { files: [...s.picked], label: plural(s.picked.size, ['файл', 'файли', 'файлів']) } : { files: [name], label: name.replace(/\.json$/, '') };
   };
 
   /* ---------- global search ---------- */
@@ -1260,16 +1248,16 @@ export async function start(root: HTMLElement): Promise<void> {
     if (pmi) { const [g, i] = pmi.dataset.pmi!.split('|'); closePops(); const it = MENUS[g!]?.[Number(i)]; if (it && it !== '-') it.fn(); return; }
     if (t.closest('#ab-stage')) { setMode(s.mode === 'review' ? 'edit' : 'review'); return; }
     const lt = t.closest<HTMLElement>('#mtabs [data-lt]');
-    if (lt) { s.leftTab[s.mode] = (['rows', 'glossary', 'scenes', 'groups'] as const).find(x => x === lt.dataset.lt) ?? 'files'; renderAll(); return; }
+    if (lt) { s.leftTab[s.mode] = (['rows', 'glossary', 'scenes'] as const).find(x => x === lt.dataset.lt) ?? 'files'; renderAll(); return; }
     const hl = t.closest<HTMLElement>('[data-hide-left]');
-    if (hl) { if (hl.dataset.hideLeft === 'glossary' || hl.dataset.hideLeft === 'scenes' || hl.dataset.hideLeft === 'groups') s.leftOpen = false; else { s.leftBoth = false; s.leftTab[s.mode] = hl.dataset.hideLeft === 'files' ? 'rows' : 'files'; } renderAll(); return; }
+    if (hl) { if (hl.dataset.hideLeft === 'glossary' || hl.dataset.hideLeft === 'scenes') s.leftOpen = false; else { s.leftBoth = false; s.leftTab[s.mode] = hl.dataset.hideLeft === 'files' ? 'rows' : 'files'; } renderAll(); return; }
     const sb = t.closest<HTMLElement>('#strip [data-lp]');
     if (sb) {
       // Each button switches its own panel on or off; both on = the zone is split between them.
-      const want: LeftTab = (['rows', 'glossary', 'scenes', 'groups'] as const).find(x => x === sb.dataset.lp) ?? 'files', other = want === 'rows' ? 'files' : 'rows';
+      const want: LeftTab = (['rows', 'glossary', 'scenes'] as const).find(x => x === sb.dataset.lp) ?? 'files', other = want === 'rows' ? 'files' : 'rows';
       const cur = s.leftTab[s.mode];
       // The glossary and the scenes are panels of their own: they take the whole zone and never share it with files or rows.
-      const own = (x: string): boolean => x === 'glossary' || x === 'scenes' || x === 'groups';
+      const own = (x: string): boolean => x === 'glossary' || x === 'scenes';
       if (own(want) || own(cur)) { if (s.leftOpen && cur === want) s.leftOpen = false; else { s.leftOpen = true; s.leftTab[s.mode] = want; } s.leftBoth = false; }
       else if (s.phone) { if (s.leftOpen && cur === want) s.leftOpen = false; else { s.leftOpen = true; s.leftTab[s.mode] = want; } s.leftBoth = false; }
       else if (!s.leftOpen) { s.leftOpen = true; s.leftBoth = false; s.leftTab[s.mode] = want; }
@@ -1323,9 +1311,6 @@ export async function start(root: HTMLElement): Promise<void> {
     if (ln) { s.lenFilter = ln.dataset.len as typeof s.lenFilter; closePops(); renderAll(); return; }
     if (t.closest('#bb-ok')) { bulkSend(); return; }
     if (t.closest('#bb-tm')) { bulkTm(); return; }
-    if (t.closest('#bb-grp')) { showPop(t.closest<HTMLElement>('#bb-grp')!, placeMenuHtml(ctx, rowsTarget(s.checked))); return; }
-    const gmenu = t.closest<HTMLElement>('[data-grpmenu]');
-    if (gmenu) { if (s.cur) showPop(gmenu, placeMenuHtml(ctx, rowsTarget([s.cur]))); return; }
     if (t.closest('#tree-grp')) { const first = [...s.picked][0]; if (first) showPop(t.closest<HTMLElement>('#tree-grp')!, placeMenuHtml(ctx, filesTarget(first))); return; }
     if (t.closest('#bb-clear')) { s.checked.clear(); renderAll(); return; }
     if (t.closest('#selall')) { const all = ($('#selall') as HTMLInputElement).checked; for (const u of visibleUnits(true)) all ? s.checked.add(u.key) : s.checked.delete(u.key); renderAll(); return; }
@@ -1497,25 +1482,18 @@ export async function start(root: HTMLElement): Promise<void> {
   wireGlossary(ctx);
   wireScenes(ctx);
   wireGroups(ctx, groupsApi);
-  // Right click on a row, a file or a scene: put it in a group. The handle of a row can be dragged onto a group of the list.
+  // Right click on a file puts it in a group; a file can also be dragged onto one.
   document.addEventListener('contextmenu', e => {
-    const t = e.target as HTMLElement;
-    const row = t.closest<HTMLElement>('.gr[data-key], .si[data-key]');
-    const file = t.closest<HTMLElement>('.node[data-file]');
-    const sc = t.closest<HTMLElement>('#lp-sc [data-scene]');
-    let html = '';
-    if (row) html = placeMenuHtml(ctx, rowsTarget(rowsAt(row.dataset.key!)));
-    else if (file) html = placeMenuHtml(ctx, filesTarget(file.dataset.file!));
-    else if (sc && s.current && s.current !== GROUP) html = placeMenuHtml(ctx, { kind: 'scene', file: s.current, scene: sc.dataset.scene!, label: sc.querySelector('.sc-t')?.textContent ?? 'сцена' });
-    if (!html) return;
+    const file = (e.target as HTMLElement).closest<HTMLElement>('.node[data-file]');
+    if (!file) return;
     e.preventDefault();
-    popAt(e.clientX, e.clientY, html);
+    popAt(e.clientX, e.clientY, placeMenuHtml(ctx, filesTarget(file.dataset.file!)));
   });
   document.addEventListener('dragstart', e => {
-    const row = (e.target as HTMLElement).closest?.('.gr[data-key]') as HTMLElement | null | undefined;
-    if (!row || !e.dataTransfer) return;
-    e.dataTransfer.setData(ROWS_MIME, dragPayload(rowRefs(rowsAt(row.dataset.key!))));
-    e.dataTransfer.setData('text/plain', row.dataset.key!);
+    const f = (e.target as HTMLElement).closest?.('.node[data-file]') as HTMLElement | null | undefined;
+    if (!f || !e.dataTransfer) return;
+    e.dataTransfer.setData(FILES_DRAG, dragFiles(filesTarget(f.dataset.file!).files));
+    e.dataTransfer.setData('text/plain', f.dataset.file!);
     e.dataTransfer.effectAllowed = 'copy';
   });
   initMobile(ctx);

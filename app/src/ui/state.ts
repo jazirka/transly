@@ -5,7 +5,7 @@ import type { Autosave, DupIndex, Entry, FileView, GameFile, Group, RowRef, Save
 export type Mode = 'table' | 'edit' | 'review';
 export type Filter = 'all' | 'new' | 'draft' | 'done' | 'appr' | 'qa' | 'cm';
 export type SideTab = 'comments' | 'history' | 'dict';
-export type LeftTab = 'files' | 'rows' | 'glossary' | 'scenes' | 'groups';
+export type LeftTab = 'files' | 'rows' | 'glossary' | 'scenes';
 export type LenFilter = 'all' | 'far' | 'longer' | 'shorter';
 /** Order of the rows list: as in the file, untranslated first, problems first, longest first. */
 export type SortMode = 'order' | 'new' | 'qa' | 'long';
@@ -106,6 +106,8 @@ export interface Ctx {
   groupsChanged(): void;
   /** The group a row is in, or null. */
   groupOf(file: string, key: string): Group | null;
+  /** Open a file as a tab. */
+  openFile(file: string): void;
   /** Open a row of any file in the editor (the file is opened, the filters that would hide the row are dropped). */
   open(file: string, key: string): void;
 }

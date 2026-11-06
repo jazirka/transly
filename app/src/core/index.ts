@@ -42,6 +42,7 @@ export * from './comments';
 export * from './textdiff';
 export * from './historyview';
 export * from './termedit';
+export * from './hints';
 export * from './journal';
 export * from './sceneindex';
 export * from './termmatch';

@@ -1,11 +1,13 @@
-import { Autosave, DupIndex, commitRows, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, lengthDeviation, limitFor, note, pluginCandidates, propagate, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, viewsFromSnapshot, wrapLines } from '../core';
+import { Autosave, DupIndex, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, lengthDeviation, limitFor, note, pluginCandidates, propagate, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, viewsFromSnapshot, wrapLines } from '../core';
 import type { Entry, FileView, GameFile, RowChange, SavedProject, Unit } from '../core';
 import { openBuild } from './build-dialog';
 import { dataDirOf, forgetGameDir, isDesktop, rememberedGameDir, reopenGameDir, reopenGameDirDesktop, setProject } from './desktop';
 import { classifyFolder, folderBanner, folderLine } from './folder-service';
 import type { FolderState } from './folder-service';
 import { $, el, esc, plural, toast } from './dom';
-import { FOCUS_HTML, SIDE_HTML, focusClick, focusInput, renderFocus, renderGlossary, renderSidePanel, send, showSide, sideClick, step } from './focus';
+import { FOCUS_HTML, SIDE_HTML, focusClick, focusInput, insertOriginal, renderFocus, renderSidePanel, send, showSide, sideClick, step } from './focus';
+import { wireDiscuss } from './discuss';
+import { GLOSSARY_HTML, glossaryClick, renderGlossaryPanel, showTerm, wireGlossary } from './glossary-panel';
 import { pickGameFolder, readFiles, reopenHandle } from './folder';
 import type { DirHandle, PickedFile } from './folder';
 import { IdbStore, loadHandle, saveHandle } from './idb';
@@ -45,7 +47,9 @@ const SVG = {
   build: '<svg viewBox="0 0 16 16"><path d="M2.5 9l2-4.5h7L13.5 9v3h-11z"/><circle cx="5.5" cy="12" r="1"/><circle cx="10.5" cy="12" r="1"/></svg>',
   panelL: '<svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M6 3v10"/></svg>',
   panelR: '<svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M10 3v10"/></svg>',
-  cmt: '<svg class="cmi" viewBox="0 0 16 16" aria-label="Є коментарі"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>',
+  book: '<svg viewBox="0 0 16 16"><path d="M3.5 2.5h8a1 1 0 0 1 1 1v10H4.5a1 1 0 0 1-1-1z"/><path d="M6 5.5h4"/></svg>',
+  cmt: '<svg class="cmi" viewBox="0 0 16 16" aria-label="Є відкриті обговорення"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>',
+  cmtDone: '<svg class="cmi done" viewBox="0 0 16 16" aria-label="Обговорення розв’язані"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/><path d="M5.8 7l1.5 1.5L10.3 5.6"/></svg>',
 };
 
 const ls = (k: string): string | null => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -61,10 +65,10 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     <button class="tb-ic" id="hamb" title="Головне меню" aria-haspopup="menu" aria-expanded="false">${SVG.menu}</button>
     <nav class="menubar" id="menubar" role="menubar" aria-label="Головне меню" hidden></nav>
     <button class="tpill" id="proj-btn" aria-haspopup="menu" aria-expanded="false" title="Проєкт: відкрити іншу гру, налаштування"><span class="pj" id="proj-av">T</span><span id="proj-name">Проєкт</span><span class="dd">▾</span></button>
-    <div class="seg" id="seg" role="tablist" aria-label="Режим">
-      <button role="tab" aria-selected="true" data-m="table" class="on"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM2.5 7h11M6.5 3.5v9"/></svg>Таблиця</button>
-      <button role="tab" aria-selected="false" data-m="edit"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM6 3.5v9M6 8h7.5"/></svg>Редагування</button>
-          <button class="sub" id="stage-pill" role="switch" aria-checked="false" aria-pressed="false" title="Вичитування: перегляд рядків, що чекають перевірки, і схвалення"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3 3 7-7"/></svg>Вичитування</button>
+    <div class="seg" id="seg" role="group" aria-label="Режим">
+      <button aria-pressed="true" data-m="table" class="on"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM2.5 7h11M6.5 3.5v9"/></svg>Таблиця</button>
+      <button aria-pressed="false" data-m="edit"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM6 3.5v9M6 8h7.5"/></svg>Редагування</button>
+          <button class="sub" id="stage-pill" role="switch" aria-checked="false" title="Вичитування: перегляд рядків, що чекають перевірки, і схвалення"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3 3 7-7"/></svg>Вичитування</button>
     </div>
     <div class="grow"></div>
     <div class="prog" id="pg" title=""><div class="bar"><i class="a" id="pg-a"></i><i class="b" id="pg-b"></i><i class="c" id="pg-c"></i></div><span id="pg-txt" style="font-family:var(--mono);font-size:11.5px"></span></div>
@@ -87,9 +91,11 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
       <button data-lp="files" class="on" title="Файли гри" aria-label="Файли гри">${SVG.files}</button>
       <hr class="ssep">
       <button data-lp="rows" title="Рядки файлу" aria-label="Рядки файлу">${SVG.rows}</button>
+      <hr class="ssep">
+      <button data-lp="glossary" title="Глосарій проєкту" aria-label="Глосарій проєкту">${SVG.book}</button>
     </nav>
     <aside class="tree" id="lpanel" aria-label="Бічна панель: файли й рядки">
-      <div class="mtabs" id="mtabs" role="group" aria-label="Бічна панель"><button data-lt="files">Файли</button><button data-lt="rows">Рядки</button><button class="ab-ic" id="mt-open" aria-label="Відкрити файли або вставити JSON" title="Відкрити файли або вставити JSON">${SVG.import}</button><button class="ab-ic" id="mt-search" aria-label="Пошук скрізь">${SVG.searchBig}</button></div>
+      <div class="mtabs" id="mtabs" role="group" aria-label="Бічна панель"><button data-lt="files">Файли</button><button data-lt="rows">Рядки</button><button data-lt="glossary">Глосарій</button><button class="ab-ic" id="mt-open" aria-label="Відкрити файли або вставити JSON" title="Відкрити файли або вставити JSON">${SVG.import}</button><button class="ab-ic" id="mt-search" aria-label="Пошук скрізь">${SVG.searchBig}</button></div>
       <div class="ph"><span class="grow" id="lp-title">Файли гри</span><button class="ico ico-btn" id="lp-search" type="button" aria-label="Знайти скрізь (Ctrl+K)" title="Знайти скрізь (Ctrl+K або двічі Shift)">${SVG.search}</button><span class="ico" id="lp-close" title="Сховати панель" role="button" aria-label="Сховати панель">—</span></div>
       <div class="treebody" id="tree"><div class="ph card-ph" data-card="files"><span class="grow">Файли гри</span><span class="ico" data-hide-left="files" role="button" tabindex="0" aria-label="Сховати панель «Файли гри»" title="Сховати">—</span></div><div class="tree-q"><div class="fin">${SVG.search}<input class="qin" id="fq" placeholder="Пошук у файлах гри" aria-label="Пошук у файлах гри" autocomplete="off" spellcheck="false"></div></div><div class="tree-act" id="tree-act"></div><div id="tree-list"></div></div>
       <div class="rz rz-y" id="rz-y" role="separator" aria-orientation="horizontal" aria-label="Розділ між файлами й рядками" aria-valuemin="15" aria-valuemax="85" tabindex="0" title="Потягніть, щоб змінити співвідношення (подвійний клік — навпіл)" hidden></div>
@@ -98,6 +104,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
         <div class="fh"><div class="fin">${SVG.search}<input class="qin" id="q2" placeholder="Пошук рядків" aria-label="Пошук рядків"></div><div class="chips2"><button class="chip" id="sortbtn" aria-haspopup="menu">↕ За порядком</button><span class="chipsHost" id="chips2"></span></div></div>
         <div class="sl-body" id="slist"></div>
       </div>
+      ${GLOSSARY_HTML}
     </aside>
     <div class="rz rz-x" id="rz-x" role="separator" aria-orientation="vertical" aria-label="Ширина бічної панелі" aria-valuemin="200" aria-valuemax="640" tabindex="0" title="Потягніть, щоб змінити ширину (подвійний клік — стандартна)"></div>
     <main class="editor" id="main">
@@ -130,6 +137,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
   <div class="kr"><span>Відкрити рядок у редагуванні</span><kbd>Enter</kbd><kbd>2× клік</kbd></div>
   <div class="kr"><span>Наступний / попередній рядок</span><kbd>↓</kbd><kbd>↑</kbd></div>
   <div class="kr"><span>У редагуванні: наступний / попередній у списку</span><kbd>Alt</kbd><kbd>↓</kbd></div>
+  <div class="kr"><span>У редагуванні: вставити оригінал у переклад</span><kbd>Alt</kbd><kbd>O</kbd></div>
   <div class="kr"><span>Надіслати на вичитування / затвердити й далі</span><kbd>Ctrl</kbd><kbd>Enter</kbd></div>
   <div class="kr"><span>Змінити переклад у комірці таблиці</span><kbd>2× клік</kbd></div>
   <div class="kr"><span>Запустити вибрану збірку (файл або гра)</span><kbd>F5</kbd></div>
@@ -230,6 +238,7 @@ export async function start(root: HTMLElement): Promise<void> {
     stage: () => (s.mode === 'review' ? 'review' : 'translate'),
     commit: (changes, kind, what) => { const id = commitRows(file => ctx.entries(file), changes, kind, s.who, Date.now(), what); s.sess.n += changes.length; return id; },
     render: () => renderAll(),
+    open: (file, key) => openRow(file, key),
     select: (key, mode) => {
       s.cur = key;
       if (mode) setMode(mode, false);
@@ -286,7 +295,7 @@ export async function start(root: HTMLElement): Promise<void> {
       case 'done': return e?.status === 'done';
       case 'appr': return e?.status === 'appr';
       case 'qa': return shownStatus(ctx, u, e) === 'qa';
-      case 'cm': return !!e?.comments?.length;
+      case 'cm': return threadsOf(e?.comments).length > 0;
       default: return true;
     }
   };
@@ -332,21 +341,22 @@ export async function start(root: HTMLElement): Promise<void> {
   }
 
   /* ---------- rendering ---------- */
-  const lp = (): 'files' | 'rows' | null => (s.leftOpen ? s.leftTab[s.mode] : null);
+  const lp = (): 'files' | 'rows' | 'glossary' | null => (s.leftOpen ? s.leftTab[s.mode] : null);
 
   function renderLayout(): void {
     const ide = $('#ide');
     const l = lp();
     ide.className = `ide mode-${s.mode === 'table' ? 'table' : 'focus'} ${l ? 'lp-open' : 'lp-closed'}${s.phone ? ' sz-s' : ''}${s.rightOpen ? ' sheet-open' : ''}${!s.sideOn.length && !s.phone ? ' rp-collapsed' : ''}${s.compact ? ' compact' : ''}${s.kb ? ' kb' : ''}`;
-    const both = !!l && s.leftBoth && !s.phone;
+    const both = (l === 'files' || l === 'rows') && s.leftBoth && !s.phone;
     $('#lpanel').classList.toggle('split', both);
     $('#rz-y').hidden = !both;
     document.querySelectorAll<HTMLElement>('#strip button').forEach(b => { const on = both || b.dataset.lp === l; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
     $('#tree').hidden = !both && l !== 'files';
     $('#lp-rows').hidden = !both && l !== 'rows';
-    $('#lp-title').textContent = both ? 'Файли й рядки' : l === 'rows' ? `Рядки · ${currentLabel()}` : 'Файли гри';
+    $('#lp-gl').hidden = l !== 'glossary';
+    $('#lp-title').textContent = both ? 'Файли й рядки' : l === 'rows' ? `Рядки · ${currentLabel()}` : l === 'glossary' ? 'Глосарій' : 'Файли гри';
     document.querySelectorAll<HTMLElement>('#mtabs [data-lt]').forEach(b => { const on = b.dataset.lt === s.leftTab[s.mode]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
-    document.querySelectorAll<HTMLElement>('#seg [data-m]').forEach(b => { const on = b.dataset.m === s.mode || (s.mode === 'review' && b.dataset.m === 'edit'); b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
+    document.querySelectorAll<HTMLElement>('#seg [data-m]').forEach(b => { const on = b.dataset.m === s.mode || (s.mode === 'review' && b.dataset.m === 'edit'); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
     const here = s.rightOpen ? 'help' : s.leftOpen ? s.leftTab[s.mode] : s.mode === 'table' ? 'rows' : 'edit';
     document.querySelectorAll<HTMLElement>('#bnav [data-bn]').forEach(b => { const on = b.dataset.bn === here; b.classList.toggle('on', on); b.setAttribute('aria-current', String(on)); });
   }
@@ -437,6 +447,11 @@ export async function start(root: HTMLElement): Promise<void> {
     set('#lenbtn', s.lenFilter !== 'all', s.lenFilter === 'all' ? 'Довжина' : LEN_LABEL[s.lenFilter], 'len');
   }
 
+  /** The mark of a row that has discussions: open ones, or only settled ones. */
+  const cmIcon = (e: Entry | undefined): string => {
+    const th = e?.comments?.length ? threadsOf(e.comments) : [];
+    return !th.length ? '' : th.some(x => !x.resolved) ? SVG.cmt : SVG.cmtDone;
+  };
   function rowHtml(u: Unit, n: number): string {
     const e = entryOf(u), sel = u.key === s.cur, chk = s.checked.has(u.key);
     const st = shownStatus(ctx, u, e);
@@ -445,7 +460,7 @@ export async function start(root: HTMLElement): Promise<void> {
     return `<div class="gr ${sel ? 'sel' : ''} ${chk ? 'chk' : ''}" role="row" tabindex="${sel ? 0 : -1}" aria-selected="${sel}" data-key="${esc(u.key)}">
       <div class="ln" role="gridcell"><span class="num">${n}</span><input type="checkbox" class="rc" ${chk ? 'checked' : ''} aria-label="Вибрати рядок ${n}"></div>
       <div class="st" role="gridcell"><span class="sd ${st}" title="${STATUS_LABEL[st]}"></span><span class="vh">${STATUS_LABEL[st]}</span></div>
-      <div role="gridcell"><span class="key" title="${esc(u.key)}">${esc(shortKey(u.key))}</span>${e?.comments?.length ? SVG.cmt : ''}</div>
+      <div role="gridcell"><span class="key" title="${esc(u.key)}">${esc(shortKey(u.key))}</span>${cmIcon(e)}</div>
       <div class="who" role="gridcell">${esc(ctx.speaker(u))}</div>
       <div class="src" role="gridcell">${markup(flow(u.source), hits)}</div>
       <div class="tr ${e?.target ? '' : 'empty'}" role="gridcell" title="Клікніть, щоб писати прямо тут">${e?.target ? markup(flow(e.target)) : '—'}</div>
@@ -459,7 +474,7 @@ export async function start(root: HTMLElement): Promise<void> {
 
   const siHtml = (u: Unit, n: number): string => {
     const e = entryOf(u), st = shownStatus(ctx, u, e);
-    return `<div class="si ${u.key === s.cur ? 'sel' : ''}" data-key="${esc(u.key)}" role="button" tabindex="0"><span class="sd ${st}" title="${STATUS_LABEL[st]}"></span><div><div class="a"><span>${n}</span><b>${esc(ctx.speaker(u) || u.kind)}</b><span>${esc(shortKey(u.key))}</span>${e?.comments?.length ? SVG.cmt : ''}</div><div class="s">${esc(flow(u.source))}</div><div class="t">${e?.target ? esc(flow(e.target)) : '—'}</div></div></div>`;
+    return `<div class="si ${u.key === s.cur ? 'sel' : ''}" data-key="${esc(u.key)}" role="button" tabindex="0"><span class="sd ${st}" title="${STATUS_LABEL[st]}"></span><div><div class="a"><span>${n}</span><b>${esc(ctx.speaker(u) || u.kind)}</b><span>${esc(shortKey(u.key))}</span>${cmIcon(e)}</div><div class="s">${esc(flow(u.source))}</div><div class="t">${e?.target ? esc(flow(e.target)) : '—'}</div></div></div>`;
   };
   const emptyHtml = '<div class="empty-state"><b>Нічого не знайдено</b><span>Немає рядків за поточним пошуком і статусом.</span><button class="btn" data-reset>Скинути фільтри</button></div>';
 
@@ -569,7 +584,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const mins = Math.max(0, Math.round((Date.now() - s.sess.t0) / 60000));
     $('#sb-sess').textContent = `Сесія: ${s.sess.n} змін · ${mins} хв`;
     $('#ab-title').textContent = s.current ? currentLabel() : 'Transly';
-    { const sp = $('#stage-pill'); sp.classList.toggle('on', s.mode === 'review'); sp.setAttribute('aria-pressed', String(s.mode === 'review')); sp.setAttribute('aria-checked', String(s.mode === 'review')); sp.hidden = s.mode === 'table'; }
+    { const sp = $('#stage-pill'); sp.classList.toggle('on', s.mode === 'review'); sp.setAttribute('aria-checked', String(s.mode === 'review')); sp.hidden = s.mode === 'table'; }
     $('#ab-stage').textContent = s.mode === 'review' ? 'Вичитування' : 'Переклад';
     $('#ab-sub').textContent = v ? `${s.mode === 'review' ? 'Вичитування' : 'Переклад'} · ${statsOf(v.units, ents).approved} / ${v.units.length} вичитано` : '';
   }
@@ -601,6 +616,7 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#v-table').style.display = '';
     $('#v-focus').style.display = '';
     if (lp() === 'rows' || s.leftBoth || s.mode !== 'table') renderRowsList();
+    if (lp() === 'glossary') renderGlossaryPanel(ctx);
     if (s.mode === 'table') renderTable(); else renderFocus(ctx, isDesktop());
     renderSidePanel(ctx);
     renderStatus();
@@ -961,7 +977,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const it = sdItems[i];
     if (!it) return;
     closeSearch();
-    if (it.t === 'term') { s.sideTab = 'glossary'; s.sideOn = showSide(s.sideOn, 'glossary'); if (s.mode === 'table') setMode('edit', false); s.rightOpen = true; renderAll(); ($('#gl-q') as HTMLInputElement).value = it.label.split(' → ')[0] ?? ''; renderGlossary(ctx); return; }
+    if (it.t === 'term') { s.leftOpen = true; s.leftBoth = false; s.leftTab[s.mode] = 'glossary'; renderAll(); showTerm(ctx, it.label.split(' → ')[0] ?? ''); return; }
     if (it.file) {
       if (it.file !== s.current) openFile(it.file);
       if (it.key) { s.filter = 'all'; s.q = ''; s.speaker = null; s.lenFilter = 'all'; ctx.select(it.key, s.mode === 'table' ? undefined : s.mode); } else renderAll();
@@ -1158,15 +1174,17 @@ export async function start(root: HTMLElement): Promise<void> {
     if (pmi) { const [g, i] = pmi.dataset.pmi!.split('|'); closePops(); const it = MENUS[g!]?.[Number(i)]; if (it && it !== '-') it.fn(); return; }
     if (t.closest('#ab-stage')) { setMode(s.mode === 'review' ? 'edit' : 'review'); return; }
     const lt = t.closest<HTMLElement>('#mtabs [data-lt]');
-    if (lt) { s.leftTab[s.mode] = lt.dataset.lt === 'rows' ? 'rows' : 'files'; renderAll(); return; }
+    if (lt) { s.leftTab[s.mode] = lt.dataset.lt === 'rows' ? 'rows' : lt.dataset.lt === 'glossary' ? 'glossary' : 'files'; renderAll(); return; }
     const hl = t.closest<HTMLElement>('[data-hide-left]');
-    if (hl) { s.leftBoth = false; s.leftTab[s.mode] = hl.dataset.hideLeft === 'files' ? 'rows' : 'files'; renderAll(); return; }
+    if (hl) { if (hl.dataset.hideLeft === 'glossary') s.leftOpen = false; else { s.leftBoth = false; s.leftTab[s.mode] = hl.dataset.hideLeft === 'files' ? 'rows' : 'files'; } renderAll(); return; }
     const sb = t.closest<HTMLElement>('#strip [data-lp]');
     if (sb) {
       // Each button switches its own panel on or off; both on = the zone is split between them.
-      const want = sb.dataset.lp === 'rows' ? 'rows' : 'files', other = want === 'rows' ? 'files' : 'rows';
+      const want = sb.dataset.lp === 'rows' ? 'rows' : sb.dataset.lp === 'glossary' ? 'glossary' : 'files', other = want === 'rows' ? 'files' : 'rows';
       const cur = s.leftTab[s.mode];
-      if (s.phone) { if (s.leftOpen && cur === want) s.leftOpen = false; else { s.leftOpen = true; s.leftTab[s.mode] = want; } s.leftBoth = false; }
+      // The glossary is a panel of its own: it takes the whole zone and never shares it with files or rows.
+      if (want === 'glossary' || cur === 'glossary') { if (s.leftOpen && cur === want) s.leftOpen = false; else { s.leftOpen = true; s.leftTab[s.mode] = want; } s.leftBoth = false; }
+      else if (s.phone) { if (s.leftOpen && cur === want) s.leftOpen = false; else { s.leftOpen = true; s.leftTab[s.mode] = want; } s.leftBoth = false; }
       else if (!s.leftOpen) { s.leftOpen = true; s.leftBoth = false; s.leftTab[s.mode] = want; }
       else if (s.leftBoth) { s.leftBoth = false; s.leftTab[s.mode] = other; }
       else if (cur === want) s.leftOpen = false;
@@ -1227,6 +1245,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.id === 'sd') { closeSearch(); return; }
     const si = t.closest<HTMLElement>('.si[data-key]');
     if (si) { if (s.phone) { s.leftOpen = false; } ctx.select(si.dataset.key!, s.mode === 'table' ? 'edit' : undefined); return; }
+    if (glossaryClick(ctx, t)) return;
     if (sideClick(ctx, t)) return;
     if (s.mode !== 'table' && focusClick(ctx, t)) return;
     if (s.mode === 'table') {
@@ -1289,7 +1308,7 @@ export async function start(root: HTMLElement): Promise<void> {
       renderAll();
       const q = $(t.id === 'q' ? '#q' : '#q2') as HTMLInputElement;
       q.focus(); q.setSelectionRange(pos, pos);
-    } else if (t.id === 'gl-q') renderGlossary(ctx);
+    }
   });
 
   $('#sd-in').addEventListener('input', sdRender);
@@ -1312,6 +1331,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') { e.preventDefault(); openSearch(); return; }
     if (e.key === 'Shift' && !e.repeat) { const now = Date.now(); if (now - lastShift < 400) openSearch(); lastShift = now; return; }
     if (e.key === 'F5') { e.preventDefault(); runSelected(); return; }
+    if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyO' && s.mode !== 'table' && s.cur) { e.preventDefault(); insertOriginal(ctx); return; }
     if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && s.mode !== 'table') { e.preventDefault(); step(ctx, e.key === 'ArrowDown' ? 1 : -1); return; }
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && t.id === 'i-tr') { e.preventDefault(); send(ctx); return; }
     if (s.mode === 'table' && t.classList.contains('gr')) {
@@ -1376,6 +1396,8 @@ export async function start(root: HTMLElement): Promise<void> {
   Object.assign(window, { __back: backStep, __flush: () => autosave.flush(), __open: (file: string, key: string) => openRow(file, key) });
   if (s.current) { unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u])); if (s.mode !== 'table') s.cur = ctx.visible()[0]?.key ?? null; }
   restoreUi();
+  wireDiscuss(ctx);
+  wireGlossary(ctx);
   initMobile(ctx);
   initResize();
   initRightResize();

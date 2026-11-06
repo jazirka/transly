@@ -1,0 +1,148 @@
+/* Workspace panels: the row header, the context strip, the hints by kind, discussions as threads, the history with
+   differences, the glossary section of the left panel. Loaded after shell.css; built on the tokens of theme.css. */
+
+/* A hidden button stays hidden: a later display rule of the toolbar used to show "return to the translator" and "play" when they had no business there. */
+.ib[hidden],.lbl-btn[hidden],.btn[hidden]{display:none!important}
+
+/* ----- small link-like button used in the panels ----- */
+.lnk{border:0;background:none;color:var(--mute);padding:0;font:inherit;font-size:11.5px;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.lnk:hover{color:var(--text)}
+.lnk:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+.lnk.ok{color:#8fd19a}
+.lnk.danger.on{color:var(--bad);text-decoration:none;font-weight:600}
+.tagi.ok{color:#8fd19a}
+
+/* ----- the row header: where I am in the list, and the scene button ----- */
+.fnav{display:flex;align-items:center;gap:8px;margin-top:-8px}
+.fnav .stepper{display:inline-flex;align-items:center;gap:0;margin:0}
+.fnav .ib.sm{width:28px;height:28px;border:1px solid var(--line);background:#2b2d30;border-radius:var(--r1)}
+.fnav .ib.sm:hover{background:#393b40}
+.fnav .ib.sm svg{width:15px;height:15px}
+.fnav .queue{min-width:104px;text-align:center;font:12px var(--mono);color:var(--text)}
+.fnav #b-scene{margin-left:auto;height:28px;border:1px solid var(--line);background:#2b2d30}
+.fnav #b-scene:hover{background:#393b40}
+
+/* ----- the "insert original" button sits on the label line of the translation field ----- */
+.trblock .lbl{min-height:22px}
+.lbl-btn{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--mute);border-radius:var(--r1)}
+.lbl-btn svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+.lbl-btn:hover{color:var(--text)}
+.lbl-btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+
+/* ----- context strip: two lines before and after, from the same scene ----- */
+.ctxstrip{display:flex;flex-direction:column;gap:1px;border-left:2px solid var(--line);padding-left:10px;margin-left:2px}
+.ctxstrip[hidden]{display:none}
+.ctxstrip .cl-h{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);margin-bottom:2px}
+.ctxstrip .cl{display:flex;gap:8px;align-items:center;text-align:left;border:0;background:none;color:var(--mute);padding:4px 6px;border-radius:var(--r1);font:inherit;font-size:12.5px;cursor:pointer}
+.ctxstrip .cl:hover{background:rgba(255,255,255,.06);color:var(--text)}
+.ctxstrip .cl:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.ctxstrip .cl-w{color:var(--violet);white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis}
+.ctxstrip .cl-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.ctxstrip .sd{flex:none}
+
+/* ----- remarks by kind: a name, a glyph and a border style as well as a colour ----- */
+.qa-row{border-left-width:3px}
+.qa-row .kind{display:inline-flex;align-items:center;gap:5px;flex:none;font:600 10.5px var(--ui);letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:999px;border:1px solid currentColor;white-space:nowrap;margin-top:1px}
+.qa-row .k-error{color:#ff9aa5}
+.qa-row .k-term{color:#d3b6ec}
+.qa-row .k-context{color:#8ec1f5}
+.qa-row .k-style{color:#f0c477}
+.qa-row .k-info{color:var(--mute)}
+.qa-row.cat-error{border-left-style:solid}
+.qa-row.cat-term{border-left-style:solid}
+.qa-row.cat-style{border-left-style:dotted}
+.qa-row.cat-context{border-left-style:dashed}
+
+/* ----- the hints panel ----- */
+.hsec{display:flex;flex-direction:column;gap:6px}
+.hsec[hidden]{display:none}
+.hh{display:flex;align-items:center;gap:6px;margin:0;font:600 11px var(--ui);letter-spacing:.07em;text-transform:uppercase;color:var(--mute)}
+.hh .n{margin-left:auto;font:11px var(--mono);letter-spacing:0}
+.hh .r{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:400}
+.hg{display:inline-grid;place-items:center;width:16px;height:16px;font-size:11px;line-height:1;flex:none}
+.hh.error .hg{color:var(--bad)}
+.hh.term .hg{color:#c4a3e2}
+.hh.context .hg{color:var(--info)}
+.hh.style .hg{color:var(--warn)}
+.hh.info .hg{color:var(--mute)}
+.hc{border:1px solid var(--line);border-left-width:3px;border-radius:var(--r2);background:rgba(255,255,255,.02);padding:7px 10px}
+.hc.term{border-left-color:#8b72e8;border-left-style:solid}
+.hc .hc-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:3px 8px}
+.hc .hc-h .hg{color:#c4a3e2;align-self:center}
+.hc .hc-h b{font-weight:500;color:#d9c3ee}
+.hc .arr{color:var(--dim)}
+.hc .uk{color:var(--text)}
+.hc .hc-b{color:var(--mute);font-size:12px;margin-top:3px;overflow-wrap:anywhere}
+.hc.gn{cursor:pointer}
+.hc.gn:hover{background:#2a2d33}
+.hc.gn:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.hc.gn.pending{border-left-style:dashed;cursor:default}
+.kchip{display:inline-block;padding:0 7px;border-radius:999px;border:1px solid var(--line);font-size:10.5px;color:var(--mute);background:#2a2c31;line-height:17px;white-space:nowrap}
+#i-gl,#i-gn{display:flex;flex-direction:column;gap:6px}
+#i-ctx{border-left:3px dashed var(--info);padding-left:10px}
+#i-dc{border-left:3px dotted var(--dim);padding-left:10px}
+.facts{margin:0;display:grid;gap:5px}
+.fact{display:grid;grid-template-columns:minmax(84px,34%) minmax(0,1fr);gap:8px;font-size:12.5px}
+.fact dt{color:var(--mute)}
+.fact dd{margin:0;color:var(--text);overflow-wrap:anywhere}
+#i-ctx .lbl{margin-top:10px}
+.sg .pc.eq{color:var(--info);font-size:14px}
+
+/* ----- discussions as threads ----- */
+.cm-list{display:flex;flex-direction:column;gap:10px}
+.thr{border:1px solid var(--line);border-radius:var(--r2);background:rgba(255,255,255,.02);padding:8px 10px;display:flex;flex-direction:column;gap:8px}
+.thr.closed{border-style:dashed;background:none}
+.thr .cm + .cm{border-top:1px solid #2f3134;padding-top:8px}
+.cm .cm-acts{display:flex;flex-wrap:wrap;gap:10px;margin-top:3px}
+.cm .cm-acts:empty{display:none}
+.cm-edit,.cm-reply{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.cm-reply .cm-acts,.cm-edit .cm-acts{align-items:center}
+.thr-foot{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.thr-closed{margin-top:2px}
+.thr-closed>summary{cursor:pointer;color:var(--mute);font-size:12px;padding:4px 0}
+.thr-closed[open]>summary{margin-bottom:8px}
+.thr-closed .thr{margin-bottom:8px}
+.cm-new{margin-top:14px;display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line);padding-top:12px}
+.cm-new .actions{display:flex;align-items:center;gap:10px}
+.cnt[hidden]{display:none}
+
+/* ----- history: what changed, and a way back ----- */
+.hv{position:relative}
+.hv .h .tagi{margin-left:6px;color:#8fd19a}
+.hv .t.diff{white-space:pre-wrap}
+.hv .t.diff ins{text-decoration:none;background:rgba(95,184,101,.22);color:#c6f0cb;border-radius:2px;padding:0 1px}
+.hv .t.diff del{background:rgba(247,84,100,.2);color:#ffb3bb;text-decoration:line-through;border-radius:2px;padding:0 1px}
+.hv-acts{display:flex;flex-wrap:wrap;gap:12px;margin-top:5px}
+.hv-acts:empty{display:none}
+.hv.cur .t{border-color:#3d6b48}
+.hist .hint{white-space:normal}
+
+/* ----- the glossary section of the left panel ----- */
+.glpanel{display:flex;flex-direction:column;min-height:0}
+.glpanel[hidden]{display:none}
+.glpanel .fh{padding:8px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--line)}
+.gl-bar{display:flex;align-items:center;gap:8px}
+.gl-bar .hint{flex:1;min-width:0;font-size:11.5px}
+.gl-form{display:flex;flex-direction:column;gap:8px;padding:10px 10px 12px;border-bottom:1px solid var(--line);background:rgba(139,114,232,.06)}
+.gl-form[hidden]{display:none}
+.gl-f{display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:var(--mute)}
+.gl-f input,.gl-f textarea{background:var(--bg);border:1px solid var(--line);border-radius:var(--r2);padding:6px 8px;color:var(--text);font:inherit;font-size:13px;min-width:0}
+.gl-f textarea{resize:vertical}
+.gl-f input:focus,.gl-f textarea:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.gl-acts{display:flex;gap:8px}
+#gl-list{overflow:auto;min-height:0;flex:1;padding:8px;display:flex;flex-direction:column;gap:6px}
+.gt-card{border:1px solid var(--line);border-left:3px solid #8b72e8;border-radius:var(--r2);padding:7px 10px;background:rgba(255,255,255,.02)}
+.gt-card:hover{background:rgba(255,255,255,.04)}
+.gt-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px}
+.gt-h b{font-weight:500;color:#d9c3ee}
+.gt-h .arr{color:var(--dim)}
+.gt-m{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin-top:4px;font-size:11.5px;color:var(--mute)}
+.gt-note{margin-top:4px;font-size:12px;color:var(--mute);overflow-wrap:anywhere}
+.gt-acts{display:flex;gap:12px;margin-top:5px}
+.qatag{font:600 9.5px var(--mono);color:var(--ok);border:1px solid #2f4a3a;border-radius:3px;padding:0 4px}
+
+/* ----- the mark of a row whose discussions are all settled ----- */
+.cmi.done{stroke:#8fd19a}
+
+/* Filters with nothing in them are dimmed, but their text stays readable (contrast). */
+.chip.zero{opacity:1;color:#9ba1ad}

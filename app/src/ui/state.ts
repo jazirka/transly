@@ -4,8 +4,8 @@ import type { Autosave, DupIndex, Entry, FileView, GameFile, SavedProject, Statu
 
 export type Mode = 'table' | 'edit' | 'review';
 export type Filter = 'all' | 'new' | 'draft' | 'done' | 'appr' | 'qa' | 'cm';
-export type SideTab = 'hints' | 'glossary' | 'comments' | 'history';
-export type LeftTab = 'files' | 'rows';
+export type SideTab = 'hints' | 'similar' | 'comments' | 'history';
+export type LeftTab = 'files' | 'rows' | 'glossary';
 export type LenFilter = 'all' | 'far' | 'longer' | 'shorter';
 /** Order of the rows list: as in the file, untranslated first, problems first, longest first. */
 export type SortMode = 'order' | 'new' | 'qa' | 'long';
@@ -98,6 +98,8 @@ export interface Ctx {
   commit(changes: RowChange[], kind: BatchKind, what?: string): string;
   render(): void;
   select(key: string, mode?: Mode): void;
+  /** Open a row of any file in the editor (the file is opened, the filters that would hide the row are dropped). */
+  open(file: string, key: string): void;
 }
 
 export function buildTm(s: State): TmIndex {

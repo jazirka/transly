@@ -172,6 +172,12 @@ export class Store {
     this.entries(file)[key] = edit(this.entry(file, key), u, text, this.stage, Date.now());
     this.tmCache = null; this.persist(); this.emit();
   }
+  /** Typing into a field of the scene screen: any row, stored at once, the screen is not redrawn. */
+  writeAtQuiet(file: string, key: string, text: string): void {
+    const u = this.unit(file, key); if (!u) return;
+    this.entries(file)[key] = edit(this.entry(file, key), u, text, this.stage, Date.now());
+    this.tmCache = null; this.persist();
+  }
   /** Send to review / approve the open row. Returns a reason when it is refused. */
   send(): string | null {
     const c = this.current; if (!c) return 'Рядок не вибрано';

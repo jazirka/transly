@@ -34,7 +34,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const PAGE = 100; let page = 1, pageSig = '';
   let refLang = ''; let fq = '';
   const collapsedCats = new Set<string>((() => { try { return JSON.parse(localStorage.getItem('transly-m-cats') ?? '[]') as string[]; } catch { return []; } })()); let sq = '';
-  let srTimer = 0;
+  let srTimer = 0; let scnTimer = 0;
   let plPick: Set<string> | null = null; let resetArmed = false;
   let selecting = false; const picked = new Set<string>();
   /** Groups of files: files ticked for "into a group", the menu, groups unfolded, the group being renamed or asked about deletion. */
@@ -316,6 +316,7 @@ export async function start(root: HTMLElement): Promise<void> {
       <div class="m-dseg scn-modes" role="group" aria-label="Що показувати">${modes.map(([k, l]) => `<button data-scmode="${k}" class="${scn.mode === k ? 'on' : ''}" aria-pressed="${scn.mode === k}">${l}</button>`).join('')}</div>
       <label class="m-check"><input type="checkbox" id="scn-real" ${scn.real ? 'checked' : ''}> Вікно як у грі: ширина в пікселях (816 px, шрифт 28)</label>
       <div class="scn-list">${lines.map(one).join('') || '<p class="m-none">У цій сцені немає текстових рядків</p>'}</div></div>
+      <div class="scn-quick"><div class="scn-q-src">${esc((v.units.find(u => u.key === scn.picked)?.source ?? '').replace(/\s+/g, ' '))}</div><textarea id="scn-tr" class="m-textarea" spellcheck="false" autocapitalize="sentences" placeholder="Переклад вибраного рядка" aria-label="Переклад вибраного рядка">${esc(store.entry(v.name, scn.picked)?.target ?? '')}</textarea></div>
       <div class="scn-bar"><button class="m-secondary" data-scedit>${icon('edit')}<span>Редагувати</span></button><button class="m-primary" data-scenesend ${canSend ? '' : 'disabled'}>${icon('check')}<span>${review ? 'Затвердити сцену' : 'Надіслати сцену'}</span></button></div>`;
   }
 
@@ -952,6 +953,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.id === 'sr-q') { sq = (t as HTMLInputElement).value; clearTimeout(srTimer); srTimer = window.setTimeout(() => { const el = document.getElementById('sr-q') as HTMLInputElement | null; if (!el || sub !== 'search') return; const keep = el.selectionStart ?? 0; render(); const qi = document.getElementById('sr-q') as HTMLInputElement; qi.focus(); qi.setSelectionRange(keep, keep); }, 250); return; }
     if (t.id === 'f-find') fr.find = (t as HTMLInputElement).value;
     else if (t.id === 'f-rep') fr.replace = (t as HTMLInputElement).value;
+    else if (t.id === 'scn-tr') { const v = store.view(); if (v && scn.picked) { store.writeAtQuiet(v.name, scn.picked, (t as HTMLTextAreaElement).value); clearTimeout(scnTimer); scnTimer = window.setTimeout(() => { const el = document.getElementById('scn-tr') as HTMLTextAreaElement | null; if (!el || sub !== 'scene') return; const keep = el.selectionStart; const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; const e2 = document.getElementById('scn-tr') as HTMLTextAreaElement | null; if (e2) { e2.focus(); e2.setSelectionRange(keep, keep); } }, 500); } }
     else if (t.id === 'sp-q') { sp.q = (t as HTMLInputElement).value; const keep = (t as HTMLInputElement).selectionStart ?? 0; render(); const qi = document.getElementById('sp-q') as HTMLInputElement; qi.focus(); qi.setSelectionRange(keep, keep); }
     else if (t.classList.contains('m-spin')) sp.draft.set((t as HTMLInputElement).dataset.k!, (t as HTMLInputElement).value);
     else if (t.id === 's-tol') { const n = Number((t as HTMLInputElement).value); if (n >= 5 && n <= 100) { store.saved.settings.tolerancePct = n; store.saved.settingsAt = Date.now(); store.persist(); } }

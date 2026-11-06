@@ -491,3 +491,8 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-gm{display:flex;align-items:center;gap:8px;min-height:44px;padding:0 10px;border:0;border-radius:var(--r2);background:none;color:var(--text);font:inherit;text-align:left}
 .m-gm.on{color:var(--accent)}
 .m-gmenu .m-gnew{padding:4px 0 0}
+
+/* ----- the scene screen: translate the picked line in place ----- */
+.scn-quick{display:flex;flex-direction:column;gap:6px;margin:8px 12px 4px;padding:10px;border:1px solid var(--line);border-radius:var(--r3,14px);background:var(--raised)}
+.scn-q-src{font-size:13px;color:var(--mute);max-height:4.2em;overflow:auto}
+.scn-quick .m-textarea{min-height:64px}

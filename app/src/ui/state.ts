@@ -97,7 +97,8 @@ export interface Ctx {
   dups(): DupIndex;
   persist(): void;
   /** Always the translate pass: a translation is approved with the ✓ in the right panel, not in a mode of its own. */
-  stage(): 'translate' | 'review';
+  /** Always `translate`: a row is sent from the editor and approved by a separate action (the old review mode is gone). */
+  stage(): 'translate';
   /** Write rows as one action of the journal: each gets a history record with what it was before, and the whole action can be taken back. Returns the action's id. */
   commit(changes: RowChange[], kind: BatchKind, what?: string): string;
   render(): void;

@@ -40,6 +40,9 @@ export interface PageInfo {
 
 export type UnitKind = 'dialogue' | 'choice' | 'scroll' | 'name' | 'description' | 'message' | 'term';
 
+/** What a kind of row is called to the translator (the keys are the game's own and stay out of the interface). */
+export const KIND_LABEL: Record<UnitKind, string> = { dialogue: 'діалог', choice: 'варіант вибору', scroll: 'прокрутний текст', name: 'назва', description: 'опис', message: 'повідомлення', term: 'термін гри' };
+
 /** Per-unit translator state that is persisted and merged. */
 export interface Entry {
   target: string;

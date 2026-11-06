@@ -2,6 +2,7 @@ import { describePage, displayLength, jumpTarget, limitFor, sceneLines, sceneUni
 import type { RowChange, SceneLine, Unit } from '../core';
 import { isDesktop } from './desktop';
 import { $, el, esc, plural, toast } from './dom';
+import { undoToast } from './undo-toast';
 import { gameHtml } from './gamehtml';
 import { showDialog } from './modal';
 import { playInGame } from './play';
@@ -29,7 +30,6 @@ export function openScene(ctx: Ctx, start: Unit): void {
   let mode: Mode = 'both';
   let picked = start.key;
   let real = false;
-  const review = ctx.stage() === 'review';
   const measure = (() => { const c = document.createElement('canvas').getContext('2d'); if (c) c.font = '28px sans-serif'; return (t: string) => c?.measureText(t).width ?? t.length * 14; })();
   const plain = (l: string) => l.replace(/\\[A-Za-z]+\[\d+\]|\\[{}.|!><^$]/g, '');
   const limit = ctx.lineLimit();
@@ -93,8 +93,8 @@ export function openScene(ctx: Ctx, start: Unit): void {
     const apprN = states.filter(x => x === 'appr').length, doneN = states.filter(x => x === 'done').length;
     $('#sc-info', dlg).textContent += ` Вичитано ${apprN}, надіслано ${doneN}.`;
     const allBtn = $('#sc-all', dlg) as HTMLButtonElement;
-    allBtn.textContent = review ? 'Вичитати всю сцену' : 'Надіслати всю сцену';
-    allBtn.disabled = !sceneUnitsAll.some(u => review ? entries[u.key]?.status === 'done' : (entries[u.key]?.status === 'draft'));
+    allBtn.textContent = 'Надіслати всю сцену';
+    allBtn.disabled = !sceneUnitsAll.some(u => entries[u.key]?.status === 'draft');
     $('#sc-cond', dlg).textContent = firstPage ? 'Умови: ' + describePage(firstPage, s.saved.sysNames).join('; ') : '';
     $('#sc-list', dlg).classList.toggle('scn-real', real);
     dlg.querySelectorAll<HTMLElement>('[data-mode]').forEach(b => { const on = b.dataset.mode === mode; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
@@ -113,19 +113,18 @@ export function openScene(ctx: Ctx, start: Unit): void {
     if (b) { pick(b.dataset.key!); return; }
     if (t.id === 'sc-real') { real = (t as HTMLInputElement).checked; render(); return; }
     if (t.id === 'sc-all') {
-      const stage = review ? 'review' : 'translate';
       const changes: RowChange[] = [];
       let skipped = 0;
       for (const l of lines) for (const u of l.kind === 'choice' ? l.units : [l.unit]) {
         const cur = entries[u.key];
-        if (!cur || (review ? cur.status !== 'done' : cur.status !== 'draft')) continue;
-        const r = submit(cur, u, stage, Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: ctx.qaOpts() });
+        if (!cur || cur.status !== 'draft') continue;
+        const r = submit(cur, u, 'translate', Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: ctx.qaOpts() });
         if (r.ok) changes.push({ file, key: u.key, next: r.entry, text: r.entry.target }); else skipped++;
       }
       const ok = changes.length;
-      if (ok) ctx.commit(changes, review ? 'approve' : 'scene', review ? 'вичитано (вся сцена)' : undefined);
+      const batch = ok ? ctx.commit(changes, 'scene') : undefined;
       ctx.persist(); ctx.invalidateTm(); render(); ctx.render();
-      toast(`${review ? 'Вичитано' : 'Надіслано'}: ${ok}${skipped ? `. Пропущено через помилки QA: ${skipped}` : ''}`);
+      undoToast(ctx, `Надіслано: ${ok}${skipped ? `. Пропущено через помилки QA: ${skipped}` : ''}`, batch, skipped > 0);
       return;
     }
     if (t.id === 'sc-edit') { const u = ctx.unit(picked); dlg.close(); if (u) ctx.select(picked); return; }

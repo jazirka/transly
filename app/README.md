@@ -15,6 +15,20 @@ npm run build      # typecheck + production build
 
 Game files are only read, never modified. Translations live in the browser profile.
 
+## How a translation moves
+
+A row is **Без перекладу** (nothing yet), **Чернетка** (something is written), **Надіслано** (the translator sent it) or **Вичитано** (a second pair of eyes approved it). The paper plane **sends**, the tick **approves** (a draft is sent and approved in one step); a sent row can be **returned for rework**. There is no separate review mode: approving lives in the right panel and in the bulk bar. Only a QA *error* (a broken control code, a missing glossary term that is enforced…) is red; advice such as the length of a line is a neutral hint and never blocks anything.
+
+Every bulk action (send, approve, fill from memory, wrap, clear, send a scene or a group) is one entry of the journal, and its message carries **Скасувати**. The same entry can be taken back later from Activity.
+
+## The workspace (desktop)
+
+- **Centre:** *Таблиця* | *Редагування* | *Сцена*. The table edits a translation in its cell (F2 or a double click; Enter and Tab save and go to the next row, Shift+Enter writes a line break). The editor works on one row. The scene mode shows every line of the event page the row belongs to, one after another as in the game, and each line is translated in place (Ctrl+Enter sends and moves to the next card); «Як у грі» opens the message-window preview.
+- **Right panel (one, like Crowdin):** the translation of the row with who wrote it and when and the earlier versions (restore, compare); automatic proposals (translation memory with the match percent, rows with the same original); the terms of the row and the names the game defines (a click opens the card); the discussion. It follows the selected row in every mode.
+- **Left panel:** files (with **groups of files** as folders of your own: Ctrl+click files → «У групу…», the context menu, or drag; a click on a group opens its files as one table), rows, glossary, scenes.
+- **Words in the text:** glossary terms are underlined in the original and in the translation, with arrows to their counterpart and a card; control codes are underlined too.
+- **Keyboard:** the menu bar (←/→, ↓, Esc), popovers (↑/↓), the file tree (one tab stop, arrows, → and ← fold folders, Enter opens, Space ticks), focus returns to where it was after a dialog or the search closes; Ctrl+K or two ⇧ outside a text field open the search; F5 runs the chosen build.
+
 ## Sync between devices (no cloud service)
 
 Run the relay on a machine you control (a PC on your network, a VPS, behind a tunnel):
@@ -95,7 +109,7 @@ Both apps can find and install a new build from the releases of the private repo
 
 ## Scene preview and playing a scene in the game
 
-- **Scene preview** (button next to the editor, or Navigation → View scene): all rows of the event page the current row belongs to, one after another, as message windows. Speakers, choices grouped under their question, `\C[n]` colours, `\N[n]` replaced by the actor's name from `Actors.json` (when the file is open), other codes as small chips, lines wider than the game window marked. Show the translation, the original or both; click a row to pick it. Works on the phone too (it uses only the project's rows).
+- **Scene preview** («Як у грі» in the scene mode, or Navigation → View scene): all rows of the event page the current row belongs to, one after another, as message windows. Speakers, choices grouped under their question, `\C[n]` colours, `\N[n]` replaced by the actor's name from `Actors.json` (when the file is open), other codes as small chips, lines wider than the game window marked. Show the translation, the original or both; click a row to pick it. Works on the phone too (it uses only the project's rows).
 - **Play in the game** (desktop app, RPG Maker MV/MZ): from the preview, "▶ From the chosen line" or "▶ From the start of the event". The app writes the translation (drafts too) into the game, adds a small plugin `js/plugins/TranslyJump.js` plus one entry at the end of `js/plugins.js`, and starts the game: it skips the title, puts the player on the event's tile (or loads the chosen save) and runs the event page from the chosen command. `js/plugins.js` is backed up once as `plugins.js.transly-orig`; Build → "Повернути оригінали" (or any normal "Apply") removes the plugin again. Battle rows start that troop's fight and run the chosen event page; database rows are not offered. Scenes can depend on the game's state (switches, variables, party), so pick a save for those.
 - The plugin's logic is tested against stand-ins for the engine's objects (`test/scene.test.ts`); it has not been run in a real RPG Maker game from here.
 
@@ -104,7 +118,7 @@ Both apps can find and install a new build from the releases of the private repo
 - **Control codes explained** in the hints: `\N[1]` → the actor's name, `\V[12]` → the variable's name from `System.json`, `\G` → the currency, colours, pauses.
 - **Event conditions** in the row's details and in the scene preview: trigger, tile, switches (with their names), variable, self-switch.
 - **Database notes**: the `note` field of items/skills and where the game hands them out (needs the game's files).
-- **Scene preview** also has a game-window mode (816 px, 28 px font, width measured in pixels) and "send the whole scene for review / approve the whole scene".
+- **Scene preview** also has a game-window mode (816 px, 28 px font, width measured in pixels) and "send the whole scene"; the scene mode itself can also approve the whole scene.
 - Tools → **Find and replace** (previews every change, you tick what to change) and **Check consistency** (the same original translated in different ways; pick the variant to apply everywhere).
 
 ## Moving work between devices by file
@@ -126,4 +140,5 @@ The desktop app (`src/main.ts` → `src/ui`, packaged by Tauri) and the phone ap
 
 - `npm run build` → `dist` (desktop, unchanged); `npm run build:mobile` → `dist-mobile` (phone, used by `.github/workflows/android.yml`).
 - `npm run dev` / `npm run dev:mobile` start the two dev servers.
-- The phone app: Файли → Рядки → Переклад → Ще, bottom navigation, swipe between rows, bottom sheet with glossary/memory, GitHub/Claude sync and in-app updates in «Ще».
+- The phone app: Файли → Рядки → Переклад → Ще, bottom navigation, swipe between rows, bottom sheet with glossary/memory/comments/history, **groups of files** (select files → «У групу»), a scene screen where the picked line is translated in a field on the spot, the same ✓ approve and paper-plane send as on the desktop, bulk send/clear with «Скасувати», GitHub/Claude sync and in-app updates in «Ще».
+- `UIUX-REVIEW.md` keeps the last UI/UX review and the waves that follow from it.

@@ -1,6 +1,6 @@
 import { describePage, displayLength, edit, sceneTitle, sourceTermHits, submit, targetHasTerm, termsIn } from '../core';
 import type { Entry, RowChange, SceneInfo, Unit } from '../core';
-import { $, esc, plural, toast } from './dom';
+import { $, esc, plural } from './dom';
 import { KIND_LABEL, nameMarks, namesOfRow, qaRows } from './hintcards';
 import { markupTerms } from './markup';
 import { scenesOf } from './scenecache';
@@ -110,7 +110,7 @@ export function renderSceneView(ctx: Ctx): void {
   const cards = [...body.querySelectorAll<HTMLElement>('.sv-card')];
   sc.units.forEach((u, n) => { const c = cards[n]; if (c) fillCard(ctx, c, u); });
   // The row that was chosen elsewhere is brought into view once.
-  if (s.cur && s.cur !== scrollKey) { scrollKey = s.cur; body.querySelector<HTMLElement>(`.sv-card[data-key="${CSS.escape(s.cur)}"]`)?.scrollIntoView({ block: 'nearest' }); }
+  if (s.cur && s.cur !== scrollKey) { scrollKey = s.cur; bringIntoView(body, body.querySelector<HTMLElement>(`.sv-card[data-key="${CSS.escape(s.cur)}"]`)); }
 }
 
 /** Typing in a card: the row changes at once, like in the editing view. */
@@ -151,8 +151,19 @@ export function sceneFocus(ctx: Ctx, ta: HTMLTextAreaElement, panel: () => void)
 /** Put the focus into the field of a row (after a send, a step or a pick in the list). */
 export function focusCard(key: string): void {
   const ta = document.querySelector<HTMLTextAreaElement>(`.sv-in[data-key="${CSS.escape(key)}"]`);
-  ta?.focus();
-  ta?.closest('.sv-card')?.scrollIntoView({ block: 'nearest' });
+  ta?.focus({ preventScroll: true });
+  bringIntoView(document.getElementById('sv-body'), ta?.closest<HTMLElement>('.sv-card'));
+}
+
+/**
+ * Bring a card into view with some of the scene around it: a card that is out of sight goes to a third of the height,
+ * not to the very edge, so the next lines stay visible; a card that is already comfortably in view does not move.
+ */
+function bringIntoView(body: HTMLElement | null, card: HTMLElement | null | undefined): void {
+  if (!body || !card) return;
+  const b = body.getBoundingClientRect(), c = card.getBoundingClientRect();
+  if (c.top >= b.top + b.height * 0.08 && c.bottom <= b.bottom - b.height * 0.25) return;
+  body.scrollTop += c.top - b.top - b.height / 3;
 }
 
 /** Send or approve every row of the scene that can be. */

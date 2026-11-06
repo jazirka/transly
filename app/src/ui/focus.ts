@@ -1,8 +1,8 @@
-import { gorohUrl, multitranUrl, wordsOf, activeIssues, byHintOrder, check, describePage, sourceTermHits, targetHasTerm, targetTermHits, explainCodes, usageKey, displayLength, edit as editFn, lengthDeviation, limitFor, newBatch, openThreads, propagate, recordChange, referenceSets, sendBack, setIgnored, sourceChanged, submit, termsIn, wrapLines, HINT_GLYPH, HINT_GROUP, HINT_LABEL } from '../core';
-import type { BatchKind, Entry, SceneIndex, Unit } from '../core';
+import { activeIssues, sourceTermHits, targetHasTerm, targetTermHits, displayLength, edit as editFn, lengthDeviation, limitFor, newBatch, openThreads, propagate, recordChange, referenceSets, setIgnored, submit, termsIn, wrapLines } from '../core';
+import type { BatchKind, Entry, Unit } from '../core';
 import { $, buzz, esc, plural, toast } from './dom';
 import { discussClick, renderDiscuss } from './discuss';
-import { chipsHtml, keyInView, qaRows, namesOfRow, nameMarks, realOf, tmMatch } from './hintcards';
+import { chipsHtml, qaRows, namesOfRow, nameMarks, realOf, tmMatch } from './hintcards';
 import { ROW_PANEL_HTML, renderRowPanel, rowPanelClick } from './rowpanel';
 import { historyClick } from './history-panel';
 import { CODE_RE, markupTerms } from './markup';
@@ -67,8 +67,6 @@ export const SIDE_HTML = `<aside class="fs" aria-label="Панель рядка"
   </div>
 </aside>`;
 
-const when = (t: number) => new Date(t).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-const stageOf = (ctx: Ctx): 'review' | 'translate' => ctx.stage();
 let picToken = 0;
 /** Pictures from the game folder for the string (item icons, faces, enemies): desktop only, and only when the project has a game folder. */
 function renderPics(ctx: Ctx, u: Unit | undefined): void {
@@ -212,7 +210,7 @@ function renderSide(ctx: Ctx, u: Unit | undefined, e: Entry | undefined): void {
 }
 
 function edit0(ctx: Ctx, u: Unit, text: string): Entry {
-  return editFn(entryOf(ctx, u), u, text, stageOf(ctx), Date.now());
+  return editFn(entryOf(ctx, u), u, text, ctx.stage(), Date.now());
 }
 
 let panelTimer = 0;
@@ -270,19 +268,18 @@ export function step(ctx: Ctx, dir: 1 | -1): void {
   ctx.select(next.key);
 }
 
-/** Send to review / approve the current unit and move on. */
+/** Send the open row and move on to the next one. */
 export function send(ctx: Ctx): void {
   const { s } = ctx;
   buzz(12);
   const u = s.cur ? ctx.unit(s.cur) : undefined;
   if (!u || !s.current) return;
   const ents = ctx.entries(s.current);
-  const stage = stageOf(ctx);
-  const r = submit(ents[u.key], u, stage, Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: ctx.qaOpts() });
+  const r = submit(ents[u.key], u, 'translate', Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: ctx.qaOpts() });
   if (!r.ok) { toast(r.reason, { sticky: true }); return; }
   const now = Date.now();
   ents[u.key] = recordChange(ents[u.key], r.entry, 'надіслано', r.entry.target, s.who, now);
-  const same = s.saved.settings.propagate ? propagate(s.saved, ctx.dups(), realOf(ctx, u).file, { ...u, key: realOf(ctx, u).key }, ents[u.key]!, stage, now, s.who, newBatch(stage === 'translate' ? 'twin' : 'approve', now)) : 0;
+  const same = s.saved.settings.propagate ? propagate(s.saved, ctx.dups(), realOf(ctx, u).file, { ...u, key: realOf(ctx, u).key }, ents[u.key]!, 'translate', now, s.who, newBatch('twin', now)) : 0;
   s.sess.n++;
   ctx.persist(); ctx.invalidateTm();
   toast('Надіслано' + (same ? `. Також у ${plural(same, ['однаковому рядку', 'однакових рядках', 'однакових рядках'])}` : ''));

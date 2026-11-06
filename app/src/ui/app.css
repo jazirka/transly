@@ -43,7 +43,6 @@
 #gl-q{width:100%}
 .gl-rows{display:flex;flex-direction:column;gap:6px}
 .grid-note{padding:6px 12px;color:var(--mute)}
-.top-open{display:none}
 .hdr-note{color:var(--mute)}
 /* hard line breaks of the game are shown as spaces in the table */
 .gr .src,.gr .tr{white-space:normal}

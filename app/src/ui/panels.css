@@ -212,15 +212,6 @@ button.cc:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .fsep{width:1px;height:14px;background:#52565e;flex:none;margin:0 2px}
 .fdot{width:3px;height:3px;border-radius:50%;background:var(--dim);flex:none}
 .fhd .cc:not(button){white-space:nowrap}
-.tmbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:10px}
-.tmbar[hidden]{display:none}
-.tm-l{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--dim)}
-.tm-i{display:inline-flex;align-items:baseline;gap:6px;max-width:100%;padding:3px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text);font:inherit;font-size:12.5px;cursor:pointer;text-align:left}
-.tm-i:hover{background:var(--panel2,#34363b);border-color:#4a4d54}
-.tm-i:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-.tm-i b{font:600 11px var(--mono);color:#f0c477}
-.tm-i b.hi{color:var(--ok)}
-.tm-i span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .qa-side{padding:12px;border-bottom:1px solid var(--line)}
 .qa-side[hidden]{display:none}
 .name-hit{cursor:help;border-bottom:1.5px dotted var(--info);border-radius:2px;background:rgba(77,163,255,.12)}
@@ -424,3 +415,10 @@ button.cc:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 
 /* messages stand in the lower left corner, over the status bar, so they do not cover the field being typed in */
 .toasts{left:16px!important;bottom:36px!important;transform:none!important;align-items:flex-start!important}
+
+/* wave 1: small fixes */
+.bulk{white-space:nowrap;overflow:hidden}
+.bulk #bulkt{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.bulk button{flex:none}
+input::placeholder,textarea::placeholder{color:#9a9ea6;opacity:1}
+.gr .st{align-items:flex-start;padding-top:11px}

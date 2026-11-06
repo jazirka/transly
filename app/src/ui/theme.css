@@ -144,7 +144,6 @@ button{cursor:pointer}
 .gr.sel .tr{box-shadow:inset 0 0 0 1px var(--accent);background:rgba(139,114,232,.10)}
 
 /* ---------- inspector (Crowdin side) ---------- */
-.insp{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 .itabs{display:flex;height:34px;border-bottom:1px solid var(--line);flex:none;padding-left:4px}
 .itabs button{background:none;border:0;border-bottom:2px solid transparent;padding:0 11px;color:var(--mute);display:flex;align-items:center;gap:5px}
 .itabs button:hover{color:var(--text)}
@@ -230,14 +229,6 @@ tr.hl td{background:#2a2540}
 td.m{font-family:var(--mono);font-size:11.5px;color:var(--mute)}
 td .term{color:#d9c3ee}
 .ents{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:10px}
-.ecard{border:1px solid var(--line);border-radius:var(--r2);background:#292b2e;padding:8px 10px;display:flex;flex-direction:column;gap:3px;min-width:0}
-.ecard .k{font:10.5px var(--mono);color:var(--mute);display:flex;justify-content:space-between}
-.ecard b{font-weight:500}
-.ecard .d{color:var(--mute);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.qai{display:grid;grid-template-columns:18px 1fr auto;gap:8px;padding:5px 12px;border-bottom:1px solid #2f3134;align-items:center}
-.qai:hover{background:#30323a}
-.qai .k{font:11px var(--mono);color:var(--mute)}
-.qai .sev{width:8px;height:8px;border-radius:50%}
 
 /* ---------- status bar ---------- */
 .status{display:flex;align-items:center;gap:16px;height:24px;padding:0 10px;background:var(--panel);border-top:1px solid var(--line);color:var(--mute);font-size:11.5px}
@@ -310,9 +301,6 @@ td .term{color:#d9c3ee}
 .gt{width:100%}
 .gt td{padding:5px 6px;white-space:normal}
 .gt tr.hl td{background:#2a2540}
-.qai{display:grid;grid-template-columns:12px 1fr;gap:8px;padding:8px 0;border-bottom:1px solid #2f3134;align-items:start}
-.qai .k{grid-column:2;font:11px var(--mono);color:var(--mute)}
-.qai .sev{margin-top:5px}
 .ln span{cursor:pointer}
 .ln span:hover{color:var(--text)}
 .src .term-hit,.tr .term-hit{display:inline}
@@ -340,10 +328,6 @@ td .term{color:#d9c3ee}
 .tgrow.c{--tc:var(--violet)}.tgrow.l{--tc:var(--ok)}.tgrow.i{--tc:var(--warn)}.tgrow.t{--tc:var(--info)}
 .glrow{padding:5px 10px;border-bottom:1px solid #2f3134}
 .glrow b{font-weight:500;color:#d9c3ee}.glrow span{display:block;color:var(--text)}.glrow small{color:var(--mute)}
-.stagebar{display:flex;align-items:center;gap:8px;color:var(--mute)}
-.stagebar .seg{margin:0}
-.stagebar .seg button.on{background:var(--accent);color:#fff}
-.stagebar .cnt{font:10.5px var(--mono);background:#3b3d42;border-radius:var(--r2);padding:0 5px;color:var(--text)}
 .qa-under{display:flex;flex-direction:column;gap:6px;margin-top:10px}
 .qa-row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--r2);border:1px solid;font-size:12.5px}
 .qa-row.bad{background:#35242a;border-color:#5e2f38}
@@ -353,9 +337,6 @@ td .term{color:#d9c3ee}
 .qa-row.bad .dot{background:var(--bad)}.qa-row.warn .dot{background:var(--warn)}.qa-row.good .dot{background:var(--ok)}
 .qa-row .fix{margin-left:auto;height:22px;padding:0 9px;border-radius:var(--r1);border:1px solid #6a5a35;background:#41381f;color:#f0d9a0;white-space:nowrap}
 .qa-row .fix:hover{background:#4d4326}
-.proof{border:1px dashed var(--line);border-radius:var(--r2);padding:9px 12px;background:#222427}
-.proof .t{font-size:13px;color:#c8ccd3}
-.proof .chg{color:var(--warn);font-size:11px;margin-left:6px}
 .ide.mode-table.lp-closed .tree,.ide.mode-focus.lp-closed .tree{display:none}
 .ide.mode-table.lp-closed .main,.ide.mode-focus.lp-closed .main{grid-template-columns:40px minmax(0,1fr)}
 .toolbar *{white-space:nowrap}
@@ -402,8 +383,6 @@ td .term{color:#d9c3ee}
 .ib[hidden]{display:none}
 .ib:hover{background:#38354a;color:#fff}
 .ib svg{width:20px;height:20px;stroke-width:1.3}
-.qab{min-width:20px;height:20px;border-radius:var(--r3);background:#ff6347;color:#fff;font:600 11px var(--ui);display:grid;place-items:center;padding:0 5px;margin-left:6px}
-.qab[hidden]{display:none}
 .cnt2{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:42px;height:36px;border-radius:var(--r2);background:#343944;font:11.5px/1.25 var(--ui);color:#aeb4c0;padding:0 6px;margin-right:6px}
 .cnt2 b{color:#fff;font-weight:600}
 .saveb{width:38px;height:36px;border:0;border-radius:var(--r2);background:#7a62d8;color:#fff;display:grid;place-items:center}
@@ -526,9 +505,6 @@ td .term{color:#d9c3ee}
 .pform input:focus,.pform select:focus{outline:1px solid var(--accent);border-color:var(--accent)}
 .pop .hint{color:var(--mute);font-size:11.5px;padding:2px 12px}
 .pform .hint{padding:0}
-.prow{display:flex;align-items:center;gap:8px;padding:6px 14px;cursor:pointer}
-.prow:hover{background:#393b40}
-.prow input{accent-color:var(--accent)}
 .pop .tgrow:not(.c):not(.l):not(.i):not(.t)::before{display:none}
 .tg .tx{margin-left:6px;color:var(--mute);cursor:pointer;font-size:10px;line-height:1}
 .tg .tx:hover{color:var(--text)}
@@ -613,26 +589,21 @@ td .term{color:#d9c3ee}
 .dlg .hint{color:var(--mute);font-size:12px}
 .pop .back{color:var(--mute)}
 .pop button .dd{float:right;color:var(--mute)}
-.stepper{display:inline-flex;align-items:center;gap:2px;margin-right:4px}
-.stepper .queue{min-width:54px;text-align:center;font-size:11.5px}
 .ib.sm{width:28px;height:30px}
 .ib.sm svg{width:16px;height:16px}
 .fhd{display:flex;align-items:center;gap:10px}
 .fhd .st-pill{margin-left:auto}
 .sbtn{cursor:pointer;border-radius:var(--r1);padding:0 4px}
 .sbtn:hover{background:rgba(255,255,255,.1);color:var(--text)}
-.no-stage .ctxrow{display:none}
 .toast{z-index:95}
 /* light translucent "glass" highlight for active / hovered tabs and buttons */
 .strip button:hover,.seg button:hover,.tab:hover:not(.on){background:rgba(255,255,255,.09);color:var(--text)}
 .strip button.on,.seg button.on:not([data-m=proof]){background:rgba(255,255,255,.14);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.22);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
 .seg button.on[data-m=proof]{background:rgba(255,255,255,.14);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.22)}
-.stagebar .seg button.on{background:rgba(255,255,255,.14);box-shadow:inset 0 0 0 1px rgba(255,255,255,.22)}
 .tab{border-radius:var(--r2) var(--r2) 0 0}
 .tab.on{background:rgba(255,255,255,.1);border-bottom-color:rgba(255,255,255,.55);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
 .seg{border-color:rgba(255,255,255,.14);border-radius:var(--r2);background:rgba(255,255,255,.04)}
 .seg kbd{color:#aeb4c0}
-.stepper .queue{font-family:var(--mono);min-width:48px}
 /* ===== menu bar (IntelliJ style) ===== */
 .menubar{display:flex;align-items:center;gap:0;margin-left:2px;height:auto;padding:0;background:none;border:0}
 .menubar[hidden]{display:none}
@@ -668,8 +639,7 @@ td .term{color:#d9c3ee}
    controls (buttons, tabs, chips, pills): hover = soft glass, active = brighter glass + ring
    list items (rows, tree, menus, results): hover = soft glass, selected = violet */
 :root{--r1:4px;--r2:8px;--r3:12px;--hv:rgba(255,255,255,.09);--on-bg:rgba(255,255,255,.15);--on-ring:rgba(255,255,255,.24);--r-ctl:var(--r2)}
-.tb-ic:hover,.ib:hover,.wc button:hover,.menubar button:hover,.strip button:hover,.seg button:hover,.tab:hover:not(.on),.chip:hover,.tpill:hover,.node:hover,.si:hover,.tgrow:hover,.gr:hover,.pop button:hover,.sbtn:hover,.tab .x:hover{background:var(--hv)}
-.menubar button.on,.strip button.on,.seg button.on,.seg button.on[data-m=proof],.stagebar .seg button.on,.chip.on,.tpill[aria-expanded=true]{background:var(--on-bg);box-shadow:inset 0 0 0 1px var(--on-ring);color:#fff;border-color:transparent}
+.tb-ic:hover,.ib:hover,.wc button:hover,.menubar button:hover,.strip button:hover,.seg button:hover,.tab:hover:not(.on),.chip:hover,.tpill:hover,.node:hover,.si:hover,.tgrow:hover,.gr:hover,.pop button:hover,.sbtn:hover,.tab .x:hover{background:var(--hv)}.menubar button.on,.strip button.on,.seg button.on,.seg button.on[data-m=proof],.chip.on,.tpill[aria-expanded=true]{background:var(--on-bg);box-shadow:inset 0 0 0 1px var(--on-ring);color:#fff;border-color:transparent}
 .tab.on{background:var(--on-bg);box-shadow:none;border-bottom-color:rgba(255,255,255,.55)}
 .mi:hover,.mi.open,.mi:focus,.sd-it:hover,.sd-it.on{background:var(--sel)}
 .tb-ic,.ib,.wc button,.menubar button,.strip button,.seg button,.pop button{border-radius:var(--r-ctl)}
@@ -690,8 +660,7 @@ td .term{color:#d9c3ee}
 .tab .x{border-radius:var(--r1)}
 /* mode switch: same squared-with-rounded-corners language as file tabs */
 .seg{border-radius:var(--r3);background:none;padding:2px;gap:2px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
-.seg button{height:26px;border-radius:var(--r2)}
-.seg button.on,.seg button.on[data-m=proof],.stagebar .seg button.on{background:var(--on-bg);box-shadow:inset 0 0 0 1px var(--on-ring);color:#fff}
+.seg button{height:26px;border-radius:var(--r2)}.seg button.on,.seg button.on[data-m=proof]{background:var(--on-bg);box-shadow:inset 0 0 0 1px var(--on-ring);color:#fff}
 /* mode switch sits flush right and fills the tab row, same tab geometry */
 .tabs .seg{margin:0 0 0 auto;align-self:flex-end;padding:0;gap:0;border-radius:0;background:none;box-shadow:none;overflow:visible}
 .tabs .seg button{height:33px;box-sizing:border-box;padding:0 14px;border-radius:var(--r2) var(--r2) 0 0;border:1px solid transparent;border-bottom:2px solid transparent;box-shadow:none}
@@ -743,10 +712,7 @@ input[type=checkbox]{accent-color:#8b6cf0}
 .tb-ic.play .lbl{text-transform:none;letter-spacing:0;margin-left:6px;font-size:12.5px}
 .adlg details>:not(summary){margin-top:8px}
 .adlg details>p,.adlg details .hint{margin-bottom:6px}
-@media (max-width:700px){
-  .vsep:has(+ .stepper){display:none}
-  .stepper{margin:0 auto}
-}
+
 .toast.err{border-color:#8a3b44;background:#3a2a2e}
 .toast.err button{color:#ffb3bb;pointer-events:auto}
 .toasts .toast{pointer-events:auto}

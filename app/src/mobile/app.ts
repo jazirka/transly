@@ -1,10 +1,10 @@
-import { HINT_GLYPH, HINT_LABEL, byHintOrder, commentId, historyRows, openThreads, restoreNote, sourceTermHits, targetHasTerm, threadsOf, batchTitle, batchUndoLabel, undoReport, setIgnored, canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, describePage, displayLength, limitFor, wordsOf, gorohUrl, multitranUrl } from '../core';
+import { HINT_GLYPH, HINT_LABEL, KIND_LABEL, byHintOrder, commentId, historyRows, openThreads, restoreNote, sourceTermHits, targetHasTerm, threadsOf, batchTitle, batchUndoLabel, undoReport, setIgnored, canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, describePage, displayLength, limitFor } from '../core';
 import type { Comment, DiffSeg, Entry, GameFile } from '../core';
 import { artifactDb, describeClaude, loadClaudeConfig, saveClaudeConfig } from '../ui/claude';
 import { describeGithub, githubApi, githubConfigured, loadGithubConfig, saveGithubConfig } from '../ui/github';
 import { esc, plural } from '../ui/dom';
 import { gameHtml } from '../ui/gamehtml';
-import { markup, markupTerms } from '../ui/markup';
+import { markupTerms } from '../ui/markup';
 import { androidBridge, publishWidget } from '../ui/android';
 import type { WidgetStats } from '../ui/android';
 import { buildWidget } from './widgetdata';
@@ -290,7 +290,7 @@ export async function start(root: HTMLElement): Promise<void> {
       <div class="m-scope" role="group" aria-label="Де шукати"><button data-scope="file">Файл</button><button class="on" data-scope="all">Усі файли</button></div></div>
       <ul class="m-list rows">${hits.map(h => {
         const e = store.entry(h.file, h.unit.key), st = store.shown(h.unit, e);
-        return `<li><button class="m-row" data-hit="${esc(h.file)}" data-hitkey="${esc(h.unit.key)}"><span class="sd ${SHAPE[st]}"></span><span class="m-row-t"><small>${esc(store.view(h.file)?.label ?? h.file)} · ${esc(h.unit.kind)}</small><span class="m-src">${esc(h.unit.source.replace(/\s+/g, ' '))}</span><span class="m-tr ${e?.target ? '' : 'none'}">${e?.target ? esc(e.target.replace(/\s+/g, ' ')) : '—'}</span></span></button></li>`;
+        return `<li><button class="m-row" data-hit="${esc(h.file)}" data-hitkey="${esc(h.unit.key)}"><span class="sd ${SHAPE[st]}"></span><span class="m-row-t"><small>${esc(store.view(h.file)?.label ?? h.file)} · ${esc(KIND_LABEL[h.unit.kind])}</small><span class="m-src">${esc(h.unit.source.replace(/\s+/g, ' '))}</span><span class="m-tr ${e?.target ? '' : 'none'}">${e?.target ? esc(e.target.replace(/\s+/g, ' ')) : '—'}</span></span></button></li>`;
       }).join('') || `<li class="m-none">${store.q.trim() ? 'Нічого не знайдено' : 'Введіть слово для пошуку'}</li>`}${hits.length >= 200 ? '<li class="m-none">Показано перші 200: уточніть пошук</li>' : ''}</ul>`;
   }
 
@@ -491,9 +491,8 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!c) return empty('Рядок не вибрано', 'Оберіть рядок зі списку.', 'rows', 'До рядків');
     const u = c.unit, e = c.entry, st = store.shown(u, e), v = store.view();
     const terms = store.terms(u);
-    const review = store.stage === 'review';
     return `<div class="m-edit" id="m-edit">
-      <div class="m-ctx"><span class="m-tag">${esc(u.kind)}</span>${store.speaker(u) ? `<span class="m-tag who">${esc(store.speaker(u))}</span>` : ''}${v?.label ? `<span class="m-tag">${esc(v.label)}</span>` : ''}<span class="m-status"><span class="sd ${SHAPE[st]}"></span>${STATUS_LABEL[st]}</span></div>
+      <div class="m-ctx"><span class="m-tag">${esc(KIND_LABEL[u.kind])}</span>${store.speaker(u) ? `<span class="m-tag who">${esc(store.speaker(u))}</span>` : ''}${v?.label ? `<span class="m-tag">${esc(v.label)}</span>` : ''}<span class="m-status"><span class="sd ${SHAPE[st]}"></span>${STATUS_LABEL[st]}</span></div>
       <section class="m-card"><h3>Оригінал</h3><div class="m-source" id="m-source">${sourceHtml(u.source, terms, e?.target ?? '')}</div>${store.refs(c.file, u.key).map(r => `<div class="m-ref"><small>Довідка · ${esc(r.lang.toUpperCase())}</small>${esc(r.text)}</div>`).join('')}${(() => { const w = store.usageOf(c.file, u.key); return w.length ? `<div class="m-ref"><small>Де видається</small>${w.map(esc).join('<br>')}</div>` : ''; })()}</section>
       <section class="m-card m-tr-card"><h3>Переклад<span class="m-count" id="m-count"></span></h3>
         <textarea id="m-tr" class="m-textarea" spellcheck="false" autocapitalize="sentences" placeholder="Напишіть переклад…" aria-label="Переклад">${esc(e?.target ?? '')}</textarea>
@@ -584,14 +583,6 @@ export async function start(root: HTMLElement): Promise<void> {
       <div class="m-cma">${r.canRestore ? `<button class="m-mini ghost" data-hv="restore" data-i="${r.index}">Відновити цю версію</button>` : ''}${r.canRestoreBefore ? `<button class="m-mini ghost" data-hv="before" data-i="${r.index}">Було до цього</button>` : ''}</div></li>`).join('')}</ol>`;
   }
   const fmtTime = (t: number): string => new Date(t).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-  /** Words of the original (Multitran) and of the translation (Goroh): each opens its dictionary page in the browser. */
-  function dictPanel(source: string, target: string): string {
-    const chip = (w: string, url: string): string => `<a class="m-w" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(w)}</a>`;
-    const en = wordsOf(source), uk = wordsOf(target);
-    return `<div class="m-dict"><h4>Оригінал · Multitran</h4><div class="m-wchips">${en.map(w => chip(w, multitranUrl(w))).join('') || '<span class="m-hint">Слів немає</span>'}</div>
-      <h4>Переклад · Горох</h4><div class="m-dseg" role="group" aria-label="Сторінка Гороху">${(['Тлумачення', 'Синоніми'] as const).map(k => `<button data-gk="${k}" class="${k === gk ? 'on' : ''}" aria-pressed="${k === gk}">${k}</button>`).join('')}</div>
-      <div class="m-wchips">${uk.map(w => chip(w, gorohUrl(w, gk))).join('') || '<span class="m-hint">Спершу напишіть переклад</span>'}</div></div>`;
-  }
   /** Side panel under the top bar: one topic at a time (glossary, memory, comments, history); the top-bar button that opened it closes it. */
   function renderSheet(): void {
     const wrap = $('m-sheet'); wrap.hidden = !sheet && !menu;

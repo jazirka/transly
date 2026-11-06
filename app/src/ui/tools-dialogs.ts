@@ -48,7 +48,7 @@ export function openFindReplace(ctx: Ctx, scope?: { title: string; rows: RowRef[
     const n = changes.length;
     if (n) ctx.commit(changes, 'replace');
     ctx.persist(); ctx.invalidateTm(); ctx.render(); dlg.close();
-    toast(`Замінено: ${plural(n, ['переклад', 'переклади', 'перекладів'])}${ctx.stage() === 'translate' ? '. Змінені рядки повернулися в чернетки' : ''}`);
+    toast(`Замінено: ${plural(n, ['переклад', 'переклади', 'перекладів'])}`);
   });
   run();
 }

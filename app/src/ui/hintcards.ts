@@ -1,4 +1,4 @@
-import { HINT_GLYPH, HINT_LABEL, activeIssues, byHintOrder, check, describePage, explainCodes, limitFor, prepareText, sceneAt, sourceChanged, sourceTermHits, targetHasTerm, termRangesIn, termRangesInTarget, termsIn, usageKey } from '../core';
+import { HINT_GLYPH, HINT_LABEL, KIND_LABEL, activeIssues, byHintOrder, check, describePage, explainCodes, limitFor, prepareText, sceneAt, sourceChanged, targetHasTerm, termRangesIn, termRangesInTarget, usageKey } from '../core';
 import type { Entry, GlossaryTerm, Unit } from '../core';
 import { esc, plural } from './dom';
 import { scenesOf } from './scenecache';
@@ -15,7 +15,7 @@ import type { TermMark } from './markup';
 /** The file and key a row really belongs to: in a group of files the row's key carries its file. */
 export const realOf = (ctx: Ctx, u: Unit): { file: string; key: string } => splitKey(u.key) ?? { file: ctx.s.current!, key: u.key };
 
-export const KIND_LABEL: Record<Unit['kind'], string> = { dialogue: 'діалог', choice: 'варіант вибору', scroll: 'прокрутний текст', name: 'назва', description: 'опис', message: 'повідомлення', term: 'термін гри' };
+export { KIND_LABEL };
 export const oneLine = (t: string, n = 90): string => { const f = t.replace(/\s+/g, ' ').trim(); return f.length > n ? f.slice(0, n) + '…' : f; };
 
 export interface RowName { file: string; key: string; name: string }
@@ -237,14 +237,6 @@ export function chipsHtml(ctx: Ctx, u: Unit): string {
 
 let tmCur: { t: string; score: number }[] = [];
 export const tmMatch = (i: number): { t: string; score: number } | undefined => tmCur[i];
-
-/** The best matches of the translation memory as proposals under the field (a click puts one in). */
-export function tmBarHtml(ctx: Ctx, u: Unit, target: string): string {
-  const m = ctx.tm().find(u.source, { min: 60, limit: 3, exclude: x => x.s === u.source && x.t === target });
-  tmCur = m;
-  if (!m.length) return '';
-  return `<span class="tm-l" title="Збіги з пам’яті перекладів: клік підставляє варіант у переклад">З пам’яті</span>${m.map((x, n) => `<button type="button" class="tm-i" data-tm="${n}" title="${esc(x.src)} · «${esc(oneLine(x.s, 60))}»"><b class="${x.score >= 90 ? 'hi' : ''}">${x.score}%</b><span>${esc(oneLine(x.t, 70))}</span></button>`).join('')}`;
-}
 
 /** The matches of the translation memory as a list for the right panel (a click puts one into the translation). */
 export function tmListHtml(ctx: Ctx, u: Unit, target: string): string {

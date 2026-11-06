@@ -245,11 +245,6 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-composer textarea:focus{border-color:var(--accent)}
 .m-send{flex:none;width:48px;height:48px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center}
 .m-send:disabled{background:rgba(255,255,255,.1);color:var(--dim)}
-
-.m-dict h4{margin:14px 0 8px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}.m-dict h4:first-child{margin-top:0}
-.m-wchips{display:flex;flex-wrap:wrap;gap:8px}
-.m-w{display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border-radius:999px;background:var(--raised);border:1px solid var(--line);color:var(--text);text-decoration:none}
-.m-w:active{background:rgba(255,255,255,.14)}
 .m-dseg{display:inline-flex;margin-bottom:10px;border:1px solid var(--line);border-radius:999px;overflow:hidden}
 .m-dseg button{min-height:40px;padding:0 14px;color:var(--mute)}.m-dseg button.on{background:rgba(255,255,255,.14);color:var(--text)}
 .m-btnrow{display:flex;gap:8px}.m-btnrow .m-primary{flex:1}

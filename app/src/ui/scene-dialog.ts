@@ -91,9 +91,9 @@ export function openScene(ctx: Ctx, start: Unit): void {
     const sceneUnitsAll = all;
     const states = sceneUnitsAll.map(u => entries[u.key]?.status ?? 'new');
     const apprN = states.filter(x => x === 'appr').length, doneN = states.filter(x => x === 'done').length;
-    $('#sc-info', dlg).textContent += ` Вичитано ${apprN}, чекає вичитування ${doneN}.`;
+    $('#sc-info', dlg).textContent += ` Вичитано ${apprN}, надіслано ${doneN}.`;
     const allBtn = $('#sc-all', dlg) as HTMLButtonElement;
-    allBtn.textContent = review ? 'Затвердити всю сцену' : 'Надіслати всю сцену на вичитування';
+    allBtn.textContent = review ? 'Вичитати всю сцену' : 'Надіслати всю сцену';
     allBtn.disabled = !sceneUnitsAll.some(u => review ? entries[u.key]?.status === 'done' : (entries[u.key]?.status === 'draft'));
     $('#sc-cond', dlg).textContent = firstPage ? 'Умови: ' + describePage(firstPage, s.saved.sysNames).join('; ') : '';
     $('#sc-list', dlg).classList.toggle('scn-real', real);
@@ -125,7 +125,7 @@ export function openScene(ctx: Ctx, start: Unit): void {
       const ok = changes.length;
       if (ok) ctx.commit(changes, review ? 'approve' : 'scene', review ? 'вичитано (вся сцена)' : undefined);
       ctx.persist(); ctx.invalidateTm(); render(); ctx.render();
-      toast(`${review ? 'Затверджено' : 'Надіслано'}: ${ok}${skipped ? `. Пропущено через помилки QA: ${skipped}` : ''}`);
+      toast(`${review ? 'Вичитано' : 'Надіслано'}: ${ok}${skipped ? `. Пропущено через помилки QA: ${skipped}` : ''}`);
       return;
     }
     if (t.id === 'sc-edit') { const u = ctx.unit(picked); dlg.close(); if (u) ctx.select(picked); return; }

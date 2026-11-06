@@ -17,7 +17,7 @@ import type { Ctx } from './state';
 const sec = (id: string, title: string, body: string, extra = ''): string => `<section class="pn-sec" data-sec="${id}"><button class="pn-h" type="button" data-pn="${id}" aria-expanded="true"><span class="pn-c" aria-hidden="true">▾</span><span>${title}</span>${extra}</button>${body}</section>`;
 
 /** Static markup of the panel (the discussion keeps its own field so what is typed in it survives redraws). */
-export const ROW_PANEL_HTML = [
+export const ROW_PANEL_HTML = ['<div class="pn-empty-all hint">Оберіть рядок, щоб побачити його переклад, пропозиції й обговорення.</div>',
   sec('tr', 'Переклад: українська', '<div class="pn-b" id="pn-tr"></div>'),
   sec('sg', 'Автоматизовані пропозиції', '<div class="pn-b" id="pn-sg"></div>'),
   sec('tm', 'Терміни й назви з гри', '<div class="pn-b" id="pn-tm"></div>'),
@@ -38,16 +38,16 @@ const ICON = {
 
 /** The translation the row holds now, as a card. */
 function versionCard(ctx: Ctx, u: Unit, e: Entry | undefined): string {
-  if (!e?.target) return '<div class="hint pn-none">Перекладу ще немає. Напишіть його в полі або виберіть пропозицію нижче.</div>';
+  if (!e?.target) return '<div class="hint pn-none">Перекладу ще немає.</div>';
   const st = shownStatus(ctx, u, e);
   const last = e.history?.[e.history.length - 1];
   const who = last?.who ?? ctx.s.who, at = last?.at ?? e.mt;
-  const label = e.returned && e.status === 'draft' ? 'Повернено на доопрацювання' : st === 'appr' ? 'Затверджено' : STATUS_CAP[st];
+  const label = e.returned && e.status === 'draft' ? 'Повернено на доопрацювання' : st === 'appr' ? 'Вичитано' : STATUS_CAP[st];
   return `<div class="pn-ver ${st}">
     <div class="pn-text">${esc(e.target)}</div>
     <div class="pn-meta"><b>${esc(who)}</b><span class="dot" aria-hidden="true"></span>${when(at)}<span class="pn-st ${st}">${st === 'appr' ? '✔ ' : ''}${esc(label)}</span></div>
     <div class="pn-acts">
-      ${st === 'appr' ? '' : `<button class="pn-ic ok" type="button" data-pa="approve" title="Затвердити переклад" aria-label="Затвердити переклад">${ICON.ok}</button>`}
+      ${st === 'appr' ? '' : `<button class="pn-ic ok" type="button" data-pa="approve" title="Вичитати переклад" aria-label="Вичитати переклад">${ICON.ok}</button>`}
       ${e.status === 'done' || e.status === 'appr' ? `<button class="pn-ic" type="button" data-pa="back" title="Повернути на доопрацювання" aria-label="Повернути на доопрацювання">${ICON.back}</button>` : ''}
       <button class="pn-ic" type="button" data-pa="clear" title="Очистити переклад (можна скасувати в «Активності»)" aria-label="Очистити переклад">${ICON.clear}</button>
     </div>
@@ -89,8 +89,9 @@ export function renderRowPanel(ctx: Ctx, u: Unit | undefined, e: Entry | undefin
     sec.querySelector('.pn-h')?.setAttribute('aria-expanded', String(open));
     const c = sec.querySelector('.pn-c'); if (c) c.textContent = open ? '▾' : '▸';
   });
-  const none = '<div class="hint">Оберіть рядок.</div>';
-  if (!u) { $('#pn-tr').innerHTML = none; $('#pn-sg').innerHTML = none; $('#pn-tm').innerHTML = none; return; }
+  const pane = $('#s-pn');
+  pane.classList.toggle('no-row', !u);
+  if (!u) return;
   const target = e?.target ?? '';
   $('#pn-tr').innerHTML = `${versionCard(ctx, u, e)}<div class="pn-sub">Попередні версії</div><div class="hist" id="hist-list"></div>`;
   $('#pn-sg').innerHTML = proposalsHtml(ctx, u, target);
@@ -113,9 +114,9 @@ function approve(ctx: Ctx, u: Unit): void {
   }
   const r2 = submit(next, u, 'review', now, opts);
   if (!r2.ok) { toast(r2.reason, { sticky: true }); return; }
-  ctx.commit([{ file, key: u.key, next: r2.entry, text: r2.entry.target }], 'approve', 'затверджено');
+  ctx.commit([{ file, key: u.key, next: r2.entry, text: r2.entry.target }], 'approve', 'вичитано');
   ctx.persist(); ctx.invalidateTm(); ctx.render();
-  toast('Затверджено');
+  toast('Вичитано');
 }
 
 /** Clicks in the panel's own parts. `setText` writes a text into the row as one change (see `focus.ts`). */

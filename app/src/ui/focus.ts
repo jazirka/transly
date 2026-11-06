@@ -20,7 +20,7 @@ const I = {
   clear: '<svg viewBox="0 0 16 16"><path d="M3 4.5h10M6.5 4.5v-1.5h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/></svg>',
   code: '<svg viewBox="0 0 16 16"><path d="M6 3H3.5v10H6M10 3h2.5v10H10M8 5v6"/></svg>',
   play: '<svg viewBox="0 0 16 16"><path d="M5 3.5l8 4.5-8 4.5z" fill="currentColor" stroke="none"/></svg>',
-  back: '<svg viewBox="0 0 16 16"><path d="M14 2L7 9M14 2l-4.5 12L7 9 2 6.5z"/></svg>',
+  send: '<svg viewBox="0 0 16 16"><path d="M14 2L7 9M14 2l-4.5 12L7 9 2 6.5z"/></svg>',
   up: '<svg viewBox="0 0 16 16"><path d="M4 9.5L8 5.5l4 4"/></svg>',
   down: '<svg viewBox="0 0 16 16"><path d="M4 6.5L8 10.5l4-4"/></svg>',
   ok: '<svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3.2L13 4.8"/></svg>',
@@ -46,9 +46,8 @@ export const FOCUS_HTML = `<div class="fc"><div class="fc-in"><div class="te-lin
       <button class="ib lab" id="b-compact" title="Лише текст: сховати контекст і примітки" aria-label="Режим лише тексту">${I.compact}<span class="tl">Лише текст</span></button>
       <button class="ib" id="b-clear" title="Очистити переклад (можна скасувати в «Активності»)" aria-label="Очистити переклад">${I.clear}</button>
       <span class="grow"></span>
-      <span class="qab" id="qa-badge" title="Активні проблеми QA в рядку" hidden></span>
       <div class="cnt2" id="cnt2" title="Знаків у перекладі / в оригіналі. Рекомендація: якнайближче до оригіналу"><span id="c-ch">0 / 0 зн.</span></div>
-      <button class="saveb" id="b-save" aria-label="Надіслати на вичитування">${I.ok}</button>
+      <button class="saveb" id="b-save" aria-label="Надіслати">${I.send}</button>
     </div>
     <div class="wraphint" id="f-wrap" hidden></div>
     <div class="qa-under" id="f-qa"></div>
@@ -135,7 +134,7 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
   refreshTerms(ctx, u);
   meter(ctx, u);
   refreshQa(ctx, u);
-  const lab = 'Надіслати на вичитування';
+  const lab = 'Надіслати';
   $('#b-save').title = lab + ' (Ctrl+Enter)';
   $('#b-save').setAttribute('aria-label', lab);
 }
@@ -183,8 +182,6 @@ function refreshQa(ctx: Ctx, u: Unit): void {
   const t = e?.target ?? '';
   const q = qaRows(ctx, u, e);
   $('#f-qa').innerHTML = q.html;
-  $('#qa-badge').hidden = !t || !q.count;
-  $('#qa-badge').textContent = String(q.count);
   const st = shownStatus(ctx, u, e);
   const pill = $('#f-state');
   pill.innerHTML = `<span class="sd ${st}"></span>${e?.returned && e.status === 'draft' ? 'повернено на доопрацювання' : STATUS_CAP[st]}`;
@@ -207,7 +204,7 @@ function renderSide(ctx: Ctx, u: Unit | undefined, e: Entry | undefined): void {
   $('#qa-side').hidden = !q.count;
   $('#i-iss').innerHTML = q.count ? q.html : '';
   renderRowPanel(ctx, u, e);
-  if (!u) { $('#cm-list').innerHTML = '<div class="hint">Оберіть рядок.</div>'; $('#cm-badge').hidden = true; $('#pn-cm-n').hidden = true; return; }
+  if (!u) { $('#cm-list').innerHTML = ''; $('#cm-badge').hidden = true; $('#pn-cm-n').hidden = true; return; }
   const open0 = openThreads(e);
   for (const id of ['#cm-badge', '#pn-cm-n']) { $(id).textContent = String(open0); $(id).hidden = !open0; }
   renderDiscuss(ctx, `${s.current}|${u.key}`, e);
@@ -281,11 +278,11 @@ export function send(ctx: Ctx): void {
   const r = submit(ents[u.key], u, stage, Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: ctx.qaOpts() });
   if (!r.ok) { toast(r.reason, { sticky: true }); return; }
   const now = Date.now();
-  ents[u.key] = recordChange(ents[u.key], r.entry, stage === 'translate' ? 'надіслано на вичитування' : 'вичитано', r.entry.target, s.who, now);
+  ents[u.key] = recordChange(ents[u.key], r.entry, 'надіслано', r.entry.target, s.who, now);
   const same = s.saved.settings.propagate ? propagate(s.saved, ctx.dups(), realOf(ctx, u).file, { ...u, key: realOf(ctx, u).key }, ents[u.key]!, stage, now, s.who, newBatch(stage === 'translate' ? 'twin' : 'approve', now)) : 0;
   s.sess.n++;
   ctx.persist(); ctx.invalidateTm();
-  toast((stage === 'translate' ? 'Надіслано на вичитування' : 'Вичитано') + (same ? `. Також у ${plural(same, ['однаковому рядку', 'однакових рядках', 'однакових рядках'])}` : ''));
+  toast('Надіслано' + (same ? `. Також у ${plural(same, ['однаковому рядку', 'однакових рядках', 'однакових рядках'])}` : ''));
   const list = ctx.visible();
   const i = list.findIndex(x => x.key === u.key);
   const next = list[i + 1] ?? list[i];

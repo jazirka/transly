@@ -57,10 +57,10 @@ export interface SubmitOptions { blockErrors: boolean; qa: QaOptions }
 export function submit(prev: Entry | undefined, unit: Unit, stage: Stage, now: number, opts: SubmitOptions = { blockErrors: true, qa: DEFAULT_QA }): SubmitResult {
   if (!prev || !prev.target.trim()) return { ok: false, reason: 'Переклад порожній' };
   if (stage === 'translate') {
-    if (prev.status === 'done') return { ok: false, reason: 'Рядок уже очікує вичитування' };
+    if (prev.status === 'done') return { ok: false, reason: 'Рядок уже надіслано' };
     if (prev.status === 'appr') return { ok: false, reason: 'Рядок уже вичитано' };
   } else if (prev.status !== 'done' && prev.status !== 'appr') {
-    return { ok: false, reason: 'Рядок ще не надіслано на вичитування' };
+    return { ok: false, reason: 'Рядок ще не надіслано' };
   }
   if (opts.blockErrors) {
     const errors = activeIssues(unit, prev, opts.qa).filter(i => i.severity === 'bad');

@@ -125,7 +125,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!store.view(file) || !store.unit(file, key)) return 'Рядка вже немає';
     store.open(file, key); sheet = false; menu = false; sub = null; tab = 'edit'; render();
     if (action === 'keyboard') setTimeout(() => { const t = document.getElementById('m-tr') as HTMLTextAreaElement | null; if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } }, 250);
-    if (action === 'send') { const r = store.send(); render(); if (r) { say(r, true); return r; } say(store.stage === 'translate' ? 'Надіслано на вичитування' : 'Вичитано'); return 'ok'; }
+    if (action === 'send') { const r = store.send(); render(); if (r) { say(r, true); return r; } say('Надіслано'); return 'ok'; }
     return 'ok';
   }
 
@@ -188,7 +188,7 @@ export async function start(root: HTMLElement): Promise<void> {
       const open = gopen.has(g.id) || !!q;
       const acts = open ? (grename === g.id
         ? `<form class="m-grename" data-grsave="${esc(g.id)}"><input id="gr-ren" value="${esc(g.name)}" aria-label="Нова назва групи" maxlength="60" autocomplete="off"><button class="m-mini" type="submit">Гаразд</button></form>`
-        : `<div class="m-gacts"><button class="m-mini" data-gsend="${esc(g.id)}" ${all.length ? '' : 'disabled'}>${store.stage === 'review' ? 'Затвердити' : 'Надіслати'}</button><button class="m-mini" data-grename="${esc(g.id)}">Назва</button><button class="m-mini" data-gcolor="${esc(g.id)}">Колір</button><button class="m-mini danger" data-gdel="${esc(g.id)}">${gdel === g.id ? 'Справді видалити?' : 'Видалити'}</button></div>`) : '';
+        : `<div class="m-gacts"><button class="m-mini" data-gsend="${esc(g.id)}" ${all.length ? '' : 'disabled'}>Надіслати</button><button class="m-mini" data-grename="${esc(g.id)}">Назва</button><button class="m-mini" data-gcolor="${esc(g.id)}">Колір</button><button class="m-mini danger" data-gdel="${esc(g.id)}">${gdel === g.id ? 'Справді видалити?' : 'Видалити'}</button></div>`) : '';
       return `<div class="m-grp"><button class="m-cat-h m-grp-h" data-gfold="${esc(g.id)}" aria-expanded="${open}"><span class="m-cat-c">${icon('down')}</span><i class="m-gdot" style="background:${esc(g.color ?? '#8b72e8')}"></i><b>${esc(g.name)}</b><small>${all.length} · ${t.all ? Math.round((100 * t.tr) / t.all) : 0}%</small></button>${open ? `${acts}${files.length ? `<ul class="m-list">${files.map(fileItem).join('')}</ul>` : '<p class="m-none">Файлів немає: «Вибрати файли», потім «У групу»</p>'}` : ''}</div>`;
     }).join('')}</section>`;
   }
@@ -309,15 +309,14 @@ export async function start(root: HTMLElement): Promise<void> {
     const st = all.map(u => store.entry(v.name, u.key)?.status ?? 'new');
     const done = all.filter(u => store.entry(v.name, u.key)?.target).length, appr = st.filter(x => x === 'appr').length, wait = st.filter(x => x === 'done').length;
     const page = around[0]?.page, cond = page ? describePage(page, store.saved.sysNames).join('; ') : '';
-    const review = store.stage === 'review';
-    const canSend = all.some(u => review ? store.entry(v.name, u.key)?.status === 'done' : store.entry(v.name, u.key)?.status === 'draft');
+    const canSend = all.some(u => store.entry(v.name, u.key)?.status === 'draft');
     const modes: ['both' | 'tr' | 'src', string][] = [['both', 'Обидва'], ['tr', 'Переклад'], ['src', 'Оригінал']];
-    return `<div class="m-scene"><div class="scn-head"><b>${esc(v.label ?? v.name)}</b><small>${plural(all.length, ['рядок', 'рядки', 'рядків'])} · перекладено ${done} · вичитано ${appr} · чекає ${wait}</small>${cond ? `<small class="scn-cond">Умови: ${esc(cond)}</small>` : ''}</div>
+    return `<div class="m-scene"><div class="scn-head"><b>${esc(v.label ?? v.name)}</b><small>${plural(all.length, ['рядок', 'рядки', 'рядків'])} · перекладено ${done} · вичитано ${appr} · надіслано ${wait}</small>${cond ? `<small class="scn-cond">Умови: ${esc(cond)}</small>` : ''}</div>
       <div class="m-dseg scn-modes" role="group" aria-label="Що показувати">${modes.map(([k, l]) => `<button data-scmode="${k}" class="${scn.mode === k ? 'on' : ''}" aria-pressed="${scn.mode === k}">${l}</button>`).join('')}</div>
       <label class="m-check"><input type="checkbox" id="scn-real" ${scn.real ? 'checked' : ''}> Вікно як у грі: ширина в пікселях (816 px, шрифт 28)</label>
       <div class="scn-list">${lines.map(one).join('') || '<p class="m-none">У цій сцені немає текстових рядків</p>'}</div></div>
       <div class="scn-quick"><div class="scn-q-src">${esc((v.units.find(u => u.key === scn.picked)?.source ?? '').replace(/\s+/g, ' '))}</div><textarea id="scn-tr" class="m-textarea" spellcheck="false" autocapitalize="sentences" placeholder="Переклад вибраного рядка" aria-label="Переклад вибраного рядка">${esc(store.entry(v.name, scn.picked)?.target ?? '')}</textarea></div>
-      <div class="scn-bar"><button class="m-secondary" data-scedit>${icon('edit')}<span>Редагувати</span></button><button class="m-primary" data-scenesend ${canSend ? '' : 'disabled'}>${icon('check')}<span>${review ? 'Затвердити сцену' : 'Надіслати сцену'}</span></button></div>`;
+      <div class="scn-bar"><button class="m-secondary" data-scedit>${icon('edit')}<span>Редагувати</span></button><button class="m-primary" data-scenesend ${canSend ? '' : 'disabled'}>${icon('send')}<span>Надіслати сцену</span></button></div>`;
   }
 
   function screenFind(): string {
@@ -352,15 +351,15 @@ export async function start(root: HTMLElement): Promise<void> {
     const n = (c: number): string => plural(c, ['рядок', 'рядки', 'рядків']);
     const evs: Ev[] = [
       ...store.sends().map((b): Ev => ({ id: `s${b.at}${b.kind}${b.guessed ? 'g' : ''}`, at: b.at, icon: b.kind === 'send' ? 'send' : 'check',
-        text: b.kind === 'send' ? `Ви надіслали ${n(b.items.length)} на вичитування` : `Ви затвердили ${n(b.items.length)}`,
-        ...(b.guessed ? { sub: 'Запису про відправлення немає, знайдено за часом зміни' } : {}), rows: b.items.slice(0, 12), undo: `${b.at}|${b.kind}|${b.guessed ? 1 : 0}` })),
+        text: b.kind === 'send' ? `Ви надіслали ${n(b.items.length)}` : `Ви вичитали ${n(b.items.length)}`,
+        ...(b.guessed ? { sub: 'Запису про надсилання немає, знайдено за часом зміни' } : {}), rows: b.items.slice(0, 12), undo: `${b.at}|${b.kind}|${b.guessed ? 1 : 0}` })),
       ...store.autos().map((b): Ev => ({ id: `a${b.at}${b.kind}`, at: b.at, icon: 'edit',
         text: b.kind === 'words' ? `Автозаповнення за словами: ${n(b.items.length)}` : `Підставлено з однакових рядків: ${n(b.items.length)}`,
-        sub: b.kind === 'words' ? 'Чернетки, їх варто переглянути' : 'Чекають вичитування без вашого перегляду', rows: b.items.slice(0, 12), undo: `${b.at}|${b.kind}`, undoLabel: 'Скасувати заповнення', undoAttr: 'data-undoauto' })),
+        sub: b.kind === 'words' ? 'Чернетки, їх варто переглянути' : 'Надіслані без вашого перегляду', rows: b.items.slice(0, 12), undo: `${b.at}|${b.kind}`, undoLabel: 'Скасувати заповнення', undoAttr: 'data-undoauto' })),
       ...store.journal().map((b): Ev => ({ id: `j${b.id}`, at: b.at, icon: b.kind === 'undo' || b.kind === 'redo' ? 'prev' : 'check', text: batchTitle(b),
         ...(b.total > b.items.length ? { sub: `ще ${n(b.total - b.items.length)} змінено після цього` } : {}), rows: b.items.slice(0, 12), undo: b.id, undoLabel: batchUndoLabel(b), undoAttr: 'data-undojournal' })),
       ...store.autosUndone().map((u): Ev => ({ id: `au${u.at}${u.kind}`, at: u.at, icon: 'prev', text: `Ви скасували ${u.kind === 'words' ? 'автозаповнення' : 'підстановку'}: ${n(u.count)}` })),
-      ...store.undone().map((u): Ev => ({ id: `u${u.at}${u.kind}`, at: u.at, icon: 'prev', text: u.kind === 'send' ? `Ви скасували відправлення: ${n(u.count)}` : `Ви скасували затвердження: ${n(u.count)}` })),
+      ...store.undone().map((u): Ev => ({ id: `u${u.at}${u.kind}`, at: u.at, icon: 'prev', text: u.kind === 'send' ? `Ви скасували надсилання: ${n(u.count)}` : `Ви скасували вичитування: ${n(u.count)}` })),
     ].sort((x, y) => y.at - x.at);
     const dayKey = (t: number): string => new Date(t).toDateString();
     const today = dayKey(Date.now()), yest = dayKey(Date.now() - 86400000);
@@ -403,7 +402,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const allOn = on.length === list.length;
     return `<div class="m-more m-afwrap"><p class="m-hint">Знаю слів: ${store.wordCount()} · рядків для автозаповнення: ${list.length}</p>
       ${shown.map(p => { const k = p.file + '|' + p.key, sel = !af.off.has(k); return `<div class="m-af ${sel ? 'sel' : ''}" role="checkbox" aria-checked="${sel}" data-aflp="${esc(k)}" data-afk="${esc(k)}"><span class="m-edge" aria-hidden="true"></span><span class="m-af-t"><small>${esc(store.view(p.file)?.label ?? p.file)}</small><b>${esc(p.source)}</b><i>→ ${esc(p.target)}</i></span></div>`; }).join('') || '<p class="m-none">Немає рядків, які можна скласти зі знайомих слів</p>'}
-      ${list.length > 80 ? `<p class="m-hint">Показано 80 із ${list.length}: після запису решта з'явиться тут.</p>` : ''}
+      ${list.length > 80 ? `<p class="m-hint">Показано 80 із ${list.length}: після запису решта з’явиться тут.</p>` : ''}
       ${almostHtml()}</div>
       ${list.length ? selBar(on.length, list.length, allOn, 'data-afall', '', `<button class="m-primary" data-afapply ${on.length ? '' : 'disabled'}>${icon('check')}<span>Вписати вибрані</span></button>`, 'data-subback') : ''}`;
   }
@@ -420,7 +419,7 @@ export async function start(root: HTMLElement): Promise<void> {
   function screenConsistency(): string {
     const groups = store.inconsistent();
     if (!groups.length) return '<div class="m-more"><p class="m-none">Однакові оригінали перекладено однаково</p></div>';
-    return `<div class="m-more"><p class="m-hint">Один оригінал перекладено по-різному. Оберіть варіант, і він з'явиться в усіх рядках.</p>${groups.map((g, gi) => `<section class="m-card"><b>${esc(g.source.slice(0, 120))}</b>${g.variants.map((v, vi) => `<div class="m-var"><span>${esc(v.target.slice(0, 160))}</span><small>${plural(v.where.length, ['рядок', 'рядки', 'рядків'])}</small><button class="m-mini" data-uni="${gi}|${vi}">Лишити цей</button><button class="m-mini ghost" data-hit="${esc(v.where[0]!.file)}" data-hitkey="${esc(v.where[0]!.key)}">Відкрити</button></div>`).join('')}</section>`).join('')}</div>`;
+    return `<div class="m-more"><p class="m-hint">Один оригінал перекладено по-різному. Оберіть варіант, і він з’явиться в усіх рядках.</p>${groups.map((g, gi) => `<section class="m-card"><b>${esc(g.source.slice(0, 120))}</b>${g.variants.map((v, vi) => `<div class="m-var"><span>${esc(v.target.slice(0, 160))}</span><small>${plural(v.where.length, ['рядок', 'рядки', 'рядків'])}</small><button class="m-mini" data-uni="${gi}|${vi}">Лишити цей</button><button class="m-mini ghost" data-hit="${esc(v.where[0]!.file)}" data-hitkey="${esc(v.where[0]!.key)}">Відкрити</button></div>`).join('')}</section>`).join('')}</div>`;
   }
 
   function screenSettings(): string {
@@ -436,7 +435,7 @@ export async function start(root: HTMLElement): Promise<void> {
         <label class="m-lbl" for="rf-lang">Код мови (ru, pl, en…)</label><input id="rf-lang" class="m-input" maxlength="8" value="${esc(refLang)}" autocomplete="off">
         <button class="m-primary wide" data-refpick>Обрати файли гри цією мовою</button></section>
       <section class="m-card"><h3>Імпорт глосарію</h3><p class="m-hint">З файлу: таблиця Google Sheets, збережена як веб-сторінка (.html), або .csv / .tsv із колонками «Оригінал», «Переклад 1…», «Опис», «Розділ».</p>
-        <label class="m-check"><input type="checkbox" id="i-termqa"> Перевіряти ці терміни в QA (для великого словника краще вимкнути: він лише підказує)</label>
+        <label class="m-check"><input type="checkbox" id="i-termqa"> Перевіряти ці терміни в QA (для великого глосарію краще вимкнути: він лише підказує)</label>
         <button class="m-secondary wide" data-termfile>${icon('folder')}<span>Імпортувати з файлу…</span></button>
         <label class="m-lbl" for="i-terms">Або вставте рядки «англійською, табуляція, українською»</label><textarea id="i-terms" class="m-textarea sm" rows="3" spellcheck="false"></textarea>
         <button class="m-secondary wide" data-termgo>Імпортувати вставлені терміни</button></section>
@@ -476,20 +475,20 @@ export async function start(root: HTMLElement): Promise<void> {
     return `<div class="m-edit" id="m-edit">
       <div class="m-ctx"><span class="m-tag">${esc(u.kind)}</span>${store.speaker(u) ? `<span class="m-tag who">${esc(store.speaker(u))}</span>` : ''}${v?.label ? `<span class="m-tag">${esc(v.label)}</span>` : ''}<span class="m-status"><span class="sd ${SHAPE[st]}"></span>${STATUS_LABEL[st]}</span></div>
       <section class="m-card"><h3>Оригінал</h3><div class="m-source" id="m-source">${sourceHtml(u.source, terms, e?.target ?? '')}</div>${store.refs(c.file, u.key).map(r => `<div class="m-ref"><small>Довідка · ${esc(r.lang.toUpperCase())}</small>${esc(r.text)}</div>`).join('')}${(() => { const w = store.usageOf(c.file, u.key); return w.length ? `<div class="m-ref"><small>Де видається</small>${w.map(esc).join('<br>')}</div>` : ''; })()}</section>
-      <section class="m-card m-tr-card"><h3>${review ? 'Після вичитування' : 'Переклад'}<span class="m-count" id="m-count"></span></h3>
+      <section class="m-card m-tr-card"><h3>Переклад<span class="m-count" id="m-count"></span></h3>
         <textarea id="m-tr" class="m-textarea" spellcheck="false" autocapitalize="sentences" placeholder="Напишіть переклад…" aria-label="Переклад">${esc(e?.target ?? '')}</textarea>
       </section>
       <div id="m-prev" class="m-prev"></div>
       <div id="m-issues" class="m-issues">${issuesHtml()}</div>
     </div>
-    <div class="m-actions" id="m-actions"><div class="m-act2"><button class="m-mini" data-sub="scene">${icon('rows')} Сцена</button><button class="m-mini" data-approve>Затвердити</button><button class="m-mini danger" data-clear>Очистити</button></div><div class="m-act1"><button class="m-ic" data-step="-1" aria-label="Попередній рядок" ${store.neighbour(-1) ? '' : 'disabled'}>${icon('prev')}</button><button class="m-ic" data-step="1" aria-label="Наступний рядок" ${store.neighbour(1) ? '' : 'disabled'}>${icon('next')}</button><button class="m-primary" data-send>${icon('check')}<span>${review ? 'Затвердити' : 'Надіслати'}</span></button></div></div>`;
+    <div class="m-actions" id="m-actions"><div class="m-act2"><button class="m-mini" data-sub="scene">${icon('rows')} Сцена</button><button class="m-mini" data-approve>${icon('check')} Вичитати</button><button class="m-mini danger" data-clear>Очистити</button></div><div class="m-act1"><button class="m-ic" data-step="-1" aria-label="Попередній рядок" ${store.neighbour(-1) ? '' : 'disabled'}>${icon('prev')}</button><button class="m-ic" data-step="1" aria-label="Наступний рядок" ${store.neighbour(1) ? '' : 'disabled'}>${icon('next')}</button><button class="m-primary" data-send>${icon('send')}<span>Надіслати</span></button></div></div>`;
   }
 
   function screenMore(): string {
     const gh = loadGithubConfig(), tot = store.totals();
     const pct = tot.total ? Math.floor((100 * tot.translated) / tot.total) : 0;
     return `<div class="m-more">
-      ${store.hasGame ? `<section class="m-card"><h3>Прогрес</h3><div class="m-big">${pct}%</div>${bar(tot.translated, tot.total)}<p class="m-hint">Перекладено ${tot.translated} з ${tot.total} · на вичитуванні ${tot.done} · вичитано ${tot.approved}</p></section>` : ''}
+      ${store.hasGame ? `<section class="m-card"><h3>Прогрес</h3><div class="m-big">${pct}%</div>${bar(tot.translated, tot.total)}<p class="m-hint">Перекладено ${tot.translated} з ${tot.total} · надіслано ${tot.done} · вичитано ${tot.approved}</p></section>` : ''}
       <section class="m-card"><h3>Відкрити</h3><p class="m-hint">На телефоні проєкт береться з комп’ютера або з GitHub. Можна також відкрити файли гри чи файл проєкту (<code>.transly.json</code>).</p>
         <button class="m-primary wide" data-pick>${icon('folder')}<span>Обрати файли…</span></button>
         <label class="m-lbl" for="m-paste">Або вставте вміст файлу</label><textarea id="m-paste" class="m-textarea sm" rows="3" spellcheck="false" placeholder='{"version":1,…}'></textarea>
@@ -794,7 +793,7 @@ export async function start(root: HTMLElement): Promise<void> {
     }
     if (q('[data-gnew]')) { gcreating = !gcreating; render(); if (gcreating) document.getElementById('g-name')?.focus(); return; }
     if ((x = q('[data-gfold]'))) { const id = x.dataset.gfold!; if (gopen.has(id)) gopen.delete(id); else gopen.add(id); grename = null; gdel = null; render(); return; }
-    if ((x = q('[data-gsend]'))) { const r = store.sendGroup(x.dataset.gsend!); say(`${store.stage === 'translate' ? 'Надіслано на вичитування' : 'Затверджено'}: ${r.sent}${r.skipped ? `, пропущено ${r.skipped}` : ''}`, !r.sent); render(); return; }
+    if ((x = q('[data-gsend]'))) { const r = store.sendGroup(x.dataset.gsend!); say(`${'Надіслано'}: ${r.sent}${r.skipped ? `, пропущено ${r.skipped}` : ''}`, !r.sent); render(); return; }
     if ((x = q('[data-grename]'))) { grename = x.dataset.grename!; render(); document.getElementById('gr-ren')?.focus(); return; }
     if ((x = q('[data-gcolor]'))) {
       const id = x.dataset.gcolor!, g = store.groupsList().find(y => y.id === id), cs = store.groupColors;
@@ -856,14 +855,14 @@ export async function start(root: HTMLElement): Promise<void> {
       if (why) { say(why, true); buzz(30); return; }
       buzz(14);
       const next = store.neighbour(1);
-      if (next) { store.select(next.key); say(store.stage === 'translate' ? 'Надіслано на вичитування' : 'Вичитано'); render(); $('m-main').scrollTop = 0; } else { say('Це був останній рядок у списку'); render(); }
+      if (next) { store.select(next.key); say('Надіслано'); render(); $('m-main').scrollTop = 0; } else { say('Це був останній рядок у списку'); render(); }
       return;
     }
     if (q('[data-copy]')) { const c = store.current; if (c) { ($('m-tr') as HTMLTextAreaElement).value = c.unit.source; store.write(c.unit.source); refreshMeta(); autosize(); } return; }
     if (q('[data-approve]')) {
       const why = store.approve();
       if (why) { say(why, true); return; }
-      say('Затверджено'); render(); return;
+      say('Вичитано'); render(); return;
     }
     if ((x = q('[data-clear]'))) {
       if (!confirmTap(x)) return;

@@ -10,8 +10,8 @@ export type Filter = 'all' | 'new' | 'draft' | 'done' | 'appr' | 'qa';
 export type Sort = 'order' | 'new' | 'qa' | 'long';
 export type Shown = Status | 'qa';
 
-export const FILTERS: [Filter, string][] = [['all', 'Усі'], ['new', 'Без перекладу'], ['draft', 'Чернетки'], ['done', 'На вичитуванні'], ['appr', 'Вичитано'], ['qa', 'Проблеми']];
-export const STATUS_LABEL: Record<Shown, string> = { new: 'без перекладу', draft: 'чернетка', done: 'чекає вичитування', appr: 'вичитано', qa: 'є проблема QA' };
+export const FILTERS: [Filter, string][] = [['all', 'Усі'], ['new', 'Без перекладу'], ['draft', 'Чернетки'], ['done', 'Надіслані'], ['appr', 'Вичитано'], ['qa', 'Помилки']];
+export const STATUS_LABEL: Record<Shown, string> = { new: 'без перекладу', draft: 'чернетка', done: 'надіслано', appr: 'вичитано', qa: 'є помилка QA' };
 const natural = (a: string, b: string): number => a.localeCompare(b, 'en', { numeric: true });
 
 export class Store {
@@ -80,7 +80,7 @@ export class Store {
     return this.autoLim.n;
   }
   issues(u: Unit, e: Entry | undefined): ReturnType<typeof activeIssues> { return e && e.target ? activeIssues(u, e, this.qaOpts()) : []; }
-  shown(u: Unit, e: Entry | undefined): Shown { const st = e?.status ?? 'new'; return st !== 'new' && this.issues(u, e).length ? 'qa' : st; }
+  shown(u: Unit, e: Entry | undefined): Shown { const st = e?.status ?? 'new'; return st !== 'new' && this.issues(u, e).some(i => i.severity === 'bad') ? 'qa' : st; }
   terms(u: Unit): ReturnType<typeof termsIn<SavedProject['terms'][number]>> { return termsIn(u.source, this.saved.terms); }
   tm(): TmIndex {
     if (this.tmCache) return this.tmCache;
@@ -184,7 +184,7 @@ export class Store {
     const r = submit(c.entry, c.unit, this.stage, Date.now(), { blockErrors: this.saved.settings.blockErrors, qa: this.qaOpts() });
     if (!r.ok) return r.reason;
     const now = Date.now();
-    this.entries(c.file)[c.unit.key] = recordChange(c.entry, r.entry, this.stage === 'translate' ? 'надіслано на вичитування' : 'вичитано', r.entry.target, this.who, now);
+    this.entries(c.file)[c.unit.key] = recordChange(c.entry, r.entry, 'надіслано', r.entry.target, this.who, now);
     this.lastSame = this.saved.settings.propagate ? propagate(this.saved, this.dups(), c.file, c.unit, this.entries(c.file)[c.unit.key]!, this.stage, now, this.who, newBatch(this.stage === 'translate' ? 'twin' : 'approve', now)) : 0;
     this.tmCache = null; this.persist(); this.emit(); return null;
   }
@@ -198,7 +198,7 @@ export class Store {
     if (next.status !== 'done' && next.status !== 'appr') { const r1 = submit(next, c.unit, 'translate', now, opts); if (!r1.ok) return r1.reason; next = r1.entry; }
     const r2 = submit(next, c.unit, 'review', now, opts);
     if (!r2.ok) return r2.reason;
-    this.commit([{ file: c.file, key: c.unit.key, next: r2.entry, text: r2.entry.target }], 'approve', 'затверджено');
+    this.commit([{ file: c.file, key: c.unit.key, next: r2.entry, text: r2.entry.target }], 'approve', 'вичитано');
     this.tmCache = null; this.persist(); this.emit(); return null;
   }
   comment(text: string): void { this.mutate((_f, _u, e) => addComment(e, this.who, text, Date.now())); }
@@ -239,7 +239,7 @@ export class Store {
       if (!r.ok) { skipped++; continue; }
       changes.push({ file, key: u.key, next: r.entry, text: r.entry.target });
     }
-    if (changes.length) { this.commit(changes, this.stage === 'translate' ? 'send' : 'approve', this.stage === 'translate' ? 'надіслано на вичитування' : 'вичитано'); this.persist(); this.emit(); }
+    if (changes.length) { this.commit(changes, 'send', 'надіслано'); this.persist(); this.emit(); }
     return { sent: changes.length, skipped };
   }
   /* ---------- groups of files ---------- */
@@ -265,7 +265,7 @@ export class Store {
       if (!r.ok) { skipped++; continue; }
       changes.push({ file, key: u.key, next: r.entry, text: r.entry.target });
     }
-    if (changes.length) { this.commit(changes, this.stage === 'translate' ? 'send' : 'approve', this.stage === 'translate' ? 'надіслано на вичитування' : 'вичитано'); this.persist(); this.emit(); }
+    if (changes.length) { this.commit(changes, 'send', 'надіслано'); this.persist(); this.emit(); }
     return { sent: changes.length, skipped };
   }
   find(o: { find: string; replace: string; caseSensitive: boolean; wholeWord: boolean }): ReturnType<typeof findReplace> { return findReplace(this.views, this.saved, o); }

@@ -52,7 +52,7 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
     <details><summary>Тексти плагінів</summary><p class="hint">Частина ігор показує текст командами плагінів, а не вікнами повідомлень. ${st.pluginCommands.length ? `Зараз увімкнено: ${esc(st.pluginCommands.join(', '))}.` : 'Поки нічого не увімкнено.'}</p><div class="acts l"><button class="btn" type="button" id="st-plug">Обрати команди з текстом…</button></div></details>
     <details><summary>Імпорт глосарію</summary>
       <p class="hint">З файлу: таблиця Google Sheets, збережена як веб-сторінка (.html), або .csv / .tsv із колонками «Оригінал», «Переклад 1…», «Опис», «Розділ».</p>
-      <label class="achk"><input type="checkbox" id="st-terms-qa"> Перевіряти ці терміни в QA (для великого загального словника краще вимкнути: він лише підказує)</label>
+      <label class="achk"><input type="checkbox" id="st-terms-qa"> Перевіряти ці терміни в QA (для великого глосарію краще вимкнути: він лише підказує)</label>
       <div class="acts l"><button class="btn" type="button" id="st-terms-file-btn">Імпортувати з файлу…</button></div><input type="file" id="st-terms-file" accept=".html,.htm,.csv,.tsv,.txt,text/html,text/csv,text/plain" hidden>
       <p class="hint">Або вставте рядки «англійською, табуляція, українською»:</p><textarea id="st-terms" rows="4" aria-label="Терміни для імпорту"></textarea><button class="btn" type="button" id="st-terms-go">Імпортувати вставлені терміни</button></details>
     <details><summary>Імпорт пам’яті перекладів</summary><p class="hint">Рядки «оригінал, табуляція, переклад».</p><textarea id="st-tm" rows="5" aria-label="Пари для імпорту"></textarea><button class="btn" type="button" id="st-tm-go">Імпортувати пари</button></details>
@@ -91,7 +91,7 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
   /* Sections live on tabs so nobody scrolls through everything to reach one setting. */
   const TABS: [string, string[]][] = [
     ['Загальні', []],
-    ['Словники й мовці', ['Імпорт глосарію', 'Імпорт пам’яті перекладів', 'Мовці', 'Довідкова мова', 'Тексти плагінів']],
+    ['Глосарій і мовці', ['Імпорт глосарію', 'Імпорт пам’яті перекладів', 'Мовці', 'Довідкові мови', 'Тексти плагінів']],
     ['Синхронізація', ['Синхронізація через Claude', 'Синхронізація через GitHub', 'Синхронізація через власний сервер', 'Обмін проєктом через файл']],
     ['Застосунок', ['Оновлення застосунку', 'Небезпечна зона']],
   ];

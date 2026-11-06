@@ -31,7 +31,7 @@ export function openBuild(ctx: Ctx, dataDir: string | null, onBuilt: (n: number)
     const r = run();
     $('#bd-sum', dlg).textContent = r.included
       ? `У збірку потрапить ${plural(r.included, ['рядок', 'рядки', 'рядків'])} у ${plural(r.files.length, ['файлі', 'файлах', 'файлах'])}. Пропущено: ${r.skipped}${r.blocked.length ? ` (з них через помилки QA: ${r.blocked.length})` : ''}.`
-      : 'У збірку поки нічого не потрапить: немає надісланих на вичитування чи вичитаних рядків.';
+      : 'У збірку поки нічого не потрапить: немає надісланих чи вичитаних рядків.';
     dlg.querySelectorAll<HTMLButtonElement>('#bd-dir,#bd-zip,#bd-play,#bd-apply').forEach(b => { b.disabled = !r.included; });
   };
   dlg.addEventListener('change', sum);

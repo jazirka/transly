@@ -40,7 +40,7 @@ describe('journal', () => {
     list = journalBatches(views, saved);
     expect(list[0]!.items.map(i => i.key)).toEqual(['1']);
     expect(list[0]!.total).toBe(2);
-    expect(batchTitle(list[0]!)).toBe('Надіслано на вичитування: 1 рядок');
+    expect(batchTitle(list[0]!)).toBe('Надіслано: 1 рядок');
   });
 
   it('undo returns the rows, reports the ones changed since, and can be repeated', () => {
@@ -57,7 +57,7 @@ describe('journal', () => {
     const undo = list.find(b => b.kind === 'undo')!;
     expect(undo.items).toHaveLength(2);
     expect(batchUndoLabel(undo)).toBe('Повторити');
-    expect(batchTitle(undo)).toBe('Скасовано «надіслано на вичитування»: 2 рядки');
+    expect(batchTitle(undo)).toBe('Скасовано «надіслано»: 2 рядки');
     const again = undoJournal(saved, undo.id, 'Я', 300);
     expect(again).toMatchObject({ done: 2, kind: 'undo' });
     expect(undoReport(again)).toBe('Повторено: 2 рядки');

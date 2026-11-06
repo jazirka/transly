@@ -15,9 +15,9 @@ export type BatchKind = 'send' | 'approve' | 'scene' | 'words' | 'twin' | 'repla
 
 /** The history text and the feed title of each kind of action. */
 export const BATCH_INFO: Record<BatchKind, { what: string; title: (n: string) => string }> = {
-  send: { what: 'надіслано на вичитування', title: n => `Надіслано на вичитування: ${n}` },
-  approve: { what: 'вичитано', title: n => `Затверджено: ${n}` },
-  scene: { what: 'надіслано на вичитування (вся сцена)', title: n => `Надіслано сцену на вичитування: ${n}` },
+  send: { what: 'надіслано', title: n => `Надіслано: ${n}` },
+  approve: { what: 'вичитано', title: n => `Вичитано: ${n}` },
+  scene: { what: 'надіслано (вся сцена)', title: n => `Надіслано сцену: ${n}` },
   words: { what: 'автозаповнено за словами', title: n => `Автозаповнення за словами: ${n}` },
   twin: { what: 'підставлено з однакового рядка', title: n => `Підставлено з однакових рядків: ${n}` },
   replace: { what: 'знайти й замінити', title: n => `Знайдено й замінено: ${n}` },

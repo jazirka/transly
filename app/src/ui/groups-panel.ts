@@ -69,7 +69,7 @@ function groupItem(ctx: Ctx, g: Group, files: string[]): string {
     <button class="grp-fold" type="button" data-gfold="${esc(g.id)}" aria-expanded="${open}" aria-label="${open ? 'Згорнути' : 'Розгорнути'} групу «${esc(g.name)}»">${open ? '▾' : '▸'}</button>
     <button class="grp-open" type="button" data-gopen="${esc(g.id)}" title="Відкрити «${esc(g.name)}» однією таблицею"><span class="grp-dot" style="background:${color}" aria-hidden="true"></span><span class="grp-name">${esc(g.name)}</span><span class="grp-c">${files.length}</span>${progressBit(ctx, rowsOf(ctx, files))}</button>
     <button class="grp-more" type="button" id="gm-${esc(g.id)}" data-gmenu="${esc(g.id)}" aria-haspopup="menu" aria-label="Дії групи «${esc(g.name)}»" title="Дії групи">⋯</button>
-  </div>${open ? `<div class="grp-files">${files.length ? files.map(f => `<div class="grp-file"><button class="grp-fopen" type="button" data-gfile="${esc(f)}" title="${esc(f)}"><span class="grp-name">${esc(shortName(f))}${ctx.s.saved.labels?.[f] ? ` <small>${esc(ctx.s.saved.labels[f]!)}</small>` : ''}</span></button><button class="grp-x" type="button" data-gm="unplace" data-file="${esc(f)}" aria-label="Прибрати файл ${esc(f)} з групи" title="Прибрати з групи">✕</button></div>`).join('') : '<div class="hint grp-none">Файлів ще немає: Ctrl-клік по файлах і «У групу»</div>'}</div>` : ''}`;
+  </div>${open ? `<div class="grp-files">${files.length ? files.map(f => `<div class="grp-file"><button class="grp-fopen" type="button" data-gfile="${esc(f)}" title="${esc(f)}"><span class="grp-name">${esc(shortName(f))}${ctx.s.saved.labels?.[f] ? ` <small>${esc(ctx.s.saved.labels[f]!)}</small>` : ''}</span></button><button class="grp-x" type="button" data-gm="unplace" data-file="${esc(f)}" aria-label="Прибрати файл ${esc(f)} з групи" title="Прибрати з групи">✕</button></div>`).join('') : '<div class="hint grp-none">Файлів ще немає: Ctrl+клік по файлах і «У групу»</div>'}</div>` : ''}`;
 }
 
 /** Draw the block above the file tree. */
@@ -83,7 +83,7 @@ export function renderGroupsBlock(ctx: Ctx): void {
   ($('#gr-form') as HTMLElement).hidden = !creating;
   const orphans = Object.keys(s.saved.members ?? {}).length ? findOrphans(s.saved, s.views).filter(o => o.kind === 'file') : [];
   let h = '';
-  if (!groups.length && !creating) h = '<div class="hint grp-none">Груп ще немає. Ctrl-клік по файлах, потім «У групу».</div>';
+  if (!groups.length && !creating) h = '<div class="hint grp-none">Груп ще немає. Ctrl+клік по файлах, потім «У групу».</div>';
   h += groups.map(g => groupItem(ctx, g, by.get(g.id) ?? [])).join('');
   if (orphans.length) {
     h += `<div class="grp-warn" role="status"><b>${plural(orphans.length, ['файл', 'файли', 'файлів'])} груп немає в поточній версії гри.</b> Вони лишаються в проєкті. <button class="lnk" type="button" data-gm="orphans">${showOrphans ? 'Сховати' : 'Показати'}</button>${showOrphans ? `<div class="grp-orph">${orphans.map(o => `<div><span>${esc(groups.find(g => g.id === o.group)?.name ?? '')} · ${esc(o.file)}</span><button class="lnk" type="button" data-gm="drop-orphan" data-ref="${esc(o.ref)}">Прибрати</button></div>`).join('')}</div>` : ''}</div>`;
@@ -109,7 +109,7 @@ function groupMenuHtml(ctx: Ctx, g: Group, files: string[]): string {
   const has = files.length > 0;
   return `<div class="group">${esc(g.name)} · ${filesLabel(files.length)}</div>
     <button data-gm="open" data-gid="${esc(g.id)}" ${has ? '' : 'disabled'}>Відкрити однією таблицею</button>
-    <button data-gm="send" data-gid="${esc(g.id)}" ${has ? '' : 'disabled'} title="Надіслати всі рядки групи, які можна надіслати, одним пакетом (його можна скасувати в «Активності»)">${ctx.stage() === 'review' ? 'Затвердити всі рядки групи' : 'Надіслати на вичитування'}</button>
+    <button data-gm="send" data-gid="${esc(g.id)}" ${has ? '' : 'disabled'} title="Надіслати всі рядки групи, які можна надіслати, одним пакетом (його можна скасувати в «Активності»)">Надіслати</button>
     <button data-gm="replace" data-gid="${esc(g.id)}" ${has ? '' : 'disabled'}>Знайти й замінити в групі…</button>
     <button data-gm="rename" data-gid="${esc(g.id)}">Перейменувати</button>
     <div class="group">Колір</div>
@@ -140,10 +140,10 @@ function sendGroup(ctx: Ctx, id: string): void {
     if (res.ok) changes.push({ file: r.file, key: r.key, next: res.entry, text: res.entry.target });
     else skipped.set(res.reason.slice(0, 40), (skipped.get(res.reason.slice(0, 40)) ?? 0) + 1);
   }
-  if (changes.length) ctx.commit(changes, ctx.stage() === 'translate' ? 'send' : 'approve');
+  if (changes.length) ctx.commit(changes, 'send');
   ctx.persist(); ctx.invalidateTm(); ctx.render();
   const nSkip = [...skipped.values()].reduce((a, b) => a + b, 0);
-  toast(`${ctx.stage() === 'translate' ? 'Надіслано на вичитування' : 'Затверджено'}: ${changes.length}${nSkip ? `. Пропущено: ${nSkip} (${[...skipped.keys()].slice(0, 2).join('; ')})` : ''}`, { sticky: nSkip > 0 });
+  toast(`Надіслано: ${changes.length}${nSkip ? `. Пропущено: ${nSkip} (${[...skipped.keys()].slice(0, 2).join('; ')})` : ''}`, { sticky: nSkip > 0 });
 }
 
 /** The data to put on a drag of files out of the tree (the shell calls it when a file starts to be dragged). */
@@ -251,7 +251,7 @@ export function groupsClick(ctx: Ctx, t: HTMLElement, api: GroupsApi): boolean {
     const g = ctx.s.saved.groups?.[op.dataset.gopen!];
     if (g && !g.del) {
       const rows = groupRows(ctx.s.saved, ctx.s.views).get(g.id) ?? [];
-      if (!rows.length) toast('У цій групі ще немає файлів: Ctrl-клік по файлах і «У групу»');
+      if (!rows.length) toast('У цій групі ще немає файлів: Ctrl+клік по файлах і «У групу»');
       else ctx.openRows(g.name, rows, g.id);
     }
     return true;

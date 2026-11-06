@@ -64,7 +64,7 @@ const SVG = {
 const ls = (k: string): string | null => { try { return localStorage.getItem(k); } catch { return null; } };
 const UI_KEY = 'transly.ui.v1';
 
-const FILTERS: [Filter, string][] = [['all', 'Усі'], ['new', 'Без перекладу'], ['draft', 'Чернетки'], ['done', 'Чекають вичитування'], ['qa', 'Проблеми'], ['cm', 'З коментарями']];
+const FILTERS: [Filter, string][] = [['all', 'Усі'], ['new', 'Без перекладу'], ['draft', 'Чернетки'], ['done', 'Надіслані'], ['appr', 'Вичитані'], ['qa', 'Помилки'], ['cm', 'З коментарями']];
 const LEN_LABEL = { far: 'далеко від оригіналу', longer: 'довші за оригінал', shorter: 'коротші за оригінал' } as const;
 const FORMAT_LABEL: Record<string, string> = { json: 'RPG Maker MV · UTF-8', po: 'gettext · UTF-8', pot: 'gettext · UTF-8', csv: 'CSV · UTF-8', tsv: 'TSV · UTF-8', rpy: 'Ren’Py · UTF-8' };
 
@@ -124,9 +124,9 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
         <div class="crumbs" id="crumbs"></div>
         <div class="filters"><div class="fin">${SVG.search}<input class="qin" id="q" placeholder="Фільтр у цьому файлі" aria-label="Фільтр"></div><span class="chipsHost" id="chips1"></span><span id="tagfilter"></span>
           <div class="r"><button class="chip" id="spkbtn">Мовець ▾</button><button class="chip" id="lenbtn">Довжина ▾</button></div></div>
-        <div class="bulk" id="bulk"><b id="bulkn">0</b><span id="bulkt"></span><button id="bb-ok">Надіслати на вичитування</button><button id="bb-appr" title="Затвердити вибрані переклади (рядки, що ще не надіслано, надсилаються й затверджуються разом)">Затвердити</button><button id="bb-tm" title="Підставити збіг із пам’яті перекладів (від 70%) у порожні вибрані рядки">Застосувати з ПП</button><button id="bb-clear" class="ghost">Скасувати вибір</button></div>
+        <div class="bulk" id="bulk"><b id="bulkn">0</b><span id="bulkt"></span><button id="bb-ok" title="Надіслати вибрані переклади">Надіслати</button><button id="bb-appr" title="Вичитати вибрані переклади (рядки, що ще не надіслано, надсилаються й вичитуються разом)">Вичитати</button><button id="bb-tm" title="Підставити збіг із пам’яті перекладів (від 70%) у порожні вибрані рядки">Підставити з пам’яті</button><button id="bb-clear" class="ghost">Скасувати вибір</button></div>
         <div class="gridwrap"><div class="grid" id="grid" role="grid" aria-label="Рядки файлу"></div></div>
-        <div class="legend-bar" aria-label="Умовні позначення"><span><i class="sd new"></i>без перекладу</span><span><i class="sd draft"></i>чернетка</span><span><i class="sd done"></i>чекає вичитування</span><span><i class="sd appr"></i>вичитано</span><span><i class="sd qa"></i>є проблема QA</span><span>${SVG.cmt}коментар</span></div>
+        <div class="legend-bar" aria-label="Умовні позначення"><span><i class="sd new"></i>без перекладу</span><span><i class="sd draft"></i>чернетка</span><span><i class="sd done"></i>надіслано</span><span><i class="sd appr"></i>вичитано</span><span><i class="sd qa"></i>є помилка QA</span><span>${SVG.cmt}коментар</span></div>
       </div>
       <div class="view" id="v-focus">${FOCUS_HTML}</div>
       <div class="view" id="v-scene">${SCENE_HTML}</div>
@@ -150,7 +150,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
   <div class="kr"><span>Наступний / попередній рядок</span><kbd>↓</kbd><kbd>↑</kbd></div>
   <div class="kr"><span>У редагуванні: наступний / попередній у списку</span><kbd>Alt</kbd><kbd>↓</kbd></div>
   <div class="kr"><span>У редагуванні: вставити оригінал у переклад</span><kbd>Alt</kbd><kbd>O</kbd></div>
-  <div class="kr"><span>Надіслати на вичитування / затвердити й далі</span><kbd>Ctrl</kbd><kbd>Enter</kbd></div>
+  <div class="kr"><span>Надіслати й далі</span><kbd>Ctrl</kbd><kbd>Enter</kbd></div>
   <div class="kr"><span>Змінити переклад у комірці таблиці</span><kbd>2× клік</kbd></div>
   <div class="kr"><span>Запустити вибрану збірку (файл або гра)</span><kbd>F5</kbd></div>
   <div class="kr"><span>Знайти скрізь</span><kbd>Ctrl</kbd><kbd>K</kbd><kbd>⇧</kbd><kbd>⇧</kbd></div>
@@ -432,7 +432,7 @@ export async function start(root: HTMLElement): Promise<void> {
   function renderTree(): void {
     renderGroupsBlock(ctx);
     const box = $('#tree-list');
-    $('#tree-act').innerHTML = s.views.length > 1 ? `<button class="btn" data-act="group-all" title="Усі рядки всіх файлів в одній таблиці">Усі файли разом</button>${s.picked.size ? `<button class="btn p" data-act="group-picked">Відкрити вибрані (${s.picked.size})</button><button class="btn" id="tree-grp" aria-haspopup="menu" title="Додати вибрані файли до групи">У групу ▾</button><button class="btn" data-act="group-clear" title="Зняти позначки">✕</button>` : '<span class="hint">Ctrl-клік по файлах, щоб відкрити їх разом</span>'}` : '';
+    $('#tree-act').innerHTML = s.views.length > 1 ? `<button class="btn" data-act="group-all" title="Усі рядки всіх файлів в одній таблиці">Усі файли разом</button>${s.picked.size ? `<button class="btn p" data-act="group-picked">Відкрити вибрані (${s.picked.size})</button><button class="btn" id="tree-grp" aria-haspopup="menu" title="Додати вибрані файли до групи">У групу ▾</button><button class="btn" data-act="group-clear" title="Зняти позначки">✕</button>` : '<span class="hint">Ctrl+клік по файлах, щоб відкрити їх разом</span>'}` : '';
     if (!s.views.length) { box.innerHTML = '<div class="msg-empty">Папку гри ще не відкрито</div>'; return; }
     let skip: number | null = null;
     const q = fileQ.trim().toLowerCase();
@@ -517,7 +517,7 @@ export async function start(root: HTMLElement): Promise<void> {
   };
   const emptyHtml = '<div class="empty-state"><b>Нічого не знайдено</b><span>Немає рядків за поточним пошуком і статусом.</span><button class="btn" data-reset>Скинути фільтри</button></div>';
 
-  const SORT_LABEL: Record<SortMode, string> = { order: 'За порядком', new: 'Без перекладу спершу', qa: 'Проблеми спершу', long: 'Найдовші спершу' };
+  const SORT_LABEL: Record<SortMode, string> = { order: 'За порядком', new: 'Без перекладу спершу', qa: 'Помилки спершу', long: 'Найдовші спершу' };
   function renderRowsList(): void {
     $('#chips2').innerHTML = (s.speaker !== null ? `<button class="chip on" data-clear="speaker" title="Скинути фільтр за мовцем">${esc(s.speaker || 'Без мовця')} ✕</button>` : '') + chipsHtml();
     $('#sortbtn').textContent = `↕ ${SORT_LABEL[s.sort]}`;
@@ -538,7 +538,7 @@ export async function start(root: HTMLElement): Promise<void> {
       if (!v) return '';
       const ents = s.saved.files[n] ?? {};
       let qa = 0;
-      for (const u of v.units) { const e = ents[u.key]; if (e && e.target && activeIssues(u, e, qaOpts()).length) qa++; }
+      for (const u of v.units) { const e = ents[u.key]; if (e && e.target && activeIssues(u, e, qaOpts()).some(i => i.severity === 'bad')) qa++; }
       const [ic, lab] = fileIcon(n);
       const on = n === s.current;
       return `<div class="tab ${on ? 'on' : ''}"><button class="tb" data-tab="${esc(n)}" aria-current="${on}" title="${esc(v.label ? n + ' · ' + v.label : n)}"><span class="tico ${ic === 'map' ? '' : 'j'}">${lab}</span>${esc(n.split('/').pop() ?? n)}${qa ? `<span class="badge" title="Проблеми QA у файлі">${qa}</span>` : ''}</button><button class="x" data-closetab="${esc(n)}" aria-label="Закрити вкладку ${esc(n)}">✕</button></div>`;
@@ -591,7 +591,7 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#pg-b').style.width = total ? `${(100 * D) / total}%` : '0';
     $('#pg-c').style.width = total ? `${(100 * W) / total}%` : '0';
     $('#pg-txt').textContent = total ? `Перекладено ${Math.floor((100 * (A + D + W)) / total)}% (${(A + D + W).toLocaleString('uk-UA')} з ${total.toLocaleString('uk-UA')}) · вичитано ${Math.floor((100 * A) / total)}%` : 'Папку гри не відкрито';
-    $('#pg').title = total ? `Вичитано ${Math.round((100 * A) / total)}% · Чекає вичитування ${Math.round((100 * D) / total)}% · Чернетки ${Math.round((100 * W) / total)}% · Решта без перекладу` : '';
+    $('#pg').title = total ? `Вичитано ${Math.round((100 * A) / total)}% · Надіслано ${Math.round((100 * D) / total)}% · Чернетки ${Math.round((100 * W) / total)}% · Решта без перекладу` : '';
     const sy = loadSyncConfig();
     const lastSync = Math.max(sy.last, loadGithubConfig().last, loadClaudeConfig().last);
     $('#sb-sync').hidden = !lastSync; $('#sb-build').hidden = !s.lastBuild;
@@ -606,18 +606,18 @@ export async function start(root: HTMLElement): Promise<void> {
     const v = ctx.view();
     const ents = v ? ctx.entries(v.name) : {};
     let qa = 0;
-    if (v) for (const u of v.units) { const e = ents[u.key]; if (e && e.target && activeIssues(u, e, qaOpts()).length) qa++; }
+    if (v) for (const u of v.units) { const e = ents[u.key]; if (e && e.target && activeIssues(u, e, qaOpts()).some(i => i.severity === 'bad')) qa++; }
     const sv = $('#sb-save');
     sv.textContent = !s.saveOk ? '○ Не збережено: повторю спробу' : s.savedAt ? '● Збережено о ' + new Date(s.savedAt).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '● Зміни зберігаються автоматично';
     sv.className = s.saveOk ? 'ok' : 'bad';
     $('#sb-fmt').textContent = s.current && s.current !== GROUP ? FORMAT_LABEL[s.current.split('.').pop() ?? ''] ?? '' : '';
-    $('#sb-qa').textContent = qa ? plural(qa, ['проблема QA', 'проблеми QA', 'проблем QA']) : 'Проблем QA немає';
+    $('#sb-qa').textContent = qa ? plural(qa, ['помилка QA', 'помилки QA', 'помилок QA']) : 'Помилок QA немає';
     $('#sb-qa').className = qa ? 'bad' : 'ok';
     const u = s.cur ? ctx.unit(s.cur) : undefined;
     $('#st-sel').textContent = u && v ? `Рядок ${v.units.indexOf(u) + 1} · ${STATUS_LABEL[shownStatus(ctx, u, entryOf(u))]}` : '';
     if (v) {
       const st = statsOf(v.units, ents);
-      $('#sb-file').textContent = `${s.current === GROUP ? 'Група' : 'Файл'}: ${st.approved} / ${st.total} вичитано · ${st.done} чекає вичитування`;
+      $('#sb-file').textContent = `${s.current === GROUP ? 'Група' : 'Файл'}: ${st.approved} / ${st.total} вичитано · ${st.done} надіслано`;
     } else $('#sb-file').textContent = '';
     const mins = Math.max(0, Math.round((Date.now() - s.sess.t0) / 60000));
     $('#sb-sess').textContent = `Сесія: ${s.sess.n} змін · ${mins} хв`;
@@ -1073,7 +1073,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const MENUS: Record<string, MenuItem[]> = {
     'Файл': [{ t: 'Відкрити папку гри…', fn: () => void openFolder() }, { t: 'Відкрити файли або вставити JSON…', fn: openImportDlg }, { t: 'Зібрати…', fn: doBuild, sc: 'F5' }, '-', { t: 'Налаштування…', fn: openSettingsDlg }],
     'Вигляд': [{ t: 'Таблиця', fn: () => setMode('table') }, { t: 'Редагування', fn: () => setMode('edit') }, { t: 'Сцена', fn: () => setMode('scene') }],
-    'Навігація': [{ t: 'Наступний рядок без перекладу', fn: () => jump('new', 1) }, { t: 'Наступна проблема QA', fn: () => jump('qa', 1) }, { t: 'Сцена', fn: () => setMode('scene') }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: 'Ctrl+K' }],
+    'Навігація': [{ t: 'Наступний рядок без перекладу', fn: () => jump('new', 1) }, { t: 'Наступна помилка QA', fn: () => jump('qa', 1) }, { t: 'Сцена', fn: () => setMode('scene') }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: 'Ctrl+K' }],
     'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Перевірити узгодженість…', fn: () => openConsistency(ctx) }, { t: 'Автозаповнення за словами…', fn: () => openAutofill(ctx) }, { t: 'Активність…', fn: () => openActivity(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенести довгі рядки у файлі', fn: wrapFile }, '-', { t: 'Налаштування…', fn: openSettingsDlg }],
     'Довідка': [{ t: 'Гарячі клавіші', fn: () => toggleKeys() }],
   };
@@ -1111,7 +1111,7 @@ export async function start(root: HTMLElement): Promise<void> {
         return;
       }
     }
-    toast(kind === 'new' ? 'Рядків без перекладу немає' : 'Проблем QA немає');
+    toast(kind === 'new' ? 'Рядків без перекладу немає' : 'Помилок QA немає');
   }
   function toggleKeys(): void {
     const k = $('#keypop');
@@ -1162,7 +1162,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (ok) ctx.commit(changes, ctx.stage() === 'translate' ? 'send' : 'approve');
     ctx.persist(); ctx.invalidateTm(); renderAll();
     const nSkip = [...skipped.values()].reduce((a, b) => a + b, 0);
-    toast(`Надіслано на вичитування: ${ok}${nSkip ? `. Пропущено: ${nSkip} (${[...skipped.keys()].slice(0, 2).join('; ')})` : ''}`, { sticky: nSkip > 0 });
+    toast(`Надіслано: ${ok}${nSkip ? `. Пропущено: ${nSkip} (${[...skipped.keys()].slice(0, 2).join('; ')})` : ''}`, { sticky: nSkip > 0 });
   }
   /** Approve the ticked rows: a draft is sent first, so the history says both. */
   function bulkApprove(): void {
@@ -1183,10 +1183,10 @@ export async function start(root: HTMLElement): Promise<void> {
       const r2 = submit(next, u, 'review', now, opts);
       if (r2.ok) changes.push({ file: v.name, key: k, next: r2.entry, text: r2.entry.target }); else miss(r2.reason);
     }
-    if (changes.length) ctx.commit(changes, 'approve', 'затверджено');
+    if (changes.length) ctx.commit(changes, 'approve', 'вичитано');
     ctx.persist(); ctx.invalidateTm(); renderAll();
     const nSkip = [...skipped.values()].reduce((a, b) => a + b, 0);
-    toast(`Затверджено: ${changes.length}${nSkip ? `. Пропущено: ${nSkip} (${[...skipped.keys()].slice(0, 2).join('; ')})` : ''}`, { sticky: nSkip > 0 });
+    toast(`Вичитано: ${changes.length}${nSkip ? `. Пропущено: ${nSkip} (${[...skipped.keys()].slice(0, 2).join('; ')})` : ''}`, { sticky: nSkip > 0 });
   }
   function bulkTm(): void {
     const v = ctx.view();

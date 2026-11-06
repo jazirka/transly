@@ -138,7 +138,7 @@
 /* The editor toolbar and its counter use the standard panel colours (they had a bluish tint of their own). */
 .edbar{background:var(--panel)}
 .cnt2{background:var(--bg)}
-.cnt2.over{background:#43292e}
+.cnt2.over{background:#41381f}
 
 /* "Return to the translator" is a paper plane flying back. */
 #b-return svg{transform:scaleX(-1)}
@@ -416,3 +416,8 @@ button.cc:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .sv-in{box-sizing:border-box;width:100%;min-height:44px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r2);background:var(--bg);color:var(--text);font:15px/1.5 var(--ui);resize:none;overflow:hidden}
 .sv-in:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(139,114,232,.18)}
 .sv .empty-state{margin-top:40px}
+
+/* nothing chosen: one line instead of four empty sections */
+.pn-empty-all{display:none;padding:14px}
+#s-pn.no-row .pn-empty-all{display:block}
+#s-pn.no-row .pn-sec{display:none}

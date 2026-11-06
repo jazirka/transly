@@ -133,8 +133,9 @@ export type ShownStatus = Status | 'qa';
 /** Status as shown to the user: a unit with an active QA issue shows the red triangle. */
 export function shownStatus(ctx: Ctx, u: Unit, e: Entry | undefined): ShownStatus {
   const st: Status = e?.status ?? 'new';
-  return e && e.target && st !== 'new' && activeIssues(u, e, ctx.qaOpts()).length ? 'qa' : st;
+  // Only an error turns the mark red: advice (a length, a style) stays in the remarks under the field.
+  return e && e.target && st !== 'new' && activeIssues(u, e, ctx.qaOpts()).some(i => i.severity === 'bad') ? 'qa' : st;
 }
 
-export const STATUS_LABEL: Record<ShownStatus, string> = { new: 'без перекладу', draft: 'чернетка', done: 'чекає вичитування', appr: 'вичитано', qa: 'є проблема QA' };
-export const STATUS_CAP: Record<ShownStatus, string> = { new: 'Без перекладу', draft: 'Чернетка', done: 'Очікує вичитування', appr: 'Вичитано', qa: 'Є проблема QA' };
+export const STATUS_LABEL: Record<ShownStatus, string> = { new: 'без перекладу', draft: 'чернетка', done: 'надіслано', appr: 'вичитано', qa: 'є помилка QA' };
+export const STATUS_CAP: Record<ShownStatus, string> = { new: 'Без перекладу', draft: 'Чернетка', done: 'Надіслано', appr: 'Вичитано', qa: 'Є помилка QA' };

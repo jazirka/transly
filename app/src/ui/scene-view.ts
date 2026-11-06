@@ -51,7 +51,7 @@ export const sceneIdOf = (ctx: Ctx, key: string | null): string | null => {
 
 function cardHtml(ctx: Ctx, u: Unit, n: number): string {
   return `<article class="sv-card" data-key="${esc(u.key)}">
-    <div class="sv-top"><span class="sd" aria-hidden="true"></span><b class="sv-who"></b><span class="sv-k">${esc(KIND_LABEL[u.kind] ?? u.kind)}</span><span class="sv-n">${n}</span><span class="grow"></span><span class="sv-cnt" aria-hidden="true"></span><button class="sv-ok" type="button" data-sv="send" title="Надіслати на вичитування й перейти далі (Ctrl+Enter)" aria-label="Надіслати рядок ${n} на вичитування"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 4.8"/></svg></button></div>
+    <div class="sv-top"><span class="sd" aria-hidden="true"></span><b class="sv-who"></b><span class="sv-k">${esc(KIND_LABEL[u.kind] ?? u.kind)}</span><span class="sv-n">${n}</span><span class="grow"></span><span class="sv-cnt" aria-hidden="true"></span><button class="sv-ok" type="button" data-sv="send" title="Надіслати й перейти далі (Ctrl+Enter)" aria-label="Надіслати рядок ${n}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M14 2L7 9M14 2l-4.5 12L7 9 2 6.5z"/></svg></button></div>
     <div class="srcbox sv-src"></div>
     <textarea class="tr-in sv-in" data-key="${esc(u.key)}" spellcheck="false" aria-label="Переклад рядка ${n}" placeholder="Переклад"></textarea>
     <div class="qa-under sv-qa"></div>
@@ -100,7 +100,7 @@ export function renderSceneView(ctx: Ctx): void {
       <div class="sv-t"><b>${esc(sceneTitle(sc))}</b><small>${esc(s.saved.labels?.[file] ?? file.replace(/\.json$/, ''))} · сцена ${i + 1} із ${idx.scenes.length} · перекладено ${done} із ${sc.units.length} · вичитано ${appr}</small></div>
       <button class="ib sm" type="button" data-sv="next" ${i < idx.scenes.length - 1 ? '' : 'disabled'} title="Наступна сцена" aria-label="Наступна сцена"><svg viewBox="0 0 16 16"><path d="M6 3.5L10.5 8 6 12.5"/></svg></button></div>
     ${cond ? `<div class="sv-cond">Показується, коли: ${esc(cond)}</div>` : ''}
-    <div class="sv-acts"><button class="btn" type="button" data-sv="all-send" title="Надіслати на вичитування всі чернетки сцени">Надіслати сцену</button><button class="btn" type="button" data-sv="all-appr" title="Затвердити всі переклади сцени">Затвердити сцену</button><button class="btn" type="button" data-sv="game" title="Подивитися сцену так, як її покаже гра">Як у грі</button></div>`;
+    <div class="sv-acts"><button class="btn" type="button" data-sv="all-send" title="Надіслати всі чернетки сцени">Надіслати сцену</button><button class="btn" type="button" data-sv="all-appr" title="Вичитати всі переклади сцени">Вичитати сцену</button><button class="btn" type="button" data-sv="game" title="Подивитися сцену так, як її покаже гра">Як у грі</button></div>`;
   const sig = `${file}\u0001${sc.id}`;
   if (sig !== built || body.children.length !== sc.units.length) {
     built = sig;
@@ -172,9 +172,9 @@ function wholeScene(ctx: Ctx, what: 'send' | 'appr'): void {
     if (what === 'appr') { const r = submit(next, u, 'review', now, opts); if (!r.ok) { skipped++; continue; } next = r.entry; }
     changes.push({ file: at.file, key: u.key, next, text: next.target });
   }
-  if (changes.length) ctx.commit(changes, what === 'send' ? 'scene' : 'approve', what === 'send' ? undefined : 'затверджено (вся сцена)');
+  if (changes.length) ctx.commit(changes, what === 'send' ? 'scene' : 'approve', what === 'send' ? undefined : 'вичитано (вся сцена)');
   ctx.persist(); ctx.invalidateTm(); ctx.render();
-  toast(`${what === 'send' ? 'Надіслано' : 'Затверджено'}: ${plural(changes.length, ['рядок', 'рядки', 'рядків'])}${skipped ? `. Пропущено через помилки QA: ${skipped}` : ''}`);
+  toast(`${what === 'send' ? 'Надіслано' : 'Вичитано'}: ${plural(changes.length, ['рядок', 'рядки', 'рядків'])}${skipped ? `. Пропущено через помилки QA: ${skipped}` : ''}`);
 }
 
 /** Clicks in the scene view. */

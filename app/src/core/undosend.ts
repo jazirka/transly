@@ -8,7 +8,7 @@ export interface SentItem { file: string; key: string; source: string; target: s
 /** Rows sent (or approved) together; they can be taken back while nothing was changed in them since. */
 export interface SendBatch { kind: SendKind; at: number; items: SentItem[]; /** True when the rows have no history record of the send (grouped by their change time). */ guessed?: boolean }
 
-const KIND = (what: string): SendKind | null => (what.startsWith('надіслано на вичитування') ? 'send' : what.startsWith('вичитано') ? 'approve' : null);
+const KIND = (what: string): SendKind | null => (what.startsWith('надіслано') ? 'send' : what.startsWith('вичитано') ? 'approve' : null);
 const GAP = 3 * 60 * 1000;
 
 /**

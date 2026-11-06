@@ -19,6 +19,8 @@ import { markup } from './markup';
 import { openSettings } from './settings';
 import { openSpeakers } from './speakers-dialog';
 import { initMobile } from './mobile';
+import { holdInert } from './modal';
+import { WINDOW_CONTROLS_HTML, initWindowControls } from './winctl';
 import { GROUP, SEP, STATUS_LABEL, buildTm, shownStatus, splitKey } from './state';
 import type { Ctx, Filter, Mode, SortMode, State } from './state';
 import { publishWidget } from './android';
@@ -134,7 +136,8 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
   <div class="kr"><span>Знайти скрізь</span><kbd>Ctrl</kbd><kbd>K</kbd><kbd>⇧</kbd><kbd>⇧</kbd></div>
   <div class="kr"><span>Закрити вікно чи меню</span><kbd>Esc</kbd></div>
 </div>
-<div class="sd-wrap" id="sd" hidden><div class="sd-box" role="dialog" aria-modal="true" aria-label="Пошук скрізь"><input id="sd-in" placeholder="Рядки, файли, терміни…" aria-label="Пошук скрізь" autocomplete="off"><div id="sd-res" role="listbox" aria-label="Результати"></div><div class="sd-foot">↑↓ вибір · Enter відкрити · Esc закрити</div></div></div>`;
+<div class="sd-wrap" id="sd" hidden><div class="sd-box" role="dialog" aria-modal="true" aria-label="Пошук скрізь"><input id="sd-in" placeholder="Рядки, файли, терміни…" aria-label="Пошук скрізь" autocomplete="off"><div id="sd-res" role="listbox" aria-label="Результати"></div><div class="sd-foot">↑↓ вибір · Enter відкрити · Esc закрити</div></div></div>
+${WINDOW_CONTROLS_HTML}`;
 
 export async function start(root: HTMLElement): Promise<void> {
   const store = new IdbStore('default');
@@ -166,6 +169,8 @@ export async function start(root: HTMLElement): Promise<void> {
   input.setAttribute('webkitdirectory', ''); input.setAttribute('aria-label', 'Папка гри');
   root.innerHTML = SHELL;
   root.appendChild(input);
+  initWindowControls(() => autosave.flush());
+  document.documentElement.dataset.booted = '1';
 
   /** Longest line a message may have: the translator's number, or what the original's own lines suggest (0 = not checked). */
   let autoLimit: { views: State['views']; n: number } | null = null;
@@ -932,8 +937,8 @@ export async function start(root: HTMLElement): Promise<void> {
   /* ---------- global search ---------- */
   let sdItems: { t: 'file' | 'row' | 'term'; file?: string; key?: string; label: string; kind: string }[] = [];
   let sdSel = 0;
-  function openSearch(): void { $('#sd').hidden = false; const i = $('#sd-in') as HTMLInputElement; i.value = ''; sdRender(); i.focus(); document.querySelector<HTMLElement>('#ide')!.inert = true; }
-  function closeSearch(): void { $('#sd').hidden = true; $('#ide').inert = false; }
+  function openSearch(): void { $('#sd').hidden = false; const i = $('#sd-in') as HTMLInputElement; i.value = ''; sdRender(); i.focus(); holdInert('search', true); }
+  function closeSearch(): void { $('#sd').hidden = true; holdInert('search', false); }
   function sdRender(): void {
     const q = ($('#sd-in') as HTMLInputElement).value.trim().toLowerCase();
     sdItems = [];
@@ -1101,6 +1106,11 @@ export async function start(root: HTMLElement): Promise<void> {
   }
 
   /* ---------- events ---------- */
+  // Pressing the empty part of the top bar starts a window drag, which swallows the click that closes open menus: close them here.
+  document.querySelector('.topbar')!.addEventListener('pointerdown', e => {
+    if ((e.target as HTMLElement).closest('button,a,input,select,textarea,[role=button],[role=tab],[role=menuitem],[tabindex]')) return;
+    closePops(); $('#keypop').hidden = true; if (!$('#menubar').hidden) mbToggle(false);
+  });
   root.addEventListener('click', e => {
     const t = e.target as HTMLElement;
     if (!t.closest('#fpop,#spkbtn,#lenbtn,#sortbtn,#bnav,#cfgpop,#cfg-btn,#projpop,#proj-btn')) closePops();

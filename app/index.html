@@ -7,6 +7,14 @@
 </head>
 <body>
 <div id="app"></div>
+<script>
+// Desktop app without the system title bar: if the app has not started after a few seconds (a script failed to load or to run),
+// bring the system title bar back, so the window can still be moved and closed.
+setTimeout(function () {
+  if (document.documentElement.dataset.booted) return;
+  try { window.__TAURI_INTERNALS__.invoke('plugin:window|set_decorations', { label: 'main', value: true }); } catch (e) { /* not the desktop app */ }
+}, 8000);
+</script>
 <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

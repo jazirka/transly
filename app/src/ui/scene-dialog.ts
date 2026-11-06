@@ -3,6 +3,7 @@ import type { RowChange, SceneLine, Unit } from '../core';
 import { isDesktop } from './desktop';
 import { $, el, esc, plural, toast } from './dom';
 import { gameHtml } from './gamehtml';
+import { showDialog } from './modal';
 import { playInGame } from './play';
 import { GROUP } from './state';
 import type { Ctx } from './state';
@@ -143,6 +144,6 @@ export function openScene(ctx: Ctx, start: Unit): void {
     if (b && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); pick(b.dataset.key!); }
   });
   render();
-  dlg.showModal();
+  showDialog(dlg);
   dlg.querySelector<HTMLElement>('.scn-cur')?.scrollIntoView({ block: 'center' });
 }

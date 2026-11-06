@@ -37,3 +37,24 @@
   .topbar .prog .bar{width:60px}
   .topbar #proj-name{max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 }
+
+/* ===== Own window frame (desktop app without the system title bar) ===== */
+:root{--tb-h:40px;--wctl-w:138px}
+.wdrag{display:none}
+.wctl[hidden]{display:none}
+html.chrome-own .wctl{display:flex;position:fixed;top:0;right:0;height:var(--tb-h);margin:0;z-index:93}
+html.chrome-own .topbar{padding-right:calc(var(--wctl-w) + 6px)}
+.wc button{width:46px;height:100%;border-radius:0;color:#c7cad1}
+.wc button:hover{background:rgba(255,255,255,.1);color:#fff}
+.wc button:active{background:rgba(255,255,255,.16)}
+.wc button:last-child:hover{background:#c42b1c;color:#fff}
+.wc button:last-child:active{background:#a82417}
+.wc button:focus-visible{outline:2px solid var(--accent);outline-offset:-3px}
+/* While a dialog or the search is open the top bar is dimmed and inert: this strip keeps the window draggable. */
+html.chrome-own.dlg-open .wdrag{display:block;position:fixed;top:0;left:0;right:var(--wctl-w);height:var(--tb-h);z-index:92}
+@media (forced-colors:active){.wc button{border:1px solid ButtonText;forced-color-adjust:auto}}
+
+/* ===== Dialogs: shown above the app by the app's own layer (see modal.ts), so the window controls stay usable ===== */
+.dlg-scrim{position:fixed;inset:0;z-index:86;background:rgba(0,0,0,.5)}
+.adlg[data-app]{position:fixed;inset:var(--tb-h) 0 0 0;margin:auto;height:fit-content;z-index:87;max-width:calc(100% - 24px);max-height:calc(100% - var(--tb-h) - 24px)}
+.adlg[data-app]:not([open]){display:none}

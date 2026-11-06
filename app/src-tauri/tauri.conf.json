@@ -11,7 +11,7 @@
   },
   "app": {
     "windows": [
-      { "title": "Transly", "width": 1400, "height": 860, "minWidth": 1000, "minHeight": 560 }
+      { "title": "Transly", "width": 1400, "height": 860, "minWidth": 1000, "minHeight": 560, "decorations": false, "shadow": true }
     ],
     "security": {
       "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost http: https:; style-src 'self' 'unsafe-inline'; img-src 'self' data:"

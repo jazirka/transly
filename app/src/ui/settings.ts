@@ -2,6 +2,8 @@ import { touchTerms, DEFAULT_SETTINGS, emptyProject, parseDelimited, parseHtmlTa
 import type { GlossaryTerm } from '../core';
 import { $, el, esc, plural, toast } from './dom';
 import { isDesktop } from './desktop';
+import { showDialog } from './modal';
+import { nativeChrome, setNativeChrome } from './winctl';
 import type { Ctx } from './state';
 import { artifactDb, describeClaude, loadClaudeConfig, runClaudeSync, saveClaudeConfig } from './claude';
 import { DEFAULT_API, describeGithub, loadGithubConfig, runGithubSync, saveGithubConfig } from './github';
@@ -12,7 +14,7 @@ import { loadUpdateConfig, updateSectionHtml, wireUpdateSection } from './update
 import { openSpeakers } from './speakers-dialog';
 import { describe, loadSyncConfig, runSync, saveSyncConfig, syncConfigured } from './sync';
 
-/** Open a native <dialog>; it traps focus, closes on Esc and restores focus to the opener. */
+/** Open a <dialog> above the app (see `modal.ts`); it closes on Esc and restores focus to the opener. */
 export function dialog(html: string, labelId: string): HTMLDialogElement {
   const opener = document.activeElement as HTMLElement | null;
   const dlg = el('dialog', 'adlg');
@@ -20,7 +22,7 @@ export function dialog(html: string, labelId: string): HTMLDialogElement {
   dlg.innerHTML = html;
   document.body.appendChild(dlg);
   dlg.addEventListener('close', () => { dlg.remove(); opener?.focus?.(); });
-  dlg.showModal();
+  showDialog(dlg);
   return dlg;
 }
 
@@ -37,7 +39,9 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
   const autoNow = st.lineLimit === 0 ? ctx.lineLimit() : 0;
   const dlg = dialog(`<form method="dialog"><h2 id="st-t">Налаштування</h2>
     ${isDesktop() ? `<div class="folder-set"><label for="st-folder">Папка гри цього проєкту</label><div class="folder-row"><span id="st-folder" class="path" tabindex="0"></span><button class="btn" type="button" id="st-folder-change">Змінити…</button><button class="btn" type="button" id="st-folder-forget">Забути</button></div>
-      <p class="hint">Папка запам’ятовується для проєкту й відновлюється під час запуску. Якщо її перенесено чи видалено, програма покаже банер із вибором нової, а переклад і оригінали в проєкті збережуться.</p></div>` : ''}
+      <p class="hint">Папка запам’ятовується для проєкту й відновлюється під час запуску. Якщо її перенесено чи видалено, програма покаже банер із вибором нової, а переклад і оригінали в проєкті збережуться.</p>
+      <label class="achk"><input type="checkbox" id="st-sysbar" ${nativeChrome() ? 'checked' : ''}> Системний заголовок вікна</label>
+      <p class="hint">Запасний варіант: якщо власного заголовка не видно або його кнопки не працюють. Застосовується одразу.</p></div>` : ''}
     <div class="grid"><label for="st-tol">Допуск довжини перекладу відносно оригіналу, %</label><input id="st-tol" type="number" min="5" max="100" step="5" value="${st.tolerancePct}">
       <label for="st-who">Ваше ім’я в коментарях та історії</label><input id="st-who" maxlength="40" value="${st.who}"></div>
     <label class="achk"><input type="checkbox" id="st-block" ${st.blockErrors ? 'checked' : ''}> Не надсилати рядок із помилкою QA</label>
@@ -144,6 +148,7 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
   const showFolder = (): void => { const el0 = dlg.querySelector<HTMLElement>('#st-folder'); if (el0) { el0.textContent = onFolder.text(); el0.title = el0.textContent; } };
   showFolder();
   dlg.querySelector('#st-folder-change')?.addEventListener('click', () => { dlg.close(); onFolder.change(); });
+  dlg.querySelector('#st-sysbar')?.addEventListener('change', e => { setNativeChrome((e.target as HTMLInputElement).checked); });
   dlg.querySelector('#st-folder-forget')?.addEventListener('click', () => { onFolder.forget(); showFolder(); toast('Папку гри забуто. Переклад лишився; збірка й запуск гри недоступні, поки папку не вказано'); });
   const termsFile = $('#st-terms-file', dlg) as HTMLInputElement;
   $('#st-terms-file-btn', dlg).addEventListener('click', () => termsFile.click());

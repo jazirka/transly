@@ -2,6 +2,7 @@ import { build, isRpgMakerFile } from '../core';
 import { $, el, esc, plural, toast } from './dom';
 import { applyToGame, isDesktop, launchGame, pickExe, rememberedExe, restoreGame, restoreJump } from './desktop';
 import { canWriteFolder, downloadZip, writeToFolder } from './export';
+import { showDialog } from './modal';
 import type { Ctx } from './state';
 
 /** Build dialog: zip / folder everywhere, plus "apply and launch" inside the desktop app. */
@@ -53,5 +54,5 @@ export function openBuild(ctx: Ctx, dataDir: string | null, onBuilt: (n: number)
     } catch (err) { toast('Не вдалося записати: ' + (err instanceof Error ? err.message : String(err))); }
   });
   sum();
-  dlg.showModal();
+  showDialog(dlg);
 }

@@ -1,5 +1,6 @@
 import { speakerCandidates, speakerOf } from '../core';
 import { $, el, esc, plural, toast } from './dom';
+import { showDialog } from './modal';
 import type { Ctx } from './state';
 
 /**
@@ -60,5 +61,5 @@ export function openSpeakers(ctx: Ctx): void {
     toast(changed ? `Мовців оновлено: ${changed}` : 'Змін немає');
   });
   render();
-  dlg.showModal();
+  showDialog(dlg);
 }

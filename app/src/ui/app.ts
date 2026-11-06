@@ -7,8 +7,9 @@ import type { FolderState } from './folder-service';
 import { $, el, esc, plural, toast } from './dom';
 import { FOCUS_HTML, SIDE_HTML, focusClick, focusInput, insertOriginal, renderFocus, renderSidePanel, send, showSide, sideClick, step } from './focus';
 import { wireDiscuss } from './discuss';
+import { wireTermCard } from './termcard';
 import { SCENES_HTML, renderScenesPanel, scenesClick, wireScenes } from './scenes-panel';
-import { GLOSSARY_HTML, glossaryClick, renderGlossaryPanel, showTerm, wireGlossary } from './glossary-panel';
+import { GLOSSARY_HTML, editTerm, glossaryClick, renderGlossaryPanel, showTerm, wireGlossary } from './glossary-panel';
 import { pickGameFolder, readFiles, reopenHandle } from './folder';
 import type { DirHandle, PickedFile } from './folder';
 import { IdbStore, loadHandle, saveHandle } from './idb';
@@ -1406,6 +1407,7 @@ export async function start(root: HTMLElement): Promise<void> {
   if (s.current) { unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u])); if (s.mode !== 'table') s.cur = ctx.visible()[0]?.key ?? null; }
   restoreUi();
   wireDiscuss(ctx);
+  wireTermCard(ctx, en => { s.leftOpen = true; s.leftBoth = false; s.leftTab[s.mode] = 'glossary'; renderAll(); editTerm(ctx, en); });
   wireGlossary(ctx);
   wireScenes(ctx);
   initMobile(ctx);

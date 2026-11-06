@@ -87,6 +87,18 @@ export function showTerm(ctx: Ctx, en: string): void {
   renderGlossaryPanel(ctx);
 }
 
+/** Open the form to change an existing term (from the card of the term). */
+export function editTerm(ctx: Ctx, en: string): void {
+  const term = ctx.s.saved.terms.find(x => norm(x.en) === norm(en));
+  if (!term) return;
+  query = term.en; editing = term.en; deleting = null;
+  const box = document.getElementById('gl-q') as HTMLInputElement | null;
+  if (box) box.value = term.en;
+  fillForm(term);
+  renderGlossaryPanel(ctx);
+  ($('#gl-uk') as HTMLInputElement).focus();
+}
+
 /** Open the form for a new term (`en` and `uk` may be filled in already). */
 export function newTerm(ctx: Ctx, en = '', uk = ''): void {
   editing = '';

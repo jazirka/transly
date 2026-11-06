@@ -1,9 +1,11 @@
-import { gorohUrl, multitranUrl, wordsOf, activeIssues, byHintOrder, buildSceneIndex, check, describePage, explainCodes, usageKey, displayLength, edit as editFn, lengthDeviation, limitFor, newBatch, openThreads, propagate, recordChange, referenceSets, sceneAt, sendBack, setIgnored, sourceChanged, submit, termsIn, wrapLines, HINT_GLYPH, HINT_GROUP, HINT_LABEL } from '../core';
+import { gorohUrl, multitranUrl, wordsOf, activeIssues, byHintOrder, buildSceneIndex, check, describePage, sourceTermHits, targetHasTerm, targetTermHits, explainCodes, usageKey, displayLength, edit as editFn, lengthDeviation, limitFor, newBatch, openThreads, propagate, recordChange, referenceSets, sceneAt, sendBack, setIgnored, sourceChanged, submit, termsIn, wrapLines, HINT_GLYPH, HINT_GROUP, HINT_LABEL } from '../core';
 import type { BatchKind, Entry, SceneIndex, Unit } from '../core';
 import { $, buzz, esc, plural, toast } from './dom';
 import { discussClick, renderDiscuss } from './discuss';
 import { historyClick, renderHistory } from './history-panel';
-import { markup } from './markup';
+import { markupTerms } from './markup';
+import { autoSize, drawMarks } from './text-editor';
+import { hideTermCard } from './termcard';
 import { isDesktop, openLink, rememberedGameDir } from './desktop';
 import { drawPic, picOfFace, picsOfRow } from './gameimg';
 import type { Pic } from './gameimg';
@@ -41,7 +43,7 @@ export const FOCUS_HTML = `<div class="fc"><div class="fc-in">
   <div id="f-refbox" hidden></div>
   <div class="trblock">
     <div class="lbl"><span id="f-trlbl">Переклад · UK</span><button class="lbl-btn" id="b-copy" title="Вставити оригінал у переклад (Alt+O)" aria-label="Вставити оригінал у переклад">${I.copy}<span>Вставити оригінал</span></button></div>
-    <textarea class="tr-in" id="i-tr" spellcheck="false" aria-label="Переклад"></textarea>
+    <div class="te"><div class="te-layer" id="te-layer" aria-hidden="true"></div><textarea class="tr-in" id="i-tr" spellcheck="false" aria-label="Переклад"></textarea></div>
     <div class="edbar">
       <button class="ib lab" id="b-compact" title="Лише текст: сховати контекст і примітки" aria-label="Режим лише тексту">${I.compact}<span class="tl">Лише текст</span></button>
       <details class="more"><summary class="ib" title="Ще дії" aria-label="Ще дії">⋯</summary><div class="morep">
@@ -196,6 +198,7 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
     $('#f-key').textContent = '';
     ($('#i-tr') as HTMLTextAreaElement).value = '';
     ($('#i-tr') as HTMLTextAreaElement).disabled = true;
+    $('#te-layer').textContent = '';
     $('#f-state').textContent = '';
     $('#f-queue').textContent = '';
     $('#c-before').hidden = true; $('#c-after').hidden = true;
@@ -214,7 +217,8 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
   $('#f-queue').title = pos >= 0 ? `Рядок ${pos + 1} із ${list.length} у поточному списку (з урахуванням фільтрів)` : '';
   $('#f-off').hidden = pos >= 0;
   const hits = termsIn(u.source, s.saved.terms);
-  $('#f-src').innerHTML = markup(u.source, hits.map(t => t.en));
+  const have = e?.target ?? '';
+  $('#f-src').innerHTML = markupTerms(u.source, sourceTermHits(u.source, hits).map(h => ({ start: h.start, end: h.end, en: h.term.en, missing: !!have && !targetHasTerm(have, h.term.uk, h.term.alt) })));
   renderPics(ctx, u);
   renderContext(ctx, u);
   const refs = referenceSets(s.saved.reference).map(r => ({ lang: r.lang, text: r.texts[realOf(ctx, u).file]?.[realOf(ctx, u).key] })).filter(r => r.text);
@@ -222,7 +226,8 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
   $('#f-refbox').innerHTML = refs.map(r => `<div class="lbl">Довідка · ${esc(r.lang.toUpperCase())}</div><div class="srcbox ref" lang="${esc(r.lang)}">${esc(r.text!)}</div>`).join('');
   $('#f-trlbl').textContent = review ? 'Після вичитування · UK' : 'Переклад · UK';
   const ta = $('#i-tr') as HTMLTextAreaElement;
-  if (document.activeElement !== ta || ta.dataset.key !== u.key) { ta.value = e?.target ?? ''; ta.dataset.key = u.key; }
+  if (document.activeElement !== ta || ta.dataset.key !== u.key) { if (ta.dataset.key !== u.key) hideTermCard(); ta.value = e?.target ?? ''; ta.dataset.key = u.key; }
+  refreshTerms(ctx, u);
   meter(ctx, u);
   refreshQa(ctx, u);
   const pf = $('#f-proof');
@@ -235,6 +240,24 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
   $('#b-play').hidden = !desktop;
   const limit = u.kind === 'dialogue' || u.kind === 'scroll' ? limitFor(ctx.lineLimit(), u.face) : 0;
   $('#b-wrap').hidden = !limit;
+}
+
+/** Terms of the open row, worked out once per row. */
+let rowTerms: { key: string; source: string; terms: ReturnType<typeof termsIn<Ctx['s']['saved']['terms'][number]>> } | null = null;
+
+/**
+ * Underlines under the translation field and the state of the terms in the original: every term of the original that
+ * the translation renders is underlined where it stands in the translation, and a term the translation lacks is
+ * underlined in the original with a wavy line. Called when the row is drawn and as the text changes.
+ */
+function refreshTerms(ctx: Ctx, u: Unit): void {
+  const ta = $('#i-tr') as HTMLTextAreaElement;
+  if (!rowTerms || rowTerms.key !== u.key || rowTerms.source !== u.source) rowTerms = { key: u.key, source: u.source, terms: termsIn(u.source, ctx.s.saved.terms) };
+  const terms = rowTerms.terms;
+  drawMarks($('#te-layer'), ta.value, targetTermHits(ta.value, terms).map(h => ({ start: h.start, end: h.end, cls: 'tt', data: { term: h.term.en } })));
+  const byEn = new Map(terms.map(t => [t.en, t]));
+  document.querySelectorAll<HTMLElement>('#f-src .th').forEach(el => { const t = byEn.get(el.dataset.term ?? ''); if (t) el.classList.toggle('miss', !!ta.value && !targetHasTerm(ta.value, t.uk, t.alt)); });
+  autoSize(ta);
 }
 
 function meter(ctx: Ctx, u: Unit): void {
@@ -409,6 +432,7 @@ export function focusInput(ctx: Ctx, ta: HTMLTextAreaElement): void {
   ents[u.key] = edit0(ctx, u, ta.value);
   ctx.s.sess.n++;
   ctx.persist();
+  refreshTerms(ctx, u);
   meter(ctx, u); refreshQa(ctx, u);
   ctx.softTm();
   refreshHistory(ctx, u);

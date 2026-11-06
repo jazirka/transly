@@ -8,7 +8,7 @@ import type { Ctx } from './state';
  * and the hints read, and a change here is written the same way a change on the phone is (see `core/termedit.ts`).
  */
 
-const SEARCH = '<svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>';
+const SEARCH = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>';
 
 export const GLOSSARY_HTML = `<div class="slist glpanel" id="lp-gl" hidden>
   <div class="ph card-ph" data-card="glossary"><span class="grow">Глосарій</span><span class="ico" data-hide-left="glossary" role="button" tabindex="0" aria-label="Сховати панель «Глосарій»" title="Сховати">—</span></div>

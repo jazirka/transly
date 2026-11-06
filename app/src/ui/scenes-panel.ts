@@ -1,7 +1,7 @@
 import { sceneTitle, statsOf } from '../core';
 import type { SceneInfo } from '../core';
 import { $, esc, plural } from './dom';
-import { scenesOf } from './focus';
+import { scenesOf } from './scenecache';
 import { GROUP } from './state';
 import type { Ctx } from './state';
 
@@ -11,7 +11,7 @@ import type { Ctx } from './state';
  * without events (the database, the system file, text formats) have none, and are not split artificially.
  */
 
-const SEARCH = '<svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>';
+const SEARCH = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>';
 
 export const SCENES_HTML = `<div class="slist scpanel" id="lp-sc" hidden>
   <div class="ph card-ph" data-card="scenes"><span class="grow">Сцени</span><span class="ico" data-hide-left="scenes" role="button" tabindex="0" aria-label="Сховати панель «Сцени»" title="Сховати">—</span></div>

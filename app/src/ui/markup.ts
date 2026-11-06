@@ -21,22 +21,27 @@ export function markup(text: string, termsEn: string[] = []): string {
   return out + esc(text.slice(at));
 }
 
-/** A glossary term found in an original: where, which term, and whether the translation has its rendering. */
-export interface TermMark { start: number; end: number; en: string; missing: boolean }
+/** A word of an original that has a card: a glossary term, or a name the game itself defines (`key` is then the name's place in the list the panel keeps). */
+export interface TermMark { start: number; end: number; en: string; missing: boolean; kind?: 'term' | 'name'; key?: string }
+
+/** Control codes of RPG Maker texts, as they stand in a text. */
+export const CODE_RE = CODE;
 
 /**
- * The original with control codes marked and every glossary term as an interactive word: it can be pointed at or chosen
- * with the keyboard to open the term's card, and it is underlined differently when the translation lacks the term.
+ * The original with every control code, glossary term and game name as an interactive word: it can be pointed at or
+ * chosen with the keyboard to open its card (`data-hc` says which kind, `data-hk` which one). A term the translation
+ * lacks is underlined differently.
  */
 export function markupTerms(text: string, hits: TermMark[]): string {
-  const marks: { start: number; end: number; cls: string; hit?: TermMark }[] = hits.map(h => ({ start: h.start, end: h.end, cls: `term-hit th${h.missing ? ' miss' : ''}`, hit: h }));
-  for (const m of text.matchAll(CODE)) if (!marks.some(x => m.index! < x.end && m.index! + m[0].length > x.start)) marks.push({ start: m.index!, end: m.index! + m[0].length, cls: 'code' });
+  const marks: { start: number; end: number; cls: string; attrs: string }[] = hits.map(h => h.kind === 'name'
+    ? { start: h.start, end: h.end, cls: 'name-hit nh', attrs: ` data-hc="name" data-hk="${esc(h.key ?? '')}" tabindex="0" role="button" title="Назва, яку визначає сама гра"` }
+    : { start: h.start, end: h.end, cls: `term-hit th${h.missing ? ' miss' : ''}`, attrs: ` data-term="${esc(h.en)}" data-hc="term" data-hk="${esc(h.en)}" tabindex="0" role="button" title="${h.missing ? 'Термін глосарію: у перекладі його немає' : 'Термін глосарію'}"` });
+  for (const m of text.matchAll(CODE)) if (!marks.some(x => m.index! < x.end && m.index! + m[0].length > x.start)) marks.push({ start: m.index!, end: m.index! + m[0].length, cls: 'code', attrs: ` data-hc="code" data-hk="${esc(m[0])}" tabindex="0" role="button" title="Керівний код: що він означає"` });
   marks.sort((a, b) => a.start - b.start);
   let out = '', at = 0;
   for (const m of marks) {
     if (m.start < at) continue;
-    const attrs = m.hit ? ` data-term="${esc(m.hit.en)}" tabindex="0" role="button" title="${m.hit.missing ? 'Термін глосарію: у перекладі його немає' : 'Термін глосарію'}"` : '';
-    out += esc(text.slice(at, m.start)) + `<span class="${m.cls}"${attrs}>${esc(text.slice(m.start, m.end))}</span>`;
+    out += esc(text.slice(at, m.start)) + `<span class="${m.cls}"${m.attrs}>${esc(text.slice(m.start, m.end))}</span>`;
     at = m.end;
   }
   return out + esc(text.slice(at));

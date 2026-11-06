@@ -5,7 +5,7 @@ import { dataDirOf, forgetGameDir, isDesktop, rememberedGameDir, reopenGameDir, 
 import { classifyFolder, folderBanner, folderLine } from './folder-service';
 import type { FolderState } from './folder-service';
 import { $, el, esc, plural, toast } from './dom';
-import { FOCUS_HTML, SIDE_HTML, focusClick, focusInput, insertOriginal, renderFocus, renderSidePanel, send, showSide, sideClick, step } from './focus';
+import { FOCUS_HTML, SIDE_HTML, qaClick, focusClick, focusInput, insertOriginal, insertText, renderFocus, renderSidePanel, send, showSide, sideClick, step } from './focus';
 import { wireDiscuss } from './discuss';
 import { wireTermCard } from './termcard';
 import { SCENES_HTML, renderScenesPanel, scenesClick, wireScenes } from './scenes-panel';
@@ -163,7 +163,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const mq = matchMedia('(max-width: 760px)');
   const s: State = {
     views: [], game: [], saved, current: null, open: [], group: null, picked: new Set(), cur: null, mode: mq.matches ? 'edit' : 'table', filter: 'all', q: '', speaker: null, lenFilter: 'all', sort: 'order', compact: ls('transly.compact') === '1', kb: false,
-    checked: new Set(), sideTab: 'hints', sideOn: ['hints'], saveOk: true, savedAt: null, who: saved.settings.who, phone: mq.matches,
+    checked: new Set(), sideTab: 'comments', sideOn: ['comments'], saveOk: true, savedAt: null, who: saved.settings.who, phone: mq.matches,
     leftTab: { table: 'files', edit: 'rows', review: 'rows' }, leftOpen: !mq.matches, leftBoth: false, rightOpen: false, collapsed: new Set(), sess: { n: 0, t0: Date.now() }, lastBuild: null,
   };
   const fromSnapshot = viewsFromSnapshot(saved);
@@ -467,7 +467,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const len = e?.target ? `${displayLength(e.target)}/${displayLength(u.source)}` : '—';
     return `<div class="gr ${sel ? 'sel' : ''} ${chk ? 'chk' : ''}" role="row" tabindex="${sel ? 0 : -1}" aria-selected="${sel}" data-key="${esc(u.key)}">
       <div class="ln" role="gridcell"><span class="num">${n}</span><input type="checkbox" class="rc" ${chk ? 'checked' : ''} aria-label="Вибрати рядок ${n}"></div>
-      <div class="st" role="gridcell"><span class="sd ${st}" title="${STATUS_LABEL[st]}"></span><span class="vh">${STATUS_LABEL[st]}</span></div>
+      <div class="st" role="gridcell"><span class="sd ${st}" title="${STATUS_LABEL[st]}"${st === 'qa' ? ` data-hc="qa" data-hk="${esc(u.key)}"` : ''}></span><span class="vh">${STATUS_LABEL[st]}</span></div>
       <div role="gridcell"><span class="key" title="${esc(u.key)}">${esc(shortKey(u.key))}</span>${cmIcon(e)}</div>
       <div class="who" role="gridcell">${esc(ctx.speaker(u))}</div>
       <div class="src" role="gridcell">${markup(flow(u.source), hits)}</div>
@@ -1407,7 +1407,12 @@ export async function start(root: HTMLElement): Promise<void> {
   if (s.current) { unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u])); if (s.mode !== 'table') s.cur = ctx.visible()[0]?.key ?? null; }
   restoreUi();
   wireDiscuss(ctx);
-  wireTermCard(ctx, en => { s.leftOpen = true; s.leftBoth = false; s.leftTab[s.mode] = 'glossary'; renderAll(); editTerm(ctx, en); });
+  wireTermCard(ctx, {
+    insert: text => insertText(ctx, text),
+    goto: (file, key) => openRow(file, key),
+    remark: (button, key) => { s.cur = key; qaClick(ctx, button); },
+    edit: en => { s.leftOpen = true; s.leftBoth = false; s.leftTab[s.mode] = 'glossary'; renderAll(); editTerm(ctx, en); },
+  });
   wireGlossary(ctx);
   wireScenes(ctx);
   initMobile(ctx);

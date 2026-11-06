@@ -36,7 +36,7 @@ export function renderHistory(ctx: Ctx, row: string, e: Entry | undefined): void
         ${r.rec.text && !r.isCurrent ? `<button class="lnk" data-hv="cmp" data-i="${r.index}">${cmp ? 'Показати зміну' : 'Порівняти з поточним'}</button>` : ''}
       </div>
     </div>`;
-  }).join('') : '<div class="hint">Змін поки немає. Тут з’являться надсилання, вичитування й масові дії з можливістю повернути попередній текст.</div>';
+  }).join('') : '<div class="hint pn-empty">Попередніх версій немає. Тут з’являться надсилання, затвердження й масові дії з можливістю повернути текст.</div>';
 }
 
 /** Clicks in the history. `apply` writes a text into the open row as one change (with its own history record). */

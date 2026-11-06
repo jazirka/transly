@@ -73,7 +73,7 @@ export function wireDiscuss(ctx: Ctx): void {
   const side = $('.fs');
   side.addEventListener('input', e => {
     const t = e.target as HTMLTextAreaElement;
-    if (!(t instanceof HTMLTextAreaElement) || !t.closest('#s-cm')) return;
+    if (!(t instanceof HTMLTextAreaElement) || !t.closest('#s-pn')) return;
     const row = shownRow;
     if (t.id === 'cm-in') drafts.set(draftKey(row, 'new'), t.value);
     else if (t.dataset.reply) drafts.set(draftKey(row, 'reply:' + t.dataset.reply), t.value);
@@ -81,7 +81,7 @@ export function wireDiscuss(ctx: Ctx): void {
   });
   side.addEventListener('keydown', e => {
     const t = e.target as HTMLTextAreaElement;
-    if (!(t instanceof HTMLTextAreaElement) || !t.closest('#s-cm')) return;
+    if (!(t instanceof HTMLTextAreaElement) || !t.closest('#s-pn')) return;
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       if (t.id === 'cm-in') discussClick(ctx, $('#cm-add'));

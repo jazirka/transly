@@ -2,9 +2,9 @@ import { TmIndex, activeIssues } from '../core';
 import type { BatchKind, GameNameIndex, RowChange, Usage } from '../core';
 import type { Autosave, DupIndex, Entry, FileView, GameFile, Group, RowRef, SavedProject, Status, Unit } from '../core';
 
-export type Mode = 'table' | 'edit' | 'review';
+export type Mode = 'table' | 'edit';
 export type Filter = 'all' | 'new' | 'draft' | 'done' | 'appr' | 'qa' | 'cm';
-export type SideTab = 'comments' | 'history' | 'dict';
+export type SideTab = 'panel';
 export type LeftTab = 'files' | 'rows' | 'glossary' | 'scenes';
 export type LenFilter = 'all' | 'far' | 'longer' | 'shorter';
 /** Order of the rows list: as in the file, untranslated first, problems first, longest first. */
@@ -94,7 +94,7 @@ export interface Ctx {
   softTm(): void;
   dups(): DupIndex;
   persist(): void;
-  /** Which pass the user is in: translating, or reviewing (what a text edit and a send mean depends on it). */
+  /** Always the translate pass: a translation is approved with the ✓ in the right panel, not in a mode of its own. */
   stage(): 'translate' | 'review';
   /** Write rows as one action of the journal: each gets a history record with what it was before, and the whole action can be taken back. Returns the action's id. */
   commit(changes: RowChange[], kind: BatchKind, what?: string): string;

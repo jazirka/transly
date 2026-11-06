@@ -6,7 +6,7 @@ import { dataDirOf, forgetGameDir, isDesktop, rememberedGameDir, reopenGameDir, 
 import { classifyFolder, folderBanner, folderLine } from './folder-service';
 import type { FolderState } from './folder-service';
 import { $, el, esc, plural, toast } from './dom';
-import { FOCUS_HTML, SIDE_HTML, qaClick, focusClick, focusInput, insertText, renderFocus, renderSidePanel, send, showSide, sideClick, step } from './focus';
+import { FOCUS_HTML, SIDE_HTML, qaClick, focusClick, focusInput, insertText, renderFocus, renderSidePanel, send, sideClick, step } from './focus';
 import { wireDiscuss } from './discuss';
 import { wireTermCard } from './termcard';
 import { wireLinks } from './links';
@@ -76,7 +76,6 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     <div class="seg" id="seg" role="group" aria-label="Режим">
       <button aria-pressed="true" data-m="table" class="on"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM2.5 7h11M6.5 3.5v9"/></svg>Таблиця</button>
       <button aria-pressed="false" data-m="edit"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM6 3.5v9M6 8h7.5"/></svg>Редагування</button>
-          <button class="sub" id="stage-pill" role="switch" aria-checked="false" title="Вичитування: перегляд рядків, що чекають перевірки, і схвалення"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3 3 7-7"/></svg>Вичитування</button>
     </div>
     <div class="grow"></div>
     <div class="prog" id="pg" title=""><div class="bar"><i class="a" id="pg-a"></i><i class="b" id="pg-b"></i><i class="c" id="pg-c"></i></div><span id="pg-txt" style="font-family:var(--mono);font-size:11.5px"></span></div>
@@ -90,7 +89,6 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
   </header>
   <header class="appbar">
     <div class="abt"><b id="ab-title">Transly</b><small id="ab-sub"></small></div>
-    <button class="chip on" id="ab-stage" title="Змінити етап"></button>
     <button class="ab-ic" id="ab-search" aria-label="Пошук скрізь">${SVG.searchBig}</button>
   </header>
   <div class="folder-bar" id="folder-bar" role="status" hidden></div>
@@ -124,7 +122,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
         <div class="crumbs" id="crumbs"></div>
         <div class="filters"><div class="fin">${SVG.search}<input class="qin" id="q" placeholder="Фільтр у цьому файлі" aria-label="Фільтр"></div><span class="chipsHost" id="chips1"></span><span id="tagfilter"></span>
           <div class="r"><button class="chip" id="spkbtn">Мовець ▾</button><button class="chip" id="lenbtn">Довжина ▾</button></div></div>
-        <div class="bulk" id="bulk"><b id="bulkn">0</b><span id="bulkt"></span><button id="bb-ok">Надіслати на вичитування</button><button id="bb-tm" title="Підставити збіг із пам’яті перекладів (від 70%) у порожні вибрані рядки">Застосувати з ПП</button><button id="bb-clear" class="ghost">Скасувати вибір</button></div>
+        <div class="bulk" id="bulk"><b id="bulkn">0</b><span id="bulkt"></span><button id="bb-ok">Надіслати на вичитування</button><button id="bb-appr" title="Затвердити вибрані переклади (рядки, що ще не надіслано, надсилаються й затверджуються разом)">Затвердити</button><button id="bb-tm" title="Підставити збіг із пам’яті перекладів (від 70%) у порожні вибрані рядки">Застосувати з ПП</button><button id="bb-clear" class="ghost">Скасувати вибір</button></div>
         <div class="gridwrap"><div class="grid" id="grid" role="grid" aria-label="Рядки файлу"></div></div>
         <div class="legend-bar" aria-label="Умовні позначення"><span><i class="sd new"></i>без перекладу</span><span><i class="sd draft"></i>чернетка</span><span><i class="sd done"></i>чекає вичитування</span><span><i class="sd appr"></i>вичитано</span><span><i class="sd qa"></i>є проблема QA</span><span>${SVG.cmt}коментар</span></div>
       </div>
@@ -167,8 +165,8 @@ export async function start(root: HTMLElement): Promise<void> {
   const mq = matchMedia('(max-width: 760px)');
   const s: State = {
     views: [], game: [], saved, current: null, open: [], group: null, groupSel: null, picked: new Set(), cur: null, mode: mq.matches ? 'edit' : 'table', filter: 'all', q: '', speaker: null, lenFilter: 'all', sort: 'order', compact: ls('transly.compact') === '1', kb: false,
-    checked: new Set(), sideTab: 'comments', sideOn: ['comments'], saveOk: true, savedAt: null, who: saved.settings.who, phone: mq.matches,
-    leftTab: { table: 'files', edit: 'rows', review: 'rows' }, leftOpen: !mq.matches, leftBoth: false, rightOpen: false, collapsed: new Set(), sess: { n: 0, t0: Date.now() }, lastBuild: null,
+    checked: new Set(), sideTab: 'panel', sideOn: ['panel'], saveOk: true, savedAt: null, who: saved.settings.who, phone: mq.matches,
+    leftTab: { table: 'files', edit: 'rows' }, leftOpen: !mq.matches, leftBoth: false, rightOpen: false, collapsed: new Set(), sess: { n: 0, t0: Date.now() }, lastBuild: null,
   };
   const fromSnapshot = viewsFromSnapshot(saved);
   if (fromSnapshot.length) { s.views = fromSnapshot; s.current = fromSnapshot[0]!.name; s.open = [s.current]; }
@@ -256,7 +254,7 @@ export async function start(root: HTMLElement): Promise<void> {
     softTm: () => { tmStale = true; },
     dups: () => { if (!dupCache || dupCache.views !== s.views) dupCache = { views: s.views, idx: new DupIndex(s.views) }; return dupCache.idx; },
     persist: () => autosave.queue(s.saved),
-    stage: () => (s.mode === 'review' ? 'review' : 'translate'),
+    stage: () => 'translate',
     commit: (changes, kind, what) => { const id = commitRows(file => ctx.entries(file), changes, kind, s.who, Date.now(), what); s.sess.n += changes.length; return id; },
     render: () => renderAll(),
     open: (file, key) => openRow(file, key),
@@ -358,7 +356,9 @@ export async function start(root: HTMLElement): Promise<void> {
     if (u.filter && FILTERS.some(f => f[0] === u.filter)) s.filter = u.filter;
     s.q = u.q ?? ''; s.speaker = u.speaker ?? null;
     if (u.sort && u.sort in SORT_LABEL) s.sort = u.sort;
-    if (u.mode && (!s.phone || u.mode !== 'table') && s.mode !== u.mode) s.mode = u.mode;
+    // The old review mode is gone: a saved one opens as the editor.
+    const um: Mode | undefined = (u.mode as string | undefined) === 'review' ? 'edit' : u.mode;
+    if (um && (!s.phone || um !== 'table') && s.mode !== um) s.mode = um;
     if (u.cur && unitMap.has(u.cur)) s.cur = u.cur;
     else if (s.mode !== 'table') s.cur = ctx.visible()[0]?.key ?? null;
     const top = u.scroll ?? 0;
@@ -382,7 +382,7 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#lp-sc').hidden = l !== 'scenes';
     $('#lp-title').textContent = both ? 'Файли й рядки' : l === 'rows' ? `Рядки · ${currentLabel()}` : l === 'glossary' ? 'Глосарій' : l === 'scenes' ? `Сцени · ${currentLabel()}` : 'Файли гри';
     document.querySelectorAll<HTMLElement>('#mtabs [data-lt]').forEach(b => { const on = b.dataset.lt === s.leftTab[s.mode]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
-    document.querySelectorAll<HTMLElement>('#seg [data-m]').forEach(b => { const on = b.dataset.m === s.mode || (s.mode === 'review' && b.dataset.m === 'edit'); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+    document.querySelectorAll<HTMLElement>('#seg [data-m]').forEach(b => { const on = b.dataset.m === s.mode; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
     const here = s.rightOpen ? 'help' : s.leftOpen ? s.leftTab[s.mode] : s.mode === 'table' ? 'rows' : 'edit';
     document.querySelectorAll<HTMLElement>('#bnav [data-bn]').forEach(b => { const on = b.dataset.bn === here; b.classList.toggle('on', on); b.setAttribute('aria-current', String(on)); });
   }
@@ -615,9 +615,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const mins = Math.max(0, Math.round((Date.now() - s.sess.t0) / 60000));
     $('#sb-sess').textContent = `Сесія: ${s.sess.n} змін · ${mins} хв`;
     $('#ab-title').textContent = s.current ? currentLabel() : 'Transly';
-    { const sp = $('#stage-pill'); sp.classList.toggle('on', s.mode === 'review'); sp.setAttribute('aria-checked', String(s.mode === 'review')); sp.hidden = s.mode === 'table'; }
-    $('#ab-stage').textContent = s.mode === 'review' ? 'Вичитування' : 'Переклад';
-    $('#ab-sub').textContent = v ? `${s.mode === 'review' ? 'Вичитування' : 'Переклад'} · ${statsOf(v.units, ents).approved} / ${v.units.length} вичитано` : '';
+    $('#ab-sub').textContent = v ? `${statsOf(v.units, ents).approved} / ${v.units.length} вичитано` : '';
   }
 
   /** The centred message in the main area: the start screen, or the progress of reading files. */
@@ -657,9 +655,7 @@ export async function start(root: HTMLElement): Promise<void> {
   /* ---------- actions ---------- */
   function setMode(m: Mode, rerender = true): void {
     if (m === s.mode) return;
-    const wasReview = s.mode === 'review';
     s.mode = m;
-    if (m === 'review') s.filter = 'done'; else if (wasReview && s.filter === 'done') s.filter = 'all';
     if (m !== 'table' && !ctx.visible().some(u => u.key === s.cur)) s.cur = ctx.visible()[0]?.key ?? null;
     if (rerender) { renderAll(); if (m !== 'table' && s.cur) $('#i-tr').focus(); }
   }
@@ -668,7 +664,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!s.views.some(v => v.name === name)) return;
     if (!s.open.includes(name)) s.open.push(name);
     s.current = name; s.q = ''; s.lenFilter = 'all'; s.checked.clear();
-    s.filter = s.mode === 'review' ? 'done' : 'all';
+    s.filter = 'all';
     unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u]));
     s.cur = s.mode === 'table' ? null : ctx.visible()[0]?.key ?? null;
   }
@@ -679,7 +675,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!known.length) return;
     s.group = known; s.groupSel = null;
     s.current = GROUP; s.q = ''; s.lenFilter = 'all'; s.checked.clear();
-    s.filter = s.mode === 'review' ? 'done' : 'all';
+    s.filter = 'all';
     unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u]));
     s.cur = null;
   }
@@ -691,7 +687,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!keys.size) { toast('Тут ще немає рядків'); return; }
     s.group = [...keys.keys()]; s.groupSel = { title, ...(gid ? { gid } : {}), keys };
     s.current = GROUP; s.q = ''; s.lenFilter = 'all'; s.checked.clear();
-    if (s.mode === 'review') s.filter = 'done'; else s.filter = 'all';
+    s.filter = 'all';
     unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u]));
     s.cur = null;
     renderAll();
@@ -1062,7 +1058,7 @@ export async function start(root: HTMLElement): Promise<void> {
   type MenuItem = '-' | { t: string; fn: () => void; sc?: string };
   const MENUS: Record<string, MenuItem[]> = {
     'Файл': [{ t: 'Відкрити папку гри…', fn: () => void openFolder() }, { t: 'Відкрити файли або вставити JSON…', fn: openImportDlg }, { t: 'Зібрати…', fn: doBuild, sc: 'F5' }, '-', { t: 'Налаштування…', fn: openSettingsDlg }],
-    'Вигляд': [{ t: 'Таблиця', fn: () => setMode('table') }, { t: 'Редагування', fn: () => setMode('edit') }, { t: 'Вичитування', fn: () => setMode('review') }],
+    'Вигляд': [{ t: 'Таблиця', fn: () => setMode('table') }, { t: 'Редагування', fn: () => setMode('edit') }],
     'Навігація': [{ t: 'Наступний рядок без перекладу', fn: () => jump('new', 1) }, { t: 'Наступна проблема QA', fn: () => jump('qa', 1) }, { t: 'Переглянути сцену…', fn: () => { const u = s.cur ? ctx.unit(s.cur) : undefined; if (u) openScene(ctx, u); else toast('Спершу виберіть рядок'); } }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: 'Ctrl+K' }],
     'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Перевірити узгодженість…', fn: () => openConsistency(ctx) }, { t: 'Автозаповнення за словами…', fn: () => openAutofill(ctx) }, { t: 'Активність…', fn: () => openActivity(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенести довгі рядки у файлі', fn: wrapFile }, '-', { t: 'Налаштування…', fn: openSettingsDlg }],
     'Довідка': [{ t: 'Гарячі клавіші', fn: () => toggleKeys() }],
@@ -1154,6 +1150,30 @@ export async function start(root: HTMLElement): Promise<void> {
     const nSkip = [...skipped.values()].reduce((a, b) => a + b, 0);
     toast(`Надіслано на вичитування: ${ok}${nSkip ? `. Пропущено: ${nSkip} (${[...skipped.keys()].slice(0, 2).join('; ')})` : ''}`, { sticky: nSkip > 0 });
   }
+  /** Approve the ticked rows: a draft is sent first, so the history says both. */
+  function bulkApprove(): void {
+    const v = ctx.view();
+    if (!v) return;
+    const ents = ctx.entries(v.name);
+    const changes: RowChange[] = []; const skipped = new Map<string, number>();
+    const visible = new Set(visibleUnits(true));
+    const opts = { blockErrors: s.saved.settings.blockErrors, qa: qaOpts() };
+    const now = Date.now();
+    for (const k of s.checked) {
+      const u = unitMap.get(k);
+      if (!u || !visible.has(u)) continue;
+      let next = ents[k];
+      const miss = (why: string): void => { skipped.set(why.slice(0, 40), (skipped.get(why.slice(0, 40)) ?? 0) + 1); };
+      if (!next?.target.trim()) { miss('Переклад порожній'); continue; }
+      if (next.status !== 'done' && next.status !== 'appr') { const r1 = submit(next, u, 'translate', now, opts); if (!r1.ok) { miss(r1.reason); continue; } next = r1.entry; }
+      const r2 = submit(next, u, 'review', now, opts);
+      if (r2.ok) changes.push({ file: v.name, key: k, next: r2.entry, text: r2.entry.target }); else miss(r2.reason);
+    }
+    if (changes.length) ctx.commit(changes, 'approve', 'затверджено');
+    ctx.persist(); ctx.invalidateTm(); renderAll();
+    const nSkip = [...skipped.values()].reduce((a, b) => a + b, 0);
+    toast(`Затверджено: ${changes.length}${nSkip ? `. Пропущено: ${nSkip} (${[...skipped.keys()].slice(0, 2).join('; ')})` : ''}`, { sticky: nSkip > 0 });
+  }
   function bulkTm(): void {
     const v = ctx.view();
     if (!v) return;
@@ -1240,13 +1260,11 @@ export async function start(root: HTMLElement): Promise<void> {
     if (mi) { const [g, i] = mi.dataset.mi!.split('|'); const it = MENUS[g!]![Number(i)]; mbToggle(false); if (it && it !== '-') setTimeout(() => it.fn(), 0); return; }
     if (!t.closest('#menubar,#mdd,#hamb') && !$('#menubar').hidden) mbToggle(false);
     if (t.closest('#scrim')) { s.leftOpen = false; s.rightOpen = false; renderAll(); return; }
-    if (t.closest('#stage-pill')) { setMode(s.mode === 'review' ? 'edit' : 'review'); return; }
     const bn = t.closest<HTMLElement>('#bnav [data-bn]');
     if (bn) { bottomNav(bn.dataset.bn!, bn); return; }
     if (t.closest('#ab-search')) { openSearch(); return; }
     const pmi = t.closest<HTMLElement>('[data-pmi]');
     if (pmi) { const [g, i] = pmi.dataset.pmi!.split('|'); closePops(); const it = MENUS[g!]?.[Number(i)]; if (it && it !== '-') it.fn(); return; }
-    if (t.closest('#ab-stage')) { setMode(s.mode === 'review' ? 'edit' : 'review'); return; }
     const lt = t.closest<HTMLElement>('#mtabs [data-lt]');
     if (lt) { s.leftTab[s.mode] = (['rows', 'glossary', 'scenes'] as const).find(x => x === lt.dataset.lt) ?? 'files'; renderAll(); return; }
     const hl = t.closest<HTMLElement>('[data-hide-left]');
@@ -1290,7 +1308,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (ch) { s.filter = ch.dataset.filter as Filter; if (s.mode !== 'table' && !ctx.visible().some(u => u.key === s.cur)) s.cur = ctx.visible()[0]?.key ?? null; renderAll(); return; }
     const clr = t.closest<HTMLElement>('[data-clear]');
     if (clr) { closePops(); if (clr.dataset.clear === 'speaker') s.speaker = null; else s.lenFilter = 'all'; renderAll(); return; }
-    if (t.closest('[data-reset]')) { s.filter = s.mode === 'review' ? 'done' : 'all'; s.q = ''; s.speaker = null; s.lenFilter = 'all'; renderAll(); return; }
+    if (t.closest('[data-reset]')) { s.filter = 'all'; s.q = ''; s.speaker = null; s.lenFilter = 'all'; renderAll(); return; }
     if (t.closest('#spkbtn')) {
       const v = ctx.view();
       // Speakers of every file, not only the open one: the choice stays when another file is opened.
@@ -1310,6 +1328,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const ln = t.closest<HTMLElement>('[data-len]');
     if (ln) { s.lenFilter = ln.dataset.len as typeof s.lenFilter; closePops(); renderAll(); return; }
     if (t.closest('#bb-ok')) { bulkSend(); return; }
+    if (t.closest('#bb-appr')) { bulkApprove(); return; }
     if (t.closest('#bb-tm')) { bulkTm(); return; }
     if (t.closest('#tree-grp')) { const first = [...s.picked][0]; if (first) showPop(t.closest<HTMLElement>('#tree-grp')!, placeMenuHtml(ctx, filesTarget(first))); return; }
     if (t.closest('#bb-clear')) { s.checked.clear(); renderAll(); return; }

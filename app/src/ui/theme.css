@@ -842,7 +842,7 @@ body.resizing{user-select:none;cursor:col-resize}
 .rz-p:hover,.rz-p.drag,.rz-p:focus-visible{background:rgba(139,108,240,.35)}
 .fs.stack .ibody{overflow:hidden}
 .fs.stack .pane{overflow:auto;min-height:0}
-.fs.stack #s-tm{flex:var(--pw0,1) 1 0}.fs.stack #s-gl{flex:var(--pw1,1) 1 0}.fs.stack #s-cm{flex:var(--pw2,1) 1 0}.fs.stack #s-hi{flex:var(--pw3,1) 1 0}
+
 .sz-s .rz-r,.sz-s .rz-p{display:none}
 /* close/hide controls appear on hover, or on the active tab / focused panel */
 .tab .x{opacity:0;transition:opacity .12s}

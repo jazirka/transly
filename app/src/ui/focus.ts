@@ -2,8 +2,9 @@ import { gorohUrl, multitranUrl, wordsOf, activeIssues, byHintOrder, check, desc
 import type { BatchKind, Entry, SceneIndex, Unit } from '../core';
 import { $, buzz, esc, plural, toast } from './dom';
 import { discussClick, renderDiscuss } from './discuss';
-import { chipsHtml, keyInView, qaRows, namesOfRow, nameMarks, realOf, tmBarHtml, tmMatch } from './hintcards';
-import { historyClick, renderHistory } from './history-panel';
+import { chipsHtml, keyInView, qaRows, namesOfRow, nameMarks, realOf, tmMatch } from './hintcards';
+import { ROW_PANEL_HTML, renderRowPanel, rowPanelClick } from './rowpanel';
+import { historyClick } from './history-panel';
 import { CODE_RE, markupTerms } from './markup';
 import { autoSize, drawMarks, insertAtCursor } from './text-editor';
 import { hideTermCard } from './termcard';
@@ -12,7 +13,7 @@ import { isDesktop, openLink, rememberedGameDir } from './desktop';
 import { drawPic, picOfFace, picsOfRow } from './gameimg';
 import type { Pic } from './gameimg';
 import { STATUS_CAP, shownStatus } from './state';
-import type { Ctx, SideTab } from './state';
+import type { Ctx } from './state';
 
 const I = {
   copy: '<svg viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="8" height="8" rx="1"/><path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2"/></svg>',
@@ -44,54 +45,30 @@ export const FOCUS_HTML = `<div class="fc"><div class="fc-in"><div class="te-lin
     <div class="edbar">
       <button class="ib lab" id="b-compact" title="Лише текст: сховати контекст і примітки" aria-label="Режим лише тексту">${I.compact}<span class="tl">Лише текст</span></button>
       <button class="ib" id="b-clear" title="Очистити переклад (можна скасувати в «Активності»)" aria-label="Очистити переклад">${I.clear}</button>
-      <button class="ib" id="b-return" title="Повернути перекладачу" aria-label="Повернути перекладачу" hidden>${I.back}</button>
       <span class="grow"></span>
       <span class="qab" id="qa-badge" title="Активні проблеми QA в рядку" hidden></span>
       <div class="cnt2" id="cnt2" title="Знаків у перекладі / в оригіналі. Рекомендація: якнайближче до оригіналу"><span id="c-ch">0 / 0 зн.</span></div>
       <button class="saveb" id="b-save" aria-label="Надіслати на вичитування">${I.ok}</button>
     </div>
-    <div class="tmbar" id="f-tm" hidden></div>
     <div class="wraphint" id="f-wrap" hidden></div>
     <div class="qa-under" id="f-qa"></div>
-    <div class="proof" id="f-proof" hidden style="margin-top:10px"></div>
   </div>
 </div></div>`;
 
-export const SIDE_HTML = `<aside class="fs" aria-label="Панелі рядка">
+export const SIDE_HTML = `<aside class="fs" aria-label="Панель рядка">
   <div class="rz rz-r" id="rz-r" role="separator" aria-orientation="vertical" aria-label="Ширина правої панелі" aria-valuemin="260" aria-valuemax="640" tabindex="0" title="Потягніть, щоб змінити ширину (подвійний клік — стандартна)"></div>
-  <div class="itabs" id="stabs" role="toolbar" aria-label="Панелі правої зони">
-    <button class="on" aria-pressed="true" data-p="s-cm" title="Обговорення рядка">${I.chat}<span class="tl">Обговорення</span> <span class="cnt" id="cm-badge" hidden>0</span></button><hr class="ssep">
-    <button aria-pressed="false" data-p="s-hi" title="Історія змін рядка: порівняння й відновлення">${I.clock}<span class="tl">Історія</span></button><hr class="ssep">
-    <button aria-pressed="false" data-p="s-dict" title="Словник: слова оригіналу й перекладу">${I.dict}<span class="tl">Словник</span></button>
+  <div class="itabs" id="stabs" role="toolbar" aria-label="Права панель">
+    <button class="on" aria-pressed="true" data-p="panel" title="Переклад, пропозиції, терміни й обговорення рядка">${I.chat}<span class="tl">Рядок</span> <span class="cnt" id="cm-badge" hidden>0</span></button>
   </div>
   <div class="ibody">
-    <div class="ph"><span class="grow" id="rp-title">Обговорення</span><span class="ico" id="rp-close" title="Сховати панель" role="button" tabindex="0" aria-label="Сховати панель">—</span></div>
+    <div class="ph"><span class="grow" id="rp-title">Рядок</span><span class="ico" id="rp-close" title="Сховати панель" role="button" tabindex="0" aria-label="Сховати панель">—</span></div>
     <section class="qa-side" id="qa-side" hidden><div class="lbl">Перевірка рядка</div><div id="i-iss" class="qa-under"></div></section>
-    <div class="pane on" id="s-cm" data-title="Обговорення"><div class="ph card-ph"><span class="grow">Обговорення</span><span class="ico" data-hide-pane="s-cm" role="button" tabindex="0" aria-label="Сховати панель «Обговорення»" title="Сховати">—</span></div>
-      <div id="cm-list" class="cm-list"></div>
-      <div class="cm-new"><textarea class="cmin" id="cm-in" placeholder="Нове обговорення цього рядка…" aria-label="Новий коментар"></textarea>
-      <div class="actions" style="margin-top:0"><button class="btn" id="cm-add">Коментувати</button><span class="hint">Ctrl+Enter</span></div></div>
-    </div>
-    <div class="rz rz-p" data-rzp="0" role="separator" aria-orientation="horizontal" aria-label="Розділ між панелями" aria-valuenow="50" aria-valuemin="10" aria-valuemax="90" tabindex="0" hidden></div>
-    <div class="pane" id="s-hi" data-title="Історія"><div class="ph card-ph"><span class="grow">Історія</span><span class="ico" data-hide-pane="s-hi" role="button" tabindex="0" aria-label="Сховати панель «Історія»" title="Сховати">—</span></div><div class="hist" id="hist-list"></div></div>
-    <div class="rz rz-p" data-rzp="1" role="separator" aria-orientation="horizontal" aria-label="Розділ між панелями" aria-valuenow="50" aria-valuemin="10" aria-valuemax="90" tabindex="0" hidden></div>
-    <div class="pane" id="s-dict" data-title="Словник"><div class="ph card-ph"><span class="grow">Словник</span><span class="ico" data-hide-pane="s-dict" role="button" tabindex="0" aria-label="Сховати панель «Словник»" title="Сховати">—</span></div>
-      <div class="hint" id="dc-none">Оберіть рядок.</div><div class="lbl" id="dc-head" hidden>Слова <span class="r" id="dc-kind"></span></div><div id="i-dc"></div></div>
+    <div class="pane on" id="s-pn" data-title="Рядок">${ROW_PANEL_HTML}</div>
   </div>
 </aside>`;
 
 const when = (t: number) => new Date(t).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 const stageOf = (ctx: Ctx): 'review' | 'translate' => ctx.stage();
-let gorohKind: 'Тлумачення' | 'Синоніми' = 'Тлумачення';
-/** Words of the original (Multitran) and of the translation (Goroh) as links: they open in the browser. */
-function renderDict(u: Unit, target: string): void {
-  const en = wordsOf(u.source), uk = wordsOf(target);
-  $('#dc-none').hidden = true; $('#dc-head').hidden = false;
-  $('#dc-kind').innerHTML = `<button class="lnk" data-gk="${gorohKind === 'Тлумачення' ? 'Синоніми' : 'Тлумачення'}" title="Що відкривати для слів перекладу на Гороху">Горох: ${gorohKind.toLowerCase()}</button>`;
-  const chip = (w: string, url: string): string => `<button class="wchip" data-ext="${esc(url)}" title="Відкрити в браузері">${esc(w)}</button>`;
-  $('#i-dc').innerHTML = `<div class="wrow"><small class="hint">Multitran</small>${en.map(w => chip(w, multitranUrl(w))).join('') || '<span class="hint">слів немає</span>'}</div>${uk.length ? `<div class="wrow"><small class="hint">Горох</small>${uk.map(w => chip(w, gorohUrl(w, gorohKind))).join('')}</div>` : '<div class="hint">Слова перекладу з’являться, коли він буде написаний.</div>'}`;
-}
-
 let picToken = 0;
 /** Pictures from the game folder for the string (item icons, faces, enemies): desktop only, and only when the project has a game folder. */
 function renderPics(ctx: Ctx, u: Unit | undefined): void {
@@ -119,14 +96,6 @@ function renderPics(ctx: Ctx, u: Unit | undefined): void {
 }
 const entryOf = (ctx: Ctx, u: Unit): Entry | undefined => ctx.entries(ctx.s.current!)[u.key];
 
-export const SIDE_ORDER: SideTab[] = ['comments', 'history', 'dict'];
-const PANE: Record<SideTab, string> = { comments: 's-cm', history: 's-hi', dict: 's-dict' };
-const TAB_OF: Record<string, SideTab> = { 's-cm': 'comments', 's-hi': 'history', 's-dict': 'dict' };
-const PANE_TITLE: Record<SideTab, string> = { comments: 'Обговорення', history: 'Історія', dict: 'Словник' };
-/** Switch a panel on (keeping the fixed order) / off. */
-export const showSide = (on: SideTab[], t: SideTab): SideTab[] => (on.includes(t) ? on : SIDE_ORDER.filter(x => x === t || on.includes(x)));
-export const hideSide = (on: SideTab[], t: SideTab): SideTab[] => on.filter(x => x !== t);
-
 /** Fill the editing view from state. The textarea is only reset when the unit changed. */
 export function renderFocus(ctx: Ctx, desktop: boolean): void {
   const { s } = ctx;
@@ -142,13 +111,12 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
     $('#f-state').textContent = '';
     $('#f-chips').innerHTML = '';
     renderPics(ctx, undefined);
-    $('#f-src').innerHTML = `<span class="hint">${list.length ? 'Оберіть рядок зліва.' : s.mode === 'review' ? 'Немає рядків, які очікують вичитування.' : 'За поточним фільтром рядків немає.'}</span>`;
+    $('#f-src').innerHTML = `<span class="hint">${list.length ? 'Оберіть рядок зліва.' : 'За поточним фільтром рядків немає.'}</span>`;
     return;
   }
   ($('#i-tr') as HTMLTextAreaElement).disabled = false;
   const e = entryOf(ctx, u);
   const st = shownStatus(ctx, u, e);
-  const review = ctx.stage() === 'review';
   const pos = list.findIndex(x => x.key === u.key);
   $('#f-key').textContent = `${realOf(ctx, u).file.replace(/\.[^.]+$/, '')} › ${u.context} › ${u.key.replace(/^.*\.list/, 'list')}`;
   $('#f-state').innerHTML = `<span class="sd ${st}"></span>${e?.returned && e.status === 'draft' ? 'повернено на доопрацювання' : STATUS_CAP[st]}`;
@@ -162,20 +130,14 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
   const refs = referenceSets(s.saved.reference).map(r => ({ lang: r.lang, text: r.texts[realOf(ctx, u).file]?.[realOf(ctx, u).key] })).filter(r => r.text);
   $('#f-refbox').hidden = !refs.length;
   $('#f-refbox').innerHTML = refs.map(r => `<div class="lbl">Довідка · ${esc(r.lang.toUpperCase())}</div><div class="srcbox ref" lang="${esc(r.lang)}">${esc(r.text!)}</div>`).join('');
-  $('#f-trlbl').textContent = review ? 'Після вичитування · UK' : 'Переклад · UK';
   const ta = $('#i-tr') as HTMLTextAreaElement;
   if (document.activeElement !== ta || ta.dataset.key !== u.key) { if (ta.dataset.key !== u.key) hideTermCard(); ta.value = e?.target ?? ''; ta.dataset.key = u.key; }
   refreshTerms(ctx, u);
-  { const tm = $('#f-tm'), bar = tmBarHtml(ctx, u, ta.value); tm.hidden = !bar; tm.innerHTML = bar; }
   meter(ctx, u);
   refreshQa(ctx, u);
-  const pf = $('#f-proof');
-  pf.hidden = !review;
-  if (review) pf.innerHTML = `<div class="lbl">Версія перекладача</div><div class="t">${esc(e?.orig ?? '—')}${e && e.orig !== undefined && e.orig !== e.target ? '<span class="chg">змінено вичитуванням</span>' : ''}</div>`;
-  const lab = review ? 'Затвердити' : 'Надіслати на вичитування';
+  const lab = 'Надіслати на вичитування';
   $('#b-save').title = lab + ' (Ctrl+Enter)';
   $('#b-save').setAttribute('aria-label', lab);
-  $('#b-return').hidden = !review;
 }
 
 /** Terms of the open row, worked out once per row. */
@@ -237,52 +199,32 @@ export function renderSidePanel(ctx: Ctx): void {
 
 function renderSide(ctx: Ctx, u: Unit | undefined, e: Entry | undefined): void {
   const { s } = ctx;
-  const on = s.phone ? [s.sideTab] : s.sideOn;
-  const tab = on[0] ?? s.sideTab;
-  const all = on.length > 1;
-  const open = s.phone || on.length > 0;
-  const idOf = (t: SideTab): string => PANE[t];
-  document.querySelectorAll<HTMLElement>('#stabs [data-p]').forEach(b => { const isOn = on.some(t => idOf(t) === b.dataset.p); b.classList.toggle('on', isOn); b.setAttribute('aria-pressed', String(isOn)); });
-  document.querySelectorAll<HTMLElement>('.ibody .pane').forEach(p => p.classList.toggle('on', on.some(t => idOf(t) === p.id)));
-  // A splitter sits before every shown panel that has another shown panel above it.
-  document.querySelectorAll<HTMLElement>('.ibody .rz-p').forEach(d => { const pane = d.nextElementSibling as HTMLElement | null; const k = pane ? SIDE_ORDER.findIndex(t => idOf(t) === pane.id) : -1; d.hidden = !(k > 0 && on.some(t => idOf(t) === pane?.id) && on.some(t => SIDE_ORDER.indexOf(t) < k)); });
-  const fsEl = document.querySelector<HTMLElement>('.fs');
-  fsEl?.classList.toggle('stack', all);
+  const open = s.phone || s.sideOn.length > 0;
+  document.querySelectorAll<HTMLElement>('#stabs [data-p]').forEach(b => { b.classList.toggle('on', open); b.setAttribute('aria-pressed', String(open)); });
   document.getElementById('v-focus')?.classList.toggle('side-collapsed', !open);
-  $('#rp-title').textContent = all ? 'Панелі' : PANE_TITLE[tab];
-  const show = (t: SideTab): boolean => on.includes(t);
-  const hintEmpty = '<div class="hint">Оберіть рядок.</div>';
   // In the table there is no editor to carry the remarks of the row: they stand at the top of this zone.
   const q = u && s.mode === 'table' ? qaRows(ctx, u, e) : { html: '', count: 0 };
   $('#qa-side').hidden = !q.count;
   $('#i-iss').innerHTML = q.count ? q.html : '';
-  if (!u) {
-    $('#dc-none').hidden = false; $('#dc-head').hidden = true; $('#i-dc').innerHTML = '';
-    $('#cm-list').innerHTML = hintEmpty; $('#hist-list').innerHTML = hintEmpty;
-    $('#cm-badge').hidden = true;
-    return;
-  }
-  const row = `${s.current}|${u.key}`;
+  renderRowPanel(ctx, u, e);
+  if (!u) { $('#cm-list').innerHTML = '<div class="hint">Оберіть рядок.</div>'; $('#cm-badge').hidden = true; $('#pn-cm-n').hidden = true; return; }
   const open0 = openThreads(e);
-  $('#cm-badge').textContent = String(open0); $('#cm-badge').hidden = !open0;
-  if (show('comments')) renderDiscuss(ctx, row, e);
-  if (show('history')) renderHistory(ctx, row, e);
-  if (show('dict')) renderDict(u, e?.target ?? '');
+  for (const id of ['#cm-badge', '#pn-cm-n']) { $(id).textContent = String(open0); $(id).hidden = !open0; }
+  renderDiscuss(ctx, `${s.current}|${u.key}`, e);
 }
 
 function edit0(ctx: Ctx, u: Unit, text: string): Entry {
   return editFn(entryOf(ctx, u), u, text, stageOf(ctx), Date.now());
 }
 
-let historyTimer = 0;
-/** The history marks which version the field holds and offers the others: after typing it is drawn again (not on every key). */
-function refreshHistory(ctx: Ctx, u: Unit): void {
-  if (!(ctx.s.phone ? ctx.s.sideTab === 'history' : ctx.s.sideOn.includes('history'))) return;
-  window.clearTimeout(historyTimer);
-  historyTimer = window.setTimeout(() => {
+let panelTimer = 0;
+/** The panel shows the translation and its versions: after typing it is drawn again (not on every key). */
+function refreshPanel(ctx: Ctx, u: Unit): void {
+  window.clearTimeout(panelTimer);
+  panelTimer = window.setTimeout(() => {
     const cur = ctx.s.cur ? ctx.unit(ctx.s.cur) : undefined;
-    if (cur && cur.key === u.key && ctx.s.current) renderHistory(ctx, `${ctx.s.current}|${u.key}`, entryOf(ctx, u));
-  }, 200);
+    if (cur && cur.key === u.key && ctx.s.current && (ctx.s.phone || ctx.s.sideOn.length)) renderRowPanel(ctx, cur, entryOf(ctx, cur));
+  }, 250);
 }
 
 /** Typing in the editing textarea. */
@@ -296,7 +238,7 @@ export function focusInput(ctx: Ctx, ta: HTMLTextAreaElement): void {
   refreshTerms(ctx, u);
   meter(ctx, u); refreshQa(ctx, u);
   ctx.softTm();
-  refreshHistory(ctx, u);
+  refreshPanel(ctx, u);
 }
 
 /** Change the text of the open row; `kind` makes it an action of the journal that can be taken back from the activity feed. */
@@ -373,12 +315,6 @@ export function focusClick(ctx: Ctx, t: HTMLElement): boolean {
     return true;
   }
   if (t.closest('#b-save')) { send(ctx); return true; }
-  if (t.closest('#b-return')) {
-    const cur = ents[u.key];
-    if (!cur) return true;
-    ents[u.key] = recordChange(cur, sendBack(cur, Date.now()), 'повернуто перекладачу', '', s.who, Date.now());
-    ctx.persist(); toast('Повернуто перекладачу'); step(ctx, 1); return true;
-  }
   const ins = t.closest<HTMLElement>('[data-ins]');
   if (ins) { setText(ctx, u, ta.value + (ins.dataset.ins ?? ''), 'додано керівні коди'); return true; }
   return false;
@@ -407,25 +343,18 @@ export function sideClick(ctx: Ctx, t: HTMLElement): boolean {
   const { s } = ctx;
   const tab = t.closest<HTMLElement>('#stabs [data-p]');
   if (tab) {
-    const next = TAB_OF[tab.dataset.p ?? ''] ?? 'comments';
-    // Every rail button switches its own panel on or off; several on = they share the zone.
-    if (s.phone) { s.sideTab = next; s.sideOn = [next]; }
-    else { s.sideOn = s.sideOn.includes(next) ? hideSide(s.sideOn, next) : showSide(s.sideOn, next); if (s.sideOn.length) s.sideTab = s.sideOn[0]!; }
+    // The rail button shows the panel or folds the zone to its rail.
+    if (s.phone) { s.sideOn = ['panel']; } else s.sideOn = s.sideOn.length ? [] : ['panel'];
     ctx.render(); return true;
   }
-  const hp = t.closest<HTMLElement>('[data-hide-pane]');
-  if (hp) { const tb = TAB_OF[hp.dataset.hidePane ?? '']; if (tb) { s.sideOn = hideSide(s.sideOn, tb); ctx.render(); } return true; }
   if (t.closest('#rp-close')) { s.sideOn = []; ctx.render(); return true; }
   if (qaClick(ctx, t)) return true;
   if (!t.closest('.fs')) return false;
   const u = s.cur ? ctx.unit(s.cur) : undefined;
-  const sw = t.closest<HTMLElement>('[data-side]');
-  if (sw) { const to = sw.dataset.side as SideTab; if (s.phone) { s.sideTab = to; s.sideOn = [to]; } else s.sideOn = showSide(s.sideOn, to); s.sideTab = to; ctx.render(); return true; }
   const ext = t.closest<HTMLElement>('[data-ext]');
   if (ext) { void openLink(ext.dataset.ext!); return true; }
-  const gk = t.closest<HTMLElement>('[data-gk]');
-  if (gk) { gorohKind = gk.dataset.gk as typeof gorohKind; if (u) renderDict(u, entryOf(ctx, u)?.target ?? ''); return true; }
   if (!u || !s.current) return false;
+  if (rowPanelClick(ctx, t, (unit, text, what, kind) => setText(ctx, unit, text, what, kind))) return true;
   if (historyClick(ctx, t, (unit, text, what) => setText(ctx, unit, text, what))) return true;
   if (discussClick(ctx, t)) return true;
   return false;

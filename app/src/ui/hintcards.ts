@@ -247,4 +247,12 @@ export function tmBarHtml(ctx: Ctx, u: Unit, target: string): string {
   return `<span class="tm-l" title="Збіги з пам’яті перекладів: клік підставляє варіант у переклад">З пам’яті</span>${m.map((x, n) => `<button type="button" class="tm-i" data-tm="${n}" title="${esc(x.src)} · «${esc(oneLine(x.s, 60))}»"><b class="${x.score >= 90 ? 'hi' : ''}">${x.score}%</b><span>${esc(oneLine(x.t, 70))}</span></button>`).join('')}`;
 }
 
+/** The matches of the translation memory as a list for the right panel (a click puts one into the translation). */
+export function tmListHtml(ctx: Ctx, u: Unit, target: string): string {
+  const m = ctx.tm().find(u.source, { min: 60, limit: 5, exclude: x => x.s === u.source && x.t === target });
+  tmCur = m;
+  const srcLabel = (s: string): string => (s === 'Імпорт' ? 'імпорт' : s.replace(/\.json$/, ''));
+  return m.map((x, n) => `<button type="button" class="pn-sug" data-tm="${n}" title="Підставити цей переклад у поле"><span class="pn-sug-t">${esc(x.t)}</span><span class="pn-sug-m"><b class="${x.score >= 90 ? 'hi' : ''}">${x.score}%</b> збігається${x.s !== u.source ? ` · «${esc(oneLine(x.s, 50))}»` : ''} · ${esc(srcLabel(x.src))}</span></button>`).join('');
+}
+
 export const keyInView = (ctx: Ctx, file: string, key: string): string => (ctx.s.current === GROUP ? file + SEP + key : key);

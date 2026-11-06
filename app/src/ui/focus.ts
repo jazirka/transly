@@ -35,11 +35,10 @@ const I = {
 
 /** Static skeleton of the editing view; renderFocus() fills the pieces so the textarea keeps focus while typing. */
 export const FOCUS_HTML = `<div class="fc"><div class="fc-in"><div class="te-links" id="te-links"></div>
-  <div class="fhd"><span class="k" id="f-key"></span><span class="st-pill" id="f-state"></span></div>
+  <div class="fhd"><span class="k" id="f-key"></span><span class="fchips" id="f-chips"></span><span class="st-pill" id="f-state"></span></div>
   <div class="fnav">
     <button class="ib lab" id="b-scene" title="Переглянути сцену: усі рядки події поспіль, як у грі" aria-label="Переглянути сцену">${I.scene}<span class="tl">Сцена</span></button>
   </div>
-  <div class="ctxchips" id="f-chips"></div>
   <div class="offlist" id="f-off" hidden><span>Цей рядок не входить у поточний фільтр або пошук.</span><button data-reset>Показати всі рядки</button></div>
   <div><div class="lbl">Оригінал · EN</div><div class="srcbox" id="f-src"></div><div class="pics" id="f-pics" hidden></div></div>
   <div id="f-refbox" hidden></div>
@@ -149,6 +148,7 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
     ($('#i-tr') as HTMLTextAreaElement).disabled = true;
     $('#te-layer').textContent = '';
     $('#f-state').textContent = '';
+    $('#f-chips').innerHTML = '';
     renderPics(ctx, undefined);
     $('#f-src').innerHTML = `<span class="hint">${list.length ? 'Оберіть рядок зліва.' : s.mode === 'review' ? 'Немає рядків, які очікують вичитування.' : 'За поточним фільтром рядків немає.'}</span>`;
     return;
@@ -158,7 +158,7 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
   const st = shownStatus(ctx, u, e);
   const review = ctx.stage() === 'review';
   const pos = list.findIndex(x => x.key === u.key);
-  $('#f-key').textContent = `${realOf(ctx, u).file.replace(/\.[^.]+$/, '')} › ${u.context}${ctx.speaker(u) ? ' › ' + ctx.speaker(u) : ''} › ${u.key.replace(/^.*\.list/, 'list')}`;
+  $('#f-key').textContent = `${realOf(ctx, u).file.replace(/\.[^.]+$/, '')} › ${u.context} › ${u.key.replace(/^.*\.list/, 'list')}`;
   $('#f-state').innerHTML = `<span class="sd ${st}"></span>${e?.returned && e.status === 'draft' ? 'повернено на доопрацювання' : STATUS_CAP[st]}`;
   $('#f-off').hidden = pos >= 0;
   const hits = termsIn(u.source, s.saved.terms);

@@ -218,17 +218,22 @@ export function chipsHtml(ctx: Ctx, u: Unit): string {
   const same = ctx.dups().others(r.file, r.key).length;
   const st = (t: string, title: string): string => `<span class="cc" title="${esc(title)}">${esc(t)}</span>`;
   const act = (which: string, t: string, title: string, warn = false): string => `<button type="button" class="cc act ${warn ? 'warn' : ''}" data-hc="ctx" data-hk="${which}" title="${esc(title)}">${esc(t)} <span aria-hidden="true">▾</span></button>`;
-  return [
+  // What the row is (plain words) and what can be opened (buttons); the header puts a divider before each group.
+  const meta = [
     st(KIND_LABEL[u.kind] ?? u.kind, 'Тип рядка'),
     ctx.speaker(u) ? st(ctx.speaker(u), 'Хто говорить') : '',
     label ? st(label, 'Місцевість') : '',
     u.note ? st(`позначка: ${u.note}`, 'Позначка розробників') : '',
     limit ? st(`рядок до ${limit} зн.`, `Ширина рядка в грі${u.face ? ' (поруч обличчя)' : ''}`) : '',
+  ].filter(Boolean);
+  const acts = [
     first?.page ? act('cond', 'умови сторінки', 'Коли показується ця сцена') : '',
     used.length ? act('used', 'де видається', 'Де гравець це отримує') : '',
     u.dbNote ? act('db', 'примітка в базі', 'Примітка розробників у базі даних') : '',
     same ? act('same', `однакових: ${same}`, 'Інші рядки з тим самим оригіналом', true) : '',
-  ].filter(Boolean).join('');
+  ].filter(Boolean);
+  const sep = '<span class="fsep" aria-hidden="true"></span>';
+  return (meta.length ? sep + meta.join('<span class="fdot" aria-hidden="true"></span>') : '') + (acts.length ? sep + acts.join('') : '');
 }
 
 let tmCur: { t: string; score: number }[] = [];

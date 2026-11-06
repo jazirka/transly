@@ -201,13 +201,17 @@ textarea.tr-in:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(139,11
 #term-none .lnk{margin-left:4px}
 
 /* ----- hints in their place: chips of the header, proposals of the memory, words of the original that open cards ----- */
-.ctxchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:-6px}
-.ctxchips:empty{display:none}
-.cc{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--mute);font:inherit;font-size:12px;line-height:18px}
-button.cc{cursor:pointer}
+.cc{display:inline-flex;align-items:center;gap:4px;font:inherit;font-size:12px;line-height:18px;color:var(--mute)}
+button.cc{cursor:pointer;padding:2px 9px;border:1px solid var(--line);border-radius:var(--r2);background:transparent}
 button.cc:hover{background:var(--panel2,#34363b);color:var(--text)}
 button.cc:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .cc.warn{border-color:#5a4a2a;color:#f0c477}
+/* the header of the row: path | what the row is | what can be opened ... state */
+.fhd{flex-wrap:wrap;row-gap:6px}
+.fchips{display:contents}
+.fsep{width:1px;height:14px;background:#52565e;flex:none;margin:0 2px}
+.fdot{width:3px;height:3px;border-radius:50%;background:var(--dim);flex:none}
+.fhd .cc:not(button){white-space:nowrap}
 .tmbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:10px}
 .tmbar[hidden]{display:none}
 .tm-l{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--dim)}

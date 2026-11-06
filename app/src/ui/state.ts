@@ -1,11 +1,11 @@
 import { TmIndex, activeIssues } from '../core';
 import type { BatchKind, GameNameIndex, RowChange, Usage } from '../core';
-import type { Autosave, DupIndex, Entry, FileView, GameFile, SavedProject, Status, Unit } from '../core';
+import type { Autosave, DupIndex, Entry, FileView, GameFile, Group, RowRef, SavedProject, Status, Unit } from '../core';
 
 export type Mode = 'table' | 'edit' | 'review';
 export type Filter = 'all' | 'new' | 'draft' | 'done' | 'appr' | 'qa' | 'cm';
 export type SideTab = 'comments' | 'history' | 'dict';
-export type LeftTab = 'files' | 'rows' | 'glossary' | 'scenes';
+export type LeftTab = 'files' | 'rows' | 'glossary' | 'scenes' | 'groups';
 export type LenFilter = 'all' | 'far' | 'longer' | 'shorter';
 /** Order of the rows list: as in the file, untranslated first, problems first, longest first. */
 export type SortMode = 'order' | 'new' | 'qa' | 'long';
@@ -29,6 +29,8 @@ export interface State {
   open: string[];
   /** Files shown together in one table (`current` is then GROUP); null when no group is open. */
   group: string[] | null;
+  /** When the group shows only some rows of its files (a group of the translator's, a speaker, a scene): the title and which keys of each file; `gid` is the translator's group it follows. */
+  groupSel: { title: string; gid?: string; keys: Map<string, Set<string>> } | null;
   /** Files ticked in the file tree (Ctrl/Shift-click) to open together. */
   picked: Set<string>;
   /** Unit key selected in the current file. */
@@ -98,6 +100,12 @@ export interface Ctx {
   commit(changes: RowChange[], kind: BatchKind, what?: string): string;
   render(): void;
   select(key: string, mode?: Mode): void;
+  /** Show some rows of the game in one table (a group of the translator's when `gid` is given: the table then follows it when rows are moved). */
+  openRows(title: string, rows: RowRef[], gid?: string): void;
+  /** The groups or what is in them changed: the lists, the marks and an open group table are redrawn. */
+  groupsChanged(): void;
+  /** The group a row is in, or null. */
+  groupOf(file: string, key: string): Group | null;
   /** Open a row of any file in the editor (the file is opened, the filters that would hide the row are dropped). */
   open(file: string, key: string): void;
 }

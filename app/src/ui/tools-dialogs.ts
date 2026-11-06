@@ -1,13 +1,22 @@
 import { edit, findReplace, inconsistencies } from '../core';
-import type { RowChange } from '../core';
+import type { FileView, RowChange, RowRef } from '../core';
 import { dialog } from './settings';
 import { $, esc, plural, toast } from './dom';
 import type { Ctx } from './state';
 
+/** The views reduced to the given rows. */
+function scopedViews(views: FileView[], rows: RowRef[]): FileView[] {
+  const by = new Map<string, Set<string>>();
+  for (const r of rows) { let k = by.get(r.file); if (!k) by.set(r.file, k = new Set()); k.add(r.key); }
+  return views.filter(v => by.has(v.name)).map(v => ({ ...v, units: v.units.filter(u => by.get(v.name)!.has(u.key)) }));
+}
+
 /** Find text in the translations of the whole project and replace it, after looking at every change. */
-export function openFindReplace(ctx: Ctx): void {
+export function openFindReplace(ctx: Ctx, scope?: { title: string; rows: RowRef[] }): void {
   const { s } = ctx;
-  const dlg = dialog(`<form method="dialog"><h2 id="fr-t">Знайти й замінити в перекладах</h2>
+  // Limited to a set of rows (a group): only their files and rows are searched.
+  const views = scope ? scopedViews(s.views, scope.rows) : s.views;
+  const dlg = dialog(`<form method="dialog"><h2 id="fr-t">Знайти й замінити в перекладах${scope ? ` ${esc(scope.title)}` : ''}</h2>
     <div class="grid"><label for="fr-find">Знайти</label><input id="fr-find" autocomplete="off"><label for="fr-rep">Замінити на</label><input id="fr-rep" autocomplete="off"></div>
     <label class="achk"><input type="checkbox" id="fr-word"> Лише ціле слово</label>
     <label class="achk"><input type="checkbox" id="fr-case"> Враховувати регістр</label>
@@ -17,7 +26,7 @@ export function openFindReplace(ctx: Ctx): void {
   const off = new Set<string>();
   let found: ReturnType<typeof findReplace> = [];
   const run = () => {
-    found = findReplace(s.views, s.saved, { find: ($('#fr-find', dlg) as HTMLInputElement).value, replace: ($('#fr-rep', dlg) as HTMLInputElement).value, wholeWord: ($('#fr-word', dlg) as HTMLInputElement).checked, caseSensitive: ($('#fr-case', dlg) as HTMLInputElement).checked });
+    found = findReplace(views, s.saved, { find: ($('#fr-find', dlg) as HTMLInputElement).value, replace: ($('#fr-rep', dlg) as HTMLInputElement).value, wholeWord: ($('#fr-word', dlg) as HTMLInputElement).checked, caseSensitive: ($('#fr-case', dlg) as HTMLInputElement).checked });
     $('#fr-sum', dlg).textContent = found.length ? `Знайдено: ${plural(found.length, ['переклад', 'переклади', 'перекладів'])}. Зніміть позначку з тих, які міняти не треба.` : ($('#fr-find', dlg) as HTMLInputElement).value ? 'Нічого не знайдено' : 'Введіть, що шукати';
     $('#fr-list', dlg).innerHTML = found.slice(0, 200).map((m, i) => `<label class="sp-row fr-row"><input type="checkbox" data-i="${i}" ${off.has(m.file + '\u0001' + m.key) ? '' : 'checked'} aria-label="Замінити в ${esc(m.file)}"><div class="sp-b"><span class="hint">${esc(m.file)} · ${esc(m.key.replace(/^.*list/, 'list'))}</span><div class="fr-b">${esc(m.before)}</div><div class="fr-a">${esc(m.after)}</div></div></label>`).join('');
     ($('#fr-go', dlg) as HTMLButtonElement).disabled = !found.length;

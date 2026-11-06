@@ -481,15 +481,14 @@ export async function start(root: HTMLElement): Promise<void> {
       <div id="m-prev" class="m-prev"></div>
       <div id="m-issues" class="m-issues">${issuesHtml()}</div>
     </div>
-    <div class="m-actions" id="m-actions"><div class="m-act2"><button class="m-mini" data-sub="scene">${icon('rows')} Сцена</button><button class="m-mini danger" data-clear>Очистити</button></div><div class="m-act1"><button class="m-ic" data-step="-1" aria-label="Попередній рядок" ${store.neighbour(-1) ? '' : 'disabled'}>${icon('prev')}</button><button class="m-ic" data-step="1" aria-label="Наступний рядок" ${store.neighbour(1) ? '' : 'disabled'}>${icon('next')}</button><button class="m-primary" data-send>${icon('check')}<span>${review ? 'Затвердити' : 'Надіслати'}</span></button></div></div>`;
+    <div class="m-actions" id="m-actions"><div class="m-act2"><button class="m-mini" data-sub="scene">${icon('rows')} Сцена</button><button class="m-mini" data-approve>Затвердити</button><button class="m-mini danger" data-clear>Очистити</button></div><div class="m-act1"><button class="m-ic" data-step="-1" aria-label="Попередній рядок" ${store.neighbour(-1) ? '' : 'disabled'}>${icon('prev')}</button><button class="m-ic" data-step="1" aria-label="Наступний рядок" ${store.neighbour(1) ? '' : 'disabled'}>${icon('next')}</button><button class="m-primary" data-send>${icon('check')}<span>${review ? 'Затвердити' : 'Надіслати'}</span></button></div></div>`;
   }
 
   function screenMore(): string {
     const gh = loadGithubConfig(), tot = store.totals();
     const pct = tot.total ? Math.floor((100 * tot.translated) / tot.total) : 0;
     return `<div class="m-more">
-      ${store.hasGame ? `<section class="m-card"><h3>Прогрес</h3><div class="m-big">${pct}%</div>${bar(tot.translated, tot.total)}<p class="m-hint">Перекладено ${tot.translated} з ${tot.total} · на вичитуванні ${tot.done} · вичитано ${tot.approved}</p>
-        <div class="m-seg" role="group" aria-label="Етап"><button data-stage="translate" class="${store.stage === 'translate' ? 'on' : ''}">Переклад</button><button data-stage="review" class="${store.stage === 'review' ? 'on' : ''}">Вичитування</button></div></section>` : ''}
+      ${store.hasGame ? `<section class="m-card"><h3>Прогрес</h3><div class="m-big">${pct}%</div>${bar(tot.translated, tot.total)}<p class="m-hint">Перекладено ${tot.translated} з ${tot.total} · на вичитуванні ${tot.done} · вичитано ${tot.approved}</p></section>` : ''}
       <section class="m-card"><h3>Відкрити</h3><p class="m-hint">На телефоні проєкт береться з комп’ютера або з GitHub. Можна також відкрити файли гри чи файл проєкту (<code>.transly.json</code>).</p>
         <button class="m-primary wide" data-pick>${icon('folder')}<span>Обрати файли…</span></button>
         <label class="m-lbl" for="m-paste">Або вставте вміст файлу</label><textarea id="m-paste" class="m-textarea sm" rows="3" spellcheck="false" placeholder='{"version":1,…}'></textarea>
@@ -590,7 +589,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const fresh = wrap.dataset.open !== '1'; wrap.dataset.open = '1';
     const terms = store.terms(c.unit), tm = store.suggestions(c.unit, c.entry), hist = historyRows(c.entry?.history, c.entry?.target ?? '').slice(0, 20);
     const counts = { terms: terms.length, tm: tm.length, cm: openThreads(c.entry), hist: hist.length, dict: 0 };
-    const tabs: ['terms' | 'tm' | 'cm' | 'hist' | 'dict', string][] = [['terms', 'Глосарій'], ['tm', 'Пам’ять'], ['dict', 'Слова'], ['cm', 'Коментарі'], ['hist', 'Історія']];
+    const tabs: ['terms' | 'tm' | 'cm' | 'hist' | 'dict', string][] = [['terms', 'Глосарій'], ['tm', 'Пам’ять'], ['cm', 'Коментарі'], ['hist', 'Історія']];
     const cur = sheetTab ?? (counts.terms ? 'terms' : counts.tm ? 'tm' : counts.cm ? 'cm' : 'terms');
     if (cur !== 'cm') { cmReply = cmEdit = cmDel = null; }
     const idx = tabs.findIndex(t => t[0] === cur), dir = fresh ? '' : idx > prevTabIdx ? 'from-r' : idx < prevTabIdx ? 'from-l' : '';
@@ -598,7 +597,6 @@ export async function start(root: HTMLElement): Promise<void> {
     const panel = cur === 'terms' ? (terms.length ? terms.map((t, i) => `<button class="m-hit" data-term="${i}"><b>${esc(t.en)}</b><span>→ ${esc(t.uk)}${t.alt?.length ? ` · ${esc(t.alt.join(', '))}` : ''}</span></button>`).join('') : '<p class="m-none">У цьому рядку термінів немає</p>') + '<button class="m-mini" data-gadd>Додати термін</button>'
       : cur === 'tm' ? (tm.length ? tm.map((m, i) => `<button class="m-hit" data-tm="${i}"><b class="m-score">${m.score}%</b><span>${esc(m.t)}</span></button>`).join('') : '<p class="m-none">Схожих перекладів немає</p>')
       : cur === 'cm' ? threadsHtml(c.entry)
-      : cur === 'dict' ? dictPanel(c.unit.source, c.entry?.target ?? '')
       : historyHtml(hist);
     wrap.innerHTML = `<div class="m-scrim ${fresh ? 'in' : ''}" data-close></div><aside class="m-sheet ${fresh ? 'in' : ''} ${cur === 'cm' ? 'tall' : ''}" role="dialog" aria-label="Допомога до рядка">
       <div class="m-stabs" role="tablist">${tabs.map(([k, l]) => `<button role="tab" data-stab="${k}" aria-selected="${k === cur}" class="${k === cur ? 'on' : ''}">${l}${counts[k] ? `<i>${counts[k]}</i>` : ''}</button>`).join('')}<span class="m-stab-ind" id="m-stab-ind"></span></div>
@@ -861,6 +859,11 @@ export async function start(root: HTMLElement): Promise<void> {
       return;
     }
     if (q('[data-copy]')) { const c = store.current; if (c) { ($('m-tr') as HTMLTextAreaElement).value = c.unit.source; store.write(c.unit.source); refreshMeta(); autosize(); } return; }
+    if (q('[data-approve]')) {
+      const why = store.approve();
+      if (why) { say(why, true); return; }
+      say('Затверджено'); render(); return;
+    }
     if ((x = q('[data-clear]'))) {
       if (!confirmTap(x)) return;
       const c = store.current;
@@ -895,7 +898,6 @@ export async function start(root: HTMLElement): Promise<void> {
     if (q('[data-close]')) { sheet = false; menu = false; renderSheet(); renderChrome(); return; }
     if ((x = q('[data-term]'))) { const c = store.current; const tm = c ? store.terms(c.unit)[Number(x.dataset.term)] : null; if (tm) { sheet = false; renderSheet(); insert(tm.uk); } return; }
     if ((x = q('[data-tm]'))) { const c = store.current; const m = c ? store.suggestions(c.unit, c.entry)[Number(x.dataset.tm)] : null; if (m) { sheet = false; renderSheet(); ($('m-tr') as HTMLTextAreaElement).value = m.t; store.write(m.t); refreshMeta(); autosize(); } return; }
-    if ((x = q('[data-stage]'))) { store.setStage(x.dataset.stage as 'translate' | 'review'); render(); return; }
     if (q('[data-pick]')) { $<HTMLInputElement>('m-file').click(); return; }
     if (q('[data-paste]')) {
       const text = ($('m-paste') as HTMLTextAreaElement).value.trim(); if (!text) { say('Спершу вставте текст', true); return; }

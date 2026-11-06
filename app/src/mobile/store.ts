@@ -151,7 +151,8 @@ export class Store {
   setFilter(f: Filter): void { this.filter = f; this.emit(); }
   setQuery(q: string): void { this.q = q; this.emit(); }
   setSort(s: Sort): void { this.sort = s; this.emit(); }
-  setStage(s: Stage): void { this.stage = s; this.emit(); }
+  /** There is no review mode: a translation is approved with `approve`. */
+  setStage(_s: Stage): void { /* kept for old callers */ }
 
   /* ---------- writing ---------- */
   /** Typing: the text is stored at once; the screen is not redrawn (the field has the focus). */
@@ -179,6 +180,19 @@ export class Store {
     const now = Date.now();
     this.entries(c.file)[c.unit.key] = recordChange(c.entry, r.entry, this.stage === 'translate' ? 'надіслано на вичитування' : 'вичитано', r.entry.target, this.who, now);
     this.lastSame = this.saved.settings.propagate ? propagate(this.saved, this.dups(), c.file, c.unit, this.entries(c.file)[c.unit.key]!, this.stage, now, this.who, newBatch(this.stage === 'translate' ? 'twin' : 'approve', now)) : 0;
+    this.tmCache = null; this.persist(); this.emit(); return null;
+  }
+  /** Approve the open row: a draft is sent first, so the history says both. Returns why it cannot be done, or null. */
+  approve(): string | null {
+    const c = this.current; if (!c) return 'Рядок не вибрано';
+    if (!c.entry?.target.trim()) return 'Переклад порожній';
+    const opts = { blockErrors: this.saved.settings.blockErrors, qa: this.qaOpts() };
+    const now = Date.now();
+    let next = c.entry;
+    if (next.status !== 'done' && next.status !== 'appr') { const r1 = submit(next, c.unit, 'translate', now, opts); if (!r1.ok) return r1.reason; next = r1.entry; }
+    const r2 = submit(next, c.unit, 'review', now, opts);
+    if (!r2.ok) return r2.reason;
+    this.commit([{ file: c.file, key: c.unit.key, next: r2.entry, text: r2.entry.target }], 'approve', 'затверджено');
     this.tmCache = null; this.persist(); this.emit(); return null;
   }
   comment(text: string): void { this.mutate((_f, _u, e) => addComment(e, this.who, text, Date.now())); }

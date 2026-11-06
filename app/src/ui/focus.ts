@@ -16,7 +16,7 @@ const I = {
   clear: '<svg viewBox="0 0 16 16"><path d="M3 4.5h10M6.5 4.5v-1.5h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/></svg>',
   code: '<svg viewBox="0 0 16 16"><path d="M6 3H3.5v10H6M10 3h2.5v10H10M8 5v6"/></svg>',
   play: '<svg viewBox="0 0 16 16"><path d="M5 3.5l8 4.5-8 4.5z" fill="currentColor" stroke="none"/></svg>',
-  back: '<svg viewBox="0 0 16 16"><path d="M6 3.5L2.5 7 6 10.5M2.5 7h7a4 4 0 0 1 0 8H8"/></svg>',
+  back: '<svg viewBox="0 0 16 16"><path d="M14 2L7 9M14 2l-4.5 12L7 9 2 6.5z"/></svg>',
   up: '<svg viewBox="0 0 16 16"><path d="M4 9.5L8 5.5l4 4"/></svg>',
   down: '<svg viewBox="0 0 16 16"><path d="M4 6.5L8 10.5l4-4"/></svg>',
   ok: '<svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3.2L13 4.8"/></svg>',

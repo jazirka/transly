@@ -30,6 +30,7 @@ import { artifactDb, describeClaude, loadClaudeConfig, runClaudeSync } from './c
 import { describeGithub, githubConfigured, loadGithubConfig, runGithubSync } from './github';
 import { describe as describeSync, loadSyncConfig, runSync, syncConfigured } from './sync';
 import { initResize, initRightResize } from './resize';
+import { mountRows, reveal } from './chunks';
 import { buildAndRunGame, playInGame } from './play';
 
 const SVG = {
@@ -244,8 +245,8 @@ export async function start(root: HTMLElement): Promise<void> {
       if (mode) setMode(mode, false);
       if (s.phone) { s.leftOpen = false; s.rightOpen = false; }
       renderAll();
-      if (s.mode === 'table') document.querySelector<HTMLElement>(`.gr[data-key="${CSS.escape(key)}"]`)?.scrollIntoView({ block: 'nearest' });
-      else { document.querySelector<HTMLElement>(`.si[data-key="${CSS.escape(key)}"]`)?.scrollIntoView({ block: 'nearest' }); $('#i-tr').focus(); }
+      if (s.mode === 'table') { reveal('grid', key); document.querySelector<HTMLElement>(`.gr[data-key="${CSS.escape(key)}"]`)?.scrollIntoView({ block: 'nearest' }); }
+      else { reveal('slist', key); document.querySelector<HTMLElement>(`.si[data-key="${CSS.escape(key)}"]`)?.scrollIntoView({ block: 'nearest' }); $('#i-tr').focus(); }
     },
   };
 
@@ -487,8 +488,11 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!v) { $('#slist').innerHTML = '<div class="msg-empty">Оберіть файл</div>'; return; }
     const idx = new Map(v.units.map((u, i) => [u.key, i + 1]));
     const list = visibleUnits(true);
-    $('#slist').innerHTML = list.length ? list.slice(0, 600).map(u => siHtml(u, idx.get(u.key)!)).join('') + (list.length > 600 ? `<div class="grid-note">Показано 600 із ${list.length}. Уточніть пошук.</div>` : '') : emptyHtml;
+    const box = $('#slist');
+    if (list.length) mountRows('slist', box, box, '', list.map(u => u.key), i => siHtml(list[i]!, idx.get(list[i]!.key)!), s.current ?? '', 72, 'si');
+    else box.innerHTML = emptyHtml;
   }
+
 
   function renderTabs(): void {
     $('#tabs-host').innerHTML = s.open.map(n => {
@@ -504,8 +508,6 @@ export async function start(root: HTMLElement): Promise<void> {
     document.querySelector<HTMLElement>('#tabs-host .tab.on')?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
   }
 
-  /** A group of many files shows only the first rows of what passes the filters; a single file is drawn in full as before. */
-  const ROW_CAP = 2500;
   function renderTable(): void {
     const v = ctx.view();
     const grid = $('#grid');
@@ -515,17 +517,15 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!v) { grid.innerHTML = ''; return; }
     const idx = new Map(v.units.map((u, i) => [u.key, i + 1]));
     const list = visibleUnits(true);
-    // A group of many files draws only its first rows; select-all and the counts follow what is drawn.
-    const cap = s.current === GROUP ? ROW_CAP : Infinity;
-    const shown = list.slice(0, cap);
-    const ids = shown.map(u => u.key);
+    const ids = list.map(u => u.key);
     const nSel = ids.filter(k => s.checked.has(k)).length;
     const hasWho = v.units.some(u => ctx.speaker(u));
     grid.classList.toggle('no-who', !hasWho);
     grid.style.setProperty('--cols', hasWho ? '34px 22px 110px 96px minmax(160px,.9fr) minmax(180px,1fr) 78px' : '34px 22px 110px minmax(160px,.9fr) minmax(180px,1fr) 78px');
     let h = `<div class="gh" role="row"><div class="gcheck" role="columnheader"><input type="checkbox" id="selall" aria-label="Вибрати всі видимі рядки" ${nSel && nSel === ids.length ? 'checked' : ''}></div><div title="Статус" role="columnheader" class="s"><span class="vh">Статус</span></div><div class="s" role="columnheader">Ключ</div><div class="s" role="columnheader">Мовець</div><div role="columnheader">Оригінал · EN</div><div class="s" role="columnheader">Переклад · UK</div><div class="s" role="columnheader" title="Кількість знаків: переклад / оригінал (без керівних кодів). Рекомендація: якнайближче до оригіналу" style="justify-content:flex-end;border-right:0">К-сть зн.</div></div>`;
-    h += list.length ? shown.map(u => rowHtml(u, idx.get(u.key)!)).join('') + (list.length > cap ? `<div class="grid-note" role="row">Показано ${cap.toLocaleString('uk-UA')} із ${list.length.toLocaleString('uk-UA')}. Уточніть пошук, мовця чи статус.</div>` : '') : `<div class="empty-wrap" role="row"><div role="gridcell">${emptyHtml}</div></div>`;
-    grid.innerHTML = h;
+    // Every row has its place; a row is drawn when it comes near the screen: nothing is cut off, however long the file or the group is.
+    if (list.length) mountRows('grid', grid, grid.parentElement!, h, ids, i => rowHtml(list[i]!, idx.get(list[i]!.key)!), s.current ?? '', 56);
+    else grid.innerHTML = h + `<div class="empty-wrap" role="row"><div role="gridcell">${emptyHtml}</div></div>`;
     grid.classList.toggle('has-sel', nSel > 0);
     const all = $('#selall') as HTMLInputElement | null;
     if (all) all.indeterminate = nSel > 0 && nSel < ids.length;
@@ -946,7 +946,7 @@ export async function start(root: HTMLElement): Promise<void> {
       s.leftBoth = false;
     }
     renderAll();
-    if (to === 'edit' && s.cur) document.querySelector<HTMLElement>(`.si[data-key="${CSS.escape(s.cur)}"]`)?.scrollIntoView({ block: 'nearest' });
+    if (to === 'edit' && s.cur) { reveal('slist', s.cur); document.querySelector<HTMLElement>(`.si[data-key="${CSS.escape(s.cur)}"]`)?.scrollIntoView({ block: 'nearest' }); }
   }
   const closePops = () => { fpop().hidden = true; $('#cfgpop').hidden = true; $('#projpop').hidden = true; };
 
@@ -1099,6 +1099,7 @@ export async function start(root: HTMLElement): Promise<void> {
 
   /* ---------- inline cell editing ---------- */
   function startInline(key: string): void {
+    reveal('grid', key);
     const cell = document.querySelector<HTMLElement>(`.gr[data-key="${CSS.escape(key)}"] .tr`);
     const u = ctx.unit(key);
     if (!cell || !u || cell.querySelector('textarea')) return;
@@ -1237,7 +1238,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.closest('#bb-ok')) { bulkSend(); return; }
     if (t.closest('#bb-tm')) { bulkTm(); return; }
     if (t.closest('#bb-clear')) { s.checked.clear(); renderAll(); return; }
-    if (t.closest('#selall')) { const all = ($('#selall') as HTMLInputElement).checked; for (const u of visibleUnits(true).slice(0, s.current === GROUP ? ROW_CAP : Infinity)) all ? s.checked.add(u.key) : s.checked.delete(u.key); renderAll(); return; }
+    if (t.closest('#selall')) { const all = ($('#selall') as HTMLInputElement).checked; for (const u of visibleUnits(true)) all ? s.checked.add(u.key) : s.checked.delete(u.key); renderAll(); return; }
     const rc = t.closest<HTMLInputElement>('.rc');
     if (rc) { const k = rc.closest<HTMLElement>('.gr')!.dataset.key!; rc.checked ? s.checked.add(k) : s.checked.delete(k); renderAll(); return; }
     const sd = t.closest<HTMLElement>('[data-sd]');
@@ -1337,7 +1338,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (s.mode === 'table' && t.classList.contains('gr')) {
       const list = visibleUnits(true);
       const i = list.findIndex(u => u.key === t.dataset.key);
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); const n = list[i + (e.key === 'ArrowDown' ? 1 : -1)]; if (n) { s.cur = n.key; renderAll(); document.querySelector<HTMLElement>(`.gr[data-key="${CSS.escape(n.key)}"]`)?.focus(); } }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); const n = list[i + (e.key === 'ArrowDown' ? 1 : -1)]; if (n) { s.cur = n.key; renderAll(); reveal('grid', n.key); document.querySelector<HTMLElement>(`.gr[data-key="${CSS.escape(n.key)}"]`)?.focus(); } }
       else if (e.key === 'Enter') { e.preventDefault(); ctx.select(t.dataset.key!, 'edit'); }
     }
   });

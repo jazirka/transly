@@ -48,10 +48,6 @@
 .qa-row .k-context{color:#8ec1f5}
 .qa-row .k-style{color:#f0c477}
 .qa-row .k-info{color:var(--mute)}
-.qa-row.cat-error{border-left-style:solid}
-.qa-row.cat-term{border-left-style:solid}
-.qa-row.cat-style{border-left-style:dotted}
-.qa-row.cat-context{border-left-style:dashed}
 
 /* ----- the hints panel ----- */
 .hsec{display:flex;flex-direction:column;gap:6px}
@@ -76,11 +72,9 @@
 .hc.gn{cursor:pointer}
 .hc.gn:hover{background:#2a2d33}
 .hc.gn:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
-.hc.gn.pending{border-left-style:dashed;cursor:default}
+.hc.gn.pending{cursor:default;opacity:.85}
 .kchip{display:inline-block;padding:0 7px;border-radius:999px;border:1px solid var(--line);font-size:10.5px;color:var(--mute);background:#2a2c31;line-height:17px;white-space:nowrap}
 #i-gl,#i-gn{display:flex;flex-direction:column;gap:6px}
-#i-ctx{border-left:3px dashed var(--info);padding-left:10px}
-#i-dc{border-left:3px dotted var(--dim);padding-left:10px}
 .facts{margin:0;display:grid;gap:5px}
 .fact{display:grid;grid-template-columns:minmax(84px,34%) minmax(0,1fr);gap:8px;font-size:12.5px}
 .fact dt{color:var(--mute)}
@@ -91,7 +85,7 @@
 /* ----- discussions as threads ----- */
 .cm-list{display:flex;flex-direction:column;gap:10px}
 .thr{border:1px solid var(--line);border-radius:var(--r2);background:rgba(255,255,255,.02);padding:8px 10px;display:flex;flex-direction:column;gap:8px}
-.thr.closed{border-style:dashed;background:none}
+.thr.closed{background:none;opacity:.85}
 .thr .cm + .cm{border-top:1px solid #2f3134;padding-top:8px}
 .cm .cm-acts{display:flex;flex-wrap:wrap;gap:10px;margin-top:3px}
 .cm .cm-acts:empty{display:none}
@@ -146,3 +140,15 @@
 
 /* Filters with nothing in them are dimmed, but their text stays readable (contrast). */
 .chip.zero{opacity:1;color:#9ba1ad}
+
+/* Rows that are only a place until they come near the screen (see chunks.ts). */
+.gr.lazy{display:block;border-bottom:1px solid #2a2c30}
+.si.lazy{display:block;border-bottom:1px solid #2f3134}
+
+/* The editor toolbar and its counter use the standard panel colours (they had a bluish tint of their own). */
+.edbar{background:var(--panel)}
+.cnt2{background:var(--bg)}
+.cnt2.over{background:#43292e}
+
+/* "Return to the translator" is a paper plane flying back. */
+#b-return svg{transform:scaleX(-1)}

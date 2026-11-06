@@ -451,11 +451,6 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 /* ----- remarks by kind, the strip of neighbouring lines, threads, history differences, the term card ----- */
 .m-kind{display:inline-flex;align-items:center;gap:4px;flex:none;font:600 10.5px var(--ui,system-ui);letter-spacing:.04em;text-transform:uppercase;padding:1px 7px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}
 .m-kind.k-error{color:#ff9aa5}.m-kind.k-term{color:#d3b6ec}.m-kind.k-context{color:#8ec1f5}.m-kind.k-style{color:#f0c477}.m-kind.k-info{color:var(--mute)}
-.m-cstrip{display:flex;flex-direction:column;gap:2px;border-left:2px solid var(--line);padding-left:10px}
-.m-cstrip small{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--mute)}
-.m-cl{display:flex;align-items:center;gap:8px;text-align:left;border:0;background:none;color:var(--mute);padding:8px 6px;border-radius:var(--r2);font:inherit;font-size:14px;min-height:44px}
-.m-cl b{color:var(--violet,#c4a3e2);font-weight:500;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis}
-.m-cl-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
 .m-thr{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
 .m-thr.closed{opacity:.85}
 .m-cma{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;align-items:center}

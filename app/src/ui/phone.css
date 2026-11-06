@@ -50,13 +50,6 @@
 .ide.sz-s .fs .itabs button::after{display:none}
 .ide.sz-s .edbar{flex-wrap:wrap;row-gap:4px}
 .ide.sz-s .edbar .ib{width:40px;height:40px}
-.ide.sz-s .edbar .stepper{order:9;flex:0 0 100%;justify-content:center;margin:0}
-.ide.sz-s .edbar .stepper{gap:0;align-items:stretch}
-.ide.sz-s .edbar .stepper .queue{margin:0;min-width:72px;display:grid;place-items:center;border-block:1px solid rgba(255,255,255,.16);font-size:13px;color:var(--text)}
-.ide.sz-s .edbar .stepper .ib.sm{width:48px;height:36px;border:1px solid rgba(255,255,255,.16);background:var(--hv)}
-.ide.sz-s .edbar .stepper #f-prev{border-radius:var(--r2) 0 0 var(--r2)}
-.ide.sz-s .edbar .stepper #f-next{border-radius:0 var(--r2) var(--r2) 0}
-.ide.sz-s .edbar .stepper .ib.sm svg{width:18px;height:18px}
 .ide.sz-s .fhd{flex-wrap:wrap;gap:4px 8px}
 .ide.sz-s .st-pill{white-space:nowrap}
 .ide.sz-s .node .chev{width:24px;font-size:16px}

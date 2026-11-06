@@ -1,4 +1,4 @@
-import { buildSceneIndex, deleteComment, editComment, replyTo, resolveThread, sceneAt, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
+import { deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
 import type { BatchKind, Entry, GlossaryTerm, RowChange, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
 import { IdbStore } from '../ui/idb';
 
@@ -194,18 +194,6 @@ export class Store {
     const now = Date.now();
     this.entries(c.file)[c.unit.key] = recordChange(c.entry, edit(c.entry, c.unit, text, this.stage, now), what, text, this.who, now);
     this.tmCache = null; this.persist(); this.emit();
-  }
-  private scenes = new WeakMap<Unit[], ReturnType<typeof buildSceneIndex>>();
-  /** Two rows before and after the open one from the same scene (none in a file without scenes). */
-  sceneAround(): { before: Unit[]; after: Unit[]; at: number; total: number } | null {
-    const c = this.current, v = c ? this.view(c.file) : null;
-    if (!c || !v) return null;
-    let idx = this.scenes.get(v.units);
-    if (idx === undefined) { idx = buildSceneIndex(v.units); this.scenes.set(v.units, idx); }
-    const sc = sceneAt(idx, c.unit.key);
-    if (!sc) return null;
-    const i = sc.units.findIndex(u => u.key === c.unit.key);
-    return { before: sc.units.slice(Math.max(0, i - 2), i), after: sc.units.slice(i + 1, i + 3), at: i + 1, total: sc.units.length };
   }
   mutate(fn: (file: string, unit: Unit, e: Entry | undefined) => Entry): void {
     const c = this.current; if (!c) return;

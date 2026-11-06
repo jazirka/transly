@@ -1,18 +1,18 @@
-import { gorohUrl, multitranUrl, wordsOf, activeIssues, byHintOrder, buildSceneIndex, check, describePage, sourceTermHits, targetHasTerm, targetTermHits, explainCodes, usageKey, displayLength, edit as editFn, lengthDeviation, limitFor, newBatch, openThreads, propagate, recordChange, referenceSets, sceneAt, sendBack, setIgnored, sourceChanged, submit, termsIn, wrapLines, HINT_GLYPH, HINT_GROUP, HINT_LABEL } from '../core';
+import { gorohUrl, multitranUrl, wordsOf, activeIssues, byHintOrder, check, describePage, sourceTermHits, targetHasTerm, targetTermHits, explainCodes, usageKey, displayLength, edit as editFn, lengthDeviation, limitFor, newBatch, openThreads, propagate, recordChange, referenceSets, sendBack, setIgnored, sourceChanged, submit, termsIn, wrapLines, HINT_GLYPH, HINT_GROUP, HINT_LABEL } from '../core';
 import type { BatchKind, Entry, SceneIndex, Unit } from '../core';
 import { $, buzz, esc, plural, toast } from './dom';
 import { discussClick, renderDiscuss } from './discuss';
-import { chipsHtml, keyInView, qaRows, namesOfRow, nameMarks, oneLine, realOf, tmBarHtml, tmMatch } from './hintcards';
-import { scenesOf } from './scenecache';
+import { chipsHtml, keyInView, qaRows, namesOfRow, nameMarks, realOf, tmBarHtml, tmMatch } from './hintcards';
 import { historyClick, renderHistory } from './history-panel';
 import { CODE_RE, markupTerms } from './markup';
 import { autoSize, drawMarks, insertAtCursor } from './text-editor';
 import { hideTermCard } from './termcard';
+import { drawLinks } from './links';
 import { isDesktop, openLink, rememberedGameDir } from './desktop';
 import { drawPic, picOfFace, picsOfRow } from './gameimg';
 import type { Pic } from './gameimg';
 import { openScene } from './scene-dialog';
-import { GROUP, SEP, STATUS_CAP, shownStatus } from './state';
+import { STATUS_CAP, shownStatus } from './state';
 import type { Ctx, SideTab } from './state';
 
 const I = {
@@ -34,15 +34,13 @@ const I = {
 };
 
 /** Static skeleton of the editing view; renderFocus() fills the pieces so the textarea keeps focus while typing. */
-export const FOCUS_HTML = `<div class="fc"><div class="fc-in">
+export const FOCUS_HTML = `<div class="fc"><div class="fc-in"><div class="te-links" id="te-links"></div>
   <div class="fhd"><span class="k" id="f-key"></span><span class="st-pill" id="f-state"></span></div>
   <div class="fnav">
-    <span class="stepper" role="group" aria-label="Перехід між рядками списку"><button class="ib sm" id="f-prev" title="Попередній рядок у списку (Alt+↑)" aria-label="Попередній рядок">${I.up}</button><span class="queue" id="f-queue"></span><button class="ib sm" id="f-next" title="Наступний рядок у списку (Alt+↓)" aria-label="Наступний рядок">${I.down}</button></span>
     <button class="ib lab" id="b-scene" title="Переглянути сцену: усі рядки події поспіль, як у грі" aria-label="Переглянути сцену">${I.scene}<span class="tl">Сцена</span></button>
   </div>
   <div class="ctxchips" id="f-chips"></div>
   <div class="offlist" id="f-off" hidden><span>Цей рядок не входить у поточний фільтр або пошук.</span><button data-reset>Показати всі рядки</button></div>
-  <div class="ctxstrip" id="c-before" aria-label="Що було перед цим рядком у сцені" hidden></div>
   <div><div class="lbl">Оригінал · EN</div><div class="srcbox" id="f-src"></div><div class="pics" id="f-pics" hidden></div></div>
   <div id="f-refbox" hidden></div>
   <div class="trblock">
@@ -66,7 +64,6 @@ export const FOCUS_HTML = `<div class="fc"><div class="fc-in">
     <div class="qa-under" id="f-qa"></div>
     <div class="proof" id="f-proof" hidden style="margin-top:10px"></div>
   </div>
-  <div class="ctxstrip" id="c-after" aria-label="Що буде після цього рядка в сцені" hidden></div>
 </div></div>`;
 
 export const SIDE_HTML = `<aside class="fs" aria-label="Панелі рядка">
@@ -139,30 +136,6 @@ const PANE_TITLE: Record<SideTab, string> = { comments: 'Обговорення'
 export const showSide = (on: SideTab[], t: SideTab): SideTab[] => (on.includes(t) ? on : SIDE_ORDER.filter(x => x === t || on.includes(x)));
 export const hideSide = (on: SideTab[], t: SideTab): SideTab[] => on.filter(x => x !== t);
 
-/**
- * Two lines before and after the open row, from the same scene: what was just said and what comes next. Files without
- * scenes (database, text formats) have no such strip: their neighbouring rows have nothing to do with each other.
- */
-function renderContext(ctx: Ctx, u: Unit): void {
-  const r = realOf(ctx, u);
-  const before = $('#c-before'), after = $('#c-after');
-  const v = ctx.s.views.find(x => x.name === r.file);
-  const sc = v ? sceneAt(scenesOf(v.units), r.key) : null;
-  const i = sc ? sc.units.findIndex(x => x.key === r.key) : -1;
-  if (!sc || i < 0) { before.hidden = after.hidden = true; return; }
-  const ents = ctx.entries(r.file);
-  const line = (x: Unit): string => {
-    const e = ents[x.key];
-    const st = shownStatus(ctx, x, e);
-    const key = ctx.s.current === GROUP ? r.file + SEP + x.key : x.key;
-    return `<button class="cl" data-goto="${esc(key)}" title="${esc(e?.target ? `Переклад: ${e.target}` : 'Ще не перекладено')}"><span class="sd ${st}" aria-hidden="true"></span>${ctx.speaker(x) ? `<span class="cl-w">${esc(ctx.speaker(x))}</span>` : ''}<span class="cl-t">${esc(oneLine(x.source))}</span></button>`;
-  };
-  const b = sc.units.slice(Math.max(0, i - 2), i), a = sc.units.slice(i + 1, i + 3);
-  before.hidden = !b.length; after.hidden = !a.length;
-  before.innerHTML = `<div class="cl-h">Перед цим рядком · ${i + 1} із ${sc.units.length} у сцені</div>${b.map(line).join('')}`;
-  after.innerHTML = `<div class="cl-h">Далі в сцені</div>${a.map(line).join('')}`;
-}
-
 /** Fill the editing view from state. The textarea is only reset when the unit changed. */
 export function renderFocus(ctx: Ctx, desktop: boolean): void {
   const { s } = ctx;
@@ -176,8 +149,6 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
     ($('#i-tr') as HTMLTextAreaElement).disabled = true;
     $('#te-layer').textContent = '';
     $('#f-state').textContent = '';
-    $('#f-queue').textContent = '';
-    $('#c-before').hidden = true; $('#c-after').hidden = true;
     renderPics(ctx, undefined);
     $('#f-src').innerHTML = `<span class="hint">${list.length ? 'Оберіть рядок зліва.' : s.mode === 'review' ? 'Немає рядків, які очікують вичитування.' : 'За поточним фільтром рядків немає.'}</span>`;
     return;
@@ -189,8 +160,6 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
   const pos = list.findIndex(x => x.key === u.key);
   $('#f-key').textContent = `${realOf(ctx, u).file.replace(/\.[^.]+$/, '')} › ${u.context}${ctx.speaker(u) ? ' › ' + ctx.speaker(u) : ''} › ${u.key.replace(/^.*\.list/, 'list')}`;
   $('#f-state').innerHTML = `<span class="sd ${st}"></span>${e?.returned && e.status === 'draft' ? 'повернено на доопрацювання' : STATUS_CAP[st]}`;
-  $('#f-queue').textContent = pos >= 0 ? `Рядок ${pos + 1} з ${list.length}` : '';
-  $('#f-queue').title = pos >= 0 ? `Рядок ${pos + 1} із ${list.length} у поточному списку (з урахуванням фільтрів)` : '';
   $('#f-off').hidden = pos >= 0;
   const hits = termsIn(u.source, s.saved.terms);
   const have = e?.target ?? '';
@@ -198,7 +167,6 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
   $('#f-src').innerHTML = markupTerms(u.source, [...termMarks, ...nameMarks(u, namesOfRow(ctx, u), termMarks)]);
   $('#f-chips').innerHTML = chipsHtml(ctx, u);
   renderPics(ctx, u);
-  renderContext(ctx, u);
   const refs = referenceSets(s.saved.reference).map(r => ({ lang: r.lang, text: r.texts[realOf(ctx, u).file]?.[realOf(ctx, u).key] })).filter(r => r.text);
   $('#f-refbox').hidden = !refs.length;
   $('#f-refbox').innerHTML = refs.map(r => `<div class="lbl">Довідка · ${esc(r.lang.toUpperCase())}</div><div class="srcbox ref" lang="${esc(r.lang)}">${esc(r.text!)}</div>`).join('');
@@ -241,6 +209,7 @@ function refreshTerms(ctx: Ctx, u: Unit): void {
   const byEn = new Map(terms.map(t => [t.en, t]));
   document.querySelectorAll<HTMLElement>('#f-src .th').forEach(el => { const t = byEn.get(el.dataset.term ?? ''); if (t) el.classList.toggle('miss', !!ta.value && !targetHasTerm(ta.value, t.uk, t.alt)); });
   autoSize(ta);
+  drawLinks(ctx);
 }
 
 function meter(ctx: Ctx, u: Unit): void {
@@ -424,8 +393,6 @@ export function focusClick(ctx: Ctx, t: HTMLElement): boolean {
     setText(ctx, u, ta.value + miss.join(''), 'додано керівні коди');
     return true;
   }
-  if (t.closest('#f-prev')) { step(ctx, -1); return true; }
-  if (t.closest('#f-next')) { step(ctx, 1); return true; }
   if (t.closest('#b-save')) { send(ctx); return true; }
   if (t.closest('#b-return')) {
     const cur = ents[u.key];

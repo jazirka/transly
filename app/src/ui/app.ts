@@ -8,6 +8,7 @@ import { $, el, esc, plural, toast } from './dom';
 import { FOCUS_HTML, SIDE_HTML, qaClick, focusClick, focusInput, insertOriginal, insertText, renderFocus, renderSidePanel, send, showSide, sideClick, step } from './focus';
 import { wireDiscuss } from './discuss';
 import { wireTermCard } from './termcard';
+import { wireLinks } from './links';
 import { SCENES_HTML, renderScenesPanel, scenesClick, wireScenes } from './scenes-panel';
 import { GLOSSARY_HTML, editTerm, glossaryClick, renderGlossaryPanel, showTerm, wireGlossary } from './glossary-panel';
 import { pickGameFolder, readFiles, reopenHandle } from './folder';
@@ -1407,6 +1408,7 @@ export async function start(root: HTMLElement): Promise<void> {
   if (s.current) { unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u])); if (s.mode !== 'table') s.cur = ctx.visible()[0]?.key ?? null; }
   restoreUi();
   wireDiscuss(ctx);
+  wireLinks(ctx);
   wireTermCard(ctx, {
     insert: text => insertText(ctx, text),
     goto: (file, key) => openRow(file, key),

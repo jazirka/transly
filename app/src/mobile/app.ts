@@ -437,15 +437,6 @@ export async function start(root: HTMLElement): Promise<void> {
   function sourceHtml(source: string, terms: ReturnType<typeof store.terms>, target: string): string {
     return markupTerms(source, sourceTermHits(source, terms).map(h => ({ start: h.start, end: h.end, en: h.term.en, missing: !!target && !targetHasTerm(target, h.term.uk, h.term.alt) })));
   }
-  /** Two lines before or after the open row, from the same scene (what was just said, what comes next); a tap goes to the row. */
-  function ctxStrip(which: 'before' | 'after'): string {
-    const s = store.sceneAround();
-    const rows = s ? s[which] : [];
-    if (!s || !rows.length) return '';
-    const c = store.current!;
-    return `<div class="m-cstrip"><small>${which === 'before' ? `Перед цим рядком · ${s.at} із ${s.total} у сцені` : 'Далі в сцені'}</small>${rows.map(u => { const en = store.entry(c.file, u.key); return `<button class="m-cl" data-key="${esc(u.key)}"><span class="sd ${SHAPE[store.shown(u, en)]}"></span>${store.speaker(u) ? `<b>${esc(store.speaker(u))}</b>` : ''}<span class="m-cl-t">${esc(u.source.replace(/\s+/g, ' ').slice(0, 80))}</span></button>`; }).join('')}</div>`;
-  }
-
   function screenEdit(): string {
     const c = store.current;
     if (!c) return empty('Рядок не вибрано', 'Оберіть рядок зі списку.', 'rows', 'До рядків');
@@ -454,14 +445,12 @@ export async function start(root: HTMLElement): Promise<void> {
     const review = store.stage === 'review';
     return `<div class="m-edit" id="m-edit">
       <div class="m-ctx"><span class="m-tag">${esc(u.kind)}</span>${store.speaker(u) ? `<span class="m-tag who">${esc(store.speaker(u))}</span>` : ''}${v?.label ? `<span class="m-tag">${esc(v.label)}</span>` : ''}<span class="m-status"><span class="sd ${SHAPE[st]}"></span>${STATUS_LABEL[st]}</span></div>
-      ${ctxStrip('before')}
       <section class="m-card"><h3>Оригінал</h3><div class="m-source" id="m-source">${sourceHtml(u.source, terms, e?.target ?? '')}</div>${store.refs(c.file, u.key).map(r => `<div class="m-ref"><small>Довідка · ${esc(r.lang.toUpperCase())}</small>${esc(r.text)}</div>`).join('')}${(() => { const w = store.usageOf(c.file, u.key); return w.length ? `<div class="m-ref"><small>Де видається</small>${w.map(esc).join('<br>')}</div>` : ''; })()}</section>
       <section class="m-card m-tr-card"><h3>${review ? 'Після вичитування' : 'Переклад'}<span class="m-count" id="m-count"></span></h3>
         <textarea id="m-tr" class="m-textarea" spellcheck="false" autocapitalize="sentences" placeholder="Напишіть переклад…" aria-label="Переклад">${esc(e?.target ?? '')}</textarea>
       </section>
       <div id="m-prev" class="m-prev"></div>
       <div id="m-issues" class="m-issues">${issuesHtml()}</div>
-      ${ctxStrip('after')}
     </div>
     <div class="m-actions" id="m-actions"><div class="m-act2"><button class="m-mini" data-sub="scene">${icon('rows')} Сцена</button><button class="m-mini danger" data-clear>Очистити</button></div><div class="m-act1"><button class="m-ic" data-step="-1" aria-label="Попередній рядок" ${store.neighbour(-1) ? '' : 'disabled'}>${icon('prev')}</button><button class="m-ic" data-step="1" aria-label="Наступний рядок" ${store.neighbour(1) ? '' : 'disabled'}>${icon('next')}</button><button class="m-primary" data-send>${icon('check')}<span>${review ? 'Затвердити' : 'Надіслати'}</span></button></div></div>`;
   }

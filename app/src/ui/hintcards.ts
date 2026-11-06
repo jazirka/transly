@@ -67,17 +67,6 @@ const mark = (text: string, ranges: [number, number][]): string => {
   return out + esc(text.slice(at));
 };
 
-/** The terms of the open row in the order they stand in the original (for the arrows between them). */
-function termsOfRow(ctx: Ctx): string[] {
-  const u = ctx.s.cur ? ctx.unit(ctx.s.cur) : undefined;
-  return u ? sourceTermHits(u.source, termsIn(u.source, ctx.s.saved.terms)).map(h => h.term.en) : [];
-}
-
-export const neighbourTerm = (ctx: Ctx, en: string, dir: 1 | -1): string | null => {
-  const all = termsOfRow(ctx), i = all.indexOf(en);
-  return i < 0 || all.length < 2 ? null : all[(i + dir + all.length) % all.length]!;
-};
-
 function termCard(ctx: Ctx, en: string): string {
   const t: GlossaryTerm | undefined = ctx.s.saved.terms.find(x => x.en.toLowerCase() === en.toLowerCase());
   if (!t) return '';
@@ -88,9 +77,7 @@ function termCard(ctx: Ctx, en: string): string {
   const used = target ? targetHasTerm(target, t.uk, t.alt) : null;
   const all = usesOf(ctx, t).filter(x => !(row && x.file === row.file && x.key === row.key));
   if (all.length) termView.i = ((termView.i % all.length) + all.length) % all.length; else termView.i = 0;
-  const rows = termsOfRow(ctx), at = rows.indexOf(t.en);
-  const steps = rows.length > 1 ? `<span class="tc-steps" role="group" aria-label="Терміни цього рядка"><button type="button" class="tc-arr" data-hca="tstep" data-v="-1" aria-label="Попередній термін рядка" title="Попередній термін рядка">‹</button><small>${at + 1}/${rows.length}</small><button type="button" class="tc-arr" data-hca="tstep" data-v="1" aria-label="Наступний термін рядка" title="Наступний термін рядка">›</button></span>` : '';
-  const head = `<div class="tc-head"><span class="tc-dot ${used === false ? 'warn' : 'ok'}" title="${used === null ? 'Переклад ще не написано' : used ? 'Є в перекладі' : 'Немає в перекладі'}"></span><b>${esc(t.uk)}</b><span class="tc-from">← ${esc(t.en)}</span>${t.kind ? `<span class="tg k" title="Категорія терміна">${esc(t.kind)}</span>` : ''}${steps}<span class="tc-tabs" role="group" aria-label="Вкладки картки"><button type="button" class="${termView.tab === 'a' ? 'on' : ''}" data-hca="tab" data-v="a" aria-pressed="${termView.tab === 'a'}" title="Переклад терміна">Aa</button><button type="button" class="${termView.tab === 'c' ? 'on' : ''}" data-hca="tab" data-v="c" aria-pressed="${termView.tab === 'c'}" title="Інші рядки з цим терміном" ${all.length ? '' : 'disabled'}>▦ ${all.length}</button></span></div>`;
+  const head = `<div class="tc-head"><span class="tc-dot ${used === false ? 'warn' : 'ok'}" title="${used === null ? 'Переклад ще не написано' : used ? 'Є в перекладі' : 'Немає в перекладі'}"></span><b>${esc(t.uk)}</b><span class="tc-from">← ${esc(t.en)}</span>${t.kind ? `<span class="tg k" title="Категорія терміна">${esc(t.kind)}</span>` : ''}<span class="tc-tabs" role="group" aria-label="Вкладки картки"><button type="button" class="${termView.tab === 'a' ? 'on' : ''}" data-hca="tab" data-v="a" aria-pressed="${termView.tab === 'a'}" title="Переклад терміна">Aa</button><button type="button" class="${termView.tab === 'c' ? 'on' : ''}" data-hca="tab" data-v="c" aria-pressed="${termView.tab === 'c'}" title="Інші рядки з цим терміном" ${all.length ? '' : 'disabled'}>▦ ${all.length}</button></span></div>`;
   if (termView.tab === 'c' && all.length) {
     // Variants of the rendering across the game: the term's own, an alternative, something else, not translated yet.
     const sums = { main: 0, alt: 0, other: 0, none: 0 };
@@ -115,8 +102,22 @@ function termCard(ctx: Ctx, en: string): string {
   }
   return `${head}
     <div class="tc-alt">${t.alt?.length ? `також: ${t.alt.map(a => `<span>${esc(a)}</span>`).join('')}` : ''}${t.note ? `<span class="tc-n">${esc(t.note)}</span>` : ''}</div>
-    <div class="tc-status ${used === false ? 'warn' : used ? 'ok' : ''}">${used === null ? 'Переклад ще не написано.' : used ? '✔ У перекладі є.' : '▲ У перекладі терміна немає.'} <span class="tg ${t.qa === false ? '' : 'ok'}">${t.qa === false ? 'лише підказка' : 'перевіряється в QA'}</span></div>
+    ${checkRows(u, target, t)}
+    <div class="tc-status"><span class="tg ${t.qa === false ? '' : 'ok'}">${t.qa === false ? 'лише підказка' : 'перевіряється в QA'}</span></div>
     <div class="tc-acts"><button type="button" class="btn p" data-hca="insert" data-v="${esc(t.uk)}" ${u ? '' : 'disabled'} title="Вставити в переклад на місці курсора">${used ? 'Замінити на' : 'Вставити'} «${esc(t.uk)}»</button><button type="button" class="btn ic" data-hca="edit" data-v="${esc(t.en)}" title="Змінити термін у глосарії" aria-label="Змінити термін">✎</button></div>`;
+}
+
+/** Whether it is right, side by side: what the original has and what the translation has, each with its own verdict. */
+function checkRows(u: Unit | undefined, target: string, t: GlossaryTerm): string {
+  if (!u) return '';
+  const sr = termRangesIn(prepareText(u.source), t.en)[0];
+  const row = (cls: string, lang: string, what: string, verdict: string): string => `<div class="tc-cr ${cls}"><span class="tc-lang">${lang}</span><span class="tc-v">${what}</span><span class="tc-r">${verdict}</span></div>`;
+  const en = sr ? row('ok', 'EN', `«${esc(u.source.slice(sr[0], sr[1]))}»`, '✔ у оригіналі') : '';
+  if (!target) return `<div class="tc-chk">${en}${row('', 'UK', '<i>ще не перекладено</i>', `має бути «${esc(t.uk)}»`)}</div>`;
+  const tr = termRangesInTarget(target, t.uk, t.alt)[0];
+  if (!tr) return `<div class="tc-chk">${en}${row('warn', 'UK', '<i>терміна немає</i>', `▲ має бути «${esc(t.uk)}»`)}</div>`;
+  const word = esc(target.slice(tr[0], tr[1]));
+  return `<div class="tc-chk">${en}${targetTermHitsMain(target, t) ? row('ok', 'UK', `«${word}»`, '✔ як у глосарії') : row('ok', 'UK', `«${word}»`, '✔ прийнятна альтернатива')}</div>`;
 }
 
 const targetTermHitsMain = (tr: string, t: GlossaryTerm): boolean => targetHasTerm(tr, t.uk);

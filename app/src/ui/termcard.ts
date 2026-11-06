@@ -1,5 +1,6 @@
 import { $ } from './dom';
-import { cardHtml, neighbourTerm, termView } from './hintcards';
+import { cardHtml, termView } from './hintcards';
+import { clearCardLinks, drawCardLinks } from './links';
 import type { Ctx } from './state';
 
 /**
@@ -38,6 +39,7 @@ const cardEl = (): HTMLElement => {
 export function hideTermCard(): void {
   window.clearTimeout(showTimer); window.clearTimeout(hideTimer);
   if (card) card.hidden = true;
+  clearCardLinks();
   shown = null;
 }
 
@@ -52,10 +54,40 @@ export function showCard(ctx: Ctx, anchor: HTMLElement, kind: string, key: strin
   el.hidden = false;
   shown = { kind, key, anchor };
   const r = anchor.getBoundingClientRect(), c = el.getBoundingClientRect();
+  // A word of the open row has its twin on the other side (the term in the original and in the translation): the card
+  // then stands beside the column and an arrow runs to it from each of the two.
+  const pair = anchor.closest('.fc-in') ? pairOf(kind, key) : null;
+  const col = document.querySelector('.fc-in')?.getBoundingClientRect();
+  const edge: 'r' | 'l' | null = pair && col && col.right + 14 + c.width <= window.innerWidth - 8 ? 'r' : pair && col && col.left - 14 - c.width >= 8 ? 'l' : null;
+  el.classList.toggle('side', !!edge);
+  if (edge && col && pair) {
+    const ys = [pair.src, pair.tr].filter((x): x is HTMLElement => !!x).map(x => { const b = x.getBoundingClientRect(); return b.top + b.height / 2; });
+    const mid = ys.reduce((a, b) => a + b, 0) / ys.length;
+    el.style.left = `${edge === 'r' ? col.right + 14 : col.left - 14 - c.width}px`;
+    el.style.top = `${Math.max(8, Math.min(window.innerHeight - c.height - 8, mid - c.height / 2))}px`;
+    el.classList.remove('above');
+    drawCardLinks(el, [pair.src, pair.tr].filter((x): x is HTMLElement => !!x), edge, edge === 'r' ? col.right : col.left);
+    return;
+  }
   const below = r.bottom + 6 + c.height <= window.innerHeight - 8;
-  el.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - c.width - 8))}px`;
-  el.style.top = `${below ? r.bottom + 6 : Math.max(8, r.top - c.height - 6)}px`;
+  const left = Math.max(8, Math.min(r.left, window.innerWidth - c.width - 8));
+  el.style.left = `${left}px`;
+  el.style.top = `${below ? r.bottom + 8 : Math.max(8, r.top - c.height - 8)}px`;
+  // The little arrow of the card points at the word (or the mark) it belongs to.
+  el.classList.toggle('above', !below);
+  el.style.setProperty('--ax', `${Math.max(14, Math.min(c.width - 24, r.left + r.width / 2 - left - 5))}px`);
+  // The twin of the word, if it is not under the card, gets an arrow too.
+  if (pair) drawCardLinks(el, [pair.src, pair.tr].filter((x): x is HTMLElement => !!x && x !== anchor), null, 0);
 }
+
+/** The word of the original and the word of the translation that belong to the same term or code. */
+const pairOf = (kind: string, key: string): { src: HTMLElement | null; tr: HTMLElement | null } | null => {
+  if (kind !== 'term' && kind !== 'code') return null;
+  const k = CSS.escape(key);
+  const src = document.querySelector<HTMLElement>(`#f-src [data-hc="${kind}"][data-hk="${k}"]`);
+  const tr = document.querySelector<HTMLElement>(`#te-layer mark[data-hc="${kind}"][data-hk="${k}"]`);
+  return src || tr ? { src, tr } : null;
+};
 
 /** The word a pointed-at element belongs to: `data-hc` says which kind of card it opens, `data-hk` which one. */
 const wordOf = (el: Element | null): { el: HTMLElement; kind: string; key: string } | null => {
@@ -83,12 +115,6 @@ export function wireTermCard(ctx: Ctx, act: CardActions): void {
       // Moves inside the card keep it open.
       if (b.dataset.hca === 'tab' && shown) { termView.tab = v === 'c' ? 'c' : 'a'; termView.i = 0; showCard(ctx, shown.anchor, shown.kind, shown.key, true); return; }
       if (b.dataset.hca === 'step' && shown) { termView.i += Number(v); showCard(ctx, shown.anchor, shown.kind, shown.key, true); return; }
-      if (b.dataset.hca === 'tstep' && shown) {
-        const next = neighbourTerm(ctx, shown.key, Number(v) as 1 | -1);
-        const el = next ? document.querySelector<HTMLElement>(`#f-src .th[data-hk="${CSS.escape(next)}"]`) : null;
-        if (next && el) showCard(ctx, el, 'term', next);
-        return;
-      }
       if (b.dataset.hca === 'insert') act.insert(v);
       else if (b.dataset.hca === 'goto') act.goto(b.dataset.file ?? '', b.dataset.key ?? '');
       else if (b.dataset.hca === 'edit') act.edit(v);

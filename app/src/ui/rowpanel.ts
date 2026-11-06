@@ -4,6 +4,7 @@ import { $, esc, toast } from './dom';
 import { namesOfRow, realOf, tmListHtml } from './hintcards';
 import { renderHistory } from './history-panel';
 import { STATUS_CAP, shownStatus } from './state';
+import { undoToast } from './undo-toast';
 import type { Ctx } from './state';
 
 /**
@@ -49,7 +50,7 @@ function versionCard(ctx: Ctx, u: Unit, e: Entry | undefined): string {
     <div class="pn-acts">
       ${st === 'appr' ? '' : `<button class="pn-ic ok" type="button" data-pa="approve" title="Вичитати переклад" aria-label="Вичитати переклад">${ICON.ok}</button>`}
       ${e.status === 'done' || e.status === 'appr' ? `<button class="pn-ic" type="button" data-pa="back" title="Повернути на доопрацювання" aria-label="Повернути на доопрацювання">${ICON.back}</button>` : ''}
-      <button class="pn-ic" type="button" data-pa="clear" title="Очистити переклад (можна скасувати в «Активності»)" aria-label="Очистити переклад">${ICON.clear}</button>
+      <button class="pn-ic" type="button" data-pa="clear" title="Очистити переклад" aria-label="Очистити переклад">${ICON.clear}</button>
     </div>
   </div>`;
 }
@@ -120,7 +121,7 @@ function approve(ctx: Ctx, u: Unit): void {
 }
 
 /** Clicks in the panel's own parts. `setText` writes a text into the row as one change (see `focus.ts`). */
-export function rowPanelClick(ctx: Ctx, t: HTMLElement, setText: (u: Unit, text: string, what: string, kind?: BatchKind) => void): boolean {
+export function rowPanelClick(ctx: Ctx, t: HTMLElement, setText: (u: Unit, text: string, what: string, kind?: BatchKind) => string | undefined): boolean {
   const h = t.closest<HTMLElement>('[data-pn]');
   if (h) { const id = h.dataset.pn!; if (folded.has(id)) folded.delete(id); else folded.add(id); ctx.render(); return true; }
   const a = t.closest<HTMLElement>('[data-pa]');
@@ -136,7 +137,7 @@ export function rowPanelClick(ctx: Ctx, t: HTMLElement, setText: (u: Unit, text:
       break;
     case 'clear':
       if (!cur?.target) { toast('Переклад уже порожній'); break; }
-      setText(u, '', 'очищено', 'clear'); toast('Переклад очищено. Скасувати можна в «Активності»');
+      undoToast(ctx, 'Переклад очищено', setText(u, '', 'очищено', 'clear'));
       break;
     default: return false;
   }

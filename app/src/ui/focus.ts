@@ -13,6 +13,7 @@ import { isDesktop, openLink, rememberedGameDir } from './desktop';
 import { drawPic, picOfFace, picsOfRow } from './gameimg';
 import type { Pic } from './gameimg';
 import { STATUS_CAP, shownStatus } from './state';
+import { undoToast } from './undo-toast';
 import type { Ctx } from './state';
 
 const I = {
@@ -44,7 +45,7 @@ export const FOCUS_HTML = `<div class="fc"><div class="fc-in"><div class="te-lin
     <div class="te"><div class="te-layer" id="te-layer" aria-hidden="true"></div><textarea class="tr-in" id="i-tr" spellcheck="false" aria-label="Переклад"></textarea></div>
     <div class="edbar">
       <button class="ib lab" id="b-compact" title="Лише текст: сховати контекст і примітки" aria-label="Режим лише тексту">${I.compact}<span class="tl">Лише текст</span></button>
-      <button class="ib" id="b-clear" title="Очистити переклад (можна скасувати в «Активності»)" aria-label="Очистити переклад">${I.clear}</button>
+      <button class="ib" id="b-clear" title="Очистити переклад" aria-label="Очистити переклад">${I.clear}</button>
       <span class="grow"></span>
       <div class="cnt2" id="cnt2" title="Знаків у перекладі / в оригіналі. Рекомендація: якнайближче до оригіналу"><span id="c-ch">0 / 0 зн.</span></div>
       <button class="saveb" id="b-save" aria-label="Надіслати">${I.send}</button>
@@ -239,15 +240,17 @@ export function focusInput(ctx: Ctx, ta: HTMLTextAreaElement): void {
 }
 
 /** Change the text of the open row; `kind` makes it an action of the journal that can be taken back from the activity feed. */
-function setText(ctx: Ctx, u: Unit, text: string, what: string, kind?: BatchKind): void {
+function setText(ctx: Ctx, u: Unit, text: string, what: string, kind?: BatchKind): string | undefined {
   const ents = ctx.entries(ctx.s.current!);
   const next = edit0(ctx, u, text);
-  if (kind) ctx.commit([{ file: ctx.s.current!, key: u.key, next, text }], kind, what);
+  let batch: string | undefined;
+  if (kind) batch = ctx.commit([{ file: ctx.s.current!, key: u.key, next, text }], kind, what);
   else { ents[u.key] = recordChange(ents[u.key], next, what, text, ctx.s.who, Date.now()); ctx.s.sess.n++; }
   // The field keeps what is typed in it while it has the focus (a shortcut changes the row without leaving it): bring it in line first.
   if (ctx.s.mode !== 'table') ($('#i-tr') as HTMLTextAreaElement).value = text;
   ctx.persist(); ctx.invalidateTm(); ctx.render();
   if (ctx.s.mode !== 'table') ($('#i-tr') as HTMLTextAreaElement).focus();
+  return batch;
 }
 
 /** Put a text into the translation: at the caret in the editor, at the end of the translation in the table. */
@@ -303,7 +306,7 @@ export function focusClick(ctx: Ctx, t: HTMLElement): boolean {
   if (go) { ctx.select(go.dataset.goto!); return true; }
   if (t.closest('#b-clear')) {
     if (!ta.value && !ents[u.key]?.target) { toast('Переклад уже порожній'); return true; }
-    setText(ctx, u, '', 'очищено', 'clear'); toast('Переклад очищено. Скасувати можна в «Активності»'); return true;
+    undoToast(ctx, 'Переклад очищено', setText(ctx, u, '', 'очищено', 'clear')); return true;
   }
   if (t.closest('[data-wrap]')) {
     const limit = limitFor(ctx.lineLimit(), u.face);

@@ -223,14 +223,15 @@ export class Store {
   /** Write rows as one action of the journal (each gets a history record with what it was before; the whole action can be taken back). */
   commit(changes: RowChange[], kind: BatchKind, what?: string): string { return commitRows(f => this.entries(f), changes, kind, this.who, Date.now(), what); }
   /** Empty the translation of these rows; an action of the journal, so it can be taken back from the activity feed. */
-  clearMany(file: string, units: Unit[]): number {
+  clearMany(file: string, units: Unit[]): { n: number; batch?: string } {
     const now = Date.now(), changes: RowChange[] = [];
     for (const u of units) { const e = this.entry(file, u.key); if (!e?.target) continue; changes.push({ file, key: u.key, next: edit(e, u, '', this.stage, now), text: '' }); }
-    if (changes.length) { this.commit(changes, 'clear'); this.tmCache = null; this.persist(); this.emit(); }
-    return changes.length;
+    const batch = changes.length ? this.commit(changes, 'clear') : undefined;
+    if (batch) { this.tmCache = null; this.persist(); this.emit(); }
+    return { n: changes.length, batch };
   }
   /** Send every translated row of these units that can be sent (the rest are counted, not blocked). */
-  sendMany(file: string, units: Unit[]): { sent: number; skipped: number } {
+  sendMany(file: string, units: Unit[]): { sent: number; skipped: number; batch?: string } {
     let skipped = 0; const now = Date.now(), changes: RowChange[] = [];
     for (const u of units) {
       const e = this.entry(file, u.key);
@@ -239,8 +240,9 @@ export class Store {
       if (!r.ok) { skipped++; continue; }
       changes.push({ file, key: u.key, next: r.entry, text: r.entry.target });
     }
-    if (changes.length) { this.commit(changes, 'send', 'надіслано'); this.persist(); this.emit(); }
-    return { sent: changes.length, skipped };
+    const batch = changes.length ? this.commit(changes, 'send', 'надіслано') : undefined;
+    if (batch) { this.persist(); this.emit(); }
+    return { sent: changes.length, skipped, batch };
   }
   /* ---------- groups of files ---------- */
   groupsList(): Group[] { return liveGroups(this.saved); }
@@ -256,7 +258,7 @@ export class Store {
   recolorGroup(id: string, color: string): void { if (recolorGroup(this.saved, id, color, Date.now())) { this.persist(); this.emit(); } }
   removeGroup(id: string): void { if (deleteGroup(this.saved, id, Date.now())) { this.persist(); this.emit(); } }
   /** Send every row of the files of a group that can be sent, as one action of the journal. */
-  sendGroup(id: string): { sent: number; skipped: number } {
+  sendGroup(id: string): { sent: number; skipped: number; batch?: string } {
     let skipped = 0; const now = Date.now(), changes: RowChange[] = [];
     for (const file of this.groupFiles(id)) for (const u of this.view(file)?.units ?? []) {
       const e = this.entry(file, u.key);
@@ -265,8 +267,9 @@ export class Store {
       if (!r.ok) { skipped++; continue; }
       changes.push({ file, key: u.key, next: r.entry, text: r.entry.target });
     }
-    if (changes.length) { this.commit(changes, 'send', 'надіслано'); this.persist(); this.emit(); }
-    return { sent: changes.length, skipped };
+    const batch = changes.length ? this.commit(changes, 'send', 'надіслано') : undefined;
+    if (batch) { this.persist(); this.emit(); }
+    return { sent: changes.length, skipped, batch };
   }
   find(o: { find: string; replace: string; caseSensitive: boolean; wholeWord: boolean }): ReturnType<typeof findReplace> { return findReplace(this.views, this.saved, o); }
   replaceAll(matches: ReturnType<typeof findReplace>): number {

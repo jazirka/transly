@@ -12,6 +12,7 @@ import { wireTermCard } from './termcard';
 import { wireLinks } from './links';
 import { SCENE_HTML, focusCard, hasScenes, renderSceneView, sceneClick, sceneFocus, sceneIdOf, sceneInput } from './scene-view';
 import { SCENES_HTML, renderScenesPanel, scenesClick, wireScenes } from './scenes-panel';
+import { undoToast } from './undo-toast';
 import { FILES_DRAG, GROUPS_HTML, dragFiles, groupsClick, placeMenuHtml, renderGroupsBlock, wireGroups } from './groups-panel';
 import type { PlaceTarget } from './groups-panel';
 import { GLOSSARY_HTML, editTerm, glossaryClick, renderGlossaryPanel, showTerm, wireGlossary } from './glossary-panel';
@@ -1093,8 +1094,9 @@ export async function start(root: HTMLElement): Promise<void> {
       if (text !== e.target) changes.push({ file: v.name, key: u.key, next: edit(e, u, text, ctx.stage(), Date.now()), text });
     }
     const n = changes.length;
-    if (n) { ctx.commit(changes, 'wrap'); ctx.persist(); ctx.invalidateTm(); renderAll(); }
-    toast(n ? `Перенесено рядки: ${plural(n, ['репліка', 'репліки', 'реплік'])}` : 'Задовгих рядків у файлі немає');
+    const batch = n ? ctx.commit(changes, 'wrap') : undefined;
+    if (n) { ctx.persist(); ctx.invalidateTm(); renderAll(); }
+    if (n) undoToast(ctx, `Перенесено рядки: ${plural(n, ['репліка', 'репліки', 'реплік'])}`, batch); else toast('Задовгих рядків у файлі немає');
   }
   function jump(kind: 'new' | 'qa', dir: 1 | -1): void {
     const v = ctx.view();
@@ -1159,10 +1161,10 @@ export async function start(root: HTMLElement): Promise<void> {
       else skipped.set(r.reason.slice(0, 40), (skipped.get(r.reason.slice(0, 40)) ?? 0) + 1);
     }
     const ok = changes.length;
-    if (ok) ctx.commit(changes, ctx.stage() === 'translate' ? 'send' : 'approve');
+    const batch = ok ? ctx.commit(changes, 'send') : undefined;
     ctx.persist(); ctx.invalidateTm(); renderAll();
     const nSkip = [...skipped.values()].reduce((a, b) => a + b, 0);
-    toast(`Надіслано: ${ok}${nSkip ? `. Пропущено: ${nSkip} (${[...skipped.keys()].slice(0, 2).join('; ')})` : ''}`, { sticky: nSkip > 0 });
+    undoToast(ctx, `Надіслано: ${ok}${nSkip ? `. Пропущено: ${nSkip} (${[...skipped.keys()].slice(0, 2).join('; ')})` : ''}`, batch, nSkip > 0);
   }
   /** Approve the ticked rows: a draft is sent first, so the history says both. */
   function bulkApprove(): void {
@@ -1183,10 +1185,10 @@ export async function start(root: HTMLElement): Promise<void> {
       const r2 = submit(next, u, 'review', now, opts);
       if (r2.ok) changes.push({ file: v.name, key: k, next: r2.entry, text: r2.entry.target }); else miss(r2.reason);
     }
-    if (changes.length) ctx.commit(changes, 'approve', 'вичитано');
+    const batch = changes.length ? ctx.commit(changes, 'approve', 'вичитано') : undefined;
     ctx.persist(); ctx.invalidateTm(); renderAll();
     const nSkip = [...skipped.values()].reduce((a, b) => a + b, 0);
-    toast(`Вичитано: ${changes.length}${nSkip ? `. Пропущено: ${nSkip} (${[...skipped.keys()].slice(0, 2).join('; ')})` : ''}`, { sticky: nSkip > 0 });
+    undoToast(ctx, `Вичитано: ${changes.length}${nSkip ? `. Пропущено: ${nSkip} (${[...skipped.keys()].slice(0, 2).join('; ')})` : ''}`, batch, nSkip > 0);
   }
   function bulkTm(): void {
     const v = ctx.view();
@@ -1200,9 +1202,9 @@ export async function start(root: HTMLElement): Promise<void> {
       if (m) changes.push({ file: v.name, key: k, next: edit(ents[k], u, m.t, ctx.stage(), Date.now()), text: m.t, what: `підставлено з пам’яті (${m.score}%)` });
     }
     const n = changes.length;
-    if (n) ctx.commit(changes, 'memory');
+    const batch = n ? ctx.commit(changes, 'memory') : undefined;
     ctx.persist(); ctx.invalidateTm(); renderAll();
-    toast(n ? `Підставлено з пам’яті: ${n}` : 'Збігів від 70% для порожніх вибраних рядків немає');
+    if (n) undoToast(ctx, `Підставлено з пам’яті: ${n}`, batch); else toast('Збігів від 70% для порожніх вибраних рядків немає');
   }
 
   /* ---------- inline cell editing ---------- */

@@ -2,6 +2,7 @@ import { GROUP_COLORS, GroupIndex, createGroup, deleteGroup, findOrphans, groupR
 import type { Group, RowChange, RowRef } from '../core';
 import { $, esc, plural, toast } from './dom';
 import { openFindReplace } from './tools-dialogs';
+import { undoToast } from './undo-toast';
 import type { Ctx } from './state';
 
 /**
@@ -140,10 +141,10 @@ function sendGroup(ctx: Ctx, id: string): void {
     if (res.ok) changes.push({ file: r.file, key: r.key, next: res.entry, text: res.entry.target });
     else skipped.set(res.reason.slice(0, 40), (skipped.get(res.reason.slice(0, 40)) ?? 0) + 1);
   }
-  if (changes.length) ctx.commit(changes, 'send');
+  const batch = changes.length ? ctx.commit(changes, 'send') : undefined;
   ctx.persist(); ctx.invalidateTm(); ctx.render();
   const nSkip = [...skipped.values()].reduce((a, b) => a + b, 0);
-  toast(`Надіслано: ${changes.length}${nSkip ? `. Пропущено: ${nSkip} (${[...skipped.keys()].slice(0, 2).join('; ')})` : ''}`, { sticky: nSkip > 0 });
+  undoToast(ctx, `Надіслано: ${changes.length}${nSkip ? `. Пропущено: ${nSkip} (${[...skipped.keys()].slice(0, 2).join('; ')})` : ''}`, batch, nSkip > 0);
 }
 
 /** The data to put on a drag of files out of the tree (the shell calls it when a file starts to be dragged). */

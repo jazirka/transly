@@ -421,3 +421,6 @@ button.cc:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .pn-empty-all{display:none;padding:14px}
 #s-pn.no-row .pn-empty-all{display:block}
 #s-pn.no-row .pn-sec{display:none}
+
+/* messages stand in the lower left corner, over the status bar, so they do not cover the field being typed in */
+.toasts{left:16px!important;bottom:36px!important;transform:none!important;align-items:flex-start!important}

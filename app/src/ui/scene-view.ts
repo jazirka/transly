@@ -8,6 +8,7 @@ import { openScene } from './scene-dialog';
 import { GROUP, STATUS_CAP, shownStatus } from './state';
 import type { Ctx } from './state';
 import { autoSize } from './text-editor';
+import { undoToast } from './undo-toast';
 
 /**
  * The scene as a mode of the centre, next to the table and the editing view: every line of one event page one after
@@ -172,9 +173,9 @@ function wholeScene(ctx: Ctx, what: 'send' | 'appr'): void {
     if (what === 'appr') { const r = submit(next, u, 'review', now, opts); if (!r.ok) { skipped++; continue; } next = r.entry; }
     changes.push({ file: at.file, key: u.key, next, text: next.target });
   }
-  if (changes.length) ctx.commit(changes, what === 'send' ? 'scene' : 'approve', what === 'send' ? undefined : 'вичитано (вся сцена)');
+  const batch = changes.length ? ctx.commit(changes, what === 'send' ? 'scene' : 'approve', what === 'send' ? undefined : 'вичитано (вся сцена)') : undefined;
   ctx.persist(); ctx.invalidateTm(); ctx.render();
-  toast(`${what === 'send' ? 'Надіслано' : 'Вичитано'}: ${plural(changes.length, ['рядок', 'рядки', 'рядків'])}${skipped ? `. Пропущено через помилки QA: ${skipped}` : ''}`);
+  undoToast(ctx, `${what === 'send' ? 'Надіслано' : 'Вичитано'}: ${plural(changes.length, ['рядок', 'рядки', 'рядків'])}${skipped ? `. Пропущено через помилки QA: ${skipped}` : ''}`, batch, skipped > 0);
 }
 
 /** Clicks in the scene view. */

@@ -14,15 +14,37 @@ export const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: Parent
   return e;
 };
 
-/** Short non-blocking message at the bottom of the window; several stack instead of overlapping. */
-/** A short confirmation; `sticky` (errors) stays until closed, so the reason cannot be missed. */
-export function toast(text: string, opts: { sticky?: boolean } = {}): void {
+/**
+ * A short message at the bottom of the window. The same text twice makes one message with a counter (×2), not two;
+ * no more than two stay at once; `sticky` (errors) stays until closed so the reason cannot be missed; `action` adds a
+ * button (an «undo», say) and keeps the message a little longer.
+ */
+export function toast(text: string, opts: { sticky?: boolean; action?: { label: string; run: () => void } } = {}): void {
   let host = document.getElementById('toasts');
   if (!host) { host = el('div', 'toasts'); host.id = 'toasts'; host.setAttribute('role', 'status'); document.body.appendChild(host); }
   host.querySelectorAll('.toast.err').forEach(x => x.remove());
-  const leave = (n: HTMLElement): void => { n.classList.add('out'); setTimeout(() => n.remove(), 220); };
+  const leave = (n: HTMLElement): void => { window.clearTimeout(Number(n.dataset.timer)); n.classList.add('out'); setTimeout(() => n.remove(), 220); };
+  const life = opts.action ? 7000 : 3500;
+  if (!opts.sticky && !opts.action) {
+    const same = [...host.querySelectorAll<HTMLElement>('.toast:not(.err):not(.out)')].find(x => x.dataset.text === text);
+    if (same) {
+      const n = Number(same.dataset.n ?? '1') + 1;
+      same.dataset.n = String(n);
+      const msg = same.querySelector('.tmsg');
+      if (msg) msg.textContent = `${text} ×${n}`;
+      window.clearTimeout(Number(same.dataset.timer));
+      same.dataset.timer = String(window.setTimeout(() => leave(same), life));
+      return;
+    }
+  }
   const t = el('div', opts.sticky ? 'toast err' : 'toast');
-  t.textContent = text;
+  t.dataset.text = text;
+  const msg = el('span', 'tmsg'); msg.textContent = text; t.appendChild(msg);
+  if (opts.action) {
+    const b = el('button'); b.type = 'button'; b.textContent = opts.action.label;
+    b.addEventListener('click', () => { leave(t); opts.action!.run(); });
+    t.appendChild(b);
+  }
   if (opts.sticky) {
     host.setAttribute('role', 'alert');
     const x = el('button'); x.type = 'button'; x.textContent = '✕'; x.setAttribute('aria-label', 'Закрити повідомлення');
@@ -30,7 +52,10 @@ export function toast(text: string, opts: { sticky?: boolean } = {}): void {
     t.appendChild(x);
   }
   host.appendChild(t);
-  if (!opts.sticky) setTimeout(() => leave(t), 3500);
+  // Two at most: the oldest goes.
+  const live = [...host.querySelectorAll<HTMLElement>('.toast:not(.err):not(.out)')];
+  while (live.length > 2) leave(live.shift()!);
+  if (!opts.sticky) t.dataset.timer = String(window.setTimeout(() => leave(t), life));
 }
 
 /** Ukrainian plural: plural(5, ['рядок','рядки','рядків']) -> «5 рядків». */

@@ -64,9 +64,29 @@ export async function start(root: HTMLElement): Promise<void> {
   </div>`;
   const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
-  const say = (text: string, bad = false): void => {
-    const t = document.createElement('div'); t.className = 'm-toast' + (bad ? ' bad' : ''); t.textContent = text;
-    $('m-toasts').appendChild(t); setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 220); }, bad ? 6000 : 3200);
+  /** A message: the same text twice becomes «×2», two at most stay on screen, and a message about a bulk action can carry «Скасувати». */
+  const say = (text: string, bad = false, undo?: string): void => {
+    const host = $('m-toasts');
+    const leave = (n: HTMLElement): void => { window.clearTimeout(Number(n.dataset.timer)); n.classList.add('out'); setTimeout(() => n.remove(), 220); };
+    const life = undo ? 7000 : bad ? 6000 : 3200;
+    const same = undo ? undefined : [...host.querySelectorAll<HTMLElement>('.m-toast:not(.out):not(.has-undo)')].find(x => x.dataset.text === text);
+    if (same) {
+      const n = Number(same.dataset.n ?? '1') + 1; same.dataset.n = String(n);
+      const m = same.querySelector('.m-tmsg'); if (m) m.textContent = `${text} ×${n}`;
+      window.clearTimeout(Number(same.dataset.timer)); same.dataset.timer = String(window.setTimeout(() => leave(same), life));
+      return;
+    }
+    const t = document.createElement('div'); t.className = 'm-toast' + (bad ? ' bad' : '') + (undo ? ' has-undo' : ''); t.dataset.text = text;
+    const m = document.createElement('span'); m.className = 'm-tmsg'; m.textContent = text; t.appendChild(m);
+    if (undo) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'm-tundo'; b.textContent = 'Скасувати';
+      b.addEventListener('click', () => { leave(t); const r = store.undoJournalBatch(undo); say(undoReport(r), !r.done); buzz(14); render(); });
+      t.appendChild(b);
+    }
+    host.appendChild(t);
+    const live = [...host.querySelectorAll<HTMLElement>('.m-toast:not(.out)')];
+    while (live.length > 2) leave(live.shift()!);
+    t.dataset.timer = String(window.setTimeout(() => leave(t), life));
   };
   const buzz = (ms = 10): void => { try { navigator.vibrate?.(ms); } catch { /* no vibrator */ } };
   /** A destructive button asks twice: the first tap turns it into «Точно очистити?» for 4 seconds. */
@@ -767,7 +787,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if ((x = q('[data-scpick]'))) { scn.picked = x.dataset.scpick!; const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
     if ((x = q('[data-scmode]'))) { scn.mode = x.dataset.scmode as typeof scn.mode; const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
     if (q('[data-scedit]')) { store.select(scn.picked); sub = null; go('edit'); return; }
-    if (q('[data-scenesend]')) { const v = store.view(), c = store.current; if (v && c) { if (!armed(sceneUnits(v.units, c.unit.key).length, 'scene')) return; const r = store.sendMany(v.name, sceneUnits(v.units, c.unit.key)); say(`Надіслано: ${r.sent}${r.skipped ? ` · пропущено: ${r.skipped}` : ''}`, r.sent === 0); buzz(14); render(); } return; }
+    if (q('[data-scenesend]')) { const v = store.view(), c = store.current; if (v && c) { if (!armed(sceneUnits(v.units, c.unit.key).length, 'scene')) return; const r = store.sendMany(v.name, sceneUnits(v.units, c.unit.key)); say(`Надіслано: ${r.sent}${r.skipped ? ` · пропущено: ${r.skipped}` : ''}`, r.sent === 0, r.batch); buzz(14); render(); } return; }
     if (q('[data-dofind]')) { fr.matches = store.find({ find: fr.find, replace: fr.replace, caseSensitive: fr.cs, wholeWord: fr.word }); if (!fr.find) say('Вкажіть, що шукати', true); else if (!fr.matches.length) say('Нічого не знайдено'); render(); return; }
     if (q('[data-doreplace]')) { const n = store.replaceAll(fr.matches); fr.matches = []; say(`Замінено в рядках: ${n}`); buzz(14); render(); return; }
     if ((x = q('[data-uni]'))) { const [gi, vi] = x.dataset.uni!.split('|').map(Number); const g = store.inconsistent()[gi!]; const v = g?.variants[vi!]; if (g && v) { const n = store.unify(g.source, v.target); say(`Уніфіковано рядків: ${n}`); buzz(14); } render(); return; }
@@ -793,7 +813,7 @@ export async function start(root: HTMLElement): Promise<void> {
     }
     if (q('[data-gnew]')) { gcreating = !gcreating; render(); if (gcreating) document.getElementById('g-name')?.focus(); return; }
     if ((x = q('[data-gfold]'))) { const id = x.dataset.gfold!; if (gopen.has(id)) gopen.delete(id); else gopen.add(id); grename = null; gdel = null; render(); return; }
-    if ((x = q('[data-gsend]'))) { const r = store.sendGroup(x.dataset.gsend!); say(`${'Надіслано'}: ${r.sent}${r.skipped ? `, пропущено ${r.skipped}` : ''}`, !r.sent); render(); return; }
+    if ((x = q('[data-gsend]'))) { const r = store.sendGroup(x.dataset.gsend!); say(`Надіслано: ${r.sent}${r.skipped ? `, пропущено ${r.skipped}` : ''}`, !r.sent, r.batch); render(); return; }
     if ((x = q('[data-grename]'))) { grename = x.dataset.grename!; render(); document.getElementById('gr-ren')?.focus(); return; }
     if ((x = q('[data-gcolor]'))) {
       const id = x.dataset.gcolor!, g = store.groupsList().find(y => y.id === id), cs = store.groupColors;
@@ -814,8 +834,8 @@ export async function start(root: HTMLElement): Promise<void> {
     if (q('[data-selall]')) { const all = store.rows(); if (picked.size === all.length) picked.clear(); else all.forEach(u => picked.add(u.key)); render(); return; }
     if (q('[data-selsend]') || q('[data-selclear]') || q('[data-selcopy]')) {
       const v = store.view(); if (!v) return; const us = v.units.filter(u => picked.has(u.key));
-      if (q('[data-selsend]')) { if (!armed(us.length, 'sel')) return; const r = store.sendMany(v.name, us); say(`Надіслано: ${r.sent}${r.skipped ? ` · пропущено: ${r.skipped}` : ''}`, r.sent === 0); }
-      else if (q('[data-selclear]')) { if (!confirmTap(q('[data-selclear]')!, `Очистити ${us.length}?`)) return; say(`Очищено: ${store.clearMany(v.name, us)}`); }
+      if (q('[data-selsend]')) { if (!armed(us.length, 'sel')) return; const r = store.sendMany(v.name, us); say(`Надіслано: ${r.sent}${r.skipped ? ` · пропущено: ${r.skipped}` : ''}`, r.sent === 0, r.batch); }
+      else if (q('[data-selclear]')) { if (!confirmTap(q('[data-selclear]')!, `Очистити ${us.length}?`)) return; const r = store.clearMany(v.name, us); say(`Очищено: ${r.n}`, false, r.batch); }
       else { const n = us.filter(u => store.writeAtCopy(v.name, u)).length; say(`Скопійовано оригінал: ${n}`); }
       buzz(14); picked.clear(); render(); return;
     }
@@ -867,7 +887,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if ((x = q('[data-clear]'))) {
       if (!confirmTap(x)) return;
       const c = store.current;
-      if (c?.entry?.target) { store.clearMany(c.file, [c.unit]); say('Очищено. Скасувати можна в «Активності»'); }
+      if (c?.entry?.target) { const r = store.clearMany(c.file, [c.unit]); say('Переклад очищено', false, r.batch); }
       ($('m-tr') as HTMLTextAreaElement).value = ''; refreshMeta(); autosize(); return;
     }
     if ((x = q('[data-ins]'))) { insert(x.dataset.ins ?? ''); return; }

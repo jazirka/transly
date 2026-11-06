@@ -46,3 +46,4 @@ export * from './hints';
 export * from './journal';
 export * from './sceneindex';
 export * from './termmatch';
+export * from './groups';

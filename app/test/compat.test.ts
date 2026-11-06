@@ -30,11 +30,11 @@ describe('files from older builds', () => {
   });
 
   it('records of items with a time merge item by item, and a reset drops the older ones', () => {
-    const a = { ...proj({}), groups: { x: { name: 'старе', mt: 5 }, y: { name: 'лише тут', mt: 8 } } } as unknown as SavedProject;
-    const b = { ...proj({}), groups: { x: { name: 'нове', mt: 9 } } } as unknown as SavedProject;
-    expect((mergeProjects(a, b).project as unknown as { groups: unknown }).groups).toEqual({ x: { name: 'нове', mt: 9 }, y: { name: 'лише тут', mt: 8 } });
-    const reset = { ...proj({}, { resetEpoch: 8 }), groups: {} } as unknown as SavedProject;
-    expect((mergeProjects(a, reset).project as unknown as { groups: unknown }).groups).toEqual({});
+    const a = { ...proj({}), futureThings: { x: { name: 'старе', mt: 5 }, y: { name: 'лише тут', mt: 8 } } } as unknown as SavedProject;
+    const b = { ...proj({}), futureThings: { x: { name: 'нове', mt: 9 } } } as unknown as SavedProject;
+    expect((mergeProjects(a, b).project as unknown as { futureThings: unknown }).futureThings).toEqual({ x: { name: 'нове', mt: 9 }, y: { name: 'лише тут', mt: 8 } });
+    const reset = { ...proj({}, { resetEpoch: 8 }), futureThings: {} } as unknown as SavedProject;
+    expect((mergeProjects(a, reset).project as unknown as { futureThings: unknown }).futureThings).toEqual({});
   });
 
   it('merging stamps the current layout and says when the other side is older', () => {

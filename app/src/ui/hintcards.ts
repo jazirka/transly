@@ -1,4 +1,4 @@
-import { HINT_GLYPH, HINT_LABEL, activeIssues, byHintOrder, check, describePage, explainCodes, limitFor, prepareText, sceneAt, sourceChanged, targetHasTerm, termRangesIn, usageKey } from '../core';
+import { HINT_GLYPH, HINT_LABEL, activeIssues, byHintOrder, check, describePage, explainCodes, limitFor, prepareText, sceneAt, sourceChanged, sourceTermHits, targetHasTerm, termRangesIn, termRangesInTarget, termsIn, usageKey } from '../core';
 import type { Entry, GlossaryTerm, Unit } from '../core';
 import { esc, plural } from './dom';
 import { scenesOf } from './scenecache';
@@ -40,21 +40,87 @@ export function nameMarks(u: Unit, list: RowName[], taken: { start: number; end:
 
 const chip = (k: string, title = ''): string => `<span class="tg k" ${title ? `title="${esc(title)}"` : ''}>${esc(k)}</span>`;
 
+/** What the card of a term shows now: its tab ('a' the term, 'c' the term in the context of other rows) and which other row. */
+export const termView = { key: '', tab: 'a' as 'a' | 'c', i: 0 };
+export function resetTermView(key: string): void { if (termView.key !== key) { termView.key = key; termView.tab = 'a'; termView.i = 0; } }
+
+interface Use { file: string; key: string }
+const usesCache = new Map<string, { views: unknown; list: Use[] }>();
+
+/** The rows of the game (other than the open one) whose original has the term, in game order. */
+function usesOf(ctx: Ctx, t: GlossaryTerm): Use[] {
+  const hit = usesCache.get(t.en);
+  if (hit && hit.views === ctx.s.views) return hit.list;
+  const first = (t.en.toLowerCase().match(/[\p{L}\p{N}]{3,}/u)?.[0] ?? t.en.toLowerCase()).slice(0, 3);
+  const list: Use[] = [];
+  for (const v of ctx.s.views) for (const u of v.units) {
+    if (!u.source.toLowerCase().includes(first)) continue;
+    if (termRangesIn(prepareText(u.source), t.en).length) list.push({ file: v.name, key: u.key });
+  }
+  usesCache.set(t.en, { views: ctx.s.views, list });
+  return list;
+}
+
+const mark = (text: string, ranges: [number, number][]): string => {
+  let out = '', at = 0;
+  for (const [a, b] of [...ranges].sort((x, y) => x[0] - y[0])) { if (a < at) continue; out += esc(text.slice(at, a)) + `<mark>${esc(text.slice(a, b))}</mark>`; at = b; }
+  return out + esc(text.slice(at));
+};
+
+/** The terms of the open row in the order they stand in the original (for the arrows between them). */
+function termsOfRow(ctx: Ctx): string[] {
+  const u = ctx.s.cur ? ctx.unit(ctx.s.cur) : undefined;
+  return u ? sourceTermHits(u.source, termsIn(u.source, ctx.s.saved.terms)).map(h => h.term.en) : [];
+}
+
+export const neighbourTerm = (ctx: Ctx, en: string, dir: 1 | -1): string | null => {
+  const all = termsOfRow(ctx), i = all.indexOf(en);
+  return i < 0 || all.length < 2 ? null : all[(i + dir + all.length) % all.length]!;
+};
+
 function termCard(ctx: Ctx, en: string): string {
   const t: GlossaryTerm | undefined = ctx.s.saved.terms.find(x => x.en.toLowerCase() === en.toLowerCase());
   if (!t) return '';
+  resetTermView(t.en);
   const u = ctx.s.cur ? ctx.unit(ctx.s.cur) : undefined;
+  const row = u ? realOf(ctx, u) : null;
   const target = u && ctx.s.current ? ctx.entries(ctx.s.current)[u.key]?.target ?? '' : '';
   const used = target ? targetHasTerm(target, t.uk, t.alt) : null;
-  const tags = [
-    t.kind ? `<span class="tg k" title="Категорія терміна">${esc(t.kind)}</span>` : '',
-    t.qa === false ? '<span class="tg">лише підказка</span>' : '<span class="tg ok" title="Відсутність терміна в перекладі буде позначено в QA">перевіряється в QA</span>',
-    used === null ? '' : used ? '<span class="tg ok">є в перекладі</span>' : '<span class="tg warn">немає в перекладі</span>',
-  ].join('');
-  return `<div class="tc-row"><span class="tc-lang">UK</span><div class="tc-main"><b>${esc(t.uk)}</b>${t.alt?.length ? `<div class="tc-alt">також: ${t.alt.map(a => `<span>${esc(a)}</span>`).join('')}</div>` : ''}<div class="tc-tags">${tags}</div></div></div>
-    <div class="tc-row tc-en"><span class="tc-lang">EN</span><div class="tc-main"><b>${esc(t.en)}</b>${t.note ? `<div class="tc-note">${esc(t.note)}</div>` : ''}</div></div>
-    <div class="tc-acts"><button type="button" class="btn p" data-hca="insert" data-v="${esc(t.uk)}" ${u ? '' : 'disabled'} title="Вставити в переклад на місці курсора">Вставити «${esc(t.uk)}»</button><button type="button" class="btn" data-hca="edit" data-v="${esc(t.en)}">Змінити термін</button></div>`;
+  const all = usesOf(ctx, t).filter(x => !(row && x.file === row.file && x.key === row.key));
+  if (all.length) termView.i = ((termView.i % all.length) + all.length) % all.length; else termView.i = 0;
+  const rows = termsOfRow(ctx), at = rows.indexOf(t.en);
+  const steps = rows.length > 1 ? `<span class="tc-steps" role="group" aria-label="Терміни цього рядка"><button type="button" class="tc-arr" data-hca="tstep" data-v="-1" aria-label="Попередній термін рядка" title="Попередній термін рядка">‹</button><small>${at + 1}/${rows.length}</small><button type="button" class="tc-arr" data-hca="tstep" data-v="1" aria-label="Наступний термін рядка" title="Наступний термін рядка">›</button></span>` : '';
+  const head = `<div class="tc-head"><span class="tc-dot ${used === false ? 'warn' : 'ok'}" title="${used === null ? 'Переклад ще не написано' : used ? 'Є в перекладі' : 'Немає в перекладі'}"></span><b>${esc(t.uk)}</b><span class="tc-from">← ${esc(t.en)}</span>${t.kind ? `<span class="tg k" title="Категорія терміна">${esc(t.kind)}</span>` : ''}${steps}<span class="tc-tabs" role="group" aria-label="Вкладки картки"><button type="button" class="${termView.tab === 'a' ? 'on' : ''}" data-hca="tab" data-v="a" aria-pressed="${termView.tab === 'a'}" title="Переклад терміна">Aa</button><button type="button" class="${termView.tab === 'c' ? 'on' : ''}" data-hca="tab" data-v="c" aria-pressed="${termView.tab === 'c'}" title="Інші рядки з цим терміном" ${all.length ? '' : 'disabled'}>▦ ${all.length}</button></span></div>`;
+  if (termView.tab === 'c' && all.length) {
+    // Variants of the rendering across the game: the term's own, an alternative, something else, not translated yet.
+    const sums = { main: 0, alt: 0, other: 0, none: 0 };
+    for (const x of all) {
+      const tr = ctx.entries(x.file)[x.key]?.target;
+      if (!tr) sums.none++; else if (targetTermHitsMain(tr, t)) sums.main++; else if (targetTermHitsAlt(tr, t)) sums.alt++; else sums.other++;
+    }
+    const cur = all[termView.i]!;
+    const cu = ctx.s.views.find(v => v.name === cur.file)?.units.find(x => x.key === cur.key);
+    const ctr = ctx.entries(cur.file)[cur.key]?.target ?? '';
+    const sc = cu ? sceneAt(scenesOf(ctx.s.views.find(v => v.name === cur.file)?.units ?? []), cur.key) : null;
+    const srcRanges = cu ? termRangesIn(prepareText(cu.source), t.en) : [];
+    const trRanges = ctr ? termRangesInTarget(ctr, t.uk, t.alt) : [];
+    const verdict = !ctr ? '<span class="tg">ще не перекладено</span>' : targetTermHitsMain(ctr, t) ? '<span class="tg ok">як у глосарії</span>' : targetTermHitsAlt(ctr, t) ? '<span class="tg warn">альтернатива</span>' : trRanges.length ? '' : '<span class="tg warn">без терміна</span>';
+    const sumLine = [sums.main ? `${sums.main} × «${esc(t.uk)}»` : '', sums.alt ? `<span class="tc-w">${sums.alt} × альтернатива</span>` : '', sums.other ? `<span class="tc-w">${sums.other} × інакше</span>` : '', sums.none ? `${sums.none} ще не перекладено` : ''].filter(Boolean).join(' · ');
+    return `${head}
+      <div class="tc-sum">${sumLine}</div>
+      <div class="tc-ctx"><div class="tc-nav"><button type="button" class="tc-arr" data-hca="step" data-v="-1" aria-label="Попереднє вживання" title="Попереднє вживання">‹</button><span>${termView.i + 1} з ${all.length}</span><button type="button" class="tc-arr" data-hca="step" data-v="1" aria-label="Наступне вживання" title="Наступне вживання">›</button><small>${esc(cur.file.replace(/\.json$/, ''))}${sc ? ' · ' + esc(sc.title) : ''}</small>${verdict}</div>
+        <div class="tc-line"><span class="tc-lang">EN</span><span>${cu ? mark(cu.source, srcRanges) : ''}</span></div>
+        <div class="tc-line"><span class="tc-lang">UK</span><span>${ctr ? mark(ctr, trRanges) : '<i>ще не перекладено</i>'}</span></div></div>
+      <div class="tc-acts"><button type="button" class="btn p" data-hca="goto" data-file="${esc(cur.file)}" data-key="${esc(cur.key)}">Перейти до рядка</button></div>`;
+  }
+  return `${head}
+    <div class="tc-alt">${t.alt?.length ? `також: ${t.alt.map(a => `<span>${esc(a)}</span>`).join('')}` : ''}${t.note ? `<span class="tc-n">${esc(t.note)}</span>` : ''}</div>
+    <div class="tc-status ${used === false ? 'warn' : used ? 'ok' : ''}">${used === null ? 'Переклад ще не написано.' : used ? '✔ У перекладі є.' : '▲ У перекладі терміна немає.'} <span class="tg ${t.qa === false ? '' : 'ok'}">${t.qa === false ? 'лише підказка' : 'перевіряється в QA'}</span></div>
+    <div class="tc-acts"><button type="button" class="btn p" data-hca="insert" data-v="${esc(t.uk)}" ${u ? '' : 'disabled'} title="Вставити в переклад на місці курсора">${used ? 'Замінити на' : 'Вставити'} «${esc(t.uk)}»</button><button type="button" class="btn ic" data-hca="edit" data-v="${esc(t.en)}" title="Змінити термін у глосарії" aria-label="Змінити термін">✎</button></div>`;
 }
+
+const targetTermHitsMain = (tr: string, t: GlossaryTerm): boolean => targetHasTerm(tr, t.uk);
+const targetTermHitsAlt = (tr: string, t: GlossaryTerm): boolean => !!t.alt?.length && targetHasTerm(tr, t.alt[0]!, t.alt.slice(1));
 
 function codeCard(ctx: Ctx, code: string): string {
   const { s } = ctx;

@@ -1,5 +1,5 @@
 import { $ } from './dom';
-import { cardHtml } from './hintcards';
+import { cardHtml, neighbourTerm, termView } from './hintcards';
 import type { Ctx } from './state';
 
 /**
@@ -42,7 +42,8 @@ export function hideTermCard(): void {
 }
 
 /** Show the card of `kind` / `key` over `anchor` (below it, or above when there is no room). */
-export function showCard(ctx: Ctx, anchor: HTMLElement, kind: string, key: string): void {
+export function showCard(ctx: Ctx, anchor: HTMLElement, kind: string, key: string, keepView = false): void {
+  if (!keepView && !(shown?.kind === kind && shown.key === key)) termView.key = '';
   const html = cardHtml(ctx, kind, key);
   if (!html) return;
   window.clearTimeout(hideTimer);
@@ -79,6 +80,15 @@ export function wireTermCard(ctx: Ctx, act: CardActions): void {
     const b = target.closest<HTMLElement>('#termcard [data-hca]');
     if (b) {
       const v = b.dataset.v ?? '';
+      // Moves inside the card keep it open.
+      if (b.dataset.hca === 'tab' && shown) { termView.tab = v === 'c' ? 'c' : 'a'; termView.i = 0; showCard(ctx, shown.anchor, shown.kind, shown.key, true); return; }
+      if (b.dataset.hca === 'step' && shown) { termView.i += Number(v); showCard(ctx, shown.anchor, shown.kind, shown.key, true); return; }
+      if (b.dataset.hca === 'tstep' && shown) {
+        const next = neighbourTerm(ctx, shown.key, Number(v) as 1 | -1);
+        const el = next ? document.querySelector<HTMLElement>(`#f-src .th[data-hk="${CSS.escape(next)}"]`) : null;
+        if (next && el) showCard(ctx, el, 'term', next);
+        return;
+      }
       if (b.dataset.hca === 'insert') act.insert(v);
       else if (b.dataset.hca === 'goto') act.goto(b.dataset.file ?? '', b.dataset.key ?? '');
       else if (b.dataset.hca === 'edit') act.edit(v);

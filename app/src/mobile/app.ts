@@ -1,10 +1,10 @@
-import { batchTitle, batchUndoLabel, undoReport, setIgnored, canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, describePage, displayLength, limitFor, wordsOf, gorohUrl, multitranUrl } from '../core';
-import type { GameFile } from '../core';
+import { HINT_GLYPH, HINT_LABEL, byHintOrder, commentId, historyRows, openThreads, restoreNote, sourceTermHits, targetHasTerm, threadsOf, batchTitle, batchUndoLabel, undoReport, setIgnored, canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, describePage, displayLength, limitFor, wordsOf, gorohUrl, multitranUrl } from '../core';
+import type { Comment, DiffSeg, Entry, GameFile } from '../core';
 import { artifactDb, describeClaude, loadClaudeConfig, saveClaudeConfig } from '../ui/claude';
 import { describeGithub, githubApi, githubConfigured, loadGithubConfig, saveGithubConfig } from '../ui/github';
 import { esc, plural } from '../ui/dom';
 import { gameHtml } from '../ui/gamehtml';
-import { markup } from '../ui/markup';
+import { markup, markupTerms } from '../ui/markup';
 import { androidBridge, publishWidget } from '../ui/android';
 import type { WidgetStats } from '../ui/android';
 import { buildWidget } from './widgetdata';
@@ -137,7 +137,7 @@ export async function start(root: HTMLElement): Promise<void> {
   /** Top-bar button of the editor: glossary, memory, comments and history of the open row. */
   function helpBtn(): string {
     const c = store.current; if (tab !== 'edit' || sub || !c) return '';
-    const n = store.terms(c.unit).length + store.suggestions(c.unit, c.entry).length + (c.entry?.comments?.length ?? 0);
+    const n = store.terms(c.unit).length + store.suggestions(c.unit, c.entry).length + openThreads(c.entry);
     return `<button class="m-hdr ${sheet ? 'on' : ''}" data-sheet aria-pressed="${sheet}" aria-label="Глосарій, пам’ять перекладів, коментарі, історія">${icon('book')}${n ? `<span class="m-badge">${n > 9 ? '9+' : n}</span>` : ''}</button>`;
   }
   function renderChrome(): void {
@@ -430,7 +430,20 @@ export async function start(root: HTMLElement): Promise<void> {
 
   function issuesHtml(): string {
     const c = store.current; if (!c) return '';
-    return store.issues(c.unit, c.entry).map(i => `<div class="m-issue ${i.severity}"><div class="m-issue-t"><span class="sd ${i.severity === 'bad' ? 'sd-qa' : 'sd-draft'}"></span><span>${esc(i.message)}</span></div><div class="m-issue-a">${i.codes?.length ? `<button class="m-mini" data-ins="${esc(i.codes.join(''))}">Вставити</button>` : ''}${i.key === 'wrap' ? '<button class="m-mini" data-wrap>Перенести</button>' : ''}<button class="m-mini ghost" data-ign="${i.key}">Ігнорувати</button></div></div>`).join('');
+    return byHintOrder(store.issues(c.unit, c.entry)).map(i => `<div class="m-issue ${i.severity}"><div class="m-issue-t"><span class="sd ${i.severity === 'bad' ? 'sd-qa' : 'sd-draft'}"></span><span class="m-kind k-${i.cat}"><span aria-hidden="true">${HINT_GLYPH[i.cat]}</span> ${HINT_LABEL[i.cat]}</span><span>${esc(i.message)}</span></div><div class="m-issue-a">${i.codes?.length ? `<button class="m-mini" data-ins="${esc(i.codes.join(''))}">Вставити</button>` : ''}${i.key === 'wrap' ? '<button class="m-mini" data-wrap>Перенести</button>' : ''}<button class="m-mini ghost" data-ign="${i.key}">Ігнорувати</button></div></div>`).join('');
+  }
+
+  /** The original with its glossary terms as words that can be tapped: a wavy line when the translation lacks the term. */
+  function sourceHtml(source: string, terms: ReturnType<typeof store.terms>, target: string): string {
+    return markupTerms(source, sourceTermHits(source, terms).map(h => ({ start: h.start, end: h.end, en: h.term.en, missing: !!target && !targetHasTerm(target, h.term.uk, h.term.alt) })));
+  }
+  /** Two lines before or after the open row, from the same scene (what was just said, what comes next); a tap goes to the row. */
+  function ctxStrip(which: 'before' | 'after'): string {
+    const s = store.sceneAround();
+    const rows = s ? s[which] : [];
+    if (!s || !rows.length) return '';
+    const c = store.current!;
+    return `<div class="m-cstrip"><small>${which === 'before' ? `Перед цим рядком · ${s.at} із ${s.total} у сцені` : 'Далі в сцені'}</small>${rows.map(u => { const en = store.entry(c.file, u.key); return `<button class="m-cl" data-key="${esc(u.key)}"><span class="sd ${SHAPE[store.shown(u, en)]}"></span>${store.speaker(u) ? `<b>${esc(store.speaker(u))}</b>` : ''}<span class="m-cl-t">${esc(u.source.replace(/\s+/g, ' ').slice(0, 80))}</span></button>`; }).join('')}</div>`;
   }
 
   function screenEdit(): string {
@@ -441,12 +454,14 @@ export async function start(root: HTMLElement): Promise<void> {
     const review = store.stage === 'review';
     return `<div class="m-edit" id="m-edit">
       <div class="m-ctx"><span class="m-tag">${esc(u.kind)}</span>${store.speaker(u) ? `<span class="m-tag who">${esc(store.speaker(u))}</span>` : ''}${v?.label ? `<span class="m-tag">${esc(v.label)}</span>` : ''}<span class="m-status"><span class="sd ${SHAPE[st]}"></span>${STATUS_LABEL[st]}</span></div>
-      <section class="m-card"><h3>Оригінал</h3><div class="m-source" id="m-source">${markup(u.source, terms.map(t => t.en))}</div>${store.refs(c.file, u.key).map(r => `<div class="m-ref"><small>Довідка · ${esc(r.lang.toUpperCase())}</small>${esc(r.text)}</div>`).join('')}${(() => { const w = store.usageOf(c.file, u.key); return w.length ? `<div class="m-ref"><small>Де видається</small>${w.map(esc).join('<br>')}</div>` : ''; })()}</section>
+      ${ctxStrip('before')}
+      <section class="m-card"><h3>Оригінал</h3><div class="m-source" id="m-source">${sourceHtml(u.source, terms, e?.target ?? '')}</div>${store.refs(c.file, u.key).map(r => `<div class="m-ref"><small>Довідка · ${esc(r.lang.toUpperCase())}</small>${esc(r.text)}</div>`).join('')}${(() => { const w = store.usageOf(c.file, u.key); return w.length ? `<div class="m-ref"><small>Де видається</small>${w.map(esc).join('<br>')}</div>` : ''; })()}</section>
       <section class="m-card m-tr-card"><h3>${review ? 'Після вичитування' : 'Переклад'}<span class="m-count" id="m-count"></span></h3>
         <textarea id="m-tr" class="m-textarea" spellcheck="false" autocapitalize="sentences" placeholder="Напишіть переклад…" aria-label="Переклад">${esc(e?.target ?? '')}</textarea>
       </section>
       <div id="m-prev" class="m-prev"></div>
       <div id="m-issues" class="m-issues">${issuesHtml()}</div>
+      ${ctxStrip('after')}
     </div>
     <div class="m-actions" id="m-actions"><div class="m-act2"><button class="m-mini" data-sub="scene">${icon('rows')} Сцена</button><button class="m-mini danger" data-clear>Очистити</button></div><div class="m-act1"><button class="m-ic" data-step="-1" aria-label="Попередній рядок" ${store.neighbour(-1) ? '' : 'disabled'}>${icon('prev')}</button><button class="m-ic" data-step="1" aria-label="Наступний рядок" ${store.neighbour(1) ? '' : 'disabled'}>${icon('next')}</button><button class="m-primary" data-send>${icon('check')}<span>${review ? 'Затвердити' : 'Надіслати'}</span></button></div></div>`;
   }
@@ -490,7 +505,47 @@ export async function start(root: HTMLElement): Promise<void> {
     return `<div class="m-empty"><h2>${esc(title)}</h2><p>${esc(text)}</p><button class="m-primary" data-go="${to}">${esc(label)}</button></div>`;
   }
 
+  /* ---------- the card of a glossary term (a tap on the term in the original) ---------- */
+  let termShown: string | null = null;
+  function renderTermCard(): void {
+    let box = document.getElementById('m-tcard');
+    const t0 = termShown ? store.saved.terms.find(y => y.en === termShown) : undefined;
+    const c = store.current;
+    if (!t0 || !c) { box?.remove(); return; }
+    const used = c.entry?.target ? targetHasTerm(c.entry.target, t0.uk, t0.alt) : null;
+    if (!box) { box = document.createElement('aside'); box.id = 'm-tcard'; box.className = 'm-tcard'; box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', 'Термін глосарію'); root.appendChild(box); }
+    box.innerHTML = `<div class="m-tc-r"><span class="m-tc-l">UK</span><div><b>${esc(t0.uk)}</b>${t0.alt?.length ? `<div class="m-tc-a">також: ${t0.alt.map(a => `<i>${esc(a)}</i>`).join('')}</div>` : ''}<div class="m-tc-t">${t0.kind ? `<span class="m-tg k">${esc(t0.kind)}</span>` : ''}<span class="m-tg ${t0.qa === false ? '' : 'ok'}">${t0.qa === false ? 'лише підказка' : 'перевіряється в QA'}</span>${used === null ? '' : used ? '<span class="m-tg ok">є в перекладі</span>' : '<span class="m-tg warn">немає в перекладі</span>'}</div></div></div>
+      <div class="m-tc-r en"><span class="m-tc-l">EN</span><div><b>${esc(t0.en)}</b>${t0.note ? `<div class="m-tc-n">${esc(t0.note)}</div>` : ''}</div></div>
+      <div class="m-tc-x"><button class="m-primary" data-tc="insert">Вставити «${esc(t0.uk)}»</button><button class="m-secondary" data-tc="edit">Змінити</button><button class="m-secondary" data-tc="close">Закрити</button></div>`;
+  }
+  const showTermCard = (en: string): void => { termShown = en; renderTermCard(); };
+
   /* ---------- the hints sheet ---------- */
+  /** Thread with an open answer form; comment being edited; comment waiting for the second tap of a deletion. */
+  let cmReply: string | null = null, cmEdit: string | null = null, cmDel: string | null = null;
+  const diffHtml = (d: DiffSeg[]): string => d.map(s => (s.t === 'same' ? esc(s.text) : s.t === 'add' ? `<ins>${esc(s.text)}</ins>` : `<del>${esc(s.text)}</del>`)).join('');
+  /** The discussion of the open row as threads: answers, closing, editing and deleting one's own comments. */
+  function threadsHtml(e: Entry | undefined): string {
+    const th = threadsOf(e?.comments);
+    if (!th.length) return '<p class="m-none">Коментарів ще немає</p>';
+    const one = (cm: Comment): string => {
+      const id = commentId(cm), mine = cm.who === store.who;
+      const edited = cm.ed && cm.ed > cm.at ? ` · змінено ${fmtTime(cm.ed)}` : '';
+      if (cmEdit === id) return `<div class="m-cmc"><textarea class="m-cmin" id="m-cmedit" rows="3" aria-label="Редагувати коментар">${esc(cm.text)}</textarea><div class="m-cma"><button class="m-mini p" data-cm="save-edit" data-cid="${esc(id)}">Зберегти</button><button class="m-mini ghost" data-cm="cancel">Скасувати</button></div></div>`;
+      return `<div class="m-cmc"><small><b>${esc(cm.who)}</b> · ${fmtTime(cm.at)}${edited}</small><p>${esc(cm.text)}</p>${mine ? `<div class="m-cma"><button class="m-mini ghost" data-cm="edit" data-cid="${esc(id)}">Змінити</button><button class="m-mini ghost ${cmDel === id ? 'danger' : ''}" data-cm="delete" data-cid="${esc(id)}">${cmDel === id ? 'Справді видалити?' : 'Видалити'}</button></div>` : ''}</div>`;
+    };
+    const card = (t: (typeof th)[number]): string => `<div class="m-thr ${t.resolved ? 'closed' : ''}">${one(t.root)}${t.replies.map(one).join('')}
+      ${cmReply === t.id ? `<div class="m-cmc"><textarea class="m-cmin" id="m-cmreply" rows="2" placeholder="Відповісти…" aria-label="Відповідь"></textarea><div class="m-cma"><button class="m-mini p" data-cm="send-reply" data-cid="${esc(t.id)}">Надіслати</button><button class="m-mini ghost" data-cm="cancel">Скасувати</button></div></div>`
+        : `<div class="m-cma foot">${t.resolved ? `<small>розв’язано · ${esc(t.by?.who ?? '')}</small><button class="m-mini ghost" data-cm="reopen" data-cid="${esc(t.id)}">Відкрити знову</button>` : `<button class="m-mini ghost" data-cm="reply" data-cid="${esc(t.id)}">Відповісти</button><button class="m-mini ghost ok" data-cm="resolve" data-cid="${esc(t.id)}">✓ Розв’язати</button>`}</div>`}</div>`;
+    const open = th.filter(x => !x.resolved), closed = th.filter(x => x.resolved);
+    return open.map(card).join('') + (closed.length ? `<details class="m-thr-closed"><summary>Розв’язані · ${closed.length}</summary>${closed.map(card).join('')}</details>` : '');
+  }
+  /** The history of the open row: what changed in each record, and a way back to a version or to what was before it. */
+  function historyHtml(rows: ReturnType<typeof historyRows>): string {
+    if (!rows.length) return '<p class="m-none">Історії ще немає</p>';
+    return `<ol class="m-time">${rows.map(r => `<li class="${r.isCurrent ? 'cur' : ''}"><small>${fmtTime(r.rec.at)} · ${esc(r.rec.who)}${r.isCurrent ? ' · зараз у полі' : ''}</small><span class="m-chipx">${esc(r.rec.what)}</span>${r.rec.text ? `<p class="m-diff">${r.before ? diffHtml(r.diff) : esc(r.rec.text)}</p>` : ''}
+      <div class="m-cma">${r.canRestore ? `<button class="m-mini ghost" data-hv="restore" data-i="${r.index}">Відновити цю версію</button>` : ''}${r.canRestoreBefore ? `<button class="m-mini ghost" data-hv="before" data-i="${r.index}">Було до цього</button>` : ''}</div></li>`).join('')}</ol>`;
+  }
   const fmtTime = (t: number): string => new Date(t).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   /** Words of the original (Multitran) and of the translation (Goroh): each opens its dictionary page in the browser. */
   function dictPanel(source: string, target: string): string {
@@ -515,17 +570,18 @@ export async function start(root: HTMLElement): Promise<void> {
     const c = store.current;
     if (!sheet || !c) { wrap.innerHTML = ''; delete wrap.dataset.open; return; }
     const fresh = wrap.dataset.open !== '1'; wrap.dataset.open = '1';
-    const terms = store.terms(c.unit), tm = store.suggestions(c.unit, c.entry), cm = c.entry?.comments ?? [], hist = [...(c.entry?.history ?? [])].reverse().slice(0, 20);
-    const counts = { terms: terms.length, tm: tm.length, cm: cm.length, hist: hist.length, dict: 0 };
+    const terms = store.terms(c.unit), tm = store.suggestions(c.unit, c.entry), hist = historyRows(c.entry?.history, c.entry?.target ?? '').slice(0, 20);
+    const counts = { terms: terms.length, tm: tm.length, cm: openThreads(c.entry), hist: hist.length, dict: 0 };
     const tabs: ['terms' | 'tm' | 'cm' | 'hist' | 'dict', string][] = [['terms', 'Глосарій'], ['tm', 'Пам’ять'], ['dict', 'Слова'], ['cm', 'Коментарі'], ['hist', 'Історія']];
     const cur = sheetTab ?? (counts.terms ? 'terms' : counts.tm ? 'tm' : counts.cm ? 'cm' : 'terms');
+    if (cur !== 'cm') { cmReply = cmEdit = cmDel = null; }
     const idx = tabs.findIndex(t => t[0] === cur), dir = fresh ? '' : idx > prevTabIdx ? 'from-r' : idx < prevTabIdx ? 'from-l' : '';
     prevTabIdx = idx;
     const panel = cur === 'terms' ? (terms.length ? terms.map((t, i) => `<button class="m-hit" data-term="${i}"><b>${esc(t.en)}</b><span>→ ${esc(t.uk)}${t.alt?.length ? ` · ${esc(t.alt.join(', '))}` : ''}</span></button>`).join('') : '<p class="m-none">У цьому рядку термінів немає</p>') + '<button class="m-mini" data-gadd>Додати термін</button>'
       : cur === 'tm' ? (tm.length ? tm.map((m, i) => `<button class="m-hit" data-tm="${i}"><b class="m-score">${m.score}%</b><span>${esc(m.t)}</span></button>`).join('') : '<p class="m-none">Схожих перекладів немає</p>')
-      : cur === 'cm' ? (cm.length ? cm.map(x => `<div class="m-cmc"><small><b>${esc(x.who)}</b> · ${fmtTime(x.at)}</small><p>${esc(x.text)}</p></div>`).join('') : '<p class="m-none">Коментарів ще немає</p>')
+      : cur === 'cm' ? threadsHtml(c.entry)
       : cur === 'dict' ? dictPanel(c.unit.source, c.entry?.target ?? '')
-      : (hist.length ? `<ol class="m-time">${hist.map(h => `<li><small>${fmtTime(h.at)} · ${esc(h.who)}</small><span class="m-chipx">${esc(h.what)}</span><p>${esc(h.text.slice(0, 200))}</p></li>`).join('')}</ol>` : '<p class="m-none">Історії ще немає</p>');
+      : historyHtml(hist);
     wrap.innerHTML = `<div class="m-scrim ${fresh ? 'in' : ''}" data-close></div><aside class="m-sheet ${fresh ? 'in' : ''} ${cur === 'cm' ? 'tall' : ''}" role="dialog" aria-label="Допомога до рядка">
       <div class="m-stabs" role="tablist">${tabs.map(([k, l]) => `<button role="tab" data-stab="${k}" aria-selected="${k === cur}" class="${k === cur ? 'on' : ''}">${l}${counts[k] ? `<i>${counts[k]}</i>` : ''}</button>`).join('')}<span class="m-stab-ind" id="m-stab-ind"></span></div>
       <div class="m-spanel ${dir}" id="m-spanel">${panel}</div>
@@ -724,6 +780,35 @@ export async function start(root: HTMLElement): Promise<void> {
     }
     if ((x = q('[data-key]'))) { openRow(x.dataset.key!); return; }
     if ((x = q('[data-step]'))) { step(Number(x.dataset.step) as 1 | -1); return; }
+    if ((x = q('[data-cm]'))) {
+      const id = x.dataset.cid ?? '', val = (sel: string): string => (document.querySelector<HTMLTextAreaElement>(sel)?.value ?? '').trim();
+      switch (x.dataset.cm) {
+        case 'reply': cmReply = id; cmEdit = null; renderSheet(); document.getElementById('m-cmreply')?.focus(); return;
+        case 'edit': cmEdit = id; cmReply = null; renderSheet(); document.getElementById('m-cmedit')?.focus(); return;
+        case 'cancel': cmReply = cmEdit = null; renderSheet(); return;
+        case 'send-reply': { const text = val('#m-cmreply'); if (!text) { say('Напишіть відповідь', true); return; } cmReply = null; store.reply(id, text); buzz(8); renderSheet(); renderChrome(); return; }
+        case 'save-edit': { const text = val('#m-cmedit'); if (!text) { say('Коментар не може бути порожнім. Щоб прибрати його, натисніть «Видалити»', true); return; } cmEdit = null; store.editComment(id, text); renderSheet(); return; }
+        case 'delete': if (cmDel !== id) { cmDel = id; renderSheet(); setTimeout(() => { if (cmDel === id) { cmDel = null; renderSheet(); } }, 4000); return; } cmDel = null; store.deleteComment(id); buzz(8); renderSheet(); renderChrome(); return;
+        case 'resolve': case 'reopen': store.resolve(id, x.dataset.cm === 'resolve'); buzz(8); renderSheet(); renderChrome(); return;
+      }
+      return;
+    }
+    if ((x = q('[data-hv]'))) {
+      const c = store.current; if (!c) return;
+      const r = historyRows(c.entry?.history, c.entry?.target ?? '').find(y => y.index === Number(x!.dataset.i));
+      const text = r ? (x.dataset.hv === 'before' ? r.before : r.rec.text) : '';
+      if (!r || !text) return;
+      store.restore(text, restoreNote(r.rec, x.dataset.hv === 'before' ? 'before' : 'text', fmtTime(r.rec.at)));
+      say('Текст відновлено. Повернути попередній можна тут же, в історії'); buzz(10); render(); return;
+    }
+    if ((x = q('.th[data-term]'))) { showTermCard(x.dataset.term!); return; }
+    if ((x = q('[data-tc]'))) {
+      const t0 = store.saved.terms.find(y => y.en === termShown);
+      if (x.dataset.tc === 'insert' && t0) insert(t0.uk);
+      else if (x.dataset.tc === 'edit' && t0) { Object.assign(gl, { en: t0.en, uk: t0.uk, alt: (t0.alt ?? []).join(', '), qa: t0.qa !== false, edit: true }); sub = 'glossary'; termShown = null; render(); return; }
+      termShown = null; renderTermCard(); return;
+    }
+    if (termShown && !q('#m-tcard')) { termShown = null; renderTermCard(); }
     if (q('[data-send]')) {
       const why = store.send();
       if (why) { say(why, true); buzz(30); return; }

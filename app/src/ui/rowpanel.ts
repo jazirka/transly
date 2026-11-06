@@ -13,18 +13,18 @@ import type { Ctx } from './state';
  * the editor alike. There is no separate "review" mode: a translation is approved here.
  */
 
-const SECTIONS: { id: 'tr' | 'sg' | 'tm' | 'cm'; title: string }[] = [
-  { id: 'tr', title: 'Переклад: українська' },
-  { id: 'sg', title: 'Автоматизовані пропозиції' },
-  { id: 'tm', title: 'Терміни й назви з гри' },
-  { id: 'cm', title: 'Обговорення' },
-];
+/** One section: a folding header and its body (the ids are written out so a test can find them). */
+const sec = (id: string, title: string, body: string, extra = ''): string => `<section class="pn-sec" data-sec="${id}"><button class="pn-h" type="button" data-pn="${id}" aria-expanded="true"><span class="pn-c" aria-hidden="true">▾</span><span>${title}</span>${extra}</button>${body}</section>`;
 
 /** Static markup of the panel (the discussion keeps its own field so what is typed in it survives redraws). */
-export const ROW_PANEL_HTML = SECTIONS.map(s => `<section class="pn-sec" data-sec="${s.id}"><button class="pn-h" type="button" data-pn="${s.id}" aria-expanded="true"><span class="pn-c" aria-hidden="true">▾</span><span>${s.title}</span>${s.id === 'cm' ? '<span class="cnt" id="pn-cm-n" hidden>0</span>' : ''}</button>
-  <div class="pn-b" id="pn-${s.id}">${s.id === 'cm' ? `<div id="cm-list" class="cm-list"></div>
+export const ROW_PANEL_HTML = [
+  sec('tr', 'Переклад: українська', '<div class="pn-b" id="pn-tr"></div>'),
+  sec('sg', 'Автоматизовані пропозиції', '<div class="pn-b" id="pn-sg"></div>'),
+  sec('tm', 'Терміни й назви з гри', '<div class="pn-b" id="pn-tm"></div>'),
+  sec('cm', 'Обговорення', `<div class="pn-b" id="pn-cm"><div id="cm-list" class="cm-list"></div>
     <div class="cm-new"><textarea class="cmin" id="cm-in" placeholder="Нове обговорення цього рядка…" aria-label="Новий коментар"></textarea>
-    <div class="actions" style="margin-top:0"><button class="btn" id="cm-add">Коментувати</button><span class="hint">Ctrl+Enter</span></div></div>` : ''}</div></section>`).join('');
+    <div class="actions" style="margin-top:0"><button class="btn" id="cm-add">Коментувати</button><span class="hint">Ctrl+Enter</span></div></div></div>`, '<span class="cnt" id="pn-cm-n" hidden>0</span>'),
+].join('');
 
 /** Sections the translator folded. */
 const folded = new Set<string>();

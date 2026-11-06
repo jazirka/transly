@@ -5,7 +5,7 @@ import type { Autosave, DupIndex, Entry, FileView, GameFile, SavedProject, Statu
 export type Mode = 'table' | 'edit' | 'review';
 export type Filter = 'all' | 'new' | 'draft' | 'done' | 'appr' | 'qa' | 'cm';
 export type SideTab = 'hints' | 'similar' | 'comments' | 'history';
-export type LeftTab = 'files' | 'rows' | 'glossary';
+export type LeftTab = 'files' | 'rows' | 'glossary' | 'scenes';
 export type LenFilter = 'all' | 'far' | 'longer' | 'shorter';
 /** Order of the rows list: as in the file, untranslated first, problems first, longest first. */
 export type SortMode = 'order' | 'new' | 'qa' | 'long';

@@ -152,3 +152,18 @@
 
 /* "Return to the translator" is a paper plane flying back. */
 #b-return svg{transform:scaleX(-1)}
+
+/* ----- the scenes section of the left panel ----- */
+.scpanel{display:flex;flex-direction:column;min-height:0}
+.scpanel[hidden]{display:none}
+.scpanel .fh{padding:8px;display:flex;flex-direction:column;gap:6px;border-bottom:1px solid var(--line)}
+#sc-list{overflow:auto;min-height:0;flex:1;padding:6px 0}
+.sc-item{display:grid;grid-template-columns:12px minmax(0,1fr) auto 34px;gap:8px;align-items:center;width:100%;text-align:left;border:0;background:none;color:var(--text);padding:7px 12px;font:inherit;font-size:13px;cursor:pointer;border-left:3px solid transparent}
+.sc-item:hover{background:rgba(255,255,255,.05)}
+.sc-item.cur{background:var(--sel);border-left-color:var(--accent)}
+.sc-item:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.sc-item .sc-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sc-item .sc-n{font:11px var(--mono);color:var(--mute)}
+.sc-item .mini{width:34px;height:4px;border-radius:var(--r1);background:#3d4045;overflow:hidden}
+.sc-item .mini i{display:block;height:100%;background:var(--info)}
+.sc-item .mini i.f{background:var(--ok)}

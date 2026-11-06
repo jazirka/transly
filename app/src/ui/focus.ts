@@ -155,7 +155,7 @@ let sameRows: { file: string; key: string }[] = [];
 
 const sceneCache = new WeakMap<object, SceneIndex | null>();
 /** The scenes of a file, worked out once for as long as the file's rows are the same. */
-function scenesOf(units: Unit[]): SceneIndex | null {
+export function scenesOf(units: Unit[]): SceneIndex | null {
   let s = sceneCache.get(units);
   if (s === undefined) { s = buildSceneIndex(units); sceneCache.set(units, s); }
   return s;

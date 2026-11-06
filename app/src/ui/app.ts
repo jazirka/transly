@@ -7,6 +7,7 @@ import type { FolderState } from './folder-service';
 import { $, el, esc, plural, toast } from './dom';
 import { FOCUS_HTML, SIDE_HTML, focusClick, focusInput, insertOriginal, renderFocus, renderSidePanel, send, showSide, sideClick, step } from './focus';
 import { wireDiscuss } from './discuss';
+import { SCENES_HTML, renderScenesPanel, scenesClick, wireScenes } from './scenes-panel';
 import { GLOSSARY_HTML, glossaryClick, renderGlossaryPanel, showTerm, wireGlossary } from './glossary-panel';
 import { pickGameFolder, readFiles, reopenHandle } from './folder';
 import type { DirHandle, PickedFile } from './folder';
@@ -48,6 +49,7 @@ const SVG = {
   build: '<svg viewBox="0 0 16 16"><path d="M2.5 9l2-4.5h7L13.5 9v3h-11z"/><circle cx="5.5" cy="12" r="1"/><circle cx="10.5" cy="12" r="1"/></svg>',
   panelL: '<svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M6 3v10"/></svg>',
   panelR: '<svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M10 3v10"/></svg>',
+  scene: '<svg viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="6" rx="1.5"/><rect x="2.5" y="11" width="7" height="2.5" rx="1"/></svg>',
   book: '<svg viewBox="0 0 16 16"><path d="M3.5 2.5h8a1 1 0 0 1 1 1v10H4.5a1 1 0 0 1-1-1z"/><path d="M6 5.5h4"/></svg>',
   cmt: '<svg class="cmi" viewBox="0 0 16 16" aria-label="Є відкриті обговорення"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>',
   cmtDone: '<svg class="cmi done" viewBox="0 0 16 16" aria-label="Обговорення розв’язані"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/><path d="M5.8 7l1.5 1.5L10.3 5.6"/></svg>',
@@ -93,10 +95,12 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
       <hr class="ssep">
       <button data-lp="rows" title="Рядки файлу" aria-label="Рядки файлу">${SVG.rows}</button>
       <hr class="ssep">
+      <button data-lp="scenes" title="Сцени файлу" aria-label="Сцени файлу">${SVG.scene}</button>
+      <hr class="ssep">
       <button data-lp="glossary" title="Глосарій проєкту" aria-label="Глосарій проєкту">${SVG.book}</button>
     </nav>
     <aside class="tree" id="lpanel" aria-label="Бічна панель: файли й рядки">
-      <div class="mtabs" id="mtabs" role="group" aria-label="Бічна панель"><button data-lt="files">Файли</button><button data-lt="rows">Рядки</button><button data-lt="glossary">Глосарій</button><button class="ab-ic" id="mt-open" aria-label="Відкрити файли або вставити JSON" title="Відкрити файли або вставити JSON">${SVG.import}</button><button class="ab-ic" id="mt-search" aria-label="Пошук скрізь">${SVG.searchBig}</button></div>
+      <div class="mtabs" id="mtabs" role="group" aria-label="Бічна панель"><button data-lt="files">Файли</button><button data-lt="rows">Рядки</button><button data-lt="scenes">Сцени</button><button data-lt="glossary">Глосарій</button><button class="ab-ic" id="mt-open" aria-label="Відкрити файли або вставити JSON" title="Відкрити файли або вставити JSON">${SVG.import}</button><button class="ab-ic" id="mt-search" aria-label="Пошук скрізь">${SVG.searchBig}</button></div>
       <div class="ph"><span class="grow" id="lp-title">Файли гри</span><button class="ico ico-btn" id="lp-search" type="button" aria-label="Знайти скрізь (Ctrl+K)" title="Знайти скрізь (Ctrl+K або двічі Shift)">${SVG.search}</button><span class="ico" id="lp-close" title="Сховати панель" role="button" aria-label="Сховати панель">—</span></div>
       <div class="treebody" id="tree"><div class="ph card-ph" data-card="files"><span class="grow">Файли гри</span><span class="ico" data-hide-left="files" role="button" tabindex="0" aria-label="Сховати панель «Файли гри»" title="Сховати">—</span></div><div class="tree-q"><div class="fin">${SVG.search}<input class="qin" id="fq" placeholder="Пошук у файлах гри" aria-label="Пошук у файлах гри" autocomplete="off" spellcheck="false"></div></div><div class="tree-act" id="tree-act"></div><div id="tree-list"></div></div>
       <div class="rz rz-y" id="rz-y" role="separator" aria-orientation="horizontal" aria-label="Розділ між файлами й рядками" aria-valuemin="15" aria-valuemax="85" tabindex="0" title="Потягніть, щоб змінити співвідношення (подвійний клік — навпіл)" hidden></div>
@@ -105,6 +109,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
         <div class="fh"><div class="fin">${SVG.search}<input class="qin" id="q2" placeholder="Пошук рядків" aria-label="Пошук рядків"></div><div class="chips2"><button class="chip" id="sortbtn" aria-haspopup="menu">↕ За порядком</button><span class="chipsHost" id="chips2"></span></div></div>
         <div class="sl-body" id="slist"></div>
       </div>
+      ${SCENES_HTML}
       ${GLOSSARY_HTML}
     </aside>
     <div class="rz rz-x" id="rz-x" role="separator" aria-orientation="vertical" aria-label="Ширина бічної панелі" aria-valuemin="200" aria-valuemax="640" tabindex="0" title="Потягніть, щоб змінити ширину (подвійний клік — стандартна)"></div>
@@ -342,7 +347,7 @@ export async function start(root: HTMLElement): Promise<void> {
   }
 
   /* ---------- rendering ---------- */
-  const lp = (): 'files' | 'rows' | 'glossary' | null => (s.leftOpen ? s.leftTab[s.mode] : null);
+  const lp = (): 'files' | 'rows' | 'glossary' | 'scenes' | null => (s.leftOpen ? s.leftTab[s.mode] : null);
 
   function renderLayout(): void {
     const ide = $('#ide');
@@ -355,7 +360,8 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#tree').hidden = !both && l !== 'files';
     $('#lp-rows').hidden = !both && l !== 'rows';
     $('#lp-gl').hidden = l !== 'glossary';
-    $('#lp-title').textContent = both ? 'Файли й рядки' : l === 'rows' ? `Рядки · ${currentLabel()}` : l === 'glossary' ? 'Глосарій' : 'Файли гри';
+    $('#lp-sc').hidden = l !== 'scenes';
+    $('#lp-title').textContent = both ? 'Файли й рядки' : l === 'rows' ? `Рядки · ${currentLabel()}` : l === 'glossary' ? 'Глосарій' : l === 'scenes' ? `Сцени · ${currentLabel()}` : 'Файли гри';
     document.querySelectorAll<HTMLElement>('#mtabs [data-lt]').forEach(b => { const on = b.dataset.lt === s.leftTab[s.mode]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
     document.querySelectorAll<HTMLElement>('#seg [data-m]').forEach(b => { const on = b.dataset.m === s.mode || (s.mode === 'review' && b.dataset.m === 'edit'); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
     const here = s.rightOpen ? 'help' : s.leftOpen ? s.leftTab[s.mode] : s.mode === 'table' ? 'rows' : 'edit';
@@ -617,6 +623,7 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#v-focus').style.display = '';
     if (lp() === 'rows' || s.leftBoth || s.mode !== 'table') renderRowsList();
     if (lp() === 'glossary') renderGlossaryPanel(ctx);
+    if (lp() === 'scenes') renderScenesPanel(ctx);
     if (s.mode === 'table') renderTable(); else renderFocus(ctx, isDesktop());
     renderSidePanel(ctx);
     renderStatus();
@@ -1175,16 +1182,17 @@ export async function start(root: HTMLElement): Promise<void> {
     if (pmi) { const [g, i] = pmi.dataset.pmi!.split('|'); closePops(); const it = MENUS[g!]?.[Number(i)]; if (it && it !== '-') it.fn(); return; }
     if (t.closest('#ab-stage')) { setMode(s.mode === 'review' ? 'edit' : 'review'); return; }
     const lt = t.closest<HTMLElement>('#mtabs [data-lt]');
-    if (lt) { s.leftTab[s.mode] = lt.dataset.lt === 'rows' ? 'rows' : lt.dataset.lt === 'glossary' ? 'glossary' : 'files'; renderAll(); return; }
+    if (lt) { s.leftTab[s.mode] = lt.dataset.lt === 'rows' ? 'rows' : lt.dataset.lt === 'glossary' ? 'glossary' : lt.dataset.lt === 'scenes' ? 'scenes' : 'files'; renderAll(); return; }
     const hl = t.closest<HTMLElement>('[data-hide-left]');
-    if (hl) { if (hl.dataset.hideLeft === 'glossary') s.leftOpen = false; else { s.leftBoth = false; s.leftTab[s.mode] = hl.dataset.hideLeft === 'files' ? 'rows' : 'files'; } renderAll(); return; }
+    if (hl) { if (hl.dataset.hideLeft === 'glossary' || hl.dataset.hideLeft === 'scenes') s.leftOpen = false; else { s.leftBoth = false; s.leftTab[s.mode] = hl.dataset.hideLeft === 'files' ? 'rows' : 'files'; } renderAll(); return; }
     const sb = t.closest<HTMLElement>('#strip [data-lp]');
     if (sb) {
       // Each button switches its own panel on or off; both on = the zone is split between them.
-      const want = sb.dataset.lp === 'rows' ? 'rows' : sb.dataset.lp === 'glossary' ? 'glossary' : 'files', other = want === 'rows' ? 'files' : 'rows';
+      const want = sb.dataset.lp === 'rows' ? 'rows' : sb.dataset.lp === 'glossary' ? 'glossary' : sb.dataset.lp === 'scenes' ? 'scenes' : 'files', other = want === 'rows' ? 'files' : 'rows';
       const cur = s.leftTab[s.mode];
-      // The glossary is a panel of its own: it takes the whole zone and never shares it with files or rows.
-      if (want === 'glossary' || cur === 'glossary') { if (s.leftOpen && cur === want) s.leftOpen = false; else { s.leftOpen = true; s.leftTab[s.mode] = want; } s.leftBoth = false; }
+      // The glossary and the scenes are panels of their own: they take the whole zone and never share it with files or rows.
+      const own = (x: string): boolean => x === 'glossary' || x === 'scenes';
+      if (own(want) || own(cur)) { if (s.leftOpen && cur === want) s.leftOpen = false; else { s.leftOpen = true; s.leftTab[s.mode] = want; } s.leftBoth = false; }
       else if (s.phone) { if (s.leftOpen && cur === want) s.leftOpen = false; else { s.leftOpen = true; s.leftTab[s.mode] = want; } s.leftBoth = false; }
       else if (!s.leftOpen) { s.leftOpen = true; s.leftBoth = false; s.leftTab[s.mode] = want; }
       else if (s.leftBoth) { s.leftBoth = false; s.leftTab[s.mode] = other; }
@@ -1246,7 +1254,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.id === 'sd') { closeSearch(); return; }
     const si = t.closest<HTMLElement>('.si[data-key]');
     if (si) { if (s.phone) { s.leftOpen = false; } ctx.select(si.dataset.key!, s.mode === 'table' ? 'edit' : undefined); return; }
-    if (glossaryClick(ctx, t)) return;
+    if (glossaryClick(ctx, t) || scenesClick(ctx, t)) return;
     if (sideClick(ctx, t)) return;
     if (s.mode !== 'table' && focusClick(ctx, t)) return;
     if (s.mode === 'table') {
@@ -1399,6 +1407,7 @@ export async function start(root: HTMLElement): Promise<void> {
   restoreUi();
   wireDiscuss(ctx);
   wireGlossary(ctx);
+  wireScenes(ctx);
   initMobile(ctx);
   initResize();
   initRightResize();

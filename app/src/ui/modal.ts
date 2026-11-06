@@ -32,11 +32,17 @@ function refresh(): void {
 export function showDialog(dlg: HTMLDialogElement): void {
   dlg.dataset.app = '1';
   dlg.setAttribute('aria-modal', 'true');
+  const from = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   // In the capture phase, so the app is live again before the dialog's other `close` handlers give focus back to the opener.
   dlg.addEventListener('close', () => {
     const i = stack.indexOf(dlg);
     if (i >= 0) stack.splice(i, 1);
     refresh();
+    // The focus goes back to the control that opened the dialog, unless something else has taken it meanwhile.
+    setTimeout(() => {
+      const at = document.activeElement;
+      if (from && from !== document.body && from.isConnected && from.getClientRects().length > 0 && (!at || at === document.body || dlg.contains(at))) from.focus({ preventScroll: true });
+    }, 0);
   }, { once: true, capture: true });
   stack.push(dlg);
   refresh();

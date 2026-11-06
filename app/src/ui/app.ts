@@ -6,6 +6,7 @@ import { dataDirOf, forgetGameDir, isDesktop, rememberedGameDir, reopenGameDir, 
 import { classifyFolder, folderBanner, folderLine } from './folder-service';
 import type { FolderState } from './folder-service';
 import { $, el, esc, plural, toast } from './dom';
+import { focusFirst, menuKeys, rememberOpener, restoreOpener, roveTree, setUnavailable, treeKeys } from './keynav';
 import { FOCUS_HTML, SIDE_HTML, qaClick, focusClick, focusInput, insertText, renderFocus, renderSidePanel, send, sideClick, step } from './focus';
 import { wireDiscuss } from './discuss';
 import { wireTermCard } from './termcard';
@@ -71,19 +72,19 @@ const FORMAT_LABEL: Record<string, string> = { json: 'RPG Maker MV · UTF-8', po
 
 const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide">
   <header class="topbar">
-    <div class="logo">T</div>
+    <div class="logo" aria-hidden="true">T</div>
     <button class="tb-ic" id="hamb" title="Головне меню" aria-haspopup="menu" aria-expanded="false">${SVG.menu}</button>
     <nav class="menubar" id="menubar" role="menubar" aria-label="Головне меню" hidden></nav>
-    <button class="tpill" id="proj-btn" aria-haspopup="menu" aria-expanded="false" title="Проєкт: відкрити іншу гру, налаштування"><span class="pj" id="proj-av">T</span><span id="proj-name">Проєкт</span><span class="dd">▾</span></button>
+    <button class="tpill" id="proj-btn" aria-haspopup="menu" aria-expanded="false" title="Проєкт: відкрити іншу гру, налаштування"><span class="pj" id="proj-av" aria-hidden="true">T</span><span id="proj-name">Проєкт</span><span class="dd" aria-hidden="true">▾</span></button>
     <div class="seg" id="seg" role="group" aria-label="Режим">
       <button aria-pressed="true" data-m="table" class="on"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM2.5 7h11M6.5 3.5v9"/></svg>Таблиця</button>
       <button aria-pressed="false" data-m="edit"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM6 3.5v9M6 8h7.5"/></svg>Редагування</button>
       <button aria-pressed="false" data-m="scene" id="m-scene"><svg viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="6" rx="1.5"/><rect x="2.5" y="11" width="7" height="2.5" rx="1"/></svg>Сцена</button>
     </div>
     <div class="grow"></div>
-    <div class="prog" id="pg" title=""><div class="bar"><i class="a" id="pg-a"></i><i class="b" id="pg-b"></i><i class="c" id="pg-c"></i></div><span id="pg-txt" style="font-family:var(--mono);font-size:11.5px"></span></div>
+    <div class="prog" id="pg" title="" role="progressbar" aria-label="Прогрес перекладу" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="bar"><i class="a" id="pg-a"></i><i class="b" id="pg-b"></i><i class="c" id="pg-c"></i></div><span id="pg-txt" style="font-family:var(--mono);font-size:11.5px"></span></div>
     <div class="tsep"></div>
-    <button class="tpill run" id="cfg-btn" aria-haspopup="menu" aria-expanded="false" title="Що запускає кнопка ▶">${SVG.build}<span id="cfg-name">Збірка (файл)</span><span class="dd">▾</span></button>
+    <button class="tpill run" id="cfg-btn" aria-haspopup="menu" aria-expanded="false" title="Що запускає кнопка ▶">${SVG.build}<span id="cfg-name">Збірка (файл)</span><span class="dd" aria-hidden="true">▾</span></button>
     <button class="tb-ic play" id="run-btn" title="Запустити (F5)" aria-label="Запустити">${SVG.play}</button>
     <div class="tsep"></div>
     <button class="tb-ic" id="hk" title="Гарячі клавіші" aria-label="Гарячі клавіші">${SVG.keys}</button>
@@ -108,7 +109,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     <aside class="tree" id="lpanel" aria-label="Бічна панель: файли й рядки">
       <div class="mtabs" id="mtabs" role="group" aria-label="Бічна панель"><button data-lt="files">Файли</button><button data-lt="rows">Рядки</button><button data-lt="scenes">Сцени</button><button data-lt="glossary">Глосарій</button><button class="ab-ic" id="mt-open" aria-label="Відкрити файли або вставити JSON" title="Відкрити файли або вставити JSON">${SVG.import}</button><button class="ab-ic" id="mt-search" aria-label="Пошук скрізь">${SVG.searchBig}</button></div>
       <div class="ph"><span class="grow" id="lp-title">Файли гри</span><button class="ico ico-btn" id="lp-search" type="button" aria-label="Знайти скрізь (Ctrl+K)" title="Знайти скрізь (Ctrl+K або двічі Shift)">${SVG.search}</button><span class="ico" id="lp-close" title="Сховати панель" role="button" aria-label="Сховати панель">—</span></div>
-      <div class="treebody" id="tree"><div class="ph card-ph" data-card="files"><span class="grow">Файли гри</span><span class="ico" data-hide-left="files" role="button" tabindex="0" aria-label="Сховати панель «Файли гри»" title="Сховати">—</span></div><div class="tree-q"><div class="fin">${SVG.search}<input class="qin" id="fq" placeholder="Пошук у файлах гри" aria-label="Пошук у файлах гри" autocomplete="off" spellcheck="false"></div></div><div class="tree-act" id="tree-act"></div>${GROUPS_HTML}<div id="tree-list"></div></div>
+      <div class="treebody" id="tree"><div class="ph card-ph" data-card="files"><span class="grow">Файли гри</span><span class="ico" data-hide-left="files" role="button" tabindex="0" aria-label="Сховати панель «Файли гри»" title="Сховати">—</span></div><div class="tree-q"><div class="fin">${SVG.search}<input class="qin" id="fq" placeholder="Пошук у файлах гри" aria-label="Пошук у файлах гри" autocomplete="off" spellcheck="false"></div></div><div class="tree-act" id="tree-act"></div>${GROUPS_HTML}<div id="tree-list" role="tree" aria-label="Файли гри"></div></div>
       <div class="rz rz-y" id="rz-y" role="separator" aria-orientation="horizontal" aria-label="Розділ між файлами й рядками" aria-valuemin="15" aria-valuemax="85" tabindex="0" title="Потягніть, щоб змінити співвідношення (подвійний клік — навпіл)" hidden></div>
       <div class="slist" id="lp-rows" hidden>
         <div class="ph card-ph" data-card="rows"><span class="grow">Рядки файлу</span><span class="ico" data-hide-left="rows" role="button" tabindex="0" aria-label="Сховати панель «Рядки файлу»" title="Сховати">—</span></div>
@@ -150,9 +151,10 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
   <div class="kr"><span>Відкрити рядок у редагуванні</span><kbd>Enter</kbd><kbd>2× клік</kbd></div>
   <div class="kr"><span>Наступний / попередній рядок</span><kbd>↓</kbd><kbd>↑</kbd></div>
   <div class="kr"><span>У редагуванні: наступний / попередній у списку</span><kbd>Alt</kbd><kbd>↓</kbd></div>
-  <div class="kr"><span>У редагуванні: вставити оригінал у переклад</span><kbd>Alt</kbd><kbd>O</kbd></div>
   <div class="kr"><span>Надіслати й далі</span><kbd>Ctrl</kbd><kbd>Enter</kbd></div>
-  <div class="kr"><span>Змінити переклад у комірці таблиці</span><kbd>2× клік</kbd></div>
+  <div class="kr"><span>Змінити переклад у комірці таблиці</span><kbd>F2</kbd><kbd>2× клік</kbd></div>
+  <div class="kr"><span>У комірці: зберегти й до наступного рядка</span><kbd>Enter</kbd><kbd>Tab</kbd></div>
+  <div class="kr"><span>У комірці: новий рядок тексту</span><kbd>⇧</kbd><kbd>Enter</kbd></div>
   <div class="kr"><span>Запустити вибрану збірку (файл або гра)</span><kbd>F5</kbd></div>
   <div class="kr"><span>Знайти скрізь</span><kbd>Ctrl</kbd><kbd>K</kbd><kbd>⇧</kbd><kbd>⇧</kbd></div>
   <div class="kr"><span>Закрити вікно чи меню</span><kbd>Esc</kbd></div>
@@ -433,6 +435,8 @@ export async function start(root: HTMLElement): Promise<void> {
   function renderTree(): void {
     renderGroupsBlock(ctx);
     const box = $('#tree-list');
+    const had = box.contains(document.activeElement) ? (document.activeElement as HTMLElement) : null;
+    const hadId = had ? { file: had.dataset.file, dir: had.dataset.dir } : null;
     $('#tree-act').innerHTML = s.views.length > 1 ? `<button class="btn" data-act="group-all" title="Усі рядки всіх файлів в одній таблиці">Усі файли разом</button>${s.picked.size ? `<button class="btn p" data-act="group-picked">Відкрити вибрані (${s.picked.size})</button><button class="btn" id="tree-grp" aria-haspopup="menu" title="Додати вибрані файли до групи">У групу ▾</button><button class="btn" data-act="group-clear" title="Зняти позначки">✕</button>` : '<span class="hint">Ctrl+клік по файлах, щоб відкрити їх разом</span>'}` : '';
     if (!s.views.length) { box.innerHTML = '<div class="msg-empty">Папку гри ще не відкрито</div>'; return; }
     let skip: number | null = null;
@@ -454,15 +458,19 @@ export async function start(root: HTMLElement): Promise<void> {
       if (n.t === 'd') {
         const c = !q && s.collapsed.has(n.name);
         if (c) skip = n.d;
-        return `<div class="node dir" style="--d:${n.d}" data-dir="${esc(n.name)}" role="button" tabindex="0" aria-expanded="${!c}"><span class="chev">${c ? '▸' : '▾'}</span><span class="ic dir">▤</span><span class="nm">${esc(n.label)}</span></div>`;
+        return `<div class="node dir" style="--d:${n.d}" data-dir="${esc(n.name)}" role="treeitem" tabindex="-1" aria-level="${n.d + 1}" aria-expanded="${!c}"><span class="chev">${c ? '▸' : '▾'}</span><span class="ic dir">▤</span><span class="nm">${esc(n.label)}</span></div>`;
       }
       const v = s.views.find(x => x.name === n.name)!;
       const st = statsOf(v.units, s.saved.files[v.name] ?? {});
       const pc = Math.round(100 * st.approved / st.total);
       const [ic, lab] = fileIcon(n.name);
       const cur = n.name === s.current;
-      return `<div class="node ${cur ? 'cur' : ''} ${s.picked.has(n.name) ? 'pick' : ''} ${!pc && !st.translated ? 'idle' : ''}" style="--d:${n.d}" data-file="${esc(n.name)}" draggable="true" role="button" tabindex="0" title="${cur ? 'Відкрито · ' : ''}${v.label ? esc(v.label) + ' · ' : ''}Вичитано ${pc}% · перекладено ${Math.round(100 * st.translated / st.total)}%"><span class="chev"></span><span class="ic ${ic}">${lab}</span><span class="nm">${fileGroupDot(n.name)}${v.label ? `${esc(v.label)}<span class="lc">${esc(n.label.replace(/\.json$/, ''))}</span>` : esc(n.label)}</span><span class="mini"><i class="${pc === 100 ? 'f' : ''}" style="width:${Math.max(pc, Math.round(100 * st.translated / st.total))}%"></i></span><span class="pc ${pc === 100 ? 'full' : ''}">${pc}%</span></div>`;
+      return `<div class="node ${cur ? 'cur' : ''} ${s.picked.has(n.name) ? 'pick' : ''} ${!pc && !st.translated ? 'idle' : ''}" style="--d:${n.d}" data-file="${esc(n.name)}" draggable="true" role="treeitem" tabindex="-1" aria-level="${n.d + 1}" aria-selected="${cur}" title="${cur ? 'Відкрито · ' : ''}${v.label ? esc(v.label) + ' · ' : ''}Вичитано ${pc}% · перекладено ${Math.round(100 * st.translated / st.total)}%"><span class="chev"></span><span class="ic ${ic}">${lab}</span><span class="nm">${fileGroupDot(n.name)}${v.label ? `${esc(v.label)}<span class="lc">${esc(n.label.replace(/\.json$/, ''))}</span>` : esc(n.label)}</span><span class="mini"><i class="${pc === 100 ? 'f' : ''}" style="width:${Math.max(pc, Math.round(100 * st.translated / st.total))}%"></i></span><span class="pc ${pc === 100 ? 'full' : ''}">${pc}%</span></div>`;
     }).join('');
+    // One tab stop for the whole tree; the node that had the focus keeps it after the redraw.
+    const mine = hadId ? [...box.querySelectorAll<HTMLElement>('.node')].find(n => hadId.file ? n.dataset.file === hadId.file : n.dataset.dir === hadId.dir) : undefined;
+    roveTree(box, mine);
+    if (mine) mine.focus({ preventScroll: true });
   }
 
   function chipsHtml(): string {
@@ -592,15 +600,17 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#pg-b').style.width = total ? `${(100 * D) / total}%` : '0';
     $('#pg-c').style.width = total ? `${(100 * W) / total}%` : '0';
     $('#pg-txt').textContent = total ? `Перекладено ${Math.floor((100 * (A + D + W)) / total)}% (${(A + D + W).toLocaleString('uk-UA')} з ${total.toLocaleString('uk-UA')}) · вичитано ${Math.floor((100 * A) / total)}%` : 'Папку гри не відкрито';
+    $('#pg').setAttribute('aria-valuenow', String(total ? Math.floor((100 * (A + D + W)) / total) : 0));
+    $('#pg').setAttribute('aria-valuetext', $('#pg-txt').textContent ?? '');
     $('#pg').title = total ? `Вичитано ${Math.round((100 * A) / total)}% · Надіслано ${Math.round((100 * D) / total)}% · Чернетки ${Math.round((100 * W) / total)}% · Решта без перекладу` : '';
     const sy = loadSyncConfig();
     const lastSync = Math.max(sy.last, loadGithubConfig().last, loadClaudeConfig().last);
     $('#sb-sync').hidden = !lastSync; $('#sb-build').hidden = !s.lastBuild;
     $('#sb-sync').textContent = lastSync ? 'Синхр.: ' + new Date(lastSync).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }) : 'Синхр.: ще не було';
     $('#sb-build').textContent = s.lastBuild ? `Збірка: ${new Date(s.lastBuild.at).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })} · ${s.lastBuild.n} рядків` : 'Збірки ще не було';
-    ($('#cfg-btn') as HTMLButtonElement).disabled = !s.views.length;
     renderRunCfg();
-    ($('#run-btn') as HTMLButtonElement).disabled = !s.views.length;
+    setUnavailable($('#cfg-btn'), !s.views.length, 'Спершу відкрийте гру', 'Що запускає кнопка ▶');
+    setUnavailable($('#run-btn'), !s.views.length, 'Спершу відкрийте гру', `Запустити «${CFG[runCfg].name}» (F5)`);
   }
 
   function renderStatus(): void {
@@ -655,7 +665,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (lp() === 'rows' || s.leftBoth || s.mode === 'edit') renderRowsList();
     if (lp() === 'glossary') renderGlossaryPanel(ctx);
     if (lp() === 'scenes') renderScenesPanel(ctx);
-    ($('#m-scene') as HTMLButtonElement).disabled = !hasScenes(ctx);
+    setUnavailable($('#m-scene'), !hasScenes(ctx), 'У цьому файлі немає сцен: режим «Сцена» працює для файлів із подіями гри', 'Усі репліки сцени поспіль, з перекладом на місці');
     if (s.mode === 'table') renderTable(); else if (s.mode === 'scene') renderSceneView(ctx); else renderFocus(ctx, isDesktop());
     renderSidePanel(ctx);
     renderStatus();
@@ -926,6 +936,7 @@ export async function start(root: HTMLElement): Promise<void> {
   function renderRunCfg(): void {
     if (runCfg === 'game' && !isDesktop()) runCfg = 'file';
     $('#cfg-name').textContent = CFG[runCfg].name;
+    $('#cfg-btn').setAttribute('aria-label', `Що запускає кнопка ▶: ${CFG[runCfg].name}`);
     $('#run-btn').title = `Запустити «${CFG[runCfg].name}» (F5)`;
     $('#run-btn').setAttribute('aria-label', `Запустити «${CFG[runCfg].name}»`);
   }
@@ -938,7 +949,7 @@ export async function start(root: HTMLElement): Promise<void> {
     }).join('') + `<hr><button role="menuitem" data-cfg-edit><span class="cfg-t">Налаштувати збірку…</span></button>`;
     const r = btn.getBoundingClientRect();
     pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 300))}px`; pop.style.top = `${r.bottom + 6}px`;
-    pop.hidden = false; btn.setAttribute('aria-expanded', 'true');
+    rememberOpener(btn); pop.hidden = false; btn.setAttribute('aria-expanded', 'true'); focusFirst(pop);
   }
   function openProjMenu(): void {
     const pop = $('#projpop'), btn = $('#proj-btn');
@@ -953,12 +964,14 @@ export async function start(root: HTMLElement): Promise<void> {
       <hr><button role="menuitem" data-pj="settings"><span class="cfg-t">Налаштування проєкту…</span></button>`;
     const r = btn.getBoundingClientRect();
     pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 340))}px`; pop.style.top = `${r.bottom + 6}px`;
-    pop.hidden = false; btn.setAttribute('aria-expanded', 'true');
+    rememberOpener(btn); pop.hidden = false; btn.setAttribute('aria-expanded', 'true'); focusFirst(pop);
   }
-  const closeProjMenu = (): void => { $('#projpop').hidden = true; $('#proj-btn').setAttribute('aria-expanded', 'false'); };
-  const closeCfgMenu = (): void => { $('#cfgpop').hidden = true; $('#cfg-btn').setAttribute('aria-expanded', 'false'); };
+  /** Hide a popover; the focus that was inside it goes back to the control that opened it. */
+  const hidePop = (pop: HTMLElement): void => { const had = pop.contains(document.activeElement); pop.hidden = true; if (had) restoreOpener(); };
+  const closeProjMenu = (): void => { hidePop($('#projpop')); $('#proj-btn').setAttribute('aria-expanded', 'false'); };
+  const closeCfgMenu = (): void => { hidePop($('#cfgpop')); $('#cfg-btn').setAttribute('aria-expanded', 'false'); };
   const runCfgNow = (k: RunCfg): void => {
-    if (!s.views.length) return;
+    if (!s.views.length) { toast('Спершу відкрийте гру'); return; }
     const fail = (err: unknown) => toast('Не вдалося запустити: ' + (err instanceof Error ? err.message : String(err)));
     if (k === 'game') buildAndRunGame(ctx).catch(fail);
     else if (k === 'scene') {
@@ -994,11 +1007,13 @@ export async function start(root: HTMLElement): Promise<void> {
   const fpop = () => $('#fpop');
   function showPop(btn: HTMLElement, html: string): void {
     const p = fpop();
-    if (!p.hidden && p.dataset.for === btn.id) { p.hidden = true; return; }
+    if (!p.hidden && p.dataset.for === btn.id) { hidePop(p); return; }
+    rememberOpener(btn);
     p.innerHTML = html; p.dataset.for = btn.id; p.hidden = false;
     const r = btn.getBoundingClientRect();
     p.style.left = Math.min(r.left, innerWidth - p.offsetWidth - 8) + 'px';
     p.style.top = r.bottom + 4 + 'px';
+    focusFirst(p);
   }
   /** Phone: the five sections of the bottom bar. Files and rows are full pages, the hints are a bottom sheet. */
   function bottomNav(to: string, btn: HTMLElement): void {
@@ -1021,14 +1036,16 @@ export async function start(root: HTMLElement): Promise<void> {
     renderAll();
     if (to === 'edit' && s.cur) { reveal('slist', s.cur); document.querySelector<HTMLElement>(`.si[data-key="${CSS.escape(s.cur)}"]`)?.scrollIntoView({ block: 'nearest' }); }
   }
-  const closePops = () => { fpop().hidden = true; $('#cfgpop').hidden = true; $('#projpop').hidden = true; };
+  const closePops = () => { hidePop(fpop()); closeCfgMenu(); closeProjMenu(); };
   const groupsApi = { pop: (a: HTMLElement, html: string) => showPop(a, html), closePops: () => closePops() };
   /** A menu at the pointer. */
   function popAt(x: number, y: number, html: string): void {
     const p = fpop();
+    rememberOpener();
     p.innerHTML = html; p.dataset.for = 'at'; p.hidden = false;
     p.style.left = Math.max(8, Math.min(x, innerWidth - p.offsetWidth - 8)) + 'px';
     p.style.top = Math.max(8, Math.min(y, innerHeight - p.offsetHeight - 8)) + 'px';
+    focusFirst(p);
   }
   const filesTarget = (name: string): PlaceTarget => {
     const many = s.picked.has(name) && s.picked.size > 1;
@@ -1038,8 +1055,14 @@ export async function start(root: HTMLElement): Promise<void> {
   /* ---------- global search ---------- */
   let sdItems: { t: 'file' | 'row' | 'term'; file?: string; key?: string; label: string; kind: string }[] = [];
   let sdSel = 0;
-  function openSearch(): void { $('#sd').hidden = false; const i = $('#sd-in') as HTMLInputElement; i.value = ''; sdRender(); i.focus(); holdInert('search', true); }
-  function closeSearch(): void { $('#sd').hidden = true; holdInert('search', false); }
+  let searchFrom: HTMLElement | null = null;
+  function openSearch(): void { searchFrom = document.activeElement instanceof HTMLElement ? document.activeElement : null; $('#sd').hidden = false; const i = $('#sd-in') as HTMLInputElement; i.value = ''; sdRender(); i.focus(); holdInert('search', true); }
+  function closeSearch(): void {
+    $('#sd').hidden = true; holdInert('search', false);
+    const from = searchFrom; searchFrom = null;
+    // Back to where the search was started, unless the chosen result has already put the focus somewhere.
+    setTimeout(() => { const at = document.activeElement; if (from && from.isConnected && from.getClientRects().length > 0 && (!at || at === document.body || $('#sd').contains(at))) from.focus({ preventScroll: true }); }, 0);
+  }
   function sdRender(): void {
     const q = ($('#sd-in') as HTMLInputElement).value.trim().toLowerCase();
     sdItems = [];
@@ -1117,7 +1140,8 @@ export async function start(root: HTMLElement): Promise<void> {
   }
   function toggleKeys(): void {
     const k = $('#keypop');
-    if (!k.hidden) { k.hidden = true; return; }
+    if (!k.hidden) { hidePop(k); return; }
+    rememberOpener($('#hk'));
     k.hidden = false;
     const r = $('#hk').getBoundingClientRect();
     k.style.left = Math.max(8, Math.min(r.right - k.offsetWidth, innerWidth - k.offsetWidth - 8)) + 'px';
@@ -1136,14 +1160,20 @@ export async function start(root: HTMLElement): Promise<void> {
     const r = btn.getBoundingClientRect();
     dd.style.left = Math.min(r.left, innerWidth - dd.offsetWidth - 8) + 'px'; dd.style.top = r.bottom + 4 + 'px';
   }
+  /** Open the menu of a group of the bar and put the focus on its first item (the keyboard way in). */
+  function mbEnter(g: string): void { mbShow(g); focusFirst(mdd(), '[role="menuitem"]'); }
   function mbToggle(on?: boolean): void {
     const bar = $('#menubar');
     const open = on ?? bar.hidden;
+    const had = bar.contains(document.activeElement) || mdd().contains(document.activeElement);
     if (open && !bar.children.length) bar.innerHTML = Object.keys(MENUS).map(g => `<button role="menuitem" aria-haspopup="menu" aria-expanded="false" data-mg="${esc(g)}">${esc(g)}</button>`).join('');
     if (!open) mbClose();
+    else rememberOpener($('#hamb'));
     bar.hidden = !open;
     $('.topbar').classList.toggle('menu-on', open);
     $('#hamb').setAttribute('aria-expanded', String(open));
+    // The keyboard goes straight into the bar; closing it gives the focus back to the button that opened it.
+    if (open) focusFirst(bar, '[data-mg]'); else if (had) restoreOpener();
   }
 
   /* ---------- bulk actions ---------- */
@@ -1215,20 +1245,30 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!cell || !u || cell.querySelector('textarea')) return;
     const ta = el('textarea', 'cell-ed');
     ta.rows = 2; ta.value = entryOf(u)?.target ?? ''; ta.setAttribute('aria-label', 'Переклад рядка');
-    cell.innerHTML = ''; cell.appendChild(ta); ta.focus(); ta.select();
+    // The caret goes to the end: the first letter typed must not wipe the translation.
+    cell.innerHTML = ''; cell.appendChild(ta); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
     let cancelled = false;
-    const finish = () => {
+    const save = (): void => {
       if (!cancelled && ta.value !== (entryOf(u)?.target ?? '')) {
         const ents = ctx.entries(s.current!);
         ents[key] = edit(ents[key], u, ta.value, ctx.stage(), Date.now());
         s.sess.n++; ctx.persist(); ctx.softTm();
       }
-      renderAll();
     };
+    const finish = () => { save(); renderAll(); };
     ta.addEventListener('blur', finish, { once: true });
     ta.addEventListener('keydown', e => {
       if (e.key === 'Escape') { cancelled = true; e.preventDefault(); ta.blur(); }
-      else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); ta.removeEventListener('blur', finish); const ents = ctx.entries(s.current!); ents[key] = edit(ents[key], u, ta.value, 'translate', Date.now()); const r = submit(ents[key], u, 'translate', Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: qaOpts() }); if (r.ok) { ents[key] = note(r.entry, 'надіслано на вичитування', r.entry.target, s.who, Date.now()); toast('Надіслано на вичитування'); } else toast(r.reason, { sticky: true }); s.sess.n++; ctx.persist(); ctx.invalidateTm(); renderAll(); }
+      // Enter and Tab keep the translation and carry on in the next row's cell (Shift+Enter writes a line break, Shift+Tab goes back).
+      else if ((e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) || (e.key === 'Tab' && !e.ctrlKey && !e.altKey)) {
+        e.preventDefault(); ta.removeEventListener('blur', finish); save();
+        const list = visibleUnits(true), at = list.findIndex(x => x.key === key);
+        const next = list[at + (e.key === 'Tab' && e.shiftKey ? -1 : 1)];
+        if (next) s.cur = next.key;
+        renderAll();
+        startInline(next?.key ?? key);
+      }
+      else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); ta.removeEventListener('blur', finish); const ents = ctx.entries(s.current!); ents[key] = edit(ents[key], u, ta.value, 'translate', Date.now()); const r = submit(ents[key], u, 'translate', Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: qaOpts() }); if (r.ok) { ents[key] = note(r.entry, 'надіслано', r.entry.target, s.who, Date.now()); toast('Надіслано'); } else toast(r.reason, { sticky: true }); s.sess.n++; ctx.persist(); ctx.invalidateTm(); renderAll(); }
     });
   }
 
@@ -1240,6 +1280,8 @@ export async function start(root: HTMLElement): Promise<void> {
   });
   root.addEventListener('click', e => {
     const t = e.target as HTMLElement;
+    const off = t.closest<HTMLElement>('[aria-disabled="true"][data-why]');
+    if (off) { toast(off.dataset.why!); return; }
     if (!t.closest('#fpop,#spkbtn,#lenbtn,#sortbtn,#bnav,#cfgpop,#cfg-btn,#projpop,#proj-btn')) closePops();
     if (!t.closest('#keypop,#hk')) $('#keypop').hidden = true;
     if (t.closest('#open2,#fb-repick')) { void openFolder(); return; }
@@ -1271,7 +1313,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.closest('#hk')) { toggleKeys(); return; }
     if (t.closest('#hamb')) { mbToggle(); return; }
     const mg = t.closest<HTMLElement>('#menubar [data-mg]');
-    if (mg) { mbOpen === mg.dataset.mg ? mbClose() : mbShow(mg.dataset.mg!); return; }
+    if (mg) { if (mbOpen === mg.dataset.mg) mbClose(); else if (e.detail === 0) mbEnter(mg.dataset.mg!); else mbShow(mg.dataset.mg!); return; }
     const mi = t.closest<HTMLElement>('#mdd [data-mi]');
     if (mi) { const [g, i] = mi.dataset.mi!.split('|'); const it = MENUS[g!]![Number(i)]; mbToggle(false); if (it && it !== '-') setTimeout(() => it.fn(), 0); return; }
     if (!t.closest('#menubar,#mdd,#hamb') && !$('#menubar').hidden) mbToggle(false);
@@ -1442,13 +1484,47 @@ export async function start(root: HTMLElement): Promise<void> {
     const t = e.target as HTMLElement;
     if (e.key === 'Escape') {
       if (!$('#sd').hidden) { closeSearch(); return; }
-      if (!$('#fpop').hidden || !$('#cfgpop').hidden || !$('#projpop').hidden || !$('#keypop').hidden) { closePops(); $('#keypop').hidden = true; return; }
+      if (!$('#fpop').hidden || !$('#cfgpop').hidden || !$('#projpop').hidden || !$('#keypop').hidden) {
+        closePops(); hidePop($('#keypop'));
+        return;
+      }
+      if (!mdd().hidden) { const g = mbOpen; mbClose(); document.querySelector<HTMLElement>(`#menubar [data-mg="${CSS.escape(g ?? '')}"]`)?.focus(); return; }
       if (!$('#menubar').hidden) { mbToggle(false); return; }
       if (s.phone && (s.leftOpen || s.rightOpen)) { s.leftOpen = false; s.rightOpen = false; renderAll(); return; }
     }
     if (document.querySelector('dialog[open]')) return;
+    // Menus, popovers, the menu bar and the file tree answer the arrows.
+    const pop = t.closest<HTMLElement>('#projpop,#cfgpop,#fpop,#keypop,#mdd');
+    if (pop && !pop.hidden) {
+      if (pop.id === 'mdd' && (e.key === 'ArrowRight' || e.key === 'ArrowLeft') && mbOpen) {
+        const gs = Object.keys(MENUS), i = gs.indexOf(mbOpen);
+        e.preventDefault(); mbEnter(gs[(i + (e.key === 'ArrowRight' ? 1 : -1) + gs.length) % gs.length]!); return;
+      }
+      if (menuKeys(e, pop)) return;
+    }
+    const bar = t.closest<HTMLElement>('#menubar');
+    if (bar && t.dataset.mg) {
+      const gs = [...bar.querySelectorAll<HTMLElement>('[data-mg]')], i = gs.indexOf(t);
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        e.preventDefault(); const n = gs[(i + (e.key === 'ArrowRight' ? 1 : -1) + gs.length) % gs.length]!;
+        if (mbOpen) mbEnter(n.dataset.mg!); else n.focus();
+        return;
+      }
+      if (e.key === 'ArrowDown') { e.preventDefault(); mbEnter(t.dataset.mg!); return; }
+      if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); gs[e.key === 'Home' ? 0 : gs.length - 1]?.focus(); return; }
+    }
+    const tree = t.closest<HTMLElement>('#tree-list');
+    if (tree && treeKeys(e, tree)) return;
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') { e.preventDefault(); openSearch(); return; }
-    if (e.key === 'Shift' && !e.repeat) { const now = Date.now(); if (now - lastShift < 400) openSearch(); lastShift = now; return; }
+    // ⇧⇧ opens the search, but only from two bare presses outside a text field: capitals typed in quick succession («Н. Ш.») are not a command.
+    if (e.key === 'Shift') {
+      if (e.repeat) return;
+      const typing = !!t.closest('input,textarea,select,[contenteditable="true"]');
+      const now = Date.now();
+      if (!typing && now - lastShift < 400) { lastShift = 0; openSearch(); } else lastShift = typing ? 0 : now;
+      return;
+    }
+    lastShift = 0;
     if (e.key === 'F5') { e.preventDefault(); runSelected(); return; }
     if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && s.mode !== 'table') { e.preventDefault(); step(ctx, e.key === 'ArrowDown' ? 1 : -1); return; }
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && t.id === 'i-tr') { e.preventDefault(); send(ctx); return; }
@@ -1458,6 +1534,7 @@ export async function start(root: HTMLElement): Promise<void> {
       const i = list.findIndex(u => u.key === t.dataset.key);
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); const n = list[i + (e.key === 'ArrowDown' ? 1 : -1)]; if (n) { s.cur = n.key; renderAll(); reveal('grid', n.key); document.querySelector<HTMLElement>(`.gr[data-key="${CSS.escape(n.key)}"]`)?.focus(); } }
       else if (e.key === 'Enter') { e.preventDefault(); ctx.select(t.dataset.key!, 'edit'); }
+      else if (e.key === 'F2') { e.preventDefault(); startInline(t.dataset.key!); }
     }
   });
 

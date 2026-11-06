@@ -23,9 +23,9 @@ const GLYPH = {
  */
 export const WINDOW_CONTROLS_HTML = `<div class="wdrag" id="wdrag" data-tauri-drag-region="deep" aria-hidden="true"></div>
 <div class="wc wctl" id="wctl" role="group" aria-label="Керування вікном" hidden>
-  <button type="button" id="wc-min" title="Згорнути" aria-label="Згорнути вікно">${GLYPH.min}</button>
-  <button type="button" id="wc-max" title="Розгорнути" aria-label="Розгорнути вікно">${GLYPH.max}</button>
-  <button type="button" id="wc-close" title="Закрити" aria-label="Закрити вікно">${GLYPH.close}</button>
+  <button type="button" tabindex="-1" id="wc-min" title="Згорнути" aria-label="Згорнути вікно">${GLYPH.min}</button>
+  <button type="button" tabindex="-1" id="wc-max" title="Розгорнути" aria-label="Розгорнути вікно">${GLYPH.max}</button>
+  <button type="button" tabindex="-1" id="wc-close" title="Закрити" aria-label="Закрити вікно">${GLYPH.close}</button>
 </div>`;
 
 /** True when the translator chose the system title bar. */

@@ -1036,3 +1036,8 @@ body.resizing{user-select:none;cursor:col-resize}
 .wchip{padding:3px 9px;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--text);font-size:12.5px}
 .wchip:hover{background:var(--hv)}
 #dc-kind .lnk{background:none;border:0;color:var(--mute);font-size:12px;text-decoration:underline;cursor:pointer}
+
+/* controls that are off but stay reachable by the keyboard (aria-disabled): they look dimmed and say why on click */
+#seg button[aria-disabled="true"],.tpill[aria-disabled="true"]{opacity:.5;cursor:default}
+#run-btn.tb-ic.play[aria-disabled="true"]{color:var(--mute);background:transparent;box-shadow:none;cursor:default}
+#run-btn.tb-ic.play[aria-disabled="true"] svg path{fill:none}

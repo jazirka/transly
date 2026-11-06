@@ -37,6 +37,8 @@ export async function start(root: HTMLElement): Promise<void> {
   let srTimer = 0;
   let plPick: Set<string> | null = null; let resetArmed = false;
   let selecting = false; const picked = new Set<string>();
+  /** Groups of files: files ticked for "into a group", the menu, groups unfolded, the group being renamed or asked about deletion. */
+  let fsel = false; const fpicked = new Set<string>(); let fmenu = false; const gopen = new Set<string>(); let grename: string | null = null; let gdel: string | null = null; let gcreating = false;
   const scn: { mode: 'both' | 'tr' | 'src'; real: boolean; picked: string; ctx: CanvasRenderingContext2D | null } = { mode: 'both', real: false, picked: '', ctx: null };
   const act = { open: new Set<string>() };
   const gl = { q: '', en: '', uk: '', alt: '', qa: true, edit: false };
@@ -159,23 +161,50 @@ export async function start(root: HTMLElement): Promise<void> {
 
   function screenFiles(): string {
     if (!store.hasGame) return empty('Файлів ще немає', 'Відкрийте файли гри або проєкт у розділі «Ще».', 'more', 'Відкрити файли');
-    return `<div id="m-flist">${filesList()}</div><div class="m-searchbar"><label class="m-search m-pill">${icon('search')}<span class="m-ph" aria-hidden="true">Пошук файлу</span><input id="m-fq" type="search" placeholder=" " aria-label="Пошук файлу" value="${esc(fq)}" enterkeyhint="search" autocomplete="off"></label></div>`;
+    const bar = fsel ? selBar(fpicked.size, store.views.length, fpicked.size === store.views.length, 'data-fall', '', `<button class="m-primary" data-fgroup ${fpicked.size ? '' : 'disabled'} aria-haspopup="menu" aria-expanded="${fmenu}">У групу</button>`, 'data-fselect') : '';
+    return `<div class="m-sortrow m-frow"><span>${store.groupsList().length ? plural(store.groupsList().length, ['група', 'групи', 'груп']) : 'Груп ще немає'}</span><button class="m-mini" data-gnew aria-label="Нова група">＋ Група</button><button class="m-mini ${fsel ? 'on' : ''}" data-fselect aria-pressed="${fsel}">${fsel ? 'Готово' : 'Вибрати файли'}</button></div>${gcreating ? '<form class="m-gnew" data-gcreateform><input id="g-name" placeholder="Назва групи" aria-label="Назва нової групи" maxlength="60" autocomplete="off"><button class="m-mini" type="submit">Створити</button></form>' : ''}${fmenu && fsel ? groupMenu() : ''}<div id="m-flist">${filesList()}</div>${bar}<div class="m-searchbar"><label class="m-search m-pill">${icon('search')}<span class="m-ph" aria-hidden="true">Пошук файлу</span><input id="m-fq" type="search" placeholder=" " aria-label="Пошук файлу" value="${esc(fq)}" enterkeyhint="search" autocomplete="off"></label></div>`;
+  }
+  /** Where the ticked files can go: a group, out of groups, or a new group. */
+  function groupMenu(): string {
+    const files = [...fpicked];
+    const now = new Set(files.map(f => store.fileGroup(f)?.id ?? ''));
+    return `<div class="m-gmenu" role="menu" aria-label="У групу">${store.groupsList().map(g => `<button class="m-gm ${now.size === 1 && now.has(g.id) ? 'on' : ''}" role="menuitem" data-fplace="${esc(g.id)}"><i class="m-gdot" style="background:${esc(g.color ?? '#8b72e8')}"></i>${esc(g.name)}</button>`).join('')}${[...now].some(x => x) ? '<button class="m-gm" role="menuitem" data-fplace="">Прибрати з групи</button>' : ''}<form class="m-gnew" data-fnewform><input id="fg-new" placeholder="Нова група" aria-label="Назва нової групи" maxlength="60" autocomplete="off"><button class="m-mini" type="submit">＋</button></form></div>`;
+  }
+  const fileItem = (v: FileViewLike): string => {
+    const st = store.stats(v.name), pc = st.total ? Math.round((100 * st.translated) / st.total) : 0;
+    const g = store.fileGroup(v.name);
+    const attr = fsel ? `data-fpick="${esc(v.name)}" aria-pressed="${fpicked.has(v.name)}"` : `data-file="${esc(v.name)}"`;
+    return `<li><button class="m-item ${v.name === store.file && !fsel ? 'cur' : ''} ${fsel && fpicked.has(v.name) ? 'picked' : ''}" ${attr}><span class="m-ico">${/^Map\d+\.json$/.test(v.name) ? 'MAP' : '{ }'}</span><span class="m-item-t"><b>${g ? `<i class="m-gdot" style="background:${esc(g.color ?? '#8b72e8')}" aria-label="Група: ${esc(g.name)}"></i>` : ''}${esc(v.label ?? v.name.replace(/\.json$/, ''))}</b><small>${esc(v.label ? v.name.replace(/\.json$/, '') : plural(st.total, ['рядок', 'рядки', 'рядків']))}</small>${bar(st.translated, st.total)}</span><span class="m-item-n">${pc}%</span></button></li>`;
+  };
+  type FileViewLike = (typeof store.views)[number];
+  /** The groups, each with its files, above the automatic categories. */
+  function groupsHtml(q: string): string {
+    const list = store.groupsList();
+    if (!list.length) return '';
+    return `<section class="m-cat open m-groups"><button class="m-cat-h" data-gtog="__all" aria-expanded="true" tabindex="-1" style="pointer-events:none"><b>Групи файлів</b><small>${list.length}</small></button>${list.map(g => {
+      const files = store.groupFiles(g.id).map(f => store.views.find(v => v.name === f)!).filter(v => !q || (v.name + ' ' + (v.label ?? '')).toLowerCase().includes(q));
+      const all = store.groupFiles(g.id);
+      const t = all.reduce((n, f) => { const st = store.stats(f); return { tr: n.tr + st.translated, all: n.all + st.total }; }, { tr: 0, all: 0 });
+      const open = gopen.has(g.id) || !!q;
+      const acts = open ? (grename === g.id
+        ? `<form class="m-grename" data-grsave="${esc(g.id)}"><input id="gr-ren" value="${esc(g.name)}" aria-label="Нова назва групи" maxlength="60" autocomplete="off"><button class="m-mini" type="submit">Гаразд</button></form>`
+        : `<div class="m-gacts"><button class="m-mini" data-gsend="${esc(g.id)}" ${all.length ? '' : 'disabled'}>${store.stage === 'review' ? 'Затвердити' : 'Надіслати'}</button><button class="m-mini" data-grename="${esc(g.id)}">Назва</button><button class="m-mini" data-gcolor="${esc(g.id)}">Колір</button><button class="m-mini danger" data-gdel="${esc(g.id)}">${gdel === g.id ? 'Справді видалити?' : 'Видалити'}</button></div>`) : '';
+      return `<div class="m-grp"><button class="m-cat-h m-grp-h" data-gfold="${esc(g.id)}" aria-expanded="${open}"><span class="m-cat-c">${icon('down')}</span><i class="m-gdot" style="background:${esc(g.color ?? '#8b72e8')}"></i><b>${esc(g.name)}</b><small>${all.length} · ${t.all ? Math.round((100 * t.tr) / t.all) : 0}%</small></button>${open ? `${acts}${files.length ? `<ul class="m-list">${files.map(fileItem).join('')}</ul>` : '<p class="m-none">Файлів немає: «Вибрати файли», потім «У групу»</p>'}` : ''}</div>`;
+    }).join('')}</section>`;
   }
   /** The files whose name or title contains the search words. */
   function filesList(): string {
     const q = fq.trim().toLowerCase();
     const views = store.views.filter(v => !q || (v.name + ' ' + (v.label ?? '')).toLowerCase().includes(q));
-    if (!views.length) return '<p class="m-none">Файлів за цим пошуком немає</p>';
-    const item = (v: (typeof views)[number]): string => {
-      const st = store.stats(v.name), pc = st.total ? Math.round((100 * st.translated) / st.total) : 0;
-      return `<li><button class="m-item ${v.name === store.file ? 'cur' : ''}" data-file="${esc(v.name)}"><span class="m-ico">${/^Map\d+\.json$/.test(v.name) ? 'MAP' : '{ }'}</span><span class="m-item-t"><b>${esc(v.label ?? v.name.replace(/\.json$/, ''))}</b><small>${esc(v.label ? v.name.replace(/\.json$/, '') : plural(st.total, ['рядок', 'рядки', 'рядків']))}</small>${bar(st.translated, st.total)}</span><span class="m-pc">${pc}%</span></button></li>`;
-    };
+    const g = groupsHtml(q);
+    if (!views.length) return g || '<p class="m-none">Файлів за цим пошуком немає</p>';
+    const item = fileItem;
     // The same automatic categories as on the computer: the game's data, the maps, and each other folder.
     const cat = (name: string): string => (name.includes('/') ? name.split('/').slice(0, -1).join('/') : /^Map\d+\.json$/.test(name) ? 'Карти' : 'Дані гри');
     const groups = new Map<string, typeof views>();
     for (const v of views) { const k = cat(v.name); groups.set(k, [...(groups.get(k) ?? []), v]); }
-    if (groups.size < 2) return `<ul class="m-list">${views.map(item).join('')}</ul>`;
-    return [...groups].map(([k, vs]) => {
+    if (groups.size < 2) return `${g}<ul class="m-list">${views.map(item).join('')}</ul>`;
+    return g + [...groups].map(([k, vs]) => {
       const open = !!q || !collapsedCats.has(k);
       const t = vs.reduce((n, v) => { const st = store.stats(v.name); return { tr: n.tr + st.translated, all: n.all + st.total }; }, { tr: 0, all: 0 });
       return `<section class="m-cat ${open ? 'open' : ''}"><button class="m-cat-h" data-cat="${esc(k)}" aria-expanded="${open}"><span class="m-cat-c">${icon('down')}</span><b>${esc(k)}</b><small>${vs.length} · ${t.all ? Math.round((100 * t.tr) / t.all) : 0}%</small></button>${open ? `<ul class="m-list">${vs.map(item).join('')}</ul>` : ''}</section>`;
@@ -754,6 +783,31 @@ export async function start(root: HTMLElement): Promise<void> {
     if ((x = q('[data-srn]'))) { const r = store.searchAll(sq)[Number(x.dataset.srn)]; if (r) { sub = null; store.open(r.file, r.key); go('edit'); } return; }
     if ((x = q('[data-refdel]'))) { store.removeReference(x.dataset.refdel!); say(`Довідку ${x.dataset.refdel!.toUpperCase()} прибрано`); render(); return; }
     if (q('[data-spsave]')) { const n = store.setSpeakers(sp.draft); sp.draft.clear(); say(n ? `Мовців оновлено: ${n}` : 'Змін немає'); render(); return; }
+    if (q('[data-fselect]')) { fsel = !fsel; fpicked.clear(); fmenu = false; render(); return; }
+    if ((x = q('[data-fpick]'))) { const f = x.dataset.fpick!; if (fpicked.has(f)) fpicked.delete(f); else fpicked.add(f); fmenu = false; render(); return; }
+    if (q('[data-fall]')) { if (fpicked.size === store.views.length) fpicked.clear(); else store.views.forEach(v => fpicked.add(v.name)); fmenu = false; render(); return; }
+    if (q('[data-fgroup]')) { fmenu = !fmenu; render(); if (fmenu) $('m-main').scrollTop = 0; return; }
+    if ((x = q('[data-fplace]'))) {
+      const id = x.dataset.fplace!, files = [...fpicked];
+      store.placeFiles(files, id || null);
+      say(id ? `${plural(files.length, ['файл', 'файли', 'файлів'])} → «${store.groupsList().find(g => g.id === id)?.name ?? ''}»` : 'Прибрано з групи');
+      fsel = false; fmenu = false; fpicked.clear(); render(); return;
+    }
+    if (q('[data-gnew]')) { gcreating = !gcreating; render(); if (gcreating) document.getElementById('g-name')?.focus(); return; }
+    if ((x = q('[data-gfold]'))) { const id = x.dataset.gfold!; if (gopen.has(id)) gopen.delete(id); else gopen.add(id); grename = null; gdel = null; render(); return; }
+    if ((x = q('[data-gsend]'))) { const r = store.sendGroup(x.dataset.gsend!); say(`${store.stage === 'translate' ? 'Надіслано на вичитування' : 'Затверджено'}: ${r.sent}${r.skipped ? `, пропущено ${r.skipped}` : ''}`, !r.sent); render(); return; }
+    if ((x = q('[data-grename]'))) { grename = x.dataset.grename!; render(); document.getElementById('gr-ren')?.focus(); return; }
+    if ((x = q('[data-gcolor]'))) {
+      const id = x.dataset.gcolor!, g = store.groupsList().find(y => y.id === id), cs = store.groupColors;
+      if (g) store.recolorGroup(id, cs[(cs.indexOf(g.color ?? '') + 1) % cs.length]!);
+      render(); return;
+    }
+    if ((x = q('[data-gdel]'))) {
+      const id = x.dataset.gdel!;
+      if (gdel !== id) { gdel = id; render(); setTimeout(() => { if (gdel === id) { gdel = null; if (tab === 'files') render(); } }, 4000); return; }
+      gdel = null; const name = store.groupsList().find(y => y.id === id)?.name ?? '';
+      store.removeGroup(id); say(`Групу «${name}» видалено; файли лишилися`); render(); return;
+    }
     if ((x = q('[data-file]'))) { store.open(x.dataset.file!); go('rows'); return; }
     if ((x = q('[data-filter]'))) { store.setFilter(x.dataset.filter as Filter); render(); return; }
     if (q('[data-more]')) { page++; const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
@@ -867,7 +921,27 @@ export async function start(root: HTMLElement): Promise<void> {
     }
   });
   root.addEventListener('submit', e => {
-    const f = e.target as HTMLElement; if (!f.matches('[data-cmform]')) return; e.preventDefault();
+    const f = e.target as HTMLElement;
+    if (f.matches('[data-gcreateform]')) {
+      e.preventDefault();
+      const g = store.addGroup($<HTMLInputElement>('g-name').value);
+      if (!g) { say('Напишіть назву групи', true); return; }
+      gcreating = false; gopen.add(g.id); say(`Групу «${g.name}» створено`); render(); return;
+    }
+    if (f.matches('[data-fnewform]')) {
+      e.preventDefault();
+      const g = store.addGroup($<HTMLInputElement>('fg-new').value);
+      if (!g) { say('Напишіть назву групи', true); return; }
+      const files = [...fpicked]; store.placeFiles(files, g.id); gopen.add(g.id);
+      say(`${plural(files.length, ['файл', 'файли', 'файлів'])} → «${g.name}»`); fsel = false; fmenu = false; fpicked.clear(); render(); return;
+    }
+    if (f.matches('[data-grsave]')) {
+      e.preventDefault();
+      const r = store.renameGroup(f.dataset.grsave!, $<HTMLInputElement>('gr-ren').value);
+      if (r === 'exists') say('Група з такою назвою вже є', true); else if (r === 'empty') say('Напишіть назву групи', true); else grename = null;
+      render(); return;
+    }
+    if (!f.matches('[data-cmform]')) return; e.preventDefault();
     const ta = $<HTMLTextAreaElement>('m-cm'); const text = ta.value.trim(); if (!text) return;
     store.comment(text); buzz(8); renderSheet(); renderChrome();
   });

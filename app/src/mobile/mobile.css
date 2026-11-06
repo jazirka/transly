@@ -477,3 +477,17 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-tg{display:inline-block;padding:1px 9px;border-radius:6px;border:1px solid var(--line);background:var(--raised);font-size:12px;color:var(--mute)}
 .m-tg.k{border-color:#5b4a86;color:#d3b6ec}.m-tg.ok{border-color:#2f4a3a;color:#8fd19a}.m-tg.warn{border-color:#5a4a2a;color:#f0c477}
 .m-tc-x{display:flex;gap:8px;flex-wrap:wrap}
+
+/* ----- groups of files ----- */
+.m-frow{gap:8px;padding:8px 16px 4px}
+.m-frow>span{flex:1}
+.m-gdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle;flex:none}
+.m-grp-h .m-gdot{margin-right:0}
+.m-grp-h{padding-top:8px;padding-bottom:6px}
+.m-grp-h b{text-transform:none;letter-spacing:0;font-size:15px;color:var(--text)}
+.m-gacts,.m-grename,.m-gnew{display:flex;gap:6px;flex-wrap:wrap;padding:2px 16px 8px}
+.m-grename input,.m-gnew input{flex:1;min-width:0;min-height:40px}
+.m-gmenu{display:flex;flex-direction:column;gap:2px;margin:4px 12px 8px;padding:8px;border:1px solid var(--line);border-radius:var(--r3,14px);background:var(--raised)}
+.m-gm{display:flex;align-items:center;gap:8px;min-height:44px;padding:0 10px;border:0;border-radius:var(--r2);background:none;color:var(--text);font:inherit;text-align:left}
+.m-gm.on{color:var(--accent)}
+.m-gmenu .m-gnew{padding:4px 0 0}

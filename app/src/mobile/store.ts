@@ -1,5 +1,5 @@
-import { deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
-import type { BatchKind, Entry, GlossaryTerm, RowChange, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
+import { GROUP_COLORS, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
+import type { BatchKind, Group, Entry, GlossaryTerm, RowChange, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
 import { IdbStore } from '../ui/idb';
 
 /**
@@ -213,6 +213,32 @@ export class Store {
   sendMany(file: string, units: Unit[]): { sent: number; skipped: number } {
     let skipped = 0; const now = Date.now(), changes: RowChange[] = [];
     for (const u of units) {
+      const e = this.entry(file, u.key);
+      if (!e?.target.trim()) { skipped++; continue; }
+      const r = submit(e, u, this.stage, now, { blockErrors: this.saved.settings.blockErrors, qa: this.qaOpts() });
+      if (!r.ok) { skipped++; continue; }
+      changes.push({ file, key: u.key, next: r.entry, text: r.entry.target });
+    }
+    if (changes.length) { this.commit(changes, this.stage === 'translate' ? 'send' : 'approve', this.stage === 'translate' ? 'надіслано на вичитування' : 'вичитано'); this.persist(); this.emit(); }
+    return { sent: changes.length, skipped };
+  }
+  /* ---------- groups of files ---------- */
+  groupsList(): Group[] { return liveGroups(this.saved); }
+  /** Files of a group, in the order of the game's files. */
+  groupFiles(id: string): string[] { const idx = new GroupIndex(this.saved); return this.views.filter(v => idx.groupOf(v.name, '\u0000') === id).map(v => v.name); }
+  /** The group of a file, or null. */
+  fileGroup(file: string): Group | null { const id = new GroupIndex(this.saved).groupOf(file, '\u0000'); return id ? this.groupsList().find(g => g.id === id) ?? null : null; }
+  /** The colours a group can take. */
+  readonly groupColors = GROUP_COLORS;
+  addGroup(name: string): Group | null { const g = createGroup(this.saved, name, Date.now()); if (g) { this.persist(); this.emit(); } return g; }
+  placeFiles(files: string[], id: string | null): void { const now = Date.now(); for (const f of files) placeFile(this.saved, f, id, now); this.persist(); this.emit(); }
+  renameGroup(id: string, name: string): 'ok' | 'empty' | 'exists' | 'missing' { const r = renameGroup(this.saved, id, name, Date.now()); if (r === 'ok') { this.persist(); this.emit(); } return r; }
+  recolorGroup(id: string, color: string): void { if (recolorGroup(this.saved, id, color, Date.now())) { this.persist(); this.emit(); } }
+  removeGroup(id: string): void { if (deleteGroup(this.saved, id, Date.now())) { this.persist(); this.emit(); } }
+  /** Send every row of the files of a group that can be sent, as one action of the journal. */
+  sendGroup(id: string): { sent: number; skipped: number } {
+    let skipped = 0; const now = Date.now(), changes: RowChange[] = [];
+    for (const file of this.groupFiles(id)) for (const u of this.view(file)?.units ?? []) {
       const e = this.entry(file, u.key);
       if (!e?.target.trim()) { skipped++; continue; }
       const r = submit(e, u, this.stage, now, { blockErrors: this.saved.settings.blockErrors, qa: this.qaOpts() });

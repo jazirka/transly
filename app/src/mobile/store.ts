@@ -1,4 +1,4 @@
-import { touchTerms, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
+import { touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, note, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
 import type { BatchKind, Entry, GlossaryTerm, RowChange, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
 import { IdbStore } from '../ui/idb';
 
@@ -241,18 +241,12 @@ export class Store {
   /* ---------- glossary ---------- */
   /** Add a term, or change the one with the same original word. Returns false when a field is empty. */
   saveTerm(en: string, uk: string, alt: string, qa: boolean): boolean {
-    en = en.trim(); uk = uk.trim(); if (!en || !uk) return false;
-    const alts = alt.split(/[;,]/).map(x => x.trim()).filter(Boolean);
-    const t = { en, uk, mt: Date.now(), ...(alts.length ? { alt: alts } : {}), ...(qa ? {} : { qa: false }) };
-    const i = this.saved.terms.findIndex(x => x.en.toLowerCase() === en.toLowerCase());
-    if (i >= 0) this.saved.terms[i] = { ...this.saved.terms[i], ...t, alt: alts.length ? alts : undefined } as typeof t; else this.saved.terms.push(t);
-    touchTerms(this.saved.terms);
+    const known = this.saved.terms.some(x => x.en.toLowerCase() === en.trim().toLowerCase());
+    if (saveTerm(this.saved, { en, uk, alt, qa }, Date.now(), known ? en : undefined) === null) return false;
     this.tmCache = null; this.persist(); this.emit(); return true;
   }
   removeTerm(en: string): void {
-    this.saved.terms = this.saved.terms.filter(x => x.en.toLowerCase() !== en.toLowerCase());
-    // A trace of the deletion, so that another device's copy of the term does not bring it back in a merge.
-    this.saved.deletedTerms = { ...(this.saved.deletedTerms ?? {}), [en.toLowerCase()]: Date.now() };
+    removeTerm(this.saved, en, Date.now());
     this.persist(); this.emit();
   }
   /* ---------- autofill by words ---------- */

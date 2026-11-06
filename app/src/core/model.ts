@@ -71,6 +71,8 @@ export interface Comment {
   res?: { who: string; at: number; open?: boolean };
   /** When the text was last edited. */
   ed?: number;
+  /** Deleted: the comment stays as a trace (without its text), so a merge with a device that still has it does not bring it back. */
+  del?: boolean;
 }
 export interface HistoryItem {
   at: number; who: string; what: string; text: string;

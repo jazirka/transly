@@ -6,7 +6,7 @@ import { dataDirOf, forgetGameDir, isDesktop, rememberedGameDir, reopenGameDir, 
 import { classifyFolder, folderBanner, folderLine } from './folder-service';
 import type { FolderState } from './folder-service';
 import { $, el, esc, plural, toast } from './dom';
-import { FOCUS_HTML, SIDE_HTML, qaClick, focusClick, focusInput, insertOriginal, insertText, renderFocus, renderSidePanel, send, showSide, sideClick, step } from './focus';
+import { FOCUS_HTML, SIDE_HTML, qaClick, focusClick, focusInput, insertText, renderFocus, renderSidePanel, send, showSide, sideClick, step } from './focus';
 import { wireDiscuss } from './discuss';
 import { wireTermCard } from './termcard';
 import { wireLinks } from './links';
@@ -1221,7 +1221,6 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.closest('#open2,#fb-repick')) { void openFolder(); return; }
     if (t.closest('#fb-use')) { useFolderAnyway(); return; }
     if (t.closest('#fb-hide')) { folderHidden = true; renderFolderBar(); return; }
-    if (t.closest('#b-play')) { runSelected(); return; }
     if (t.closest('#resume')) { void resume(); return; }
     if (t.closest('#imp2,#mt-open')) { openImportDlg(); return; }
     if (t.closest('#cl2')) {
@@ -1423,7 +1422,6 @@ export async function start(root: HTMLElement): Promise<void> {
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') { e.preventDefault(); openSearch(); return; }
     if (e.key === 'Shift' && !e.repeat) { const now = Date.now(); if (now - lastShift < 400) openSearch(); lastShift = now; return; }
     if (e.key === 'F5') { e.preventDefault(); runSelected(); return; }
-    if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyO' && s.mode !== 'table' && s.cur) { e.preventDefault(); insertOriginal(ctx); return; }
     if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && s.mode !== 'table') { e.preventDefault(); step(ctx, e.key === 'ArrowDown' ? 1 : -1); return; }
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && t.id === 'i-tr') { e.preventDefault(); send(ctx); return; }
     if (s.mode === 'table' && t.classList.contains('gr')) {

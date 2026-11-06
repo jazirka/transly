@@ -11,7 +11,6 @@ import { drawLinks } from './links';
 import { isDesktop, openLink, rememberedGameDir } from './desktop';
 import { drawPic, picOfFace, picsOfRow } from './gameimg';
 import type { Pic } from './gameimg';
-import { openScene } from './scene-dialog';
 import { STATUS_CAP, shownStatus } from './state';
 import type { Ctx, SideTab } from './state';
 
@@ -36,23 +35,15 @@ const I = {
 /** Static skeleton of the editing view; renderFocus() fills the pieces so the textarea keeps focus while typing. */
 export const FOCUS_HTML = `<div class="fc"><div class="fc-in"><div class="te-links" id="te-links"></div>
   <div class="fhd"><span class="k" id="f-key"></span><span class="fchips" id="f-chips"></span><span class="st-pill" id="f-state"></span></div>
-  <div class="fnav">
-    <button class="ib lab" id="b-scene" title="Переглянути сцену: усі рядки події поспіль, як у грі" aria-label="Переглянути сцену">${I.scene}<span class="tl">Сцена</span></button>
-  </div>
   <div class="offlist" id="f-off" hidden><span>Цей рядок не входить у поточний фільтр або пошук.</span><button data-reset>Показати всі рядки</button></div>
   <div><div class="lbl">Оригінал · EN</div><div class="srcbox" id="f-src"></div><div class="pics" id="f-pics" hidden></div></div>
   <div id="f-refbox" hidden></div>
   <div class="trblock">
-    <div class="lbl"><span id="f-trlbl">Переклад · UK</span><button class="lbl-btn" id="b-copy" title="Вставити оригінал у переклад (Alt+O)" aria-label="Вставити оригінал у переклад">${I.copy}<span>Вставити оригінал</span></button></div>
+    <div class="lbl"><span id="f-trlbl">Переклад · UK</span></div>
     <div class="te"><div class="te-layer" id="te-layer" aria-hidden="true"></div><textarea class="tr-in" id="i-tr" spellcheck="false" aria-label="Переклад"></textarea></div>
     <div class="edbar">
       <button class="ib lab" id="b-compact" title="Лише текст: сховати контекст і примітки" aria-label="Режим лише тексту">${I.compact}<span class="tl">Лише текст</span></button>
-      <details class="more"><summary class="ib" title="Ще дії" aria-label="Ще дії">⋯</summary><div class="morep">
-        <button id="b-code" title="Вставити відсутні керівні коди з оригіналу">${I.code}<span>Вставити керівні коди</span></button>
-        <button id="b-wrap" title="Перенести рядки за шириною вікна гри">${I.wrap}<span>Перенести рядки за шириною</span></button>
-        <hr><button class="danger" id="b-clear" title="Очистити переклад (можна скасувати)">${I.clear}<span>Очистити переклад</span></button>
-      </div></details>
-      <span class="vsep" aria-hidden="true"></span><button class="ib" id="b-play" title="Зібрати й перевірити в грі (F5)" aria-label="Перевірити в грі" hidden>${I.play}</button>
+      <button class="ib" id="b-clear" title="Очистити переклад (можна скасувати в «Активності»)" aria-label="Очистити переклад">${I.clear}</button>
       <button class="ib" id="b-return" title="Повернути перекладачу" aria-label="Повернути перекладачу" hidden>${I.back}</button>
       <span class="grow"></span>
       <span class="qab" id="qa-badge" title="Активні проблеми QA в рядку" hidden></span>
@@ -60,6 +51,7 @@ export const FOCUS_HTML = `<div class="fc"><div class="fc-in"><div class="te-lin
       <button class="saveb" id="b-save" aria-label="Надіслати на вичитування">${I.ok}</button>
     </div>
     <div class="tmbar" id="f-tm" hidden></div>
+    <div class="wraphint" id="f-wrap" hidden></div>
     <div class="qa-under" id="f-qa"></div>
     <div class="proof" id="f-proof" hidden style="margin-top:10px"></div>
   </div>
@@ -184,9 +176,6 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
   $('#b-save').title = lab + ' (Ctrl+Enter)';
   $('#b-save').setAttribute('aria-label', lab);
   $('#b-return').hidden = !review;
-  $('#b-play').hidden = !desktop;
-  const limit = u.kind === 'dialogue' || u.kind === 'scroll' ? limitFor(ctx.lineLimit(), u.face) : 0;
-  $('#b-wrap').hidden = !limit;
 }
 
 /** Terms of the open row, worked out once per row. */
@@ -219,6 +208,12 @@ function meter(ctx: Ctx, u: Unit): void {
   $('#c-ch').textContent = `${n} / ${rl} зн.`;
   $('#cnt2').classList.toggle('over', !!t && d > tol);
   $('#cnt2').classList.toggle('mid', !!t && d <= tol && d > tol / 2);
+  // A line longer than the game's window is said right under the field, with the way to fix it.
+  const limit = u.kind === 'dialogue' || u.kind === 'scroll' ? limitFor(ctx.lineLimit(), u.face) : 0;
+  const long = limit ? t.split('\n').filter(l => displayLength(l) > limit).length : 0;
+  const wh = $('#f-wrap');
+  wh.hidden = !long;
+  if (long) wh.innerHTML = `<span><b>Рядок довший за вікно гри</b> (до ${limit} зн.): ${plural(long, ['рядок', 'рядки', 'рядків'])}</span><button type="button" class="btn" data-wrap>Перенести за шириною</button>`;
 }
 
 function refreshQa(ctx: Ctx, u: Unit): void {
@@ -316,13 +311,6 @@ function setText(ctx: Ctx, u: Unit, text: string, what: string, kind?: BatchKind
   if (ctx.s.mode !== 'table') ($('#i-tr') as HTMLTextAreaElement).focus();
 }
 
-/** Put the original into the translation (the button in the corner of the field, Alt+O). */
-export function insertOriginal(ctx: Ctx): void {
-  const u = ctx.s.cur ? ctx.unit(ctx.s.cur) : undefined;
-  if (!u || !ctx.s.current) { toast('Спершу виберіть рядок'); return; }
-  setText(ctx, u, u.source, 'скопійовано оригінал');
-}
-
 /** Put a text into the translation: at the caret in the editor, at the end of the translation in the table. */
 export function insertText(ctx: Ctx, text: string): void {
   const u = ctx.s.cur ? ctx.unit(ctx.s.cur) : undefined;
@@ -365,12 +353,10 @@ export function send(ctx: Ctx): void {
 export function focusClick(ctx: Ctx, t: HTMLElement): boolean {
   const { s } = ctx;
   const u = s.cur ? ctx.unit(s.cur) : undefined;
-  if (!t.closest('details.more > summary')) document.querySelectorAll<HTMLDetailsElement>('details.more').forEach(d => { d.open = false; });
   if (sideClick(ctx, t)) return true;
   if (!u || !s.current) return false;
   const ents = ctx.entries(s.current);
   const ta = $('#i-tr') as HTMLTextAreaElement;
-  if (t.closest('#b-copy')) { insertOriginal(ctx); return true; }
   const tm = t.closest<HTMLElement>('[data-tm]');
   if (tm) { const m = tmMatch(Number(tm.dataset.tm)); if (m) setText(ctx, u, m.t, `підставлено з пам’яті (${m.score}%)`); return true; }
   const go = t.closest<HTMLElement>('[data-goto]');
@@ -379,18 +365,11 @@ export function focusClick(ctx: Ctx, t: HTMLElement): boolean {
     if (!ta.value && !ents[u.key]?.target) { toast('Переклад уже порожній'); return true; }
     setText(ctx, u, '', 'очищено', 'clear'); toast('Переклад очищено. Скасувати можна в «Активності»'); return true;
   }
-  if (t.closest('#b-scene')) { openScene(ctx, u); return true; }
-  if (t.closest('#b-wrap,[data-wrap]')) {
+  if (t.closest('[data-wrap]')) {
     const limit = limitFor(ctx.lineLimit(), u.face);
     if (!limit) { toast('Ширину рядка вимкнено в налаштуваннях'); return true; }
     const text = wrapLines(ta.value, limit);
     if (text === ta.value) toast('Рядки вже вміщаються'); else setText(ctx, u, text, 'перенесено рядки');
-    return true;
-  }
-  if (t.closest('#b-code')) {
-    const miss = activeIssues(u, { target: ta.value }, ctx.qaOpts()).find(i => i.key === 'codes')?.codes ?? [];
-    if (!miss.length) { toast('Усі керівні коди вже є'); return true; }
-    setText(ctx, u, ta.value + miss.join(''), 'додано керівні коди');
     return true;
   }
   if (t.closest('#b-save')) { send(ctx); return true; }

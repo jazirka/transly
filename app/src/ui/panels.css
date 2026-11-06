@@ -342,3 +342,7 @@ button.cc:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 #fpop button .grp-dot{margin-right:8px}
 #fpop button.on{color:var(--accent)}
 .gr .ln[draggable="true"]{cursor:grab}
+
+/* a line longer than the game's window: said under the field, with the fix */
+.wraphint{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;border:1px solid #5a4a2a;border-radius:var(--r2);background:rgba(224,160,70,.08);font-size:12.5px;margin-top:8px}
+.wraphint[hidden]{display:none}

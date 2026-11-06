@@ -10,6 +10,7 @@ import { FOCUS_HTML, SIDE_HTML, qaClick, focusClick, focusInput, insertText, ren
 import { wireDiscuss } from './discuss';
 import { wireTermCard } from './termcard';
 import { wireLinks } from './links';
+import { SCENE_HTML, focusCard, hasScenes, renderSceneView, sceneClick, sceneFocus, sceneIdOf, sceneInput } from './scene-view';
 import { SCENES_HTML, renderScenesPanel, scenesClick, wireScenes } from './scenes-panel';
 import { FILES_DRAG, GROUPS_HTML, dragFiles, groupsClick, placeMenuHtml, renderGroupsBlock, wireGroups } from './groups-panel';
 import type { PlaceTarget } from './groups-panel';
@@ -76,6 +77,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     <div class="seg" id="seg" role="group" aria-label="Режим">
       <button aria-pressed="true" data-m="table" class="on"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM2.5 7h11M6.5 3.5v9"/></svg>Таблиця</button>
       <button aria-pressed="false" data-m="edit"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM6 3.5v9M6 8h7.5"/></svg>Редагування</button>
+      <button aria-pressed="false" data-m="scene" id="m-scene"><svg viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="6" rx="1.5"/><rect x="2.5" y="11" width="7" height="2.5" rx="1"/></svg>Сцена</button>
     </div>
     <div class="grow"></div>
     <div class="prog" id="pg" title=""><div class="bar"><i class="a" id="pg-a"></i><i class="b" id="pg-b"></i><i class="c" id="pg-c"></i></div><span id="pg-txt" style="font-family:var(--mono);font-size:11.5px"></span></div>
@@ -127,6 +129,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
         <div class="legend-bar" aria-label="Умовні позначення"><span><i class="sd new"></i>без перекладу</span><span><i class="sd draft"></i>чернетка</span><span><i class="sd done"></i>чекає вичитування</span><span><i class="sd appr"></i>вичитано</span><span><i class="sd qa"></i>є проблема QA</span><span>${SVG.cmt}коментар</span></div>
       </div>
       <div class="view" id="v-focus">${FOCUS_HTML}</div>
+      <div class="view" id="v-scene">${SCENE_HTML}</div>
     </main>
     ${SIDE_HTML}
   </div>
@@ -164,9 +167,9 @@ export async function start(root: HTMLElement): Promise<void> {
   catch { saved = emptyProject('Новий проєкт'); }
   const mq = matchMedia('(max-width: 760px)');
   const s: State = {
-    views: [], game: [], saved, current: null, open: [], group: null, groupSel: null, picked: new Set(), cur: null, mode: mq.matches ? 'edit' : 'table', filter: 'all', q: '', speaker: null, lenFilter: 'all', sort: 'order', compact: ls('transly.compact') === '1', kb: false,
+    views: [], game: [], saved, current: null, open: [], group: null, groupSel: null, picked: new Set(), cur: null, scene: null, mode: mq.matches ? 'edit' : 'table', filter: 'all', q: '', speaker: null, lenFilter: 'all', sort: 'order', compact: ls('transly.compact') === '1', kb: false,
     checked: new Set(), sideTab: 'panel', sideOn: ['panel'], saveOk: true, savedAt: null, who: saved.settings.who, phone: mq.matches,
-    leftTab: { table: 'files', edit: 'rows' }, leftOpen: !mq.matches, leftBoth: false, rightOpen: false, collapsed: new Set(), sess: { n: 0, t0: Date.now() }, lastBuild: null,
+    leftTab: { table: 'files', edit: 'rows', scene: 'scenes' }, leftOpen: !mq.matches, leftBoth: false, rightOpen: false, collapsed: new Set(), sess: { n: 0, t0: Date.now() }, lastBuild: null,
   };
   const fromSnapshot = viewsFromSnapshot(saved);
   if (fromSnapshot.length) { s.views = fromSnapshot; s.current = fromSnapshot[0]!.name; s.open = [s.current]; }
@@ -265,9 +268,12 @@ export async function start(root: HTMLElement): Promise<void> {
     select: (key, mode) => {
       s.cur = key;
       if (mode) setMode(mode, false);
+      // In the scene mode a row of another scene brings that scene in.
+      if (s.mode === 'scene') s.scene = sceneIdOf(ctx, key);
       if (s.phone) { s.leftOpen = false; s.rightOpen = false; }
       renderAll();
       if (s.mode === 'table') { reveal('grid', key); document.querySelector<HTMLElement>(`.gr[data-key="${CSS.escape(key)}"]`)?.scrollIntoView({ block: 'nearest' }); }
+      else if (s.mode === 'scene') focusCard(key);
       else { reveal('slist', key); document.querySelector<HTMLElement>(`.si[data-key="${CSS.escape(key)}"]`)?.scrollIntoView({ block: 'nearest' }); $('#i-tr').focus(); }
     },
   };
@@ -356,8 +362,9 @@ export async function start(root: HTMLElement): Promise<void> {
     if (u.filter && FILTERS.some(f => f[0] === u.filter)) s.filter = u.filter;
     s.q = u.q ?? ''; s.speaker = u.speaker ?? null;
     if (u.sort && u.sort in SORT_LABEL) s.sort = u.sort;
-    // The old review mode is gone: a saved one opens as the editor.
-    const um: Mode | undefined = (u.mode as string | undefined) === 'review' ? 'edit' : u.mode;
+    // The old review mode is gone: a saved one opens as the editor; the scene mode needs a file with scenes.
+    let um: Mode | undefined = (u.mode as string | undefined) === 'review' ? 'edit' : u.mode;
+    if (um === 'scene') { if (hasScenes(ctx)) s.scene = sceneIdOf(ctx, u.cur ?? null); else um = 'edit'; }
     if (um && (!s.phone || um !== 'table') && s.mode !== um) s.mode = um;
     if (u.cur && unitMap.has(u.cur)) s.cur = u.cur;
     else if (s.mode !== 'table') s.cur = ctx.visible()[0]?.key ?? null;
@@ -371,7 +378,7 @@ export async function start(root: HTMLElement): Promise<void> {
   function renderLayout(): void {
     const ide = $('#ide');
     const l = lp();
-    ide.className = `ide mode-${s.mode === 'table' ? 'table' : 'focus'} ${l ? 'lp-open' : 'lp-closed'}${s.phone ? ' sz-s' : ''}${s.rightOpen ? ' sheet-open' : ''}${!s.sideOn.length && !s.phone ? ' rp-collapsed' : ''}${s.compact ? ' compact' : ''}${s.kb ? ' kb' : ''}`;
+    ide.className = `ide mode-${s.mode === 'table' ? 'table' : 'focus'}${s.mode === 'scene' ? ' scene-mode' : ''} ${l ? 'lp-open' : 'lp-closed'}${s.phone ? ' sz-s' : ''}${s.rightOpen ? ' sheet-open' : ''}${!s.sideOn.length && !s.phone ? ' rp-collapsed' : ''}${s.compact ? ' compact' : ''}${s.kb ? ' kb' : ''}`;
     const both = (l === 'files' || l === 'rows') && s.leftBoth && !s.phone;
     $('#lpanel').classList.toggle('split', both);
     $('#rz-y').hidden = !both;
@@ -644,10 +651,11 @@ export async function start(root: HTMLElement): Promise<void> {
     if (renderMainEmpty()) { renderStatus(); return; }
     $('#v-table').style.display = '';
     $('#v-focus').style.display = '';
-    if (lp() === 'rows' || s.leftBoth || s.mode !== 'table') renderRowsList();
+    if (lp() === 'rows' || s.leftBoth || s.mode === 'edit') renderRowsList();
     if (lp() === 'glossary') renderGlossaryPanel(ctx);
     if (lp() === 'scenes') renderScenesPanel(ctx);
-    if (s.mode === 'table') renderTable(); else renderFocus(ctx, isDesktop());
+    ($('#m-scene') as HTMLButtonElement).disabled = !hasScenes(ctx);
+    if (s.mode === 'table') renderTable(); else if (s.mode === 'scene') renderSceneView(ctx); else renderFocus(ctx, isDesktop());
     renderSidePanel(ctx);
     renderStatus();
   }
@@ -655,9 +663,15 @@ export async function start(root: HTMLElement): Promise<void> {
   /* ---------- actions ---------- */
   function setMode(m: Mode, rerender = true): void {
     if (m === s.mode) return;
+    if (m === 'scene') {
+      if (!hasScenes(ctx)) { toast(s.current === GROUP ? 'Сцену видно у файлі, відкритому окремо: відкрийте його зі списку файлів' : 'У цьому файлі немає сцен: вони є лише в картах, спільних подіях і боях'); return; }
+      s.scene = sceneIdOf(ctx, s.cur);
+      s.leftTab.scene = 'scenes'; s.leftOpen = true; s.leftBoth = false;
+    }
     s.mode = m;
-    if (m !== 'table' && !ctx.visible().some(u => u.key === s.cur)) s.cur = ctx.visible()[0]?.key ?? null;
-    if (rerender) { renderAll(); if (m !== 'table' && s.cur) $('#i-tr').focus(); }
+    if (m === 'edit' && !ctx.visible().some(u => u.key === s.cur)) s.cur = ctx.visible()[0]?.key ?? null;
+    if (m === 'scene' && !s.cur) { const idx = sceneIdOf(ctx, null); void idx; }
+    if (rerender) { renderAll(); if (m === 'edit' && s.cur) $('#i-tr').focus(); else if (m === 'scene' && s.cur) focusCard(s.cur); }
   }
 
   function openFile(name: string): void {
@@ -1058,8 +1072,8 @@ export async function start(root: HTMLElement): Promise<void> {
   type MenuItem = '-' | { t: string; fn: () => void; sc?: string };
   const MENUS: Record<string, MenuItem[]> = {
     'Файл': [{ t: 'Відкрити папку гри…', fn: () => void openFolder() }, { t: 'Відкрити файли або вставити JSON…', fn: openImportDlg }, { t: 'Зібрати…', fn: doBuild, sc: 'F5' }, '-', { t: 'Налаштування…', fn: openSettingsDlg }],
-    'Вигляд': [{ t: 'Таблиця', fn: () => setMode('table') }, { t: 'Редагування', fn: () => setMode('edit') }],
-    'Навігація': [{ t: 'Наступний рядок без перекладу', fn: () => jump('new', 1) }, { t: 'Наступна проблема QA', fn: () => jump('qa', 1) }, { t: 'Переглянути сцену…', fn: () => { const u = s.cur ? ctx.unit(s.cur) : undefined; if (u) openScene(ctx, u); else toast('Спершу виберіть рядок'); } }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: 'Ctrl+K' }],
+    'Вигляд': [{ t: 'Таблиця', fn: () => setMode('table') }, { t: 'Редагування', fn: () => setMode('edit') }, { t: 'Сцена', fn: () => setMode('scene') }],
+    'Навігація': [{ t: 'Наступний рядок без перекладу', fn: () => jump('new', 1) }, { t: 'Наступна проблема QA', fn: () => jump('qa', 1) }, { t: 'Сцена', fn: () => setMode('scene') }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: 'Ctrl+K' }],
     'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Перевірити узгодженість…', fn: () => openConsistency(ctx) }, { t: 'Автозаповнення за словами…', fn: () => openAutofill(ctx) }, { t: 'Активність…', fn: () => openActivity(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенести довгі рядки у файлі', fn: wrapFile }, '-', { t: 'Налаштування…', fn: openSettingsDlg }],
     'Довідка': [{ t: 'Гарячі клавіші', fn: () => toggleKeys() }],
   };
@@ -1342,6 +1356,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (si) { if (s.phone) { s.leftOpen = false; } ctx.select(si.dataset.key!, s.mode === 'table' ? 'edit' : undefined); return; }
     if (groupsClick(ctx, t, groupsApi) || glossaryClick(ctx, t) || scenesClick(ctx, t)) return;
     if (sideClick(ctx, t)) return;
+    if (s.mode === 'scene' && sceneClick(ctx, t, key => { s.cur = key; send(ctx); })) return;
     if (s.mode !== 'table' && focusClick(ctx, t)) return;
     if (s.mode === 'table') {
       const row = t.closest<HTMLElement>('.gr');
@@ -1394,9 +1409,16 @@ export async function start(root: HTMLElement): Promise<void> {
     else if (row && s.mode === 'table' && !t.closest('textarea')) ctx.select(row.dataset.key!, 'edit');
   });
 
+  let scenePanelTimer = 0;
+  // A field of the scene mode got the focus: that row is the open one, the right panel follows.
+  root.addEventListener('focusin', e => {
+    const t = e.target as HTMLElement;
+    if (t instanceof HTMLTextAreaElement) sceneFocus(ctx, t, () => { renderSidePanel(ctx); renderStatus(); saveUi(); });
+  });
   root.addEventListener('input', e => {
     const t = e.target as HTMLElement;
     if (t instanceof HTMLTextAreaElement && t.id === 'i-tr') { focusInput(ctx, t); renderStatus(); return; }
+    if (t instanceof HTMLTextAreaElement && sceneInput(ctx, t)) { renderStatus(); window.clearTimeout(scenePanelTimer); scenePanelTimer = window.setTimeout(() => renderSidePanel(ctx), 250); return; }
     if (t.id === 'q' || t.id === 'q2') {
       s.q = (t as HTMLInputElement).value;
       const pos = (t as HTMLInputElement).selectionStart ?? s.q.length;
@@ -1428,6 +1450,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (e.key === 'F5') { e.preventDefault(); runSelected(); return; }
     if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && s.mode !== 'table') { e.preventDefault(); step(ctx, e.key === 'ArrowDown' ? 1 : -1); return; }
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && t.id === 'i-tr') { e.preventDefault(); send(ctx); return; }
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && t.classList.contains('sv-in')) { e.preventDefault(); s.cur = t.dataset.key ?? s.cur; send(ctx); return; }
     if (s.mode === 'table' && t.classList.contains('gr')) {
       const list = visibleUnits(true);
       const i = list.findIndex(u => u.key === t.dataset.key);

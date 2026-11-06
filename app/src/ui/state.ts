@@ -2,7 +2,7 @@ import { TmIndex, activeIssues } from '../core';
 import type { BatchKind, GameNameIndex, RowChange, Usage } from '../core';
 import type { Autosave, DupIndex, Entry, FileView, GameFile, Group, RowRef, SavedProject, Status, Unit } from '../core';
 
-export type Mode = 'table' | 'edit';
+export type Mode = 'table' | 'edit' | 'scene';
 export type Filter = 'all' | 'new' | 'draft' | 'done' | 'appr' | 'qa' | 'cm';
 export type SideTab = 'panel';
 export type LeftTab = 'files' | 'rows' | 'glossary' | 'scenes';
@@ -33,6 +33,8 @@ export interface State {
   groupSel: { title: string; gid?: string; keys: Map<string, Set<string>> } | null;
   /** Files ticked in the file tree (Ctrl/Shift-click) to open together. */
   picked: Set<string>;
+  /** The scene (its id) shown in the scene mode. */
+  scene: string | null;
   /** Unit key selected in the current file. */
   cur: string | null;
   mode: Mode;

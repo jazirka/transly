@@ -388,3 +388,31 @@ button.cc:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .pn-row{display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px dashed transparent;border-radius:var(--r2);background:none;color:var(--mute);font:inherit;font-size:12.5px;text-align:left;cursor:pointer}
 .pn-eq{display:inline-grid;place-items:center;width:16px;color:var(--warn)}
 .fs .ibody .pane{padding:0}
+
+/* ----- the scene mode: the lines of one event page, each with its own field ----- */
+#v-scene{display:none;min-height:0;overflow:auto}
+.ide.scene-mode #v-scene{display:block}
+.ide.scene-mode #v-focus{display:none}
+.sv{max-width:780px;margin:0 auto;padding:0 22px 40px;display:flex;flex-direction:column;gap:14px}
+.sv-hd{position:sticky;top:0;z-index:5;display:flex;flex-direction:column;gap:8px;padding:14px 0 10px;background:var(--bg);border-bottom:1px solid var(--line)}
+.sv-title{display:flex;align-items:center;gap:10px}
+.sv-t{flex:1;min-width:0;display:flex;flex-direction:column}
+.sv-t b{font-size:15px;font-weight:600}
+.sv-t small{font-size:12px;color:var(--mute)}
+.sv-cond{font-size:12px;color:var(--mute)}
+.sv-acts{display:flex;flex-wrap:wrap;gap:8px}
+.sv-body{display:flex;flex-direction:column;gap:12px}
+.sv-card{display:flex;flex-direction:column;gap:8px;padding:10px 12px 12px;border:1px solid var(--line);border-radius:var(--r3,12px);background:var(--panel)}
+.sv-card.cur{border-color:var(--accent);box-shadow:0 0 0 3px rgba(139,114,232,.16)}
+.sv-top{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mute)}
+.sv-who{font-size:13px;font-weight:500;color:#b7a6ff}
+.sv-n{font:11px var(--mono);color:var(--dim)}
+.sv-cnt{font:11.5px var(--mono)}
+.sv-ok{width:28px;height:28px;padding:0;display:grid;place-items:center;border:1px solid var(--line);border-radius:var(--r2);background:var(--bg);color:var(--mute);cursor:pointer}
+.sv-ok svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.sv-ok:hover{color:var(--ok);border-color:rgba(76,195,138,.5)}
+.sv-ok:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.sv-src{padding:8px 10px;font-size:14px}
+.sv-in{box-sizing:border-box;width:100%;min-height:44px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r2);background:var(--bg);color:var(--text);font:15px/1.5 var(--ui);resize:none;overflow:hidden}
+.sv-in:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(139,114,232,.18)}
+.sv .empty-state{margin-top:40px}

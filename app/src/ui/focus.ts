@@ -258,6 +258,7 @@ export function insertText(ctx: Ctx, text: string): void {
   const u = ctx.s.cur ? ctx.unit(ctx.s.cur) : undefined;
   if (!u || !ctx.s.current) { toast('Спершу виберіть рядок'); return; }
   if (ctx.s.mode === 'table') { const have = entryOf(ctx, u)?.target ?? ''; setText(ctx, u, have ? `${have} ${text}` : text, 'вставлено з картки'); }
+  else if (ctx.s.mode === 'scene') { const ta = document.querySelector<HTMLTextAreaElement>(`.sv-in[data-key="${CSS.escape(u.key)}"]`); if (ta) insertAtCursor(ta, text); }
   else insertAtCursor($('#i-tr') as HTMLTextAreaElement, text);
 }
 

@@ -129,7 +129,6 @@
 .cmi.done{stroke:#8fd19a}
 
 /* Filters with nothing in them are dimmed, but their text stays readable (contrast). */
-.chip.zero{opacity:1;color:#9ba1ad}
 
 /* Rows that are only a place until they come near the screen (see chunks.ts). */
 .gr.lazy{display:block;border-bottom:1px solid #2a2c30}
@@ -426,3 +425,44 @@ button.cc:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .bulk button{flex:none}
 input::placeholder,textarea::placeholder{color:#9a9ea6;opacity:1}
 .gr .st{align-items:flex-start;padding-top:11px}
+
+/* ---------- wave 2: a narrow window ---------- */
+/* the widths the panels really take: what the translator set, but never so much that the centre is squeezed */
+.ide{--lpw-eff:var(--lpw,300px);--rpw-eff:var(--rpw,350px)}
+@media (min-width:761px) and (max-width:1180px){
+  .ide:not(.sz-s){--lpw-eff:min(var(--lpw,300px),240px);--rpw-eff:min(var(--rpw,350px),320px)}
+}
+/* the right panel opened in a narrow window lies over the centre (it has no column of its own; the rail keeps its column) */
+.ide:not(.sz-s).rp-collapsed.rp-over .fs .ibody{display:flex;position:absolute;top:0;bottom:6px;right:46px;width:var(--rpw-eff);z-index:20;box-shadow:-14px 0 32px rgba(0,0,0,.5)}
+/* breadcrumbs wrap and shorten instead of being cut */
+.crumbs{height:auto;min-height:26px;flex-wrap:wrap;row-gap:0;padding-top:2px;padding-bottom:2px}
+.crumbs>span:not(.r){min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* the table keeps its translation column when the centre is narrow: the key goes under the original, the speaker and length columns step aside */
+.gridwrap{container-type:inline-size;container-name:grid}
+.gr .src .skey{display:none}
+/* first the speaker column steps aside, then the key and the length too (the key moves under the original) */
+@container grid (max-width:680px){
+  .grid:not(.no-who) .gh,.grid:not(.no-who) .gr{grid-template-columns:34px 22px 110px minmax(160px,.9fr) minmax(180px,1fr) 78px}
+  .grid .gh>div:nth-child(4),.grid .gr>div:nth-child(4){display:none}
+}
+@container grid (max-width:600px){
+  .grid .gh,.grid .gr{grid-template-columns:34px 22px minmax(120px,1fr) minmax(140px,1.1fr)}
+  .grid .gh>div:nth-child(3),.grid .gh>div:nth-child(7),
+  .grid .gr>div:nth-child(3),.grid .gr>div:nth-child(7){display:none}
+  .gr .src .skey{display:block;margin-top:2px;font:11px var(--mono);color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
+
+/* ---------- wave 2: the table's chrome ---------- */
+/* filter chips share the row with the search and shrink to wrap, so the last one is never cut off */
+.filters .chipsHost{flex:1 1 0;min-width:0}
+/* the bulk bar lies over the header of the table instead of pushing the rows down (the select-all box stays free) */
+.gridwrap>.bulk{display:none;position:sticky;top:0;z-index:5;height:0;padding:0;border:0;background:none;overflow:visible}
+.gridwrap>.bulk.show{display:block}
+.bulk-in{position:absolute;left:34px;right:0;top:0;height:26px;display:flex;align-items:center;gap:8px;padding:0 10px;background:#2f2a58;border-bottom:1px solid #5a4a9a;color:#d9d0ff;white-space:nowrap;overflow:hidden}
+.bulk-in button{flex:none;height:24px}
+.bulk-in .ghost{margin-left:auto;min-width:24px;padding:0 6px}
+.bulk-in #bulkt{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+/* the status marks, now in the hint popover */
+.keys .kh2{margin-top:10px}
+.keys .kr-l{display:flex;flex-wrap:wrap;gap:6px 14px}
+.keys .kr-l span{display:inline-flex;align-items:center;gap:6px}

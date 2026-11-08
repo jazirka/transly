@@ -124,11 +124,9 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
       <div class="tabs"><span class="tabs-host" id="tabs-host"></span></div>
       <div class="view" id="v-table">
         <div class="crumbs" id="crumbs"></div>
-        <div class="filters"><div class="fin">${SVG.search}<input class="qin" id="q" placeholder="Фільтр у цьому файлі" aria-label="Фільтр"></div><span class="chipsHost" id="chips1"></span><span id="tagfilter"></span>
+        <div class="filters"><div class="fin">${SVG.search}<input class="qin" id="q" placeholder="Фільтр у цьому файлі" aria-label="Фільтр"></div><span class="chipsHost" id="chips1"></span>
           <div class="r"><button class="chip" id="spkbtn">Мовець ▾</button><button class="chip" id="lenbtn">Довжина ▾</button></div></div>
-        <div class="bulk" id="bulk"><b id="bulkn">0</b><span id="bulkt"></span><button id="bb-ok" title="Надіслати вибрані переклади">Надіслати</button><button id="bb-appr" title="Вичитати вибрані переклади (рядки, що ще не надіслано, надсилаються й вичитуються разом)">Вичитати</button><button id="bb-tm" title="Підставити збіг із пам’яті перекладів (від 70%) у порожні вибрані рядки">Підставити з пам’яті</button><button id="bb-clear" class="ghost">Скасувати вибір</button></div>
-        <div class="gridwrap"><div class="grid" id="grid" role="grid" aria-label="Рядки файлу"></div></div>
-        <div class="legend-bar" aria-label="Умовні позначення"><span><i class="sd new"></i>без перекладу</span><span><i class="sd draft"></i>чернетка</span><span><i class="sd done"></i>надіслано</span><span><i class="sd appr"></i>вичитано</span><span><i class="sd qa"></i>є помилка QA</span><span>${SVG.cmt}коментар</span></div>
+        <div class="gridwrap"><div class="bulk" id="bulk"><div class="bulk-in"><b id="bulkn">0</b><span id="bulkt"></span><button id="bb-ok" title="Надіслати вибрані переклади">Надіслати</button><button id="bb-appr" title="Вичитати вибрані переклади (рядки, що ще не надіслано, надсилаються й вичитуються разом)">Вичитати</button><button id="bb-tm" title="Підставити збіг із пам’яті перекладів (від 70%) у порожні вибрані рядки">З пам’яті</button><button id="bb-clear" class="ghost" title="Скасувати вибір" aria-label="Скасувати вибір">✕</button></div></div><div class="grid" id="grid" role="grid" aria-label="Рядки файлу"></div></div>
       </div>
       <div class="view" id="v-focus">${FOCUS_HTML}</div>
       <div class="view" id="v-scene">${SCENE_HTML}</div>
@@ -146,7 +144,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
 <div class="pop cfgpop projpop" id="projpop" role="menu" aria-label="Проєкт" hidden></div>
 <div class="pop cfgpop" id="cfgpop" role="menu" aria-label="Що запускати" hidden></div>
 <div class="pop" id="fpop" role="dialog" aria-label="Параметри" hidden></div>
-<div class="pop keys" id="keypop" role="dialog" aria-label="Гарячі клавіші" hidden>
+<div class="pop keys" id="keypop" role="dialog" aria-label="Гарячі клавіші й позначки" hidden>
   <div class="kh">Гарячі клавіші</div>
   <div class="kr"><span>Відкрити рядок у редагуванні</span><kbd>Enter</kbd><kbd>2× клік</kbd></div>
   <div class="kr"><span>Наступний / попередній рядок</span><kbd>↓</kbd><kbd>↑</kbd></div>
@@ -158,6 +156,8 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
   <div class="kr"><span>Запустити вибрану збірку (файл або гра)</span><kbd>F5</kbd></div>
   <div class="kr"><span>Знайти скрізь</span><kbd>Ctrl</kbd><kbd>K</kbd><kbd>⇧</kbd><kbd>⇧</kbd></div>
   <div class="kr"><span>Закрити вікно чи меню</span><kbd>Esc</kbd></div>
+  <div class="kh kh2">Позначки рядків</div>
+  <div class="kr kr-l"><span><i class="sd new"></i>без перекладу</span><span><i class="sd draft"></i>чернетка</span><span><i class="sd done"></i>надіслано</span><span><i class="sd appr"></i>вичитано</span><span><i class="sd qa"></i>є помилка QA</span></div>
 </div>
 <div class="sd-wrap" id="sd" hidden><div class="sd-box" role="dialog" aria-modal="true" aria-label="Пошук скрізь"><input id="sd-in" placeholder="Рядки, файли, терміни…" aria-label="Пошук скрізь" autocomplete="off"><div id="sd-res" role="listbox" aria-label="Результати"></div><div class="sd-foot">↑↓ вибір · Enter відкрити · Esc закрити</div></div></div>
 ${WINDOW_CONTROLS_HTML}`;
@@ -169,11 +169,14 @@ export async function start(root: HTMLElement): Promise<void> {
   try { saved = (await store.load()) ?? emptyProject('Новий проєкт'); }
   catch { saved = emptyProject('Новий проєкт'); }
   const mq = matchMedia('(max-width: 760px)');
+  /** A window too narrow for three columns: the right panel is folded by itself and, when opened, lies over the centre. */
+  const narrow = matchMedia('(min-width: 761px) and (max-width: 1180px)');
   const s: State = {
     views: [], game: [], saved, current: null, open: [], group: null, groupSel: null, picked: new Set(), cur: null, scene: null, mode: mq.matches ? 'edit' : 'table', filter: 'all', q: '', speaker: null, lenFilter: 'all', sort: 'order', compact: ls('transly.compact') === '1', kb: false,
     checked: new Set(), sideTab: 'panel', sideOn: ['panel'], saveOk: true, savedAt: null, who: saved.settings.who, phone: mq.matches,
     leftTab: { table: 'files', edit: 'rows', scene: 'scenes' }, leftOpen: !mq.matches, leftBoth: false, rightOpen: false, collapsed: new Set(), sess: { n: 0, t0: Date.now() }, lastBuild: null,
   };
+  if (narrow.matches && !s.phone) s.sideOn = [];
   const fromSnapshot = viewsFromSnapshot(saved);
   if (fromSnapshot.length) { s.views = fromSnapshot; s.current = fromSnapshot[0]!.name; s.open = [s.current]; }
   let lastHandle: (DirHandle & { name: string }) | null = null;
@@ -381,7 +384,8 @@ export async function start(root: HTMLElement): Promise<void> {
   function renderLayout(): void {
     const ide = $('#ide');
     const l = lp();
-    ide.className = `ide mode-${s.mode === 'table' ? 'table' : 'focus'}${s.mode === 'scene' ? ' scene-mode' : ''} ${l ? 'lp-open' : 'lp-closed'}${s.phone ? ' sz-s' : ''}${s.rightOpen ? ' sheet-open' : ''}${!s.sideOn.length && !s.phone ? ' rp-collapsed' : ''}${s.compact ? ' compact' : ''}${s.kb ? ' kb' : ''}`;
+    const over = narrow.matches && !s.phone && s.sideOn.length > 0;
+    ide.className = `ide mode-${s.mode === 'table' ? 'table' : 'focus'}${s.mode === 'scene' ? ' scene-mode' : ''} ${l ? 'lp-open' : 'lp-closed'}${s.phone ? ' sz-s' : ''}${s.rightOpen ? ' sheet-open' : ''}${(!s.sideOn.length || over) && !s.phone ? ' rp-collapsed' : ''}${over ? ' rp-over' : ''}${s.compact ? ' compact' : ''}${s.kb ? ' kb' : ''}`;
     const both = (l === 'files' || l === 'rows') && s.leftBoth && !s.phone;
     $('#lpanel').classList.toggle('split', both);
     $('#rz-y').hidden = !both;
@@ -480,7 +484,9 @@ export async function start(root: HTMLElement): Promise<void> {
     const ctxUnits = v.units.filter(u => inContext(u, ents[u.key]));
     return FILTERS.map(([f, l]) => {
       const n = f === 'all' ? ctxUnits.length : ctxUnits.filter(u => matchesStatus(u, ents[u.key], f)).length;
-      return `<button class="chip ${s.filter === f ? 'on' : n === 0 && f !== 'all' ? 'zero' : ''}" data-filter="${f}" aria-pressed="${s.filter === f}">${l} <span class="n">${n}</span></button>`;
+      // A filter that finds nothing is not offered (unless it is the chosen one): the row stays short and nothing is cut off.
+      if (n === 0 && f !== 'all' && s.filter !== f) return '';
+      return `<button class="chip ${s.filter === f ? 'on' : ''}" data-filter="${f}" aria-pressed="${s.filter === f}">${l} <span class="n">${n}</span></button>`;
     }).join('');
   }
 
@@ -510,7 +516,7 @@ export async function start(root: HTMLElement): Promise<void> {
       <div class="st" role="gridcell"><span class="sd ${st}" title="${STATUS_LABEL[st]}"${st === 'qa' ? ` data-hc="qa" data-hk="${esc(u.key)}"` : ''}></span><span class="vh">${STATUS_LABEL[st]}</span></div>
       <div role="gridcell"><span class="key" title="${esc(u.key)}">${esc(shortKey(u.key))}</span>${cmIcon(e)}</div>
       <div class="who" role="gridcell">${esc(ctx.speaker(u))}</div>
-      <div class="src" role="gridcell">${markup(flow(u.source), hits)}</div>
+      <div class="src" role="gridcell">${markup(flow(u.source), hits)}<span class="skey" aria-hidden="true">${esc(shortKey(u.key))}</span></div>
       <div class="tr ${e?.target ? '' : 'empty'}" role="gridcell" title="Клікніть, щоб писати прямо тут">${e?.target ? markup(flow(e.target)) : '—'}</div>
       <div class="len ${lenCls(u, e)}" role="gridcell" title="Символів у перекладі / в оригіналі">${len}</div></div>`;
   }
@@ -1564,6 +1570,11 @@ export async function start(root: HTMLElement): Promise<void> {
 
   mq.addEventListener('change', () => {
     s.phone = mq.matches; s.leftOpen = !s.phone; s.rightOpen = false;
+    renderAll();
+  });
+  narrow.addEventListener('change', () => {
+    // Until the translator has chosen, the panel follows the window: folded when narrow, open when wide.
+    if (!s.phone && !s.sideTouched) s.sideOn = narrow.matches ? [] : ['panel'];
     renderAll();
   });
 

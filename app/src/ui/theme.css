@@ -465,9 +465,6 @@ td .term{color:#d9c3ee}
 .gr:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .cmi{width:13px;height:13px;stroke:var(--mute);fill:none;stroke-width:1.4;vertical-align:-2px;margin-left:6px;flex:none}
 .si .a .cmi{margin-left:2px}
-.legend-bar{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;padding:7px 14px;border-top:1px solid var(--line);color:var(--mute);font-size:11.5px;flex:none;background:#222427}
-.legend-bar span{display:inline-flex;align-items:center;gap:6px}
-.legend-bar .cmi{margin:0}
 .empty-state{display:flex;flex-direction:column;align-items:center;gap:8px;padding:44px 16px;color:var(--mute);text-align:center}
 .empty-state b{color:var(--text);font-size:14px;font-weight:500}
 .offlist{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:8px 12px;border:1px solid #5a4a2a;background:#352e20;border-radius:var(--r2);color:#f0d9a0;font-size:12.5px}
@@ -721,7 +718,6 @@ input[type=checkbox]{accent-color:#8b6cf0}
 .tr:has(>.cell-ed){display:flex;flex-direction:column;align-items:stretch}
 .tr>.cell-ed{flex:1;font-style:normal;color:var(--text);min-height:0}
 .cell-hint{position:static;flex:none;border:0;background:#17181a;padding:0 10px 4px}
-.chip.zero{opacity:.55}
 .code{color:#c9a8ec;background:#2e2840}
 .gr .tr .code{color:#c9a8ec}
 .sbtn[hidden]{display:none}
@@ -775,7 +771,7 @@ input[type=checkbox]{accent-color:#8b6cf0}
 .tree.split #lp-rows .sl-body{overflow:auto}
 .tree.split .treebody[hidden],.tree.split .slist[hidden]{display:none}
 /* resizable left panel */
-.ide:not(.sz-s).lp-open .main,.ide:not(.sz-s).lp-open.mode-table .main,.ide:not(.sz-s).lp-open.mode-focus .main{grid-template-columns:40px var(--lpw,300px) minmax(0,1fr)}
+.ide:not(.sz-s).lp-open .main,.ide:not(.sz-s).lp-open.mode-table .main,.ide:not(.sz-s).lp-open.mode-focus .main{grid-template-columns:40px var(--lpw-eff) minmax(0,1fr)}
 .tree{position:relative}
 .rz{position:absolute;z-index:6;background:transparent;touch-action:none}
 .rz-x{top:0;bottom:0;right:0;width:6px;cursor:col-resize}
@@ -788,7 +784,7 @@ body.resizing{user-select:none;cursor:col-resize}
 .tree.split #lp-rows{flex:calc(1 - var(--split,.5)) 1 0;border-top:0}
 .sz-s .rz{display:none}
 /* right zone mirrors the left one: rail on the outer edge, stackable panes, resizable, foldable */
-.ide:not(.sz-s) #v-focus{grid-template-columns:minmax(0,1fr) var(--rpw,350px)!important}
+.ide:not(.sz-s) #v-focus{grid-template-columns:minmax(0,1fr) var(--rpw-eff)!important}
 .ide:not(.sz-s) #v-focus.side-collapsed{grid-template-columns:minmax(0,1fr) 40px!important}
 .ide:not(.sz-s) .fs{flex-direction:row;position:relative}
 .ide:not(.sz-s) .fs .ibody{order:1;flex:1;min-width:0;display:flex;flex-direction:column}
@@ -827,11 +823,11 @@ body.resizing{user-select:none;cursor:col-resize}
 .ide:not(.sz-s) .fs .itabs button.on::before{right:auto;left:-5px}
 .ide:not(.sz-s) .fs .itabs button.on::before{left:-2px}
 .ide:not(.sz-s) .fs .itabs .ssep{width:18px}
-.ide:not(.sz-s) .rz-r{position:absolute;top:0;bottom:6px;right:calc(52px + var(--rpw,350px));left:auto;width:8px}
+.ide:not(.sz-s) .rz-r{position:absolute;top:0;bottom:6px;right:calc(52px + var(--rpw-eff));left:auto;width:8px}
 .ide:not(.sz-s).rp-collapsed .rz-r,.ide:not(.sz-s).rp-collapsed .fs .ibody{display:none}
-.ide:not(.sz-s).lp-open .main,.ide:not(.sz-s).lp-open.mode-table .main,.ide:not(.sz-s).lp-open.mode-focus .main{grid-template-columns:40px var(--lpw,300px) minmax(0,1fr) var(--rpw,350px) 40px}
-.ide:not(.sz-s).lp-open.rp-collapsed .main,.ide:not(.sz-s).lp-open.rp-collapsed.mode-table .main,.ide:not(.sz-s).lp-open.rp-collapsed.mode-focus .main{grid-template-columns:40px var(--lpw,300px) minmax(0,1fr) 40px}
-.ide:not(.sz-s).lp-closed .main,.ide:not(.sz-s).lp-closed.mode-table .main,.ide:not(.sz-s).lp-closed.mode-focus .main{grid-template-columns:40px minmax(0,1fr) var(--rpw,350px) 40px}
+.ide:not(.sz-s).lp-open .main,.ide:not(.sz-s).lp-open.mode-table .main,.ide:not(.sz-s).lp-open.mode-focus .main{grid-template-columns:40px var(--lpw-eff) minmax(0,1fr) var(--rpw-eff) 40px}
+.ide:not(.sz-s).lp-open.rp-collapsed .main,.ide:not(.sz-s).lp-open.rp-collapsed.mode-table .main,.ide:not(.sz-s).lp-open.rp-collapsed.mode-focus .main{grid-template-columns:40px var(--lpw-eff) minmax(0,1fr) 40px}
+.ide:not(.sz-s).lp-closed .main,.ide:not(.sz-s).lp-closed.mode-table .main,.ide:not(.sz-s).lp-closed.mode-focus .main{grid-template-columns:40px minmax(0,1fr) var(--rpw-eff) 40px}
 .ide:not(.sz-s).lp-closed.rp-collapsed .main,.ide:not(.sz-s).lp-closed.rp-collapsed.mode-table .main,.ide:not(.sz-s).lp-closed.rp-collapsed.mode-focus .main{grid-template-columns:40px minmax(0,1fr) 40px}
 .ide:not(.sz-s) .main{padding-right:0}
 /* both zones share one header: title, and a hide control that shows on hover */
@@ -843,9 +839,9 @@ body.resizing{user-select:none;cursor:col-resize}
 .rz:hover,.rz.drag,.rz:focus-visible{background:transparent!important}
 .rz.drag{background:rgba(139,108,240,.22)!important}
 .rz:focus-visible{outline:none;box-shadow:0 0 0 1px rgba(139,108,240,.6) inset}
-.ide:not(.sz-s) .rz-x{position:absolute;top:0;bottom:6px;left:calc(46px + var(--lpw,300px));right:auto;width:6px;cursor:col-resize}
+.ide:not(.sz-s) .rz-x{position:absolute;top:0;bottom:6px;left:calc(46px + var(--lpw-eff));right:auto;width:6px;cursor:col-resize}
 .ide:not(.sz-s).lp-closed .rz-x{display:none}
-.ide:not(.sz-s) .rz-r{right:calc(46px + var(--rpw,350px));width:6px}
+.ide:not(.sz-s) .rz-r{right:calc(46px + var(--rpw-eff));width:6px}
 .rz-y,.rz-p{height:7px;border:0;background:linear-gradient(var(--line),var(--line)) center/100% 1px no-repeat!important}
 .rz-y.drag,.rz-p.drag{background:rgba(139,108,240,.22)!important}
 /* rails sit on the window background, not as a separate strip */

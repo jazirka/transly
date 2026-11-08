@@ -347,10 +347,10 @@ export function sideClick(ctx: Ctx, t: HTMLElement): boolean {
   const tab = t.closest<HTMLElement>('#stabs [data-p]');
   if (tab) {
     // The rail button shows the panel or folds the zone to its rail.
-    if (s.phone) { s.sideOn = ['panel']; } else s.sideOn = s.sideOn.length ? [] : ['panel'];
+    if (s.phone) { s.sideOn = ['panel']; } else { s.sideOn = s.sideOn.length ? [] : ['panel']; s.sideTouched = true; }
     ctx.render(); return true;
   }
-  if (t.closest('#rp-close')) { s.sideOn = []; ctx.render(); return true; }
+  if (t.closest('#rp-close')) { s.sideOn = []; s.sideTouched = true; ctx.render(); return true; }
   if (qaClick(ctx, t)) return true;
   if (!t.closest('.fs')) return false;
   const u = s.cur ? ctx.unit(s.cur) : undefined;

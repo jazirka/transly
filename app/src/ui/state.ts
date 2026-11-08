@@ -52,6 +52,8 @@ export interface State {
   sideTab: SideTab;
   /** Right-hand panels that are switched on (like tool windows): several are stacked, none folds the zone to its rail. */
   sideOn: SideTab[];
+  /** The translator opened or closed the right panel by hand: a narrow window then no longer folds it by itself. */
+  sideTouched?: boolean;
   saveOk: boolean;
   savedAt: number | null;
   who: string;

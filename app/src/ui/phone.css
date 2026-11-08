@@ -57,10 +57,7 @@
 .ide.sz-s .lbl-btn{padding:9px 10px;margin:-9px -10px}
 .ide.sz-s #b-play,.ide.sz-s #hk{display:none}
 .ide.sz-s .si{position:relative;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
-.ide.sz-s #lp-rows #bulk{flex-wrap:wrap;height:auto;padding:6px 10px;gap:6px}
-.ide.sz-s #lp-rows #bulk button{height:32px}
 .ide.sz-s #bb-rep,.ide.sz-s #bb-tm{display:none}
-.ide.sz-s #lp-rows #bulk .ghost{margin-left:auto}
 .dl-acts{display:flex;flex-direction:column;gap:6px}.dl-acts .btn{height:40px;text-align:left;padding:0 14px}
 .lphint{padding:6px 14px;color:var(--mute);font-size:11.5px}
 
@@ -78,7 +75,6 @@
 .ide.sz-s .filters{padding:6px 10px}
 .ide.sz-s .filters .fin{flex:1 1 100%}
 .ide.sz-s .crumbs{display:none}
-.ide.sz-s .legend-bar{display:none}
 
 /* ---- Phone, mobile-first: bottom bar, full-page lists, bottom sheet for the hints, text-only editor ---- */
 .bnav{display:none}

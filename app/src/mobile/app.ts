@@ -30,6 +30,9 @@ export async function start(root: HTMLElement): Promise<void> {
   let sub: Sub | null = null;
   let scope: 'file' | 'all' = 'file';
   let layout: 'cards' | 'table' = (() => { try { return localStorage.getItem('transly-m-layout') === 'table' ? 'table' : 'cards'; } catch { return 'cards'; } })();
+  /** The table needs room for its columns (a landscape phone, a tablet); on a narrow screen the rows are cards whatever was chosen. */
+  const wide = matchMedia('(min-width: 700px)');
+  const lay = (): 'cards' | 'table' => (wide.matches ? layout : 'cards');
   const fr = { find: '', replace: '', word: false, cs: false, matches: [] as ReturnType<typeof store.find> };
   const PAGE = 100; let page = 1, pageSig = '';
   let refLang = ''; let fq = '';
@@ -168,6 +171,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const title = tab === 'files' ? 'Файли гри' : tab === 'rows' ? (store.view()?.label ?? store.file ?? 'Рядки') : tab === 'edit' ? (store.file ?? 'Переклад') : 'Ще';
     let where = '';
     if (tab === 'edit' && !sub && store.current) { const list = store.rows(), pos = list.findIndex(x => x.key === store.current!.unit.key); if (pos >= 0) where = `Рядок ${pos + 1} з ${list.length} · `; }
+    else if (tab === 'rows' && !sub && scope === 'file' && store.view()) where = `${store.rows().length} з ${store.view()!.units.length} · `;
     const subline = tab === 'more' || !store.hasGame || sub ? '' : `${where}${pct}% · ${store.saveOk ? 'збережено' : 'не збережено!'}`;
     $('m-bar').innerHTML = `${sub ? '<button class="m-back" data-subback aria-label="Назад">' + icon('prev') + '</button>' : ''}<div class="m-title"><b>${esc(sub ? SUB_TITLE[sub] : title)}</b>${subline ? `<small class="${store.saveOk ? '' : 'bad'}">${esc(subline)}</small>` : ''}</div>${busy || updBusy ? `<span class="m-busy" role="status"><i class="m-spin"></i>${esc(busy || 'Перевіряю…')}</span>` : ''}${helpBtn()}${toolsBtn()}`;
     $('m-bar').classList.toggle('loading', !!(busy || updBusy));
@@ -241,15 +245,15 @@ export async function start(root: HTMLElement): Promise<void> {
     const shown = rows.slice(0, PAGE * page);
     const chips = FILTERS.map(([f, l]) => `<button class="m-chip ${store.filter === f ? 'on' : ''}" data-filter="${f}" aria-pressed="${store.filter === f}">${l}</button>`).join('');
     const sbar = `<div class="m-searchbar"><label class="m-search m-pill">${icon('search')}<span class="m-ph" aria-hidden="true">Пошук у файлі</span><input id="m-q" type="search" placeholder=" " aria-label="Пошук у файлі" value="${esc(store.q)}" enterkeyhint="search" autocomplete="off"></label></div>`;
-    return `<div class="m-tools">
-      <div class="m-scoperow"><div class="m-scope" role="group" aria-label="Де шукати"><button class="on" data-scope="file">Файл</button><button data-scope="all">Усі файли</button></div>
-      <div class="m-scope" role="group" aria-label="Вигляд"><button class="${layout === 'cards' ? 'on' : ''}" data-layout="cards">Картки</button><button class="${layout === 'table' ? 'on' : ''}" data-layout="table">Таблиця</button></div></div>
-      <div class="m-chips" role="group" aria-label="Фільтр">${chips}</div>
-      <div class="m-sortrow"><span>${rows.length} з ${v.units.length}</span>${layout === 'cards' ? `<button class="m-mini ${selecting ? 'on' : ''}" data-select aria-pressed="${selecting}">${selecting ? 'Готово' : 'Вибрати'}</button>` : ''}<select id="m-sort" aria-label="Порядок">${(['order', 'new', 'qa', 'long'] as Sort[]).map(s => `<option value="${s}" ${store.sort === s ? 'selected' : ''}>${{ order: 'За порядком', new: 'Спершу без перекладу', qa: 'Спершу проблеми', long: 'Спершу найдовші' }[s]}</option>`).join('')}</select></div></div>
-      ${layout === 'table' ? tableHtml(v.name, shown, rows.length) : `<ul class="m-list rows">${shown.map((u, i) => {
+    const L = lay();
+    const orders = { order: 'За порядком', new: 'Спершу без перекладу', qa: 'Спершу з помилками', long: 'Спершу найдовші' } as Record<Sort, string>;
+    return `<div class="m-tools compact"><div class="m-chiprow"><div class="m-chips" role="group" aria-label="Фільтр"><button class="m-chip scope" data-scope="all" aria-pressed="false" title="Шукати в усіх файлах">Усі файли</button>${chips}</div>
+      <div class="m-chipacts">${L === 'cards' ? `<button class="m-mini ${selecting ? 'on' : ''}" data-select aria-pressed="${selecting}">${selecting ? 'Готово' : 'Вибрати'}</button>` : ''}<label class="m-sortbtn" title="Порядок: ${esc(orders[store.sort])}">${icon('sort')}<select id="m-sort" aria-label="Порядок">${(['order', 'new', 'qa', 'long'] as Sort[]).map(s => `<option value="${s}" ${store.sort === s ? 'selected' : ''}>${orders[s]}</option>`).join('')}</select></label></div></div>
+      ${wide.matches ? `<div class="m-scope m-layout" role="group" aria-label="Вигляд"><button class="${L === 'cards' ? 'on' : ''}" data-layout="cards">Картки</button><button class="${L === 'table' ? 'on' : ''}" data-layout="table">Таблиця</button></div>` : ''}</div>
+      ${L === 'table' ? tableHtml(v.name, shown, rows.length) : `<ul class="m-list rows">${shown.map((u, i) => {
         const e = store.entry(v.name, u.key), st = store.shown(u, e);
-        return `<li><button class="m-row ${u.key === store.key && !selecting ? 'cur' : ''} ${selecting && picked.has(u.key) ? 'picked' : ''}" ${selecting ? `data-pickkey="${esc(u.key)}" aria-pressed="${picked.has(u.key)}"` : `data-key="${esc(u.key)}"`}>${selecting ? '<span class="m-edge" aria-hidden="true"></span>' : ''}<span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span><span class="m-row-t"><small>${i + 1} · ${esc(store.speaker(u) || u.kind)}</small><span class="m-src">${esc(u.source.replace(/\s+/g, ' '))}</span><span class="m-tr ${e?.target ? '' : 'none'}">${e?.target ? esc(e.target.replace(/\s+/g, ' ')) : '—'}</span></span></button></li>`;
-      }).join('') || '<li class="m-none">Нічого не знайдено</li>'}${rows.length > shown.length ? `<li class="m-more-li"><button class="m-mini" data-more>Показати ще ${Math.min(PAGE, rows.length - shown.length)} · ${shown.length} з ${rows.length}</button></li>` : ''}</ul>`}${selecting && layout === 'cards' ? selBar(picked.size, rows.length, picked.size === rows.length && rows.length > 0, 'data-selall', `<button class="m-mini" data-selcopy ${picked.size ? '' : 'disabled'}>Оригінал</button><button class="m-mini danger" data-selclear ${picked.size ? '' : 'disabled'}>Очистити</button>`, `<button class="m-primary" data-selsend ${picked.size ? '' : 'disabled'}>${icon('check')}<span>Надіслати</span></button>`, 'data-select') : ''}${selecting && layout === 'cards' ? '' : sbar}`;
+        return `<li><button class="m-row ${u.key === store.key && !selecting ? 'cur' : ''} ${selecting && picked.has(u.key) ? 'picked' : ''}" ${selecting ? `data-pickkey="${esc(u.key)}" aria-pressed="${picked.has(u.key)}"` : `data-key="${esc(u.key)}"`}>${selecting ? '<span class="m-edge" aria-hidden="true"></span>' : ''}<span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span><span class="m-row-t"><small>${i + 1} · ${esc(store.speaker(u) || KIND_LABEL[u.kind])}</small><span class="m-src">${esc(u.source.replace(/\s+/g, ' '))}</span><span class="m-tr ${e?.target ? '' : 'none'}">${e?.target ? esc(e.target.replace(/\s+/g, ' ')) : '—'}</span></span></button></li>`;
+      }).join('') || '<li class="m-none">Нічого не знайдено</li>'}${rows.length > shown.length ? `<li class="m-more-li"><button class="m-mini" data-more>Показати ще ${Math.min(PAGE, rows.length - shown.length)} · ${shown.length} з ${rows.length}</button></li>` : ''}</ul>`}${selecting && L === 'cards' ? selBar(picked.size, rows.length, picked.size === rows.length && rows.length > 0, 'data-selall', `<button class="m-mini" data-selcopy ${picked.size ? '' : 'disabled'}>Оригінал</button><button class="m-mini danger" data-selclear ${picked.size ? '' : 'disabled'}>Очистити</button>`, `<button class="m-primary" data-selsend ${picked.size ? '' : 'disabled'}>${icon('check')}<span>Надіслати</span></button>`, 'data-select') : ''}${selecting && layout === 'cards' ? '' : sbar}`;
   }
 
   /** The table: columns scroll sideways, a tap on a translation writes right in the cell, a tap on a number opens the row. */
@@ -652,7 +656,7 @@ export async function start(root: HTMLElement): Promise<void> {
   }
   store.onChange(() => { renderChrome(); });
 
-  function autosize(): void { const t = document.getElementById('m-tr') as HTMLTextAreaElement | null; if (t) { t.style.height = 'auto'; t.style.height = Math.max(132, t.scrollHeight + 2) + 'px'; } }
+  function autosize(): void { const t = document.getElementById('m-tr') as HTMLTextAreaElement | null; if (t) { t.style.height = 'auto'; t.style.height = Math.max(window.innerHeight < 520 ? 88 : 132, t.scrollHeight + 2) + 'px'; } }
   /** Typing changes the numbers and the QA messages, not the field itself. */
   function refreshMeta(): void {
     const c = store.current; if (!c) return;
@@ -1077,9 +1081,13 @@ export async function start(root: HTMLElement): Promise<void> {
     const on = (tab === 'files' || tab === 'rows') && !sub && mainEl.scrollTop > 360;
     topBtn.hidden = !on;
     const bar = document.querySelector<HTMLElement>('.m-afbar, .m-searchbar');
-    topBtn.style.bottom = bar ? `${$('m-nav').offsetHeight + bar.offsetHeight + 12}px` : '';
+    topBtn.style.bottom = bar ? `${navBottom() + bar.offsetHeight + 12}px` : '';
   };
   mainEl.addEventListener('scroll', updateTop, { passive: true });
+  /** The height the navigation takes at the bottom (it is a rail on the left in landscape, and then takes none). */
+  function navBottom(): number { const n = $('m-nav').getBoundingClientRect(); return n.width > n.height ? n.height : 0; }
+  const setBarH = (): void => { document.documentElement.style.setProperty('--bar-h', $('m-bar').offsetHeight + 'px'); };
+  window.addEventListener('resize', setBarH);
   topBtn.addEventListener('click', () => mainEl.scrollTo({ top: 0, behavior: 'smooth' }));
   new MutationObserver(updateTop).observe(mainEl, { childList: true });
   /** The field the translator writes in stays in sight above the action bar when the keyboard opens or the screen changes size. */
@@ -1092,6 +1100,8 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.matches(WRITE)) setTimeout(() => { if (document.activeElement === t) showField(t, 'center'); }, 260);
   });
   window.visualViewport?.addEventListener('resize', () => showField(document.activeElement, 'nearest'));
+  // Landscape brings the table and the side rail; a turn back takes them away. Nothing is redrawn while the keyboard is up (a redraw would drop the field).
+  wide.addEventListener('change', () => { if (!$('m-app').classList.contains('kb')) render(); });
   document.addEventListener('focusout', () => { setTimeout(() => { if (!document.activeElement?.matches(TEXTY)) $('m-app').classList.remove('kb'); }, 120); });
   // A swipe across the editor moves to the next / previous row.
   let sx = 0, sy = 0, st = 0, sw = false;

@@ -15,6 +15,9 @@ const ICONS: Record<string, string> = {
   next: P('<path d="M9 5l7 7-7 7"/>'),
   check: P('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
   folder: P('<path d="M3 7.5a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
+  sort: P('<path d="M8 5v14M5 16l3 3 3-3M16 19V5M13 8l3-3 3 3"/>'),
+  cm: P('<path d="M4 5.5h16v10H12l-4 3.5v-3.5H4z"/>'),
+  undo: P('<path d="M9 7L4.5 11.5 9 16M5 11.5h8a5 5 0 0 1 0 10h-1"/>'),
   sync: P('<path d="M20 11a8 8 0 0 0-14-4M4 5v4h4M4 13a8 8 0 0 0 14 4M20 19v-4h-4"/>'),
 };
 export const icon = (name: string): string => ICONS[name] ?? '';

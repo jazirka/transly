@@ -219,7 +219,6 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-mini::before,.m-chip::before,.m-scope button::before{content:'';position:absolute;inset:-4px -2px}
 .m-scope{overflow:visible}.m-scope button:first-child{border-radius:999px 0 0 999px}.m-scope button:last-child{border-radius:0 999px 999px 0}
 .m-chips{padding:4px 0;margin:-4px 0}
-.m-sortrow select{height:44px}
 .m-hdr{position:relative;flex:none;width:44px;height:44px;border-radius:var(--r2);display:grid;place-items:center;color:var(--text)}
 .m-hdr:active{background:rgba(255,255,255,.1)}.m-hdr svg{width:22px;height:22px}
 .m-badge{position:absolute;top:4px;right:2px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:var(--accent);color:#fff;font-size:11px;line-height:16px;text-align:center}
@@ -509,3 +508,46 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .kb .m-main.tab-edit{scroll-padding-bottom:72px}
 /* the remarks stand inside the translation card, right under the field */
 .m-tr-card .m-issues{margin-top:10px}
+
+/* ---------- wave 3: the Rows header is one row ---------- */
+.m-tools.compact{position:sticky;top:0;z-index:3;gap:6px;padding:6px 12px}
+.m-chiprow{display:flex;align-items:center;gap:8px}
+.m-chiprow .m-chips{flex:1;min-width:0}
+.m-chipacts{flex:none;display:flex;align-items:center;gap:6px}
+.m-chip.scope{border-style:dashed}
+.m-sortbtn{position:relative;flex:none;width:44px;height:44px;border-radius:var(--r2);display:grid;place-items:center;color:var(--mute);border:1px solid var(--line);background:var(--panel)}
+.m-sortbtn svg{width:20px;height:20px}
+.m-sortbtn select{position:absolute;inset:0;width:100%;height:100%;opacity:0;font-size:16px}
+.m-layout{max-width:320px}
+
+/* ---------- wave 3: landscape (a phone on its side: little height, plenty of width) ---------- */
+@media (orientation:landscape) and (max-height:520px){
+  :root{--nav:0px}
+  .m-app{grid-template-columns:64px minmax(0,1fr);grid-template-rows:auto 1fr;max-width:none}
+  /* the navigation is a rail on the left, the header and the screen share the rest */
+  .m-nav{grid-column:1;grid-row:1/-1;display:flex;flex-direction:column;justify-content:center;height:auto;padding:0;border-top:0;border-right:1px solid var(--line)}
+  .m-nav button{flex:1;max-height:88px;min-height:56px}
+  .m-nav button span{font-size:11px}
+  .m-nav button:nth-child(-n+2)::after,.m-nav button:nth-child(3)::after{display:none}
+  .m-bar{grid-column:2;grid-row:1;min-height:44px;padding-block:4px;padding-top:4px}
+  .m-main{grid-column:2;grid-row:2}
+  .m-title{flex-direction:row;align-items:baseline;gap:10px}
+  .m-title b{font-size:16px}
+  .m-sheet-wrap{left:64px}
+  .m-toasts{left:76px;bottom:72px}
+  .kb .m-nav{display:flex}
+  /* the editor: the original on the left, the translation on the right; the context and the preview span both */
+  .m-edit{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px;align-items:start}
+  .m-edit>.m-ctx,.m-edit>.m-prev{grid-column:1/-1}
+  .m-edit>.m-card:not(.m-tr-card){grid-column:1}
+  .m-edit>.m-tr-card{grid-column:2;grid-row:2}
+  .m-textarea{min-height:88px}
+  /* the actions in one row */
+  .m-actions{flex-direction:row;align-items:center;padding:6px 12px}
+  .m-actions .m-act2{flex:1;min-width:0}
+  .m-actions .m-act1{flex:1.2}
+  .m-ic{width:44px;height:44px}
+  .m-primary{min-height:44px}
+  .kb .m-actions .m-act2{display:flex}
+  .scn-quick .m-textarea{min-height:48px}
+}

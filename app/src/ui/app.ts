@@ -28,6 +28,7 @@ import { openPluginTexts } from './plugins-dialog';
 import { openActivity, openAutofill } from './activity-dialog';
 import { markup } from './markup';
 import { openSettings } from './settings';
+import type { SettingsTab } from './settings';
 import { openSpeakers } from './speakers-dialog';
 import { initMobile } from './mobile';
 import { holdInert } from './modal';
@@ -691,7 +692,11 @@ export async function start(root: HTMLElement): Promise<void> {
     if (v) { document.getElementById('start-empty')?.remove(); return false; }
     tv.style.display = 'none'; fv.style.display = 'none';
     const box = emptyBox();
-    box.innerHTML = `<h2>${s.phone ? 'Відкрийте файли' : 'Відкрийте папку гри'}</h2>${s.phone ? 'На телефоні проєкт береться з комп’ютера: на ПК виберіть «Налаштування → Обмін проєктом через файл → Зберегти проєкт у файл», передайте файл сюди й відкрийте його, або вставте його вміст як текст. Так само можна відкрити файли самої гри.' : 'Оберіть папку <b>data</b> гри на RPG Maker (або саму папку гри), папку з файлами <b>.po</b>, <b>.csv</b>, <b>.rpy</b> (Ren’Py) чи JSON-локалізацією. Ваш переклад зберігається в цьому браузері, файли гри не змінюються.'}${(lastHandle || desktopDir()) ? `<p><button class="btn p" id="resume">Продовжити з папкою «${esc(lastHandle?.name ?? (desktopDir() ?? '').split(/[\\/]/).filter(Boolean).pop() ?? '')}»</button></p>` : ''}${s.phone ? `${claudeAvailable ? '<p><button class="btn p" id="cl2">Отримати з іншого пристрою (через Claude)</button></p>' : ''}<p><button class="btn p" id="imp2">Відкрити файли або вставити JSON…</button></p>` : '<p><button class="btn p" id="open2">Відкрити папку гри</button></p>'}`;
+    // What to say depends on the platform, not on the width of the window: a narrow desktop window is still the desktop.
+    const handheld = s.phone && !isDesktop();
+    const resume = (lastHandle || desktopDir()) ? `<p><button class="btn p" id="resume">Продовжити з папкою «${esc(lastHandle?.name ?? (desktopDir() ?? '').split(/[\\/]/).filter(Boolean).pop() ?? '')}»</button></p>` : '';
+    const where = isDesktop() ? 'у проєкті на цьому комп’ютері' : 'у цьому браузері';
+    box.innerHTML = `<h2>${handheld ? 'Відкрийте файли' : 'Відкрийте папку гри'}</h2>${handheld ? 'На телефоні проєкт береться з комп’ютера: на ПК виберіть «Налаштування → Синхронізація → Обмін проєктом через файл → Зберегти проєкт у файл», передайте файл сюди й відкрийте його, або вставте його вміст як текст. Так само можна відкрити файли самої гри.' : `Оберіть папку <b>data</b> гри на RPG Maker (або саму папку гри), папку з файлами <b>.po</b>, <b>.csv</b>, <b>.rpy</b> (Ren’Py) чи JSON-локалізацією. Ваш переклад зберігається ${where}, файли гри не змінюються.`}${resume}${handheld ? `${claudeAvailable ? '<p><button class="btn p" id="cl2">Отримати з іншого пристрою (через Claude)</button></p>' : ''}<p><button class="btn p" id="imp2">Відкрити файли або вставити JSON…</button></p>` : `<p><button class="btn p" id="open2">Відкрити папку гри</button></p><p><button class="btn" id="imp2">Відкрити файли або вставити JSON…</button></p>`}`;
     return true;
   }
 
@@ -963,7 +968,8 @@ export async function start(root: HTMLElement): Promise<void> {
   void artifactDb().then(db => { if (db) { claudeAvailable = true; if (!s.views.length) renderAll(); } });
 
   function openImportDlg(): void {
-    s.leftOpen = false; renderLayout();
+    // On a narrow screen the list would cover the dialog; on a desktop the panel stays where it is.
+    if (s.phone) { s.leftOpen = false; renderLayout(); }
     openImport(ctx, adopt, files => loadFiles(files, true));
   }
   /* ---------- run configurations: what the ▶ button does (like IntelliJ's run selector) ---------- */
@@ -1002,8 +1008,7 @@ export async function start(root: HTMLElement): Promise<void> {
     pop.innerHTML = `<button role="menuitem" data-pj="folder"><span class="cfg-t">Відкрити папку гри…</span></button>
       <button role="menuitem" data-pj="files"><span class="cfg-t">Відкрити файли або вставити JSON…</span></button>
       <hr><div class="pj-h">Поточний проєкт</div>
-      <div class="pj-card"><span class="pj lg">${esc((Array.from(s.saved.name.trim())[0] ?? 'T').toUpperCase())}</span><div><b>${esc(s.saved.name)}</b><small class="${folder.kind === 'missing' || folder.kind === 'other' ? 'warn' : ''}" title="${esc(folderLine(folder, remembered))}">${esc(folderLine(folder, remembered))}</small><small>${total ? `Перекладено ${done.toLocaleString('uk-UA')} з ${total.toLocaleString('uk-UA')}` : 'Файлів ще немає'}</small></div></div>
-      <hr><button role="menuitem" data-pj="settings"><span class="cfg-t">Налаштування проєкту…</span></button>`;
+      <div class="pj-card"><span class="pj lg">${esc((Array.from(s.saved.name.trim())[0] ?? 'T').toUpperCase())}</span><div><b>${esc(s.saved.name)}</b><small class="${folder.kind === 'missing' || folder.kind === 'other' ? 'warn' : ''}" title="${esc(folderLine(folder, remembered))}">${esc(folderLine(folder, remembered))}</small><small>${total ? `Перекладено ${done.toLocaleString('uk-UA')} з ${total.toLocaleString('uk-UA')}` : 'Файлів ще немає'}</small></div></div>`;
     const r = btn.getBoundingClientRect();
     pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 340))}px`; pop.style.top = `${r.bottom + 6}px`;
     rememberOpener(btn); pop.hidden = false; btn.setAttribute('aria-expanded', 'true'); focusFirst(pop);
@@ -1026,7 +1031,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const runSelected = (): void => runCfgNow(runCfg);
   const doBuild = () => openBuild(ctx, dataDir, n => { s.lastBuild = { at: Date.now(), n }; renderTop(); });
 
-  function openSettingsDlg(): void {
+  function openSettingsDlg(tab?: SettingsTab): void {
     openSettings(ctx, {
       reset: () => {
         // The project is empty again, so the game's strings have to be read into it afresh (plugin texts are off by default).
@@ -1042,7 +1047,7 @@ export async function start(root: HTMLElement): Promise<void> {
       },
       plugins: () => openPluginTexts(ctx, setPluginCommands),
       importFiles: openImportDlg,
-    });
+    }, tab);
   }
 
   /* ---------- popovers (speaker / length) ---------- */
@@ -1061,7 +1066,7 @@ export async function start(root: HTMLElement): Promise<void> {
   function bottomNav(to: string, btn: HTMLElement): void {
     if (to === 'more') {
       // The phone has no menu bar: the same menus, as one list.
-      showPop(btn, Object.entries(MENUS).map(([g, items]) => `<div class="group">${esc(g)}</div>${items.map((it, i) => (it === '-' ? '' : `<button data-pmi="${esc(g)}|${i}">${esc(it.t)}</button>`)).join('')}`).join(''));
+      showPop(btn, Object.entries(PHONE_MENUS).map(([g, items]) => `<div class="group">${esc(g)}</div>${items.map((it, i) => (it === '-' ? '' : `<button data-pmi="${esc(g)}|${i}">${esc(it.t)}</button>`)).join('')}`).join(''));
       return;
     }
     closePops();
@@ -1136,11 +1141,16 @@ export async function start(root: HTMLElement): Promise<void> {
 
   /* ---------- menu bar ---------- */
   type MenuItem = '-' | { t: string; fn: () => void; sc?: string };
+  /** The menu bar of the desktop: what is already a button of the title bar (the modes, the shortcuts) is not repeated here. */
   const MENUS: Record<string, MenuItem[]> = {
-    'Файл': [{ t: 'Відкрити папку гри…', fn: () => void openFolder() }, { t: 'Відкрити файли або вставити JSON…', fn: openImportDlg }, { t: 'Зібрати…', fn: doBuild, sc: 'F5' }, '-', { t: 'Налаштування…', fn: openSettingsDlg }],
+    'Файл': [{ t: 'Відкрити папку гри…', fn: () => void openFolder() }, { t: 'Відкрити файли або вставити JSON…', fn: openImportDlg }, '-', { t: 'Зібрати…', fn: doBuild }, { t: 'Запустити вибране', fn: runSelected, sc: 'F5' }, '-', { t: 'Налаштування…', fn: () => openSettingsDlg() }],
+    'Перехід': [{ t: 'Наступний рядок без перекладу', fn: () => jump('new', 1) }, { t: 'Наступна помилка QA', fn: () => jump('qa', 1) }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: 'Ctrl+K' }],
+    'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Перевірити узгодженість…', fn: () => openConsistency(ctx) }, { t: 'Автозаповнення за словами…', fn: () => openAutofill(ctx) }, { t: 'Активність…', fn: () => openActivity(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенести довгі рядки у файлі', fn: wrapFile }],
+  };
+  /** The phone has no title bar: its «Ще» list is the same menus plus what the title bar offers on the desktop. */
+  const PHONE_MENUS: Record<string, MenuItem[]> = {
+    ...MENUS,
     'Вигляд': [{ t: 'Таблиця', fn: () => setMode('table') }, { t: 'Редагування', fn: () => setMode('edit') }, { t: 'Сцена', fn: () => setMode('scene') }],
-    'Навігація': [{ t: 'Наступний рядок без перекладу', fn: () => jump('new', 1) }, { t: 'Наступна помилка QA', fn: () => jump('qa', 1) }, { t: 'Сцена', fn: () => setMode('scene') }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: 'Ctrl+K' }],
-    'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Перевірити узгодженість…', fn: () => openConsistency(ctx) }, { t: 'Автозаповнення за словами…', fn: () => openAutofill(ctx) }, { t: 'Активність…', fn: () => openActivity(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенести довгі рядки у файлі', fn: wrapFile }, '-', { t: 'Налаштування…', fn: openSettingsDlg }],
     'Довідка': [{ t: 'Гарячі клавіші', fn: () => toggleKeys() }],
   };
   /** Re-flow every translated message of the current file whose lines are wider than the game window. */
@@ -1350,7 +1360,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (cfgItem) { runCfg = cfgItem.dataset.cfg as RunCfg; try { localStorage.setItem('transly.runcfg', runCfg); } catch { /* private mode */ } closeCfgMenu(); renderRunCfg(); return; }
     if (t.closest('#run-btn')) { runSelected(); return; }
     if (t.closest('#sb-build')) { doBuild(); return; }
-    if (t.closest('#sb-sync')) { openSettingsDlg(); return; }
+    if (t.closest('#sb-sync')) { openSettingsDlg('Синхронізація'); return; }
     if (t.closest('#lp-search,#mt-search')) { openSearch(); return; }
     if (t.closest('#hk')) { toggleKeys(); return; }
     if (t.closest('#hamb')) { mbToggle(); return; }
@@ -1364,7 +1374,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (bn) { bottomNav(bn.dataset.bn!, bn); return; }
     if (t.closest('#ab-search')) { openSearch(); return; }
     const pmi = t.closest<HTMLElement>('[data-pmi]');
-    if (pmi) { const [g, i] = pmi.dataset.pmi!.split('|'); closePops(); const it = MENUS[g!]?.[Number(i)]; if (it && it !== '-') it.fn(); return; }
+    if (pmi) { const [g, i] = pmi.dataset.pmi!.split('|'); closePops(); const it = PHONE_MENUS[g!]?.[Number(i)]; if (it && it !== '-') it.fn(); return; }
     const lt = t.closest<HTMLElement>('#mtabs [data-lt]');
     if (lt) { s.leftTab[s.mode] = (['rows', 'glossary', 'scenes'] as const).find(x => x === lt.dataset.lt) ?? 'files'; renderAll(); return; }
     const hl = t.closest<HTMLElement>('[data-hide-left]');

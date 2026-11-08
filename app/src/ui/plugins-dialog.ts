@@ -21,7 +21,7 @@ export function openPluginTexts(ctx: Ctx, apply: (names: string[]) => void): voi
     <p class="hint">Деякі ігри показують текст не у вікнах повідомлень, а командами плагінів (спливаючі репліки, пункти меню). Позначте команди, чий текст бачить гравець: вони з’являться в перекладі як окремі рядки. Назва команди та числа в ній лишаються як були.</p>
     ${cands.length ? `<div class="pl-list">${rows}</div>` : `<p class="hint">${ctx.s.game.length ? 'У цій грі не знайдено команд плагінів із текстом.' : 'Файлів гри зараз немає (проєкт відкрито зі збереженого файлу). Команди можна вибрати на комп’ютері, коли відкрито папку гри.'}</p>`}
     ${keep.length ? `<p class="hint">Також увімкнено раніше: ${keep.map(esc).join(', ')}.</p>` : ''}
-    <div class="acts"><button class="btn" value="cancel" id="pl-no">${st.pluginsAsked ? 'Скасувати' : 'Не зараз'}</button>${cands.length ? '<button class="btn p" id="pl-ok" value="save">Застосувати</button>' : ''}</div></form>`, 'pl-t');
+    <div class="acts"><button class="btn" value="cancel" id="pl-no">${cands.length ? (st.pluginsAsked ? 'Скасувати' : 'Не зараз') : 'Закрити'}</button>${cands.length ? '<button class="btn p" id="pl-ok" value="save">Застосувати</button>' : ''}</div></form>`, 'pl-t');
   dlg.addEventListener('close', () => { if (!st.pluginsAsked) { st.pluginsAsked = true; ctx.persist(); } });
   dlg.querySelector('#pl-ok')?.addEventListener('click', () => {
     const names = [...dlg.querySelectorAll<HTMLInputElement>('[data-pl]')].filter(b => b.checked).map(b => b.dataset.pl!);

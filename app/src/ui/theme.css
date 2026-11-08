@@ -754,7 +754,7 @@ input[type=checkbox]{accent-color:#8b6cf0}
 .stabbar button:hover{color:var(--text)}
 .stabbar button[aria-selected=true]{color:var(--text);border-bottom-color:#8b6cf0}
 .adlg .tab-off,.adlg details.tab-off[hidden]{display:none!important}
-.adlg form{min-height:min(440px,78vh)}
+.adlg.tall form{min-height:min(440px,78vh)}
 .grid.no-who .who,.grid.no-who .gh>div:nth-child(4){display:none}
 .gr.sel{background:rgba(139,114,232,.08)!important}
 .gr.sel .tr{box-shadow:inset 0 0 0 1px var(--accent);background:rgba(139,114,232,.16)}

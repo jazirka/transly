@@ -466,3 +466,6 @@ input::placeholder,textarea::placeholder{color:#9a9ea6;opacity:1}
 .keys .kh2{margin-top:10px}
 .keys .kr-l{display:flex;flex-wrap:wrap;gap:6px 14px}
 .keys .kr-l span{display:inline-flex;align-items:center;gap:6px}
+
+/* the settings dialog: «Зміни застосовуються одразу» on the left of «Закрити» */
+.adlg .acts .st-auto{margin-right:auto;align-self:center}

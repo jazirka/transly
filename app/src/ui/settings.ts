@@ -31,7 +31,10 @@ let lastSettingsTab = 0;
 /** Things the settings dialog starts but the shell owns. */
 export interface SettingsActions { reset: () => void; adopt: () => void; plugins: () => void; importFiles: () => void; folder: { text: () => string; change: () => void; forget: () => void } }
 
-export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugins: onPlugins, importFiles: onFiles, folder: onFolder }: SettingsActions): void {
+/** The tab to open first (by name), or the one that was open last. */
+export type SettingsTab = 'Загальні' | 'Глосарій і пам’ять' | 'Гра і мови' | 'Синхронізація' | 'Застосунок';
+
+export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugins: onPlugins, importFiles: onFiles, folder: onFolder }: SettingsActions, tab?: SettingsTab): void {
   const st = ctx.s.saved.settings;
   const sync = loadSyncConfig();
   const gh = loadGithubConfig();
@@ -42,13 +45,13 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
       <p class="hint">Папка запам’ятовується для проєкту й відновлюється під час запуску. Якщо її перенесено чи видалено, програма покаже банер із вибором нової, а переклад і оригінали в проєкті збережуться.</p>
       <label class="achk"><input type="checkbox" id="st-sysbar" ${nativeChrome() ? 'checked' : ''}> Системний заголовок вікна</label>
       <p class="hint">Запасний варіант: якщо власного заголовка не видно або його кнопки не працюють. Застосовується одразу.</p></div>` : ''}
-    <div class="grid"><label for="st-tol">Допуск довжини перекладу відносно оригіналу, %</label><input id="st-tol" type="number" min="5" max="100" step="5" value="${st.tolerancePct}">
+    <div class="grid"><label for="st-tol">Радити, коли переклад відрізняється від оригіналу понад, %</label><input id="st-tol" type="number" min="5" max="100" step="5" value="${st.tolerancePct}">
       <label for="st-who">Ваше ім’я в коментарях та історії</label><input id="st-who" maxlength="40" value="${st.who}"></div>
     <label class="achk"><input type="checkbox" id="st-block" ${st.blockErrors ? 'checked' : ''}> Не надсилати рядок із помилкою QA</label>
-    <label class="achk"><input type="checkbox" id="st-prop" ${st.propagate ? 'checked' : ''}> Переносити переклад в однакові рядки (інші файли теж)</label>
+    <label class="achk"><input type="checkbox" id="st-prop" ${st.propagate ? 'checked' : ''}> Підставляти переклад у рядки з таким самим оригіналом (в інших файлах теж)</label>
     <div class="grid"><label for="st-lim-mode">Ширина рядка в повідомленні (вікно гри)</label><select id="st-lim-mode"><option value="auto" ${st.lineLimit === 0 ? 'selected' : ''}>За оригіналом гри${autoNow ? ` (зараз ${autoNow})` : ''}</option><option value="custom" ${st.lineLimit > 0 ? 'selected' : ''}>Своє число</option><option value="off" ${st.lineLimit < 0 ? 'selected' : ''}>Не перевіряти</option></select>
       <label for="st-lim">Символів у рядку</label><input id="st-lim" type="number" min="10" max="200" value="${st.lineLimit > 0 ? st.lineLimit : autoNow || 50}" ${st.lineLimit > 0 ? '' : 'disabled'}></div>
-    <p class="hint">Довжина тексту не обмежується: застосунок лише попереджає, коли переклад дуже відрізняється від оригіналу або рядок ширший за вікно гри (з обличчям поруч вікно вужче). Кнопка «Перенести рядки» розбиває текст сама.</p>
+    <p class="hint">Довжина тексту не обмежується: застосунок лише попереджає, коли переклад дуже відрізняється від оригіналу або рядок ширший за вікно гри (коли поруч показано портрет персонажа, вікно вужче). Кнопка «Перенести за шириною» розбиває текст сама.</p>
     <details><summary>Тексти плагінів</summary><p class="hint">Частина ігор показує текст командами плагінів, а не вікнами повідомлень. ${st.pluginCommands.length ? `Зараз увімкнено: ${esc(st.pluginCommands.join(', '))}.` : 'Поки нічого не увімкнено.'}</p><div class="acts l"><button class="btn" type="button" id="st-plug">Обрати команди з текстом…</button></div></details>
     <details><summary>Імпорт глосарію</summary>
       <p class="hint">З файлу: таблиця Google Sheets, збережена як веб-сторінка (.html), або .csv / .tsv із колонками «Оригінал», «Переклад 1…», «Опис», «Розділ».</p>
@@ -68,7 +71,7 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
       <div class="acts l"><button class="btn p" type="button" id="cl-go">Синхронізувати через Claude зараз</button></div>
       <p class="hint" id="cl-state" role="status">${cl.last ? 'Остання синхронізація: ' + new Date(cl.last).toLocaleString('uk-UA') : 'Ще не синхронізовано'}</p></details>
     <details><summary>Синхронізація через GitHub</summary>
-      <p class="hint">Переклад зберігається у вашому репозиторії GitHub (краще приватному) звичайними файлами, а історія комітів показує, що й коли змінилося. Створіть репозиторій із файлом README, потім токен: GitHub → Settings → Developer settings → Fine-grained tokens, доступ лише до цього репозиторію, право «Contents: Read and write». Токен лишається тільки в цьому браузері й не потрапляє у файл проєкту.</p>
+      <p class="hint">Переклад зберігається у вашому репозиторії GitHub (краще приватному) звичайними файлами, а історія комітів показує, що й коли змінилося. Створіть репозиторій із файлом README, потім токен: GitHub → Settings → Developer settings → Fine-grained tokens, доступ лише до цього репозиторію, право «Contents: Read and write». Токен лишається тільки ${isDesktop() ? 'на цьому пристрої' : 'у цьому браузері'} й не потрапляє у файл проєкту.</p>
       <div class="grid"><label for="gh-repo">Репозиторій (власник/назва)</label><input id="gh-repo" placeholder="ivan/my-translation" autocomplete="off" spellcheck="false" value="${esc(gh.repo)}">
         <label for="gh-token">Токен доступу</label><input id="gh-token" type="password" autocomplete="off" value="${esc(gh.token)}">
         <label for="gh-branch">Гілка (необов’язково)</label><input id="gh-branch" placeholder="основна гілка репозиторію" autocomplete="off" spellcheck="false" value="${esc(gh.branch)}">
@@ -78,7 +81,7 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
       <details><summary>Додатково</summary><div class="grid"><label for="gh-api">Адреса API (для GitHub Enterprise)</label><input id="gh-api" type="url" autocomplete="off" spellcheck="false" value="${esc(gh.api)}"></div></details>
       <div class="acts l"><button class="btn p" type="button" id="gh-go">Синхронізувати з GitHub зараз</button></div>
       <p class="hint" id="gh-state" role="status">${gh.last ? 'Остання синхронізація: ' + new Date(gh.last).toLocaleString('uk-UA') : 'Ще не синхронізовано'}</p>
-      <p class="hint">Якщо пише, що немає з’єднання, а інтернет є: сторінка, у якій відкрито застосунок, може забороняти запити до GitHub (так працює вбудований перегляд). Користуйтеся застосунком як сайтом або настільною версією.</p></details>
+      ${isDesktop() ? '' : '<p class="hint">Якщо пише, що немає з’єднання, а інтернет є: сторінка, у якій відкрито застосунок, може забороняти запити до GitHub (так працює вбудований перегляд). Користуйтеся застосунком як сайтом або настільною версією.</p>'}</details>
     <details><summary>Синхронізація через власний сервер</summary><p class="hint">Через ваш власний проміжний сервер (<code>node server/relay.ts</code>): він лише передає зашифровані дані й забуває їх. Без чужих хмар. Дані шифруються паролем на пристроях. Для адреси в інтернеті потрібен https.</p>
       <div class="grid"><label for="sy-url">Адреса сервера</label><input id="sy-url" type="url" placeholder="https://sync.example.com або http://192.168.0.14:7421" value="${esc(sync.url)}">
         <label for="sy-pass">Пароль синхронізації (однаковий на всіх пристроях)</label><input id="sy-pass" type="password" autocomplete="off" minlength="8" value="${esc(sync.passphrase)}">
@@ -86,12 +89,14 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
       <div class="acts l"><button class="btn p" type="button" id="sy-go">Синхронізувати зараз</button></div><p class="hint" id="sy-state" role="status">${sync.last ? 'Остання синхронізація: ' + new Date(sync.last).toLocaleString('uk-UA') : 'Ще не синхронізовано'}</p></details>
     <details><summary>Обмін проєктом через файл</summary><p class="hint">Файл містить переклад, глосарій, пам’ять і оригінальні рядки, без файлів гри. Імпорт зливає зміни по рядках: лишається новіша правка.</p>
       <div class="acts l"><button class="btn" type="button" id="st-export">Зберегти проєкт у файл</button><button class="btn" type="button" id="st-import">Імпортувати з файлу…</button><button class="btn" type="button" id="st-files">Відкрити файли або вставити JSON…</button></div><input type="file" id="st-file" accept="application/json,.json" hidden></details>
-    <details><summary>Небезпечна зона</summary><p class="hint">Видаляє весь переклад, глосарій та імпортовану пам’ять у цьому браузері. Файли гри не змінюються.</p><button class="btn" type="button" id="st-reset">Скинути проєкт…</button></details>
-    <div class="acts"><button class="btn" value="cancel">Скасувати</button><button class="btn p" id="st-save" value="save">Зберегти</button></div></form>`, 'st-t');
+    <details><summary>Небезпечна зона</summary><p class="hint">Видаляє весь переклад, глосарій та імпортовану пам’ять ${isDesktop() ? 'у цьому застосунку' : 'у цьому браузері'}. Файли гри не змінюються.</p><button class="btn" type="button" id="st-reset">Скинути проєкт…</button></details>
+    <div class="acts"><span class="hint st-auto">Зміни застосовуються одразу.</span><button class="btn p" type="button" id="st-close">Закрити</button></div></form>`, 'st-t');
+  dlg.classList.add('tall');
   /* Sections live on tabs so nobody scrolls through everything to reach one setting. */
   const TABS: [string, string[]][] = [
     ['Загальні', []],
-    ['Глосарій і мовці', ['Імпорт глосарію', 'Імпорт пам’яті перекладів', 'Мовці', 'Довідкові мови', 'Тексти плагінів']],
+    ['Глосарій і пам’ять', ['Імпорт глосарію', 'Імпорт пам’яті перекладів']],
+    ['Гра і мови', ['Мовці', 'Довідкові мови', 'Тексти плагінів']],
     ['Синхронізація', ['Синхронізація через Claude', 'Синхронізація через GitHub', 'Синхронізація через власний сервер', 'Обмін проєктом через файл']],
     ['Застосунок', ['Оновлення застосунку', 'Небезпечна зона']],
   ];
@@ -104,7 +109,7 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
     return i < 0 ? 0 : i;
   };
   items.forEach(c => c.setAttribute('data-stab', String(tabOf(c))));
-  let shown = lastSettingsTab;
+  let shown = tab ? Math.max(0, TABS.findIndex(([n]) => n === tab)) : lastSettingsTab;
   const show = (i: number): void => {
     shown = lastSettingsTab = i;
     items.forEach(c => c.classList.toggle('tab-off', c.getAttribute('data-stab') !== String(i)));
@@ -116,21 +121,24 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
   $('#st-lim-mode', dlg).addEventListener('change', e => { ($('#st-lim', dlg) as HTMLInputElement).disabled = (e.target as HTMLSelectElement).value !== 'custom'; });
   $('#st-plug', dlg).addEventListener('click', () => { dlg.close(); onPlugins(); });
   $('#st-files', dlg).addEventListener('click', () => { dlg.close(); onFiles(); });
-  const num = () => Number(($('#st-tol', dlg) as HTMLInputElement).value);
-  $('#st-save', dlg).addEventListener('click', e => {
-    const v = num();
-    if (!(v >= 5 && v <= 100)) { e.preventDefault(); toast('Допуск має бути від 5 до 100'); return; }
+  /* The general settings are applied as they change (like the sync ones below), so there is nothing to save and «Закрити» loses nothing. */
+  const applyGeneral = (): boolean => {
+    const v = Number(($('#st-tol', dlg) as HTMLInputElement).value);
+    if (!(v >= 5 && v <= 100)) { toast('Відсоток має бути від 5 до 100'); return false; }
+    const mode = ($('#st-lim-mode', dlg) as HTMLSelectElement).value, lim = Number(($('#st-lim', dlg) as HTMLInputElement).value);
+    if (mode === 'custom' && !(lim >= 10 && lim <= 200)) { toast('Ширина рядка має бути від 10 до 200 символів'); return false; }
     st.tolerancePct = v;
     st.blockErrors = ($('#st-block', dlg) as HTMLInputElement).checked;
     st.propagate = ($('#st-prop', dlg) as HTMLInputElement).checked;
-    const mode = ($('#st-lim-mode', dlg) as HTMLSelectElement).value, lim = Number(($('#st-lim', dlg) as HTMLInputElement).value);
-    if (mode === 'custom' && !(lim >= 10 && lim <= 200)) { e.preventDefault(); toast('Ширина рядка має бути від 10 до 200 символів'); return; }
     st.lineLimit = mode === 'off' ? -1 : mode === 'custom' ? Math.round(lim) : 0;
     st.who = ($('#st-who', dlg) as HTMLInputElement).value.trim() || DEFAULT_SETTINGS.who;
     ctx.s.saved.settingsAt = Date.now();
     ctx.s.who = st.who;
-    ctx.persist(); ctx.render(); toast('Налаштування збережено');
-  });
+    ctx.persist(); ctx.render();
+    return true;
+  };
+  for (const id of ['#st-tol', '#st-who', '#st-block', '#st-prop', '#st-lim-mode', '#st-lim']) $(id, dlg).addEventListener('change', applyGeneral);
+  $('#st-close', dlg).addEventListener('click', () => { if (applyGeneral()) dlg.close(); });
   const addTerms = (terms: GlossaryTerm[]): { added: number; merged: number } => {
     let added = 0, merged = 0;
     const have = new Map(ctx.s.saved.terms.map(t => [t.en.toLowerCase(), t]));

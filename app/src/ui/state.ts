@@ -103,6 +103,8 @@ export interface Ctx {
   stage(): 'translate';
   /** Write rows as one action of the journal: each gets a history record with what it was before, and the whole action can be taken back. Returns the action's id. */
   commit(changes: RowChange[], kind: BatchKind, what?: string): string;
+  /** The one name a file goes by everywhere: «Ліс · Map002» (the game's label and the file without `.json`), or «Items». */
+  fileTitle(name: string): string;
   /** The line of bulk actions of this session that Ctrl+Z walks back along. */
   history: UndoStack;
   render(): void;

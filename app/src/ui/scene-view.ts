@@ -99,7 +99,7 @@ export function renderSceneView(ctx: Ctx): void {
   const done = sc.units.filter(u => ents[u.key]?.target).length, appr = sc.units.filter(u => ents[u.key]?.status === 'appr').length;
   const cond = sc.cond ? describePage(sc.cond, s.saved.sysNames).join('; ') : '';
   hd.innerHTML = `<div class="sv-title"><button class="ib sm" type="button" data-sv="prev" ${i > 0 ? '' : 'disabled'} title="Попередня сцена" aria-label="Попередня сцена"><svg viewBox="0 0 16 16"><path d="M10 3.5L5.5 8l4.5 4.5"/></svg></button>
-      <div class="sv-t"><b>${esc(sceneTitle(sc))}</b><small>${esc(s.saved.labels?.[file] ?? file.replace(/\.json$/, ''))} · сцена ${i + 1} із ${idx.scenes.length} · перекладено ${done} із ${sc.units.length} · вичитано ${appr}</small></div>
+      <div class="sv-t"><b>${esc(sceneTitle(sc))}</b><small>${esc(ctx.fileTitle(file))} · сцена ${i + 1} із ${idx.scenes.length} · перекладено ${done} із ${sc.units.length} · вичитано ${appr}</small></div>
       <button class="ib sm" type="button" data-sv="next" ${i < idx.scenes.length - 1 ? '' : 'disabled'} title="Наступна сцена" aria-label="Наступна сцена"><svg viewBox="0 0 16 16"><path d="M6 3.5L10.5 8 6 12.5"/></svg></button></div>
     ${cond ? `<div class="sv-cond">Показується, коли: ${esc(cond)}</div>` : ''}
     <div class="sv-acts"><button class="btn" type="button" data-sv="all-send" title="Надіслати всі чернетки сцени">Надіслати сцену</button><button class="btn" type="button" data-sv="all-appr" title="Вичитати всі переклади сцени">Вичитати сцену</button><button class="btn" type="button" data-sv="game" title="Подивитися сцену так, як її покаже гра">Як у грі</button></div>`;

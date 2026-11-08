@@ -267,6 +267,7 @@ export async function start(root: HTMLElement): Promise<void> {
     persist: () => autosave.queue(s.saved),
     stage: () => 'translate',
     history: new UndoStack(),
+    fileTitle: name => fileTitle(name),
     commit: (changes, kind, what) => { const id = commitRows(file => ctx.entries(file), changes, kind, s.who, Date.now(), what); s.sess.n += changes.length; ctx.history.record(id); return id; },
     render: () => renderAll(),
     open: (file, key) => openRow(file, key),
@@ -290,7 +291,9 @@ export async function start(root: HTMLElement): Promise<void> {
   /* ---------- data helpers ---------- */
   const entryOf = (u: Unit): Entry | undefined => (s.current === GROUP ? groupEntries[u.key] : s.current ? s.saved.files[s.current]?.[u.key] : undefined);
   /** The name shown for what is open: a file, or the group. */
-  const currentLabel = (): string => (s.current === GROUP ? groupTitle() : s.current ?? '');
+  const baseName = (name: string): string => (name.split('/').pop() ?? name).replace(/\.json$/i, '');
+  const fileTitle = (name: string): string => { const label = s.views.find(v => v.name === name)?.label; return label ? `${label} · ${baseName(name)}` : baseName(name); };
+  const currentLabel = (): string => (s.current === GROUP ? groupTitle() : s.current ? fileTitle(s.current) : '');
   const groupTitle = (): string => s.groupSel?.title ?? (s.group && s.group.length === s.views.length ? 'Усі файли разом' : `Група з ${s.group?.length ?? 0} файлів`);
   /** Short key for the table: `msg[5]` for text, `choice[5.2]` for choice options, database keys as they are; in a group the file comes first. */
   const shortKey = (full: string): string => {
@@ -397,7 +400,7 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#lp-rows').hidden = !both && l !== 'rows';
     $('#lp-gl').hidden = l !== 'glossary';
     $('#lp-sc').hidden = l !== 'scenes';
-    $('#lp-title').textContent = both ? 'Файли й рядки' : l === 'rows' ? `Рядки · ${currentLabel()}` : l === 'glossary' ? 'Глосарій' : l === 'scenes' ? `Сцени · ${currentLabel()}` : 'Файли гри';
+    $('#lp-title').innerHTML = both ? 'Файли й рядки' : l === 'rows' ? `Рядки <span class="lt-f">${esc(currentLabel())}</span>` : l === 'glossary' ? 'Глосарій' : l === 'scenes' ? `Сцени <span class="lt-f">${esc(currentLabel())}</span>` : 'Файли гри';
     document.querySelectorAll<HTMLElement>('#mtabs [data-lt]').forEach(b => { const on = b.dataset.lt === s.leftTab[s.mode]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
     document.querySelectorAll<HTMLElement>('#seg [data-m]').forEach(b => { const on = b.dataset.m === s.mode; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
     const here = s.rightOpen ? 'help' : s.leftOpen ? s.leftTab[s.mode] : s.mode === 'table' ? 'rows' : 'edit';
@@ -410,9 +413,9 @@ export async function start(root: HTMLElement): Promise<void> {
     const others = s.views.filter(v => v.name.includes('/'));
     if (rpg.length) {
       out.push({ t: 'd', d: 0, name: 'data', label: 'data' });
-      for (const v of rpg.filter(x => !/^Map\d+\.json$/.test(x.name))) out.push({ t: 'f', d: 1, name: v.name, label: v.name });
+      for (const v of rpg.filter(x => !/^Map\d+\.json$/.test(x.name))) out.push({ t: 'f', d: 1, name: v.name, label: baseName(v.name) });
       const maps = rpg.filter(x => /^Map\d+\.json$/.test(x.name));
-      if (maps.length) { out.push({ t: 'd', d: 1, name: 'data/maps', label: 'maps' }); for (const v of maps) out.push({ t: 'f', d: 2, name: v.name, label: v.name }); }
+      if (maps.length) { out.push({ t: 'd', d: 1, name: 'data/maps', label: 'maps' }); for (const v of maps) out.push({ t: 'f', d: 2, name: v.name, label: baseName(v.name) }); }
     }
     let prev: string[] = [];
     for (const v of others) {
@@ -421,7 +424,7 @@ export async function start(root: HTMLElement): Promise<void> {
       let i = 0;
       while (i < dirs.length && prev[i] === dirs[i]) i++;
       for (let k = i; k < dirs.length; k++) out.push({ t: 'd', d: k, name: dirs.slice(0, k + 1).join('/'), label: dirs[k]! });
-      out.push({ t: 'f', d: dirs.length, name: v.name, label: parts[parts.length - 1]! });
+      out.push({ t: 'f', d: dirs.length, name: v.name, label: baseName(v.name) });
       prev = dirs;
     }
     return out;
@@ -444,7 +447,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const box = $('#tree-list');
     const had = box.contains(document.activeElement) ? (document.activeElement as HTMLElement) : null;
     const hadId = had ? { file: had.dataset.file, dir: had.dataset.dir } : null;
-    $('#tree-act').innerHTML = s.views.length > 1 ? `<button class="btn" data-act="group-all" title="Усі рядки всіх файлів в одній таблиці">Усі файли разом</button>${s.picked.size ? `<button class="btn p" data-act="group-picked">Відкрити вибрані (${s.picked.size})</button><button class="btn" id="tree-grp" aria-haspopup="menu" title="Додати вибрані файли до групи">У групу ▾</button><button class="btn" data-act="group-clear" title="Зняти позначки">✕</button>` : '<span class="hint">Ctrl+клік по файлах, щоб відкрити їх разом</span>'}` : '';
+    $('#tree-act').innerHTML = s.views.length > 1 ? `<button class="btn" data-act="group-all" title="Усі рядки всіх файлів в одній таблиці">Усі файли разом</button>${s.picked.size ? `<button class="btn p" data-act="group-picked">Відкрити вибрані (${s.picked.size})</button><button class="btn" id="tree-grp" aria-haspopup="menu" title="Додати вибрані файли до групи">У групу ▾</button><button class="btn" data-act="group-clear" title="Зняти позначки">✕</button>` : '<span class="hint">Ctrl+клік: вибрати кілька файлів</span>'}` : '';
     if (!s.views.length) { box.innerHTML = '<div class="msg-empty">Папку гри ще не відкрито</div>'; return; }
     let skip: number | null = null;
     const q = fileQ.trim().toLowerCase();
@@ -559,7 +562,9 @@ export async function start(root: HTMLElement): Promise<void> {
       for (const u of v.units) { const e = ents[u.key]; if (e && e.target && activeIssues(u, e, qaOpts()).some(i => i.severity === 'bad')) qa++; }
       const [ic, lab] = fileIcon(n);
       const on = n === s.current;
-      return `<div class="tab ${on ? 'on' : ''}"><button class="tb" data-tab="${esc(n)}" aria-current="${on}" title="${esc(v.label ? n + ' · ' + v.label : n)}"><span class="tico ${ic === 'map' ? '' : 'j'}">${lab}</span>${esc(n.split('/').pop() ?? n)}${qa ? `<span class="badge" title="Проблеми QA у файлі">${qa}</span>` : ''}</button><button class="x" data-closetab="${esc(n)}" aria-label="Закрити вкладку ${esc(n)}">✕</button></div>`;
+      // A tab is short: the game's label (or the file's name); when two open tabs would read the same, the full name.
+      const short = v.label || baseName(n), twin = s.open.some(o => o !== n && (s.views.find(x => x.name === o)?.label || baseName(o)) === short);
+      return `<div class="tab ${on ? 'on' : ''}"><button class="tb" data-tab="${esc(n)}" aria-current="${on}" title="${esc(fileTitle(n) + (n.includes('/') ? ' · ' + n : ''))}"><span class="tico ${ic === 'map' ? '' : 'j'}">${lab}</span>${esc(twin ? fileTitle(n) : short)}${qa ? `<span class="badge" title="Проблеми QA у файлі">${qa}</span>` : ''}</button><button class="x" data-closetab="${esc(n)}" aria-label="Закрити вкладку ${esc(n)}">✕</button></div>`;
     }).join('') + (s.group ? `<div class="tab ${s.current === GROUP ? 'on' : ''}"><button class="tb" data-tab="${GROUP}" aria-current="${s.current === GROUP}" title="${esc(s.group.join(', '))}"><span class="tico j">▦</span>${esc(groupTitle())}</button><button class="x" data-closetab="${GROUP}" aria-label="Закрити групу">✕</button></div>` : '');
     document.querySelector<HTMLElement>('#tabs-host .tab.on')?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
   }
@@ -624,7 +629,7 @@ export async function start(root: HTMLElement): Promise<void> {
     else grid.innerHTML = h + `<div class="empty-wrap" role="row"><div role="gridcell">${emptyHtml}</div></div>`;
     renderBulk(ids);
     const cur = s.cur ? idx.get(s.cur) : undefined;
-    $('#crumbs').innerHTML = `<span>${esc(s.current !== GROUP && s.current?.includes('/') ? s.current.split('/').slice(0, -1).join('/') : 'data')}</span>›<span>${esc(currentLabel())}</span>${cur && s.cur ? `›<b>${esc(ctx.unit(s.cur)?.context ?? '')}</b>` : ''}<span class="r">${cur ? `рядок ${cur} з ${v.units.length}` : `${v.units.length} рядків`}${list.length !== v.units.length ? ` · показано ${list.length}` : ''}</span>`;
+    $('#crumbs').innerHTML = `${s.current !== GROUP && s.current?.includes('/') ? `<span>${esc(s.current.split('/').slice(0, -1).join('/'))}</span>›` : ''}<span>${esc(currentLabel())}</span>${cur && s.cur ? `›<b>${esc(ctx.unit(s.cur)?.context ?? '')}</b>` : ''}<span class="r">${cur ? `рядок ${cur} з ${v.units.length}` : `${v.units.length} рядків`}${list.length !== v.units.length ? ` · показано ${list.length}` : ''}</span>`;
   }
 
   function renderTop(): void {
@@ -1100,7 +1105,8 @@ export async function start(root: HTMLElement): Promise<void> {
   };
 
   /* ---------- global search ---------- */
-  let sdItems: { t: 'file' | 'row' | 'term'; file?: string; key?: string; label: string; kind: string }[] = [];
+  interface SdItem { t: 'file' | 'row' | 'term'; file?: string; key?: string; term?: string; kind: string; title: string; sub?: string; where?: string; status?: string }
+  let sdItems: SdItem[] = [];
   let sdSel = 0;
   let searchFrom: HTMLElement | null = null;
   function openSearch(): void { searchFrom = document.activeElement instanceof HTMLElement ? document.activeElement : null; $('#sd').hidden = false; const i = $('#sd-in') as HTMLInputElement; i.value = ''; sdRender(); i.focus(); holdInert('search', true); }
@@ -1110,29 +1116,44 @@ export async function start(root: HTMLElement): Promise<void> {
     // Back to where the search was started, unless the chosen result has already put the focus somewhere.
     setTimeout(() => { const at = document.activeElement; if (from && from.isConnected && from.getClientRects().length > 0 && (!at || at === document.body || $('#sd').contains(at))) from.focus({ preventScroll: true }); }, 0);
   }
+  /**
+   * The results come in three groups, each with its own limit (so rows never push the terms out): files, rows (the
+   * original, the translation under it, where it is and its state) and terms. Without a query: the open files first.
+   */
   function sdRender(): void {
     const q = ($('#sd-in') as HTMLInputElement).value.trim().toLowerCase();
-    sdItems = [];
-    if (!q) s.views.slice(0, 14).forEach(v => sdItems.push({ t: 'file', file: v.name, label: v.name, kind: 'Файл' }));
-    else {
-      for (const v of s.views) if (v.name.toLowerCase().includes(q)) sdItems.push({ t: 'file', file: v.name, label: v.name, kind: 'Файл' });
+    const files: SdItem[] = [], rows: SdItem[] = [], terms: SdItem[] = [];
+    const fileItem = (name: string): SdItem => ({ t: 'file', file: name, kind: 'Файли', title: fileTitle(name), sub: name.includes('/') ? name : undefined });
+    if (!q) {
+      const first = [...new Set([...s.open, ...s.views.map(v => v.name)])].filter(n => s.views.some(v => v.name === n));
+      first.slice(0, 8).forEach(n => files.push(fileItem(n)));
+    } else {
+      for (const v of s.views) if (`${v.name} ${v.label ?? ''}`.toLowerCase().includes(q) && files.length < 5) files.push(fileItem(v.name));
       outer: for (const v of s.views) {
         const ents = s.saved.files[v.name] ?? {};
         for (const u of v.units) {
           const e = ents[u.key];
-          if ((u.source + ' ' + (e?.target ?? '') + ' ' + u.key).toLowerCase().includes(q)) { sdItems.push({ t: 'row', file: v.name, key: u.key, label: `${v.name} · ${u.source.slice(0, 70)}${e?.target ? ' → ' + e.target.slice(0, 40) : ''}`, kind: 'Рядок' }); if (sdItems.length > 40) break outer; }
+          if (!(u.source + ' ' + (e?.target ?? '') + ' ' + u.key).toLowerCase().includes(q)) continue;
+          rows.push({ t: 'row', file: v.name, key: u.key, kind: 'Рядки', title: u.source.replace(/\s+/g, ' ').slice(0, 90), sub: e?.target ? e.target.replace(/\s+/g, ' ').slice(0, 90) : '', where: `${fileTitle(v.name)} · ${shortKey(u.key)}`, status: shownStatus(ctx, u, e) });
+          if (rows.length >= 8) break outer;
         }
       }
-      s.saved.terms.filter(t => (t.en + ' ' + t.uk).toLowerCase().includes(q)).slice(0, 6).forEach(t => sdItems.push({ t: 'term', label: `${t.en} → ${t.uk}`, kind: 'Термін' }));
+      s.saved.terms.filter(t => (t.en + ' ' + t.uk).toLowerCase().includes(q)).slice(0, 4).forEach(t => terms.push({ t: 'term', term: t.en, kind: 'Терміни', title: t.en, sub: t.uk }));
     }
-    sdItems = sdItems.slice(0, 14); sdSel = 0;
-    $('#sd-res').innerHTML = sdItems.length ? sdItems.map((x, i) => `<div class="sd-it ${i === 0 ? 'on' : ''}" data-sd="${i}" role="option" aria-selected="${i === 0}"><span class="sd-k">${x.kind}</span><span class="sd-t">${esc(x.label)}</span></div>`).join('') : '<div class="sd-empty">Нічого не знайдено</div>';
+    sdItems = [...files, ...rows, ...terms]; sdSel = 0;
+    let html = '', last = '';
+    sdItems.forEach((x, i) => {
+      if (x.kind !== last) { last = x.kind; html += `<div class="sd-h" role="presentation">${x.kind}</div>`; }
+      const dot = x.status ? `<i class="sd ${x.status}" title="${STATUS_LABEL[x.status as keyof typeof STATUS_LABEL] ?? ''}" aria-hidden="true"></i>` : '';
+      html += `<div class="sd-it ${i === 0 ? 'on' : ''}" data-sd="${i}" role="option" aria-selected="${i === 0}">${dot}<span class="sd-b"><span class="sd-t">${esc(x.title)}</span>${x.sub ? `<span class="sd-s">${esc(x.sub)}</span>` : ''}${x.where ? `<span class="sd-w">${esc(x.where)}</span>` : ''}</span></div>`;
+    });
+    $('#sd-res').innerHTML = html || '<div class="sd-empty">Нічого не знайдено</div>';
   }
   function sdGo(i: number): void {
     const it = sdItems[i];
     if (!it) return;
     closeSearch();
-    if (it.t === 'term') { s.leftOpen = true; s.leftBoth = false; s.leftTab[s.mode] = 'glossary'; renderAll(); showTerm(ctx, it.label.split(' → ')[0] ?? ''); return; }
+    if (it.t === 'term') { s.leftOpen = true; s.leftBoth = false; s.leftTab[s.mode] = 'glossary'; renderAll(); showTerm(ctx, it.term ?? ''); return; }
     if (it.file) {
       if (it.file !== s.current) openFile(it.file);
       if (it.key) { s.filter = 'all'; s.q = ''; s.speaker = null; s.lenFilter = 'all'; ctx.select(it.key, s.mode === 'table' ? undefined : s.mode); } else renderAll();

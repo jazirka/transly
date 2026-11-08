@@ -33,8 +33,8 @@
 .btn:disabled{opacity:.45;cursor:default}
 .gamebox{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r2);background:var(--bg)}
 .gamebox .acts{flex-wrap:wrap}
-.sh{color:var(--mute);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
-.qatag{font:10.5px var(--mono);color:var(--warn);margin-left:4px}
+.sh{color:var(--mute);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.qatag{font:12px var(--mono);color:var(--warn);margin-left:4px}
 
 /* pieces the mockup did not need */
 .srcbox.ref{color:var(--mute);font-style:italic}
@@ -55,7 +55,7 @@
 /* speaker dialog */
 .sp-list{display:flex;flex-direction:column;gap:6px;max-height:46vh;overflow:auto}
 .sp-row{display:grid;grid-template-columns:70px minmax(0,1fr) minmax(130px,200px);gap:10px;align-items:center;padding:6px 8px;border:1px solid var(--line);border-radius:var(--r2)}
-.sp-k{font-size:11px;color:var(--mute);letter-spacing:.04em;text-transform:uppercase}
+.sp-k{font-size:12px;color:var(--mute);letter-spacing:.04em;text-transform:uppercase}
 .sp-k.hdr{color:#9fd0e8}
 .sp-k.face{color:#d9c3ee}
 .sp-b{min-width:0}
@@ -63,7 +63,7 @@
 .sp-in{height:28px;padding:0 8px;border:1px solid var(--line);border-radius:var(--r2);background:var(--bg)}
 
 .sp-k.note{color:#c8d99a}
-.node .lc{margin-left:8px;color:var(--mute);font-size:11px}
+.node .lc{margin-left:8px;color:var(--mute);font-size:12px}
 .node.cur .lc{color:var(--text)}
 .gloss-row.gn{cursor:pointer}
 .gloss-row.gn[data-gn]:hover{background:var(--hover,#34363a)}
@@ -92,7 +92,7 @@
 .scn-orig{padding:0 14px;font-size:12px;color:var(--mute)}
 .scn-chip{padding:0 5px;border-radius:var(--r1);background:rgba(255,255,255,.18);font:12px var(--mono)}
 .scn-name{padding:0 4px;border-radius:var(--r1);background:rgba(139,114,232,.35)}
-.scn-tag{align-self:flex-start;margin-left:14px;padding:1px 8px;border-radius:10px;background:#3a3b40;color:var(--mute);font-size:11px}
+.scn-tag{align-self:flex-start;margin-left:14px;padding:1px 8px;border-radius:10px;background:#3a3b40;color:var(--mute);font-size:12px}
 .scn-tag.scn-warn{background:#5a2d2d;color:#ffd7d7}
 .scn-choice{display:flex;flex-direction:column;gap:6px;align-self:flex-end;min-width:50%}
 .scn-opt{flex-direction:row;align-items:flex-start;gap:10px;padding:8px 12px;background:#101a3c;border:2px solid #7f8bc0;border-radius:var(--r2);color:#fff}

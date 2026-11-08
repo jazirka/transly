@@ -13,7 +13,7 @@ import type { Ctx } from './state';
  */
 
 export const GROUPS_HTML = `<div class="grp" id="tree-groups">
-  <div class="grp-head"><span class="grp-title">Групи файлів</span><span class="hint" id="gr-n"></span><button class="grp-add" id="gr-add" type="button" aria-label="Нова група" title="Нова група">＋</button></div>
+  <div class="grp-head"><span class="grp-title">Групи файлів</span><button class="grp-add" id="gr-add" type="button" aria-label="Нова група" title="Нова група. Файли в групу: Ctrl+клік по файлах, потім «У групу» (або перетягніть файл на групу)">＋</button></div>
   <form class="grp-form" id="gr-form" hidden autocomplete="off"><input id="gr-name" aria-label="Назва нової групи" placeholder="Назва групи" maxlength="60"><button class="btn p" type="submit">Створити</button></form>
   <div id="gr-list"></div>
 </div>`;
@@ -57,7 +57,7 @@ function filesByGroup(ctx: Ctx): Map<string, string[]> {
 function progressBit(ctx: Ctx, rows: RowRef[]): string {
   const p = rowsProgress(rows, f => ctx.entries(f));
   const pc = p.total ? Math.round((100 * Math.max(p.translated, p.approved)) / p.total) : 0;
-  return `<span class="grp-n" title="Перекладено ${p.translated} із ${p.total}, вичитано ${p.approved}">${p.translated}/${p.total}</span><span class="mini" aria-hidden="true"><i class="${p.total && p.approved === p.total ? 'f' : ''}" style="width:${pc}%"></i></span>`;
+  return `<span class="grp-n" title="Перекладено ${p.translated} із ${plural(p.total, ['рядка', 'рядків', 'рядків'])}, вичитано ${p.approved}">${p.translated}/${p.total}</span><span class="mini" aria-hidden="true"><i class="${p.total && p.approved === p.total ? 'f' : ''}" style="width:${pc}%"></i></span>`;
 }
 
 const rowsOf = (ctx: Ctx, files: string[]): RowRef[] => files.flatMap(f => (ctx.s.views.find(v => v.name === f)?.units ?? []).map(u => ({ file: f, key: u.key })));
@@ -68,9 +68,9 @@ function groupItem(ctx: Ctx, g: Group, files: string[]): string {
   const color = esc(g.color ?? '#8b72e8');
   return `<div class="grp-item" data-gid="${esc(g.id)}">
     <button class="grp-fold" type="button" data-gfold="${esc(g.id)}" aria-expanded="${open}" aria-label="${open ? 'Згорнути' : 'Розгорнути'} групу «${esc(g.name)}»">${open ? '▾' : '▸'}</button>
-    <button class="grp-open" type="button" data-gopen="${esc(g.id)}" title="Відкрити «${esc(g.name)}» однією таблицею"><span class="grp-dot" style="background:${color}" aria-hidden="true"></span><span class="grp-name">${esc(g.name)}</span><span class="grp-c">${files.length}</span>${progressBit(ctx, rowsOf(ctx, files))}</button>
+    <button class="grp-open" type="button" data-gopen="${esc(g.id)}" title="Відкрити «${esc(g.name)}» однією таблицею"><span class="grp-dot" style="background:${color}" aria-hidden="true"></span><span class="grp-name">${esc(g.name)}</span><span class="grp-c" title="Файлів у групі: ${files.length}">${files.length} ф.</span>${progressBit(ctx, rowsOf(ctx, files))}</button>
     <button class="grp-more" type="button" id="gm-${esc(g.id)}" data-gmenu="${esc(g.id)}" aria-haspopup="menu" aria-label="Дії групи «${esc(g.name)}»" title="Дії групи">⋯</button>
-  </div>${open ? `<div class="grp-files">${files.length ? files.map(f => `<div class="grp-file"><button class="grp-fopen" type="button" data-gfile="${esc(f)}" title="${esc(f)}"><span class="grp-name">${esc(shortName(f))}${ctx.s.saved.labels?.[f] ? ` <small>${esc(ctx.s.saved.labels[f]!)}</small>` : ''}</span></button><button class="grp-x" type="button" data-gm="unplace" data-file="${esc(f)}" aria-label="Прибрати файл ${esc(f)} з групи" title="Прибрати з групи">✕</button></div>`).join('') : '<div class="hint grp-none">Файлів ще немає: Ctrl+клік по файлах і «У групу»</div>'}</div>` : ''}`;
+  </div>${open ? `<div class="grp-files">${files.length ? files.map(f => `<div class="grp-file"><button class="grp-fopen" type="button" data-gfile="${esc(f)}" title="${esc(f)}"><span class="grp-name">${esc(ctx.fileTitle(f))}</span></button><button class="grp-x" type="button" data-gm="unplace" data-file="${esc(f)}" aria-label="Прибрати файл ${esc(f)} з групи" title="Прибрати з групи">✕</button></div>`).join('') : '<div class="hint grp-none">Файлів ще немає: Ctrl+клік по файлах і «У групу»</div>'}</div>` : ''}`;
 }
 
 /** Draw the block above the file tree. */
@@ -80,11 +80,9 @@ export function renderGroupsBlock(ctx: Ctx): void {
   if (!root) return;
   const groups = liveGroups(s.saved);
   const by = filesByGroup(ctx);
-  $('#gr-n').textContent = groups.length ? String(groups.length) : '';
   ($('#gr-form') as HTMLElement).hidden = !creating;
   const orphans = Object.keys(s.saved.members ?? {}).length ? findOrphans(s.saved, s.views).filter(o => o.kind === 'file') : [];
   let h = '';
-  if (!groups.length && !creating) h = '<div class="hint grp-none">Груп ще немає. Ctrl+клік по файлах, потім «У групу».</div>';
   h += groups.map(g => groupItem(ctx, g, by.get(g.id) ?? [])).join('');
   if (orphans.length) {
     h += `<div class="grp-warn" role="status"><b>${plural(orphans.length, ['файл', 'файли', 'файлів'])} груп немає в поточній версії гри.</b> Вони лишаються в проєкті. <button class="lnk" type="button" data-gm="orphans">${showOrphans ? 'Сховати' : 'Показати'}</button>${showOrphans ? `<div class="grp-orph">${orphans.map(o => `<div><span>${esc(groups.find(g => g.id === o.group)?.name ?? '')} · ${esc(o.file)}</span><button class="lnk" type="button" data-gm="drop-orphan" data-ref="${esc(o.ref)}">Прибрати</button></div>`).join('')}</div>` : ''}</div>`;

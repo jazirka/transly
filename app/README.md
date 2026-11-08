@@ -19,14 +19,16 @@ Game files are only read, never modified. Translations live in the browser profi
 
 A row is **Без перекладу** (nothing yet), **Чернетка** (something is written), **Надіслано** (the translator sent it) or **Вичитано** (a second pair of eyes approved it). The paper plane **sends**, the tick **approves** (a draft is sent and approved in one step); a sent row can be **returned for rework**. There is no separate review mode: approving lives in the right panel and in the bulk bar. Only a QA *error* (a broken control code, a missing glossary term that is enforced…) is red; advice such as the length of a line is a neutral hint and never blocks anything.
 
-Every bulk action (send, approve, fill from memory, wrap, clear, send a scene or a group) is one entry of the journal, and its message carries **Скасувати**. The same entry can be taken back later from Activity.
+Every bulk action (send, approve, fill from memory, wrap, clear, send a scene or a group) is one entry of the journal, and its message carries **Скасувати**. The same entry can be taken back later from Activity, and **Ctrl+Z / Ctrl+Shift+Z** outside a text field take back and repeat the last bulk actions of the session (rows changed since are never touched).
 
 ## The workspace (desktop)
 
 - **Centre:** *Таблиця* | *Редагування* | *Сцена*. The table edits a translation in its cell (F2 or a double click; Enter and Tab save and go to the next row, Shift+Enter writes a line break). The editor works on one row. The scene mode shows every line of the event page the row belongs to, one after another as in the game, and each line is translated in place (Ctrl+Enter sends and moves to the next card); «Як у грі» opens the message-window preview.
 - **Right panel (one, like Crowdin):** the translation of the row with who wrote it and when and the earlier versions (restore, compare); automatic proposals (translation memory with the match percent, rows with the same original); the terms of the row and the names the game defines (a click opens the card); the discussion. It follows the selected row in every mode.
+- **A narrow window** (up to ~1180 px): the left panel gets narrower, the right panel is folded by itself (until you open or close it by hand) and, when opened, lies over the centre; the table drops the speaker column and then moves the key under the original, so the translation column is always there. The bulk bar lies over the header of the table instead of pushing the rows down.
 - **Left panel:** files (with **groups of files** as folders of your own: Ctrl+click files → «У групу…», the context menu, or drag; a click on a group opens its files as one table), rows, glossary, scenes.
 - **Words in the text:** glossary terms are underlined in the original and in the translation, with arrows to their counterpart and a card; control codes are underlined too.
+- **Names:** a file is called the same everywhere: «Ліс · Map002» (the game's label and the file without `.json`), or «Items»; tabs show the short form. **Ctrl+K** groups its results (files, rows with the original, the translation under it and where it is, terms).
 - **Keyboard:** the menu bar (←/→, ↓, Esc), popovers (↑/↓), the file tree (one tab stop, arrows, → and ← fold folders, Enter opens, Space ticks), focus returns to where it was after a dialog or the search closes; Ctrl+K or two ⇧ outside a text field open the search; F5 runs the chosen build.
 
 ## Sync between devices (no cloud service)

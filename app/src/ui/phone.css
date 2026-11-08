@@ -6,7 +6,7 @@
 .ide.sz-s .appbar{display:flex;align-items:center;gap:2px;height:52px;padding:0 6px;background:var(--panel);border-bottom:1px solid var(--line);flex:none}
 .appbar .abt{flex:1;min-width:0;display:flex;flex-direction:column}
 .appbar .abt b{font-weight:500;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.appbar .abt small{color:var(--mute);font-size:11.5px;white-space:nowrap}
+.appbar .abt small{color:var(--mute);font-size:12px;white-space:nowrap}
 .ab-ic{width:38px;height:40px;flex:none;border:0;background:none;border-radius:20px;display:grid;place-items:center;color:var(--text)}
 .ab-ic svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 .appbar .chip{height:30px;padding:0 10px;flex:none;margin:0 4px}
@@ -46,7 +46,7 @@
 .ide.sz-s .fs .itabs button{position:relative;width:42px;height:42px;padding:0;border:1px solid transparent;border-radius:var(--r2);background:none;color:var(--mute);display:grid;place-items:center}
 .ide.sz-s .fs .itabs button.on{background:var(--on-bg);border-color:var(--on-ring);color:#fff}
 .ide.sz-s .fs .itabs button svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
-.ide.sz-s .fs .itabs .cnt{position:absolute;top:2px;right:2px;min-width:16px;height:16px;border-radius:8px;font-size:10px}
+.ide.sz-s .fs .itabs .cnt{position:absolute;top:2px;right:2px;min-width:16px;height:16px;border-radius:8px;font-size:12px}
 .ide.sz-s .fs .itabs button::after{display:none}
 .ide.sz-s .edbar{flex-wrap:wrap;row-gap:4px}
 .ide.sz-s .edbar .ib{width:40px;height:40px}
@@ -59,16 +59,16 @@
 .ide.sz-s .si{position:relative;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .ide.sz-s #bb-rep,.ide.sz-s #bb-tm{display:none}
 .dl-acts{display:flex;flex-direction:column;gap:6px}.dl-acts .btn{height:40px;text-align:left;padding:0 14px}
-.lphint{padding:6px 14px;color:var(--mute);font-size:11.5px}
+.lphint{padding:6px 14px;color:var(--mute);font-size:12px}
 
 /* Table on the phone: every row is a small card (who, original, translation); a tap opens the row in the editor. */
 .ide.sz-s .grid{min-width:0}
 .ide.sz-s .gh{display:none}
 .ide.sz-s .gr{grid-template-columns:22px minmax(0,1fr);grid-template-areas:"st key" "st who" "st src" "st tr";gap:2px 8px;padding:10px 12px 10px 8px;min-height:0;align-items:start}
 .ide.sz-s .gr>:nth-child(1),.ide.sz-s .gr>:nth-child(7){display:none}
-.ide.sz-s .gr>:nth-child(3){grid-area:key;padding:0;font-size:11px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ide.sz-s .gr>:nth-child(3){grid-area:key;padding:0;font-size:12px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ide.sz-s .gr>:nth-child(2){grid-area:st;padding-top:4px}
-.ide.sz-s .gr>.who{grid-area:who;font-size:11.5px;color:var(--accent);padding:0}
+.ide.sz-s .gr>.who{grid-area:who;font-size:12px;color:var(--accent);padding:0}
 .ide.sz-s .gr>.who:empty{display:none}
 .ide.sz-s .gr>.src{grid-area:src;padding:0;font-size:14px}
 .ide.sz-s .gr>.tr{grid-area:tr;padding:0;font-size:14px;color:var(--text);opacity:.85}
@@ -82,7 +82,7 @@
 .ide.sz-s.kb{--bnav:0px}
 .ide.sz-s .bnav{display:flex;position:fixed;left:0;right:0;bottom:0;height:var(--bnav);padding-bottom:env(safe-area-inset-bottom,0px);background:var(--panel);border-top:1px solid var(--line);z-index:40}
 .ide.sz-s.kb .bnav{display:none}
-.bnav button{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:0;background:none;color:var(--mute);font-size:11px;letter-spacing:.02em}
+.bnav button{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:0;background:none;color:var(--mute);font-size:12px;letter-spacing:.02em}
 .bnav button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 .bnav button.on{color:var(--accent)}
 .ide.sz-s .main{margin-bottom:var(--bnav)}

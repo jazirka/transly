@@ -56,7 +56,7 @@ export function renderDiscuss(ctx: Ctx, row: string, e: Entry | undefined): void
   };
   $('#cm-list').innerHTML = threads.length
     ? open.map(threadHtml).join('') + (closed.length ? `<details class="thr-closed"><summary>Розв’язані · ${closed.length}</summary>${closed.map(threadHtml).join('')}</details>` : '')
-    : '<div class="hint">До цього рядка коментарів немає.</div>';
+    : '<div class="hint">Коментарів немає</div>';
   $('#cm-badge').textContent = String(open.length);
   $('#cm-badge').hidden = !open.length;
   $('#cm-badge').title = open.length ? `Відкритих обговорень: ${open.length}` : '';

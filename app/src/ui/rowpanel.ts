@@ -18,9 +18,9 @@ import type { Ctx } from './state';
 const sec = (id: string, title: string, body: string, extra = ''): string => `<section class="pn-sec" data-sec="${id}"><button class="pn-h" type="button" data-pn="${id}" aria-expanded="true"><span class="pn-c" aria-hidden="true">▾</span><span>${title}</span>${extra}</button>${body}</section>`;
 
 /** Static markup of the panel (the discussion keeps its own field so what is typed in it survives redraws). */
-export const ROW_PANEL_HTML = ['<div class="pn-empty-all hint">Оберіть рядок, щоб побачити його переклад, пропозиції й обговорення.</div>',
+export const ROW_PANEL_HTML = ['<div class="pn-empty-all hint">Оберіть рядок</div>',
   sec('tr', 'Переклад: українська', '<div class="pn-b" id="pn-tr"></div>'),
-  sec('sg', 'Автоматизовані пропозиції', '<div class="pn-b" id="pn-sg"></div>'),
+  sec('sg', 'Пропозиції', '<div class="pn-b" id="pn-sg"></div>'),
   sec('tm', 'Терміни й назви з гри', '<div class="pn-b" id="pn-tm"></div>'),
   sec('cm', 'Обговорення', `<div class="pn-b" id="pn-cm"><div id="cm-list" class="cm-list"></div>
     <div class="cm-new"><textarea class="cmin" id="cm-in" placeholder="Нове обговорення цього рядка…" aria-label="Новий коментар"></textarea>
@@ -29,6 +29,10 @@ export const ROW_PANEL_HTML = ['<div class="pn-empty-all hint">Оберіть р
 
 /** Sections the translator folded. */
 const folded = new Set<string>();
+/** Rows whose translation card is shown in full (the card shows three lines of a long text). */
+const expanded = new Set<string>();
+/** A text longer than this (characters, or lines) is cut to three lines until «Показати повністю». */
+const LONG = 150;
 
 const when = (t: number): string => new Date(t).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 const ICON = {
@@ -39,19 +43,22 @@ const ICON = {
 
 /** The translation the row holds now, as a card. */
 function versionCard(ctx: Ctx, u: Unit, e: Entry | undefined): string {
-  if (!e?.target) return '<div class="hint pn-none">Перекладу ще немає.</div>';
+  if (!e?.target) return '<div class="hint pn-none">Немає перекладу</div>';
   const st = shownStatus(ctx, u, e);
   const last = e.history?.[e.history.length - 1];
   const who = last?.who ?? ctx.s.who, at = last?.at ?? e.mt;
   const label = e.returned && e.status === 'draft' ? 'Повернено на доопрацювання' : st === 'appr' ? 'Вичитано' : STATUS_CAP[st];
+  const long = e.target.length > LONG || e.target.split('\n').length > 3;
+  const open = expanded.has(`${ctx.s.current}|${u.key}`);
   return `<div class="pn-ver ${st}">
-    <div class="pn-text">${esc(e.target)}</div>
-    <div class="pn-meta"><b>${esc(who)}</b><span class="dot" aria-hidden="true"></span>${when(at)}<span class="pn-st ${st}">${st === 'appr' ? '✔ ' : ''}${esc(label)}</span></div>
-    <div class="pn-acts">
+    <div class="pn-text ${long && !open ? 'clamp' : ''}">${esc(e.target)}</div>
+    ${long ? `<button class="pn-more" type="button" data-pa="more" aria-expanded="${open}">${open ? 'Згорнути' : 'Показати повністю'}</button>` : ''}
+    <div class="pn-meta"><b>${esc(who)}</b><span class="dot" aria-hidden="true"></span>${when(at)}<span class="pn-st ${st}">${st === 'appr' ? '✔ ' : ''}${esc(label)}</span>
+    <span class="pn-acts">
       ${st === 'appr' ? '' : `<button class="pn-ic ok" type="button" data-pa="approve" title="Вичитати переклад" aria-label="Вичитати переклад">${ICON.ok}</button>`}
       ${e.status === 'done' || e.status === 'appr' ? `<button class="pn-ic" type="button" data-pa="back" title="Повернути на доопрацювання" aria-label="Повернути на доопрацювання">${ICON.back}</button>` : ''}
       <button class="pn-ic" type="button" data-pa="clear" title="Очистити переклад" aria-label="Очистити переклад">${ICON.clear}</button>
-    </div>
+    </span></div>
   </div>`;
 }
 
@@ -70,7 +77,7 @@ function termsHtml(ctx: Ctx, u: Unit, target: string): string {
       return `<button type="button" class="pn-term" data-hc="name" data-hk="${i}"><span class="pn-term-t"><b>${esc(g.name)}</b><span class="arr" aria-hidden="true">→</span>${tr ? `<span>${esc(tr)}</span>` : '<i>ще не перекладено</i>'}</span><span class="tg k" title="Файл бази даних гри">${esc(g.file.replace(/\.json$/, ''))}</span></button>`;
     }),
   ];
-  return rows.join('') || '<div class="hint">У цьому рядку немає термінів глосарію й назв із бази гри.</div>';
+  return rows.join('') || '<div class="hint">Термінів немає</div>';
 }
 
 /** The proposals: matches of the translation memory and the rows with the same original. */
@@ -79,7 +86,7 @@ function proposalsHtml(ctx: Ctx, u: Unit, target: string): string {
   const tm = tmListHtml(ctx, u, target);
   const same = ctx.dups().others(r.file, r.key).length;
   const sameBtn = same ? `<button type="button" class="pn-row" data-hc="ctx" data-hk="same"><span class="pn-eq" aria-hidden="true">=</span>Однаковий оригінал: ${same} ${same === 1 ? 'рядок' : 'рядків'} <span aria-hidden="true">▾</span></button>` : '';
-  return tm + sameBtn || '<div class="hint">Збігів у пам’яті перекладів немає.</div>';
+  return tm + sameBtn || '<div class="hint">Збігів немає</div>';
 }
 
 /** Fill the panel for the open row. */
@@ -132,6 +139,7 @@ export function rowPanelClick(ctx: Ctx, t: HTMLElement, setText: (u: Unit, text:
   const ents = ctx.entries(s.current), cur = ents[u.key];
   switch (a.dataset.pa) {
     case 'approve': approve(ctx, u); break;
+    case 'more': { const k = `${s.current}|${u.key}`; if (expanded.has(k)) expanded.delete(k); else expanded.add(k); ctx.render(); break; }
     case 'back':
       if (cur) { ents[u.key] = recordChange(cur, sendBack(cur, Date.now()), 'повернуто на доопрацювання', '', s.who, Date.now()); ctx.persist(); ctx.render(); toast('Повернено на доопрацювання'); }
       break;

@@ -23,7 +23,9 @@ export function renderHistory(ctx: Ctx, row: string, e: Entry | undefined): void
   const rows = historyRows(e?.history, current);
   $('#hist-list').innerHTML = rows.length ? rows.map(r => {
     const cmp = against.has(r.index);
-    const body = !r.rec.text ? '<span class="hint">текст не змінювався</span>'
+    // The newest record is the translation the card above already shows: it is not written out a second time.
+    const body = r.isCurrent ? '<span class="hint">Це поточний переклад (угорі)</span>'
+      : !r.rec.text ? '<span class="hint">текст не змінювався</span>'
       : cmp ? segs(diffWords(current, r.rec.text))
       : r.before ? segs(r.diff) : esc(r.rec.text);
     return `<div class="hv ${r.isCurrent ? 'cur' : ''}" data-hi="${r.index}">
@@ -36,7 +38,7 @@ export function renderHistory(ctx: Ctx, row: string, e: Entry | undefined): void
         ${r.rec.text && !r.isCurrent ? `<button class="lnk" data-hv="cmp" data-i="${r.index}">${cmp ? 'Показати зміну' : 'Порівняти з поточним'}</button>` : ''}
       </div>
     </div>`;
-  }).join('') : '<div class="hint pn-empty">Попередніх версій немає.</div>';
+  }).join('') : '<div class="hint pn-empty">Версій немає</div>';
 }
 
 /** Clicks in the history. `apply` writes a text into the open row as one change (with its own history record). */

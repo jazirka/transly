@@ -87,7 +87,7 @@ export function openScene(ctx: Ctx, start: Unit): void {
     $('#sc-list', dlg).innerHTML = lines.map(renderLine).join('') || '<p class="hint">У цій сцені немає текстових рядків.</p>';
     const all = lines.flatMap(l => (l.kind === 'choice' ? l.units : [l.unit]));
     const done = all.filter(u => entries[u.key]?.target).length;
-    $('#sc-info', dlg).textContent = `${file}${view.label ? ' · ' + view.label : ''} · ${plural(all.length, ['рядок', 'рядки', 'рядків'])}, перекладено ${done}. Натисніть на рядок, щоб вибрати його.`;
+    $('#sc-info', dlg).textContent = `${ctx.fileTitle(file)} · ${plural(all.length, ['рядок', 'рядки', 'рядків'])}, перекладено ${done}. Натисніть на рядок, щоб вибрати його.`;
     const sceneUnitsAll = all;
     const states = sceneUnitsAll.map(u => entries[u.key]?.status ?? 'new');
     const apprN = states.filter(x => x === 'appr').length, doneN = states.filter(x => x === 'done').length;

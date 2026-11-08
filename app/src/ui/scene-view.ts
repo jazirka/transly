@@ -1,6 +1,6 @@
 import { describePage, displayLength, edit, sceneTitle, sourceTermHits, submit, targetHasTerm, termsIn } from '../core';
 import type { Entry, RowChange, SceneInfo, Unit } from '../core';
-import { $, esc, plural } from './dom';
+import { $, esc, plural, toast } from './dom';
 import { KIND_LABEL, nameMarks, namesOfRow, qaRows } from './hintcards';
 import { markupTerms } from './markup';
 import { scenesOf } from './scenecache';
@@ -54,7 +54,7 @@ function cardHtml(ctx: Ctx, u: Unit, n: number): string {
   return `<article class="sv-card" data-key="${esc(u.key)}">
     <div class="sv-top"><span class="sd" aria-hidden="true"></span><b class="sv-who"></b><span class="sv-k">${esc(KIND_LABEL[u.kind] ?? u.kind)}</span><span class="sv-n">${n}</span><span class="grow"></span><span class="sv-cnt" aria-hidden="true"></span><button class="sv-ok" type="button" data-sv="send" title="Надіслати й перейти далі (Ctrl+Enter)" aria-label="Надіслати рядок ${n}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M14 2L7 9M14 2l-4.5 12L7 9 2 6.5z"/></svg></button></div>
     <div class="srcbox sv-src"></div>
-    <textarea class="tr-in sv-in" data-key="${esc(u.key)}" spellcheck="false" aria-label="Переклад рядка ${n}" placeholder="Переклад"></textarea>
+    <textarea class="tr-in sv-in" rows="1" data-key="${esc(u.key)}" spellcheck="false" aria-label="Переклад рядка ${n}" placeholder="Переклад"></textarea>
     <div class="qa-under sv-qa"></div>
   </article>`;
 }
@@ -65,6 +65,7 @@ function fillCard(ctx: Ctx, card: HTMLElement, u: Unit): void {
   const e = ctx.entries(s.current!)[u.key];
   const st = shownStatus(ctx, u, e);
   card.classList.toggle('cur', u.key === s.cur);
+  card.classList.toggle('err', st === 'qa');
   const sd = card.querySelector('.sd') as HTMLElement;
   sd.className = `sd ${st}`; sd.title = STATUS_CAP[st];
   (card.querySelector('.sv-who') as HTMLElement).textContent = ctx.speaker(u) || '';
@@ -110,7 +111,7 @@ export function renderSceneView(ctx: Ctx): void {
   const cards = [...body.querySelectorAll<HTMLElement>('.sv-card')];
   sc.units.forEach((u, n) => { const c = cards[n]; if (c) fillCard(ctx, c, u); });
   // The row that was chosen elsewhere is brought into view once.
-  if (s.cur && s.cur !== scrollKey) { scrollKey = s.cur; bringIntoView(body, body.querySelector<HTMLElement>(`.sv-card[data-key="${CSS.escape(s.cur)}"]`)); }
+  if (s.cur && s.cur !== scrollKey) { scrollKey = s.cur; bringIntoView(body.querySelector<HTMLElement>(`.sv-card[data-key="${CSS.escape(s.cur)}"]`)); }
 }
 
 /** Typing in a card: the row changes at once, like in the editing view. */
@@ -129,6 +130,7 @@ export function sceneInput(ctx: Ctx, ta: HTMLTextAreaElement): boolean {
     meterCard(card, u, ta.value);
     const e = ents[u.key], st = shownStatus(ctx, u, e);
     const sd = card.querySelector('.sd') as HTMLElement; sd.className = `sd ${st}`; sd.title = STATUS_CAP[st];
+    card.classList.toggle('err', st === 'qa');
     (card.querySelector('.sv-qa') as HTMLElement).innerHTML = ta.value ? qaRows(ctx, u, e).html : '';
   }
   return true;
@@ -152,18 +154,35 @@ export function sceneFocus(ctx: Ctx, ta: HTMLTextAreaElement, panel: () => void)
 export function focusCard(key: string): void {
   const ta = document.querySelector<HTMLTextAreaElement>(`.sv-in[data-key="${CSS.escape(key)}"]`);
   ta?.focus({ preventScroll: true });
-  bringIntoView(document.getElementById('sv-body'), ta?.closest<HTMLElement>('.sv-card'));
+  bringIntoView(ta?.closest<HTMLElement>('.sv-card'));
 }
 
 /**
- * Bring a card into view with some of the scene around it: a card that is out of sight goes to a third of the height,
- * not to the very edge, so the next lines stay visible; a card that is already comfortably in view does not move.
+ * Bring a card into view with some of the scene around it. The scroller is the whole view (`#v-scene`), and its top
+ * is covered by the sticky header, so the visible part starts below it. A card that is above that part or low in it
+ * goes to a third of the height, so the next lines stay in sight; a card that is already high enough does not move.
  */
-function bringIntoView(body: HTMLElement | null, card: HTMLElement | null | undefined): void {
-  if (!body || !card) return;
-  const b = body.getBoundingClientRect(), c = card.getBoundingClientRect();
-  if (c.top >= b.top + b.height * 0.08 && c.bottom <= b.bottom - b.height * 0.25) return;
-  body.scrollTop += c.top - b.top - b.height / 3;
+function bringIntoView(card: HTMLElement | null | undefined): void {
+  const sc = document.getElementById('v-scene'), hd = document.getElementById('sv-hd');
+  if (!sc || !card) return;
+  const b = sc.getBoundingClientRect(), c = card.getBoundingClientRect();
+  const top = b.top + (hd?.offsetHeight ?? 0), h = b.bottom - top;
+  if (h <= 0 || (c.top >= top + 4 && c.top <= top + h * 0.6)) return;
+  sc.scrollTop += c.top - top - h / 3;
+}
+
+/**
+ * A send was refused because of a remark: the card says so itself (red border, the remark under the field), the view
+ * scrolls to it and the focus goes to its first fix (or to the field), so the error is mended there and then. The
+ * message is short and goes away by itself, it does not cover the cards.
+ */
+export function sceneBlocked(ctx: Ctx, key: string, reason: string): void {
+  const card = document.querySelector<HTMLElement>(`.sv-card[data-key="${CSS.escape(key)}"]`);
+  toast(reason);
+  if (!card) return;
+  bringIntoView(card);
+  (card.querySelector<HTMLElement>('.sv-qa [data-fix]') ?? card.querySelector<HTMLElement>('.sv-in'))?.focus({ preventScroll: true });
+  void ctx;
 }
 
 /** Send or approve every row of the scene that can be. */
@@ -175,18 +194,21 @@ function wholeScene(ctx: Ctx, what: 'send' | 'appr'): void {
   const opts = { blockErrors: s.saved.settings.blockErrors, qa: ctx.qaOpts() };
   const now = Date.now();
   const changes: RowChange[] = [];
-  let skipped = 0;
+  const blocked: string[] = [];
   for (const u of at.sc.units) {
     let next: Entry | undefined = ents[u.key];
     if (!next?.target.trim()) continue;
     if (what === 'send' && next.status !== 'draft') continue;
-    if (next.status !== 'done' && next.status !== 'appr') { const r = submit(next, u, 'translate', now, opts); if (!r.ok) { skipped++; continue; } next = r.entry; }
-    if (what === 'appr') { const r = submit(next, u, 'review', now, opts); if (!r.ok) { skipped++; continue; } next = r.entry; }
+    if (next.status !== 'done' && next.status !== 'appr') { const r = submit(next, u, 'translate', now, opts); if (!r.ok) { blocked.push(u.key); continue; } next = r.entry; }
+    if (what === 'appr') { const r = submit(next, u, 'review', now, opts); if (!r.ok) { blocked.push(u.key); continue; } next = r.entry; }
     changes.push({ file: at.file, key: u.key, next, text: next.target });
   }
   const batch = changes.length ? ctx.commit(changes, what === 'send' ? 'scene' : 'approve', what === 'send' ? undefined : 'вичитано (вся сцена)') : undefined;
   ctx.persist(); ctx.invalidateTm(); ctx.render();
-  undoToast(ctx, `${what === 'send' ? 'Надіслано' : 'Вичитано'}: ${plural(changes.length, ['рядок', 'рядки', 'рядків'])}${skipped ? `. Пропущено через помилки QA: ${skipped}` : ''}`, batch, skipped > 0);
+  undoToast(ctx, `${what === 'send' ? 'Надіслано' : 'Вичитано'}: ${plural(changes.length, ['рядок', 'рядки', 'рядків'])}${blocked.length ? `. Пропущено через помилки QA: ${blocked.length}` : ''}`, batch);
+  // The cards that were left out show their remarks: go to the first of them.
+  const first = blocked[0] ? document.querySelector<HTMLElement>(`.sv-card[data-key="${CSS.escape(blocked[0])}"]`) : null;
+  if (first) { bringIntoView(first); (first.querySelector<HTMLElement>('.sv-qa [data-fix]') ?? first.querySelector<HTMLElement>('.sv-in'))?.focus({ preventScroll: true }); }
 }
 
 /** Clicks in the scene view. */

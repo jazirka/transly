@@ -393,19 +393,23 @@ button.cc:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .sv-cond{font-size:12px;color:var(--mute)}
 .sv-acts{display:flex;flex-wrap:wrap;gap:8px}
 .sv-body{display:flex;flex-direction:column;gap:12px}
-.sv-card{display:flex;flex-direction:column;gap:8px;padding:10px 12px 12px;border:1px solid var(--line);border-radius:var(--r3,12px);background:var(--panel)}
-.sv-card.cur{border-color:var(--accent);box-shadow:0 0 0 3px rgba(139,114,232,.16)}
+.sv-card{display:flex;flex-direction:column;gap:6px;padding:8px 12px 10px;border:1px solid var(--line);border-radius:var(--r3,12px);background:var(--panel)}
+.sv-card.err{border-color:rgba(255,99,71,.6)}
+.sv-card.cur,.sv-card.cur.err{border-color:var(--accent);box-shadow:0 0 0 3px rgba(139,114,232,.16)}
 .sv-top{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mute)}
 .sv-who{font-size:13px;font-weight:500;color:#b7a6ff}
 .sv-n{font:11px var(--mono);color:var(--dim)}
 .sv-cnt{font:11.5px var(--mono)}
-.sv-ok{width:28px;height:28px;padding:0;display:grid;place-items:center;border:1px solid var(--line);border-radius:var(--r2);background:var(--bg);color:var(--mute);cursor:pointer}
+.sv-ok{width:26px;height:26px;padding:0;display:grid;place-items:center;border:1px solid var(--line);border-radius:var(--r2);background:var(--bg);color:var(--mute);cursor:pointer}
 .sv-ok svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 .sv-ok:hover{color:var(--ok);border-color:rgba(76,195,138,.5)}
 .sv-ok:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .sv-src{padding:8px 10px;font-size:14px}
-.sv-in{box-sizing:border-box;width:100%;min-height:44px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r2);background:var(--bg);color:var(--text);font:15px/1.5 var(--ui);resize:none;overflow:hidden}
-.sv-in:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(139,114,232,.18)}
+/* `.sv .sv-in`: the global `textarea.tr-in` (min-height 96, accent border) is more specific than a bare `.sv-in` */
+.sv .sv-in{box-sizing:border-box;width:100%;min-height:44px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r2);background:var(--bg);color:var(--text);font:15px/1.5 var(--ui);resize:none;overflow:hidden;box-shadow:none;outline:none}
+.sv .sv-in:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(139,114,232,.18)}
+.sv-qa{margin-top:0}
+.sv-qa:empty{display:none}
 .sv .empty-state{margin-top:40px}
 
 /* nothing chosen: one line instead of four empty sections */

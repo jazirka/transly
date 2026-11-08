@@ -4,6 +4,7 @@ import { $, buzz, esc, plural, toast } from './dom';
 import { discussClick, renderDiscuss } from './discuss';
 import { chipsHtml, qaRows, namesOfRow, nameMarks, realOf, tmMatch } from './hintcards';
 import { ROW_PANEL_HTML, renderRowPanel, rowPanelClick } from './rowpanel';
+import { focusCard, sceneBlocked } from './scene-view';
 import { historyClick } from './history-panel';
 import { CODE_RE, markupTerms } from './markup';
 import { autoSize, drawMarks, insertAtCursor } from './text-editor';
@@ -245,9 +246,10 @@ function setText(ctx: Ctx, u: Unit, text: string, what: string, kind?: BatchKind
   if (kind) batch = ctx.commit([{ file: ctx.s.current!, key: u.key, next, text }], kind, what);
   else { ents[u.key] = recordChange(ents[u.key], next, what, text, ctx.s.who, Date.now()); ctx.s.sess.n++; }
   // The field keeps what is typed in it while it has the focus (a shortcut changes the row without leaving it): bring it in line first.
-  if (ctx.s.mode !== 'table') ($('#i-tr') as HTMLTextAreaElement).value = text;
+  const card = ctx.s.mode === 'scene' ? document.querySelector<HTMLTextAreaElement>(`.sv-in[data-key="${CSS.escape(u.key)}"]`) : null;
+  if (card) card.value = text; else if (ctx.s.mode === 'edit') ($('#i-tr') as HTMLTextAreaElement).value = text;
   ctx.persist(); ctx.invalidateTm(); ctx.render();
-  if (ctx.s.mode !== 'table') ($('#i-tr') as HTMLTextAreaElement).focus();
+  if (card) focusCard(u.key); else if (ctx.s.mode === 'edit') ($('#i-tr') as HTMLTextAreaElement).focus();
   return batch;
 }
 
@@ -276,7 +278,7 @@ export function send(ctx: Ctx): void {
   if (!u || !s.current) return;
   const ents = ctx.entries(s.current);
   const r = submit(ents[u.key], u, 'translate', Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: ctx.qaOpts() });
-  if (!r.ok) { toast(r.reason, { sticky: true }); return; }
+  if (!r.ok) { if (s.mode === 'scene') sceneBlocked(ctx, u.key, r.reason); else toast(r.reason, { sticky: true }); return; }
   const now = Date.now();
   ents[u.key] = recordChange(ents[u.key], r.entry, 'надіслано', r.entry.target, s.who, now);
   const same = s.saved.settings.propagate ? propagate(s.saved, ctx.dups(), realOf(ctx, u).file, { ...u, key: realOf(ctx, u).key }, ents[u.key]!, 'translate', now, s.who, newBatch('twin', now)) : 0;
@@ -321,9 +323,12 @@ export function focusClick(ctx: Ctx, t: HTMLElement): boolean {
 /** The buttons of a remark (fix, ignore, bring back): they sit under the editor and in the panel, so they work in the table too. */
 export function qaClick(ctx: Ctx, t: HTMLElement): boolean {
   const { s } = ctx;
-  const u = s.cur ? ctx.unit(s.cur) : undefined;
   const ign = t.closest<HTMLElement>('[data-ign]'), un = t.closest<HTMLElement>('[data-unign]'), fix = t.closest<HTMLElement>('[data-fix]');
   if (!ign && !un && !fix) return false;
+  // In the scene the remark belongs to the card it stands in, not to the row that happened to be open.
+  const own = t.closest<HTMLElement>('.sv-card')?.dataset.key;
+  if (own) s.cur = own;
+  const u = s.cur ? ctx.unit(s.cur) : undefined;
   if (!u || !s.current) return true;
   const ents = ctx.entries(s.current);
   const e = ents[u.key];

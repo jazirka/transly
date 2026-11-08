@@ -44,6 +44,7 @@ export * from './historyview';
 export * from './termedit';
 export * from './hints';
 export * from './journal';
+export * from './undostack';
 export * from './sceneindex';
 export * from './termmatch';
 export * from './groups';

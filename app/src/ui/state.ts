@@ -1,6 +1,6 @@
 import { TmIndex, activeIssues } from '../core';
 import type { BatchKind, GameNameIndex, RowChange, Usage } from '../core';
-import type { Autosave, DupIndex, Entry, FileView, GameFile, Group, RowRef, SavedProject, Status, Unit } from '../core';
+import type { Autosave, DupIndex, UndoStack, Entry, FileView, GameFile, Group, RowRef, SavedProject, Status, Unit } from '../core';
 
 export type Mode = 'table' | 'edit' | 'scene';
 export type Filter = 'all' | 'new' | 'draft' | 'done' | 'appr' | 'qa' | 'cm';
@@ -103,6 +103,8 @@ export interface Ctx {
   stage(): 'translate';
   /** Write rows as one action of the journal: each gets a history record with what it was before, and the whole action can be taken back. Returns the action's id. */
   commit(changes: RowChange[], kind: BatchKind, what?: string): string;
+  /** The line of bulk actions of this session that Ctrl+Z walks back along. */
+  history: UndoStack;
   render(): void;
   select(key: string, mode?: Mode): void;
   /** Show some rows of the game in one table (a group of the translator's when `gid` is given: the table then follows it when rows are moved). */

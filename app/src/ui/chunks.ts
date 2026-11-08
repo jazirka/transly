@@ -105,6 +105,26 @@ export function reveal(id: string, key: string): void {
   if (shell) realize(l, shell);
 }
 
+/**
+ * Replace one drawn row by new markup (the row's text or state changed) without touching the other rows or the scroll
+ * position. False when the row is not drawn (a shell, or not in the list): the caller then redraws the list.
+ */
+export function patchRow(id: string, key: string, html: string): boolean {
+  const l = lists.get(id);
+  if (!l) return false;
+  const row = l.host.querySelector<HTMLElement>(`[data-key="${CSS.escape(key)}"]:not(.lazy)`);
+  if (!row) return false;
+  // The element itself stays and only its attributes and cells are rewritten: taking a row out of a list of thousands makes the browser lay the whole list out again.
+  const box = document.createElement('div');
+  box.innerHTML = html;
+  const fresh = box.firstElementChild as HTMLElement | null;
+  if (!fresh) return false;
+  for (const a of [...row.attributes]) if (!fresh.hasAttribute(a.name) && a.name !== 'style') row.removeAttribute(a.name);
+  for (const a of [...fresh.attributes]) row.setAttribute(a.name, a.value);
+  row.replaceChildren(...fresh.childNodes);
+  return true;
+}
+
 /** How many rows of the list are drawn and how many it has (for tests). */
 export const rowStats = (id: string): { drawn: number; total: number } | null => { const l = lists.get(id); return l ? { drawn: l.realized, total: l.keys.length } : null; };
 

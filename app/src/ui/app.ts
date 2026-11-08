@@ -1,5 +1,5 @@
 import { Autosave, DupIndex, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, lengthDeviation, limitFor, note, pluginCandidates, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, viewsFromSnapshot, wrapLines } from '../core';
-import { GroupIndex, KIND_LABEL, groupRows, liveGroups } from '../core';
+import { GroupIndex, KIND_LABEL, UndoStack, groupRows, liveGroups } from '../core';
 import type { Entry, FileView, GameFile, Group, RowChange, SavedProject, Unit } from '../core';
 import { openBuild } from './build-dialog';
 import { dataDirOf, forgetGameDir, isDesktop, rememberedGameDir, reopenGameDir, reopenGameDirDesktop, setProject } from './desktop';
@@ -13,7 +13,7 @@ import { wireTermCard } from './termcard';
 import { wireLinks } from './links';
 import { SCENE_HTML, focusCard, hasScenes, renderSceneView, sceneClick, sceneFocus, sceneIdOf, sceneInput } from './scene-view';
 import { SCENES_HTML, renderScenesPanel, scenesClick, wireScenes } from './scenes-panel';
-import { undoToast } from './undo-toast';
+import { undoByKey, undoToast } from './undo-toast';
 import { FILES_DRAG, GROUPS_HTML, dragFiles, groupsClick, placeMenuHtml, renderGroupsBlock, wireGroups } from './groups-panel';
 import type { PlaceTarget } from './groups-panel';
 import { GLOSSARY_HTML, editTerm, glossaryClick, renderGlossaryPanel, showTerm, wireGlossary } from './glossary-panel';
@@ -39,7 +39,7 @@ import { artifactDb, describeClaude, loadClaudeConfig, runClaudeSync } from './c
 import { describeGithub, githubConfigured, loadGithubConfig, runGithubSync } from './github';
 import { describe as describeSync, loadSyncConfig, runSync, syncConfigured } from './sync';
 import { initResize, initRightResize } from './resize';
-import { mountRows, reveal } from './chunks';
+import { mountRows, patchRow, reveal } from './chunks';
 import { buildAndRunGame, playInGame } from './play';
 
 const SVG = {
@@ -150,6 +150,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
   <div class="kr"><span>Наступний / попередній рядок</span><kbd>↓</kbd><kbd>↑</kbd></div>
   <div class="kr"><span>У редагуванні: наступний / попередній у списку</span><kbd>Alt</kbd><kbd>↓</kbd></div>
   <div class="kr"><span>Надіслати й далі</span><kbd>Ctrl</kbd><kbd>Enter</kbd></div>
+  <div class="kr"><span>Скасувати / повернути останню масову дію (поза полем вводу)</span><kbd>Ctrl</kbd><kbd>Z</kbd><kbd>Ctrl</kbd><kbd>⇧</kbd><kbd>Z</kbd></div>
   <div class="kr"><span>Змінити переклад у комірці таблиці</span><kbd>F2</kbd><kbd>2× клік</kbd></div>
   <div class="kr"><span>У комірці: зберегти й до наступного рядка</span><kbd>Enter</kbd><kbd>Tab</kbd></div>
   <div class="kr"><span>У комірці: новий рядок тексту</span><kbd>⇧</kbd><kbd>Enter</kbd></div>
@@ -264,7 +265,8 @@ export async function start(root: HTMLElement): Promise<void> {
     dups: () => { if (!dupCache || dupCache.views !== s.views) dupCache = { views: s.views, idx: new DupIndex(s.views) }; return dupCache.idx; },
     persist: () => autosave.queue(s.saved),
     stage: () => 'translate',
-    commit: (changes, kind, what) => { const id = commitRows(file => ctx.entries(file), changes, kind, s.who, Date.now(), what); s.sess.n += changes.length; return id; },
+    history: new UndoStack(),
+    commit: (changes, kind, what) => { const id = commitRows(file => ctx.entries(file), changes, kind, s.who, Date.now(), what); s.sess.n += changes.length; ctx.history.record(id); return id; },
     render: () => renderAll(),
     open: (file, key) => openRow(file, key),
     openRows: (title, rows, gid) => openRows(title, rows, gid),
@@ -561,6 +563,46 @@ export async function start(root: HTMLElement): Promise<void> {
     document.querySelector<HTMLElement>('#tabs-host .tab.on')?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
   }
 
+  /** The bulk bar, the select-all box and the tick state of the grid for the rows that are shown (`ids`). */
+  function renderBulk(ids: string[]): void {
+    const nSel = ids.filter(k => s.checked.has(k)).length;
+    $('#grid').classList.toggle('has-sel', nSel > 0);
+    const all = $('#selall') as HTMLInputElement | null;
+    if (all) { all.checked = nSel > 0 && nSel === ids.length; all.indeterminate = nSel > 0 && nSel < ids.length; }
+    const hidden = s.checked.size - nSel;
+    $('#bulk').classList.toggle('show', nSel > 0);
+    $('#bulkn').textContent = String(nSel);
+    $('#bulkt').textContent = ' вибрано' + (hidden ? ` · ще ${hidden} приховано фільтром, їх дія не торкається` : '');
+  }
+  /** The ticks changed: only the rows that are drawn are touched (a long list keeps shells for the rest, drawn later from `s.checked`). */
+  function renderSelection(): void {
+    document.querySelectorAll<HTMLElement>('#grid .gr:not(.lazy)').forEach(r => { const on = s.checked.has(r.dataset.key ?? ''); r.classList.toggle('chk', on); const c = r.querySelector<HTMLInputElement>('.rc'); if (c) c.checked = on; });
+    renderBulk(visibleUnits(true).map(u => u.key));
+  }
+  /** Is the table showing every row (no filter, search, speaker, length or sort)? Then a changed row stays where it is. */
+  const tablePlain = (): boolean => s.mode === 'table' && s.filter === 'all' && !s.q && s.speaker === null && s.lenFilter === 'all' && s.sort === 'order' && !s.phone && !(lp() === 'rows' || s.leftBoth);
+  /**
+   * One row of the table changed (a cell was edited): draw that row again and bring the totals in line, instead of
+   * drawing the whole workspace. Anything that could move or remove the row (a filter, a search, a sort) or a view
+   * other than the plain table falls back to the full redraw.
+   */
+  function rowChanged(key: string): void {
+    const u = ctx.unit(key);
+    const old = u && tablePlain() ? document.querySelector<HTMLElement>(`#grid .gr[data-key="${CSS.escape(key)}"]:not(.lazy)`) : null;
+    if (!u || !old || !patchRow('grid', key, rowHtml(u, Number(old.querySelector('.num')?.textContent) || 1))) { renderAll(); return; }
+    $('#chips1').innerHTML = chipsHtml();
+    renderTop(); renderTabs(); renderTree(); renderSidePanel(ctx); renderStatus();
+  }
+  /** Make another row the selected one without drawing the table again. */
+  function selectRowLight(key: string): void {
+    document.querySelector('#grid .gr.sel')?.classList.remove('sel');
+    const row = document.querySelector<HTMLElement>(`#grid .gr[data-key="${CSS.escape(key)}"]`);
+    s.cur = key;
+    document.querySelectorAll<HTMLElement>('#grid .gr[tabindex="0"]').forEach(r => { r.tabIndex = -1; r.setAttribute('aria-selected', 'false'); });
+    if (row) { row.classList.add('sel'); row.tabIndex = 0; row.setAttribute('aria-selected', 'true'); }
+    renderStatus(); renderSidePanel(ctx);
+  }
+
   function renderTable(): void {
     const v = ctx.view();
     const grid = $('#grid');
@@ -579,13 +621,7 @@ export async function start(root: HTMLElement): Promise<void> {
     // Every row has its place; a row is drawn when it comes near the screen: nothing is cut off, however long the file or the group is.
     if (list.length) mountRows('grid', grid, grid.parentElement!, h, ids, i => rowHtml(list[i]!, idx.get(list[i]!.key)!), s.current ?? '', 56);
     else grid.innerHTML = h + `<div class="empty-wrap" role="row"><div role="gridcell">${emptyHtml}</div></div>`;
-    grid.classList.toggle('has-sel', nSel > 0);
-    const all = $('#selall') as HTMLInputElement | null;
-    if (all) all.indeterminate = nSel > 0 && nSel < ids.length;
-    const hidden = s.checked.size - nSel;
-    $('#bulk').classList.toggle('show', nSel > 0);
-    $('#bulkn').textContent = String(nSel);
-    $('#bulkt').textContent = ' вибрано' + (hidden ? ` · ще ${hidden} приховано фільтром, їх дія не торкається` : '');
+    renderBulk(ids);
     const cur = s.cur ? idx.get(s.cur) : undefined;
     $('#crumbs').innerHTML = `<span>${esc(s.current !== GROUP && s.current?.includes('/') ? s.current.split('/').slice(0, -1).join('/') : 'data')}</span>›<span>${esc(currentLabel())}</span>${cur && s.cur ? `›<b>${esc(ctx.unit(s.cur)?.context ?? '')}</b>` : ''}<span class="r">${cur ? `рядок ${cur} з ${v.units.length}` : `${v.units.length} рядків`}${list.length !== v.units.length ? ` · показано ${list.length}` : ''}</span>`;
   }
@@ -1261,7 +1297,7 @@ export async function start(root: HTMLElement): Promise<void> {
         s.sess.n++; ctx.persist(); ctx.softTm();
       }
     };
-    const finish = () => { save(); renderAll(); };
+    const finish = () => { save(); rowChanged(key); };
     ta.addEventListener('blur', finish, { once: true });
     ta.addEventListener('keydown', e => {
       if (e.key === 'Escape') { cancelled = true; e.preventDefault(); ta.blur(); }
@@ -1270,8 +1306,8 @@ export async function start(root: HTMLElement): Promise<void> {
         e.preventDefault(); ta.removeEventListener('blur', finish); save();
         const list = visibleUnits(true), at = list.findIndex(x => x.key === key);
         const next = list[at + (e.key === 'Tab' && e.shiftKey ? -1 : 1)];
-        if (next) s.cur = next.key;
-        renderAll();
+        rowChanged(key);
+        if (next) { reveal('grid', next.key); selectRowLight(next.key); }
         startInline(next?.key ?? key);
       }
       else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); ta.removeEventListener('blur', finish); const ents = ctx.entries(s.current!); ents[key] = edit(ents[key], u, ta.value, 'translate', Date.now()); const r = submit(ents[key], u, 'translate', Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: qaOpts() }); if (r.ok) { ents[key] = note(r.entry, 'надіслано', r.entry.target, s.who, Date.now()); toast('Надіслано'); } else toast(r.reason, { sticky: true }); s.sess.n++; ctx.persist(); ctx.invalidateTm(); renderAll(); }
@@ -1395,10 +1431,10 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.closest('#bb-appr')) { bulkApprove(); return; }
     if (t.closest('#bb-tm')) { bulkTm(); return; }
     if (t.closest('#tree-grp')) { const first = [...s.picked][0]; if (first) showPop(t.closest<HTMLElement>('#tree-grp')!, placeMenuHtml(ctx, filesTarget(first))); return; }
-    if (t.closest('#bb-clear')) { s.checked.clear(); renderAll(); return; }
-    if (t.closest('#selall')) { const all = ($('#selall') as HTMLInputElement).checked; for (const u of visibleUnits(true)) all ? s.checked.add(u.key) : s.checked.delete(u.key); renderAll(); return; }
+    if (t.closest('#bb-clear')) { s.checked.clear(); renderSelection(); return; }
+    if (t.closest('#selall')) { const all = ($('#selall') as HTMLInputElement).checked; for (const u of visibleUnits(true)) all ? s.checked.add(u.key) : s.checked.delete(u.key); renderSelection(); return; }
     const rc = t.closest<HTMLInputElement>('.rc');
-    if (rc) { const k = rc.closest<HTMLElement>('.gr')!.dataset.key!; rc.checked ? s.checked.add(k) : s.checked.delete(k); renderAll(); return; }
+    if (rc) { const row = rc.closest<HTMLElement>('.gr')!, k = row.dataset.key!; rc.checked ? s.checked.add(k) : s.checked.delete(k); row.classList.toggle('chk', rc.checked); renderBulk(visibleUnits(true).map(u => u.key)); return; }
     const sd = t.closest<HTMLElement>('[data-sd]');
     if (sd) { sdGo(Number(sd.dataset.sd)); return; }
     if (t.id === 'sd') { closeSearch(); return; }
@@ -1472,11 +1508,17 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t instanceof HTMLTextAreaElement && t.id === 'i-tr') { focusInput(ctx, t); renderStatus(); return; }
     if (t instanceof HTMLTextAreaElement && sceneInput(ctx, t)) { renderStatus(); window.clearTimeout(scenePanelTimer); scenePanelTimer = window.setTimeout(() => renderSidePanel(ctx), 250); return; }
     if (t.id === 'q' || t.id === 'q2') {
+      // The list is filtered as the translator types, but not on every letter: a long file is drawn once the typing pauses.
       s.q = (t as HTMLInputElement).value;
-      const pos = (t as HTMLInputElement).selectionStart ?? s.q.length;
-      renderAll();
-      const q = $(t.id === 'q' ? '#q' : '#q2') as HTMLInputElement;
-      q.focus(); q.setSelectionRange(pos, pos);
+      const id = t.id;
+      window.clearTimeout(qTimer);
+      qTimer = window.setTimeout(() => {
+        const box = $(id === 'q' ? '#q' : '#q2') as HTMLInputElement;
+        const pos = box.selectionStart ?? s.q.length, had = document.activeElement === box;
+        renderAll();
+        const q = $(id === 'q' ? '#q' : '#q2') as HTMLInputElement;
+        if (had) { q.focus(); q.setSelectionRange(pos, pos); }
+      }, 160);
     }
   });
 
@@ -1487,6 +1529,7 @@ export async function start(root: HTMLElement): Promise<void> {
     else if (k === 'Enter') { e.preventDefault(); sdGo(sdSel); }
   });
 
+  let qTimer = 0;
   let lastShift = 0;
   document.addEventListener('keydown', e => {
     const t = e.target as HTMLElement;
@@ -1524,6 +1567,11 @@ export async function start(root: HTMLElement): Promise<void> {
     const tree = t.closest<HTMLElement>('#tree-list');
     if (tree && treeKeys(e, tree)) return;
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') { e.preventDefault(); openSearch(); return; }
+    // Ctrl+Z / Ctrl+Shift+Z (Ctrl+Y) outside the text fields walk the bulk actions back and forth; in a field the field's own undo keeps working.
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !t.closest('input,textarea,select,[contenteditable="true"]')) {
+      const k = e.key.toLowerCase();
+      if (k === 'z' || (k === 'y' && !e.shiftKey)) { e.preventDefault(); undoByKey(ctx, k === 'y' || e.shiftKey ? 'forward' : 'back'); return; }
+    }
     // ⇧⇧ opens the search, but only from two bare presses outside a text field: capitals typed in quick succession («Н. Ш.») are not a command.
     if (e.key === 'Shift') {
       if (e.repeat) return;
@@ -1540,7 +1588,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (s.mode === 'table' && t.classList.contains('gr')) {
       const list = visibleUnits(true);
       const i = list.findIndex(u => u.key === t.dataset.key);
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); const n = list[i + (e.key === 'ArrowDown' ? 1 : -1)]; if (n) { s.cur = n.key; renderAll(); reveal('grid', n.key); document.querySelector<HTMLElement>(`.gr[data-key="${CSS.escape(n.key)}"]`)?.focus(); } }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); const n = list[i + (e.key === 'ArrowDown' ? 1 : -1)]; if (n) { reveal('grid', n.key); selectRowLight(n.key); const r = document.querySelector<HTMLElement>(`.gr[data-key="${CSS.escape(n.key)}"]`); r?.focus(); r?.scrollIntoView({ block: 'nearest' }); } }
       else if (e.key === 'Enter') { e.preventDefault(); ctx.select(t.dataset.key!, 'edit'); }
       else if (e.key === 'F2') { e.preventDefault(); startInline(t.dataset.key!); }
     }

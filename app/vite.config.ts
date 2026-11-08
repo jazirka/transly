@@ -11,7 +11,7 @@ import type { Plugin } from 'vite';
 
 const entry = (mobile: boolean): Plugin => ({
   name: 'transly-entry',
-  transformIndexHtml: { order: 'pre', handler: html => (mobile ? html.replace('/src/main.ts', '/src/main-mobile.ts').replace('<title>Transly</title>', '<title>Transly</title>\n<meta name="theme-color" content="#1a1b1e">') : html) },
+  transformIndexHtml: { order: 'pre', handler: html => (mobile ? html.replace('/src/main.ts', '/src/main-mobile.ts').replace('width=device-width,initial-scale=1', 'width=device-width,initial-scale=1,interactive-widget=resizes-content').replace('<title>Transly</title>', '<title>Transly</title>\n<meta name="theme-color" content="#1a1b1e">') : html) },
 });
 
 export default defineConfig(({ mode }) => ({

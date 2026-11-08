@@ -408,7 +408,7 @@ export async function start(root: HTMLElement): Promise<void> {
       <label class="m-check"><input type="checkbox" id="g-qa" ${gl.qa ? 'checked' : ''}> Перевіряти в QA</label>
       <div class="m-btnrow"><button class="m-primary" data-gsave>${gl.edit ? 'Зберегти' : 'Додати термін'}</button>${gl.edit ? '<button class="m-secondary" data-gcancel>Скасувати</button>' : ''}</div></section>
       <label class="m-search">${icon('search')}<input id="g-q" type="search" placeholder="Пошук серед ${store.saved.terms.length} термінів" value="${esc(gl.q)}" autocomplete="off"></label>
-      ${list.map(t => `<div class="m-term"><button class="m-term-t" data-gedit="${esc(t.en)}"><b>${esc(t.en)}</b><span>→ ${esc(t.uk)}${t.alt?.length ? ` · ${esc(t.alt.join(', '))}` : ''}</span></button><button class="m-mini ghost" data-gdel="${esc(t.en)}" aria-label="Видалити термін ${esc(t.en)}">Видалити</button></div>`).join('') || '<p class="m-none">Термінів ще немає</p>'}</div>`;
+      ${list.map(t => `<div class="m-term"><button class="m-term-t" data-gedit="${esc(t.en)}"><b>${esc(t.en)}</b><span>→ ${esc(t.uk)}${t.alt?.length ? ` · ${esc(t.alt.join(', '))}` : ''}</span></button><button class="m-mini ghost" data-tdel="${esc(t.en)}" aria-label="Видалити термін ${esc(t.en)}">Видалити</button></div>`).join('') || '<p class="m-none">Термінів ще немає</p>'}</div>`;
   }
 
   /** Lines made only of words that are already known: shown first, written only after the tap. */
@@ -496,9 +496,9 @@ export async function start(root: HTMLElement): Promise<void> {
       <section class="m-card"><h3>Оригінал</h3><div class="m-source" id="m-source">${sourceHtml(u.source, terms, e?.target ?? '')}</div>${store.refs(c.file, u.key).map(r => `<div class="m-ref"><small>Довідка · ${esc(r.lang.toUpperCase())}</small>${esc(r.text)}</div>`).join('')}${(() => { const w = store.usageOf(c.file, u.key); return w.length ? `<div class="m-ref"><small>Де видається</small>${w.map(esc).join('<br>')}</div>` : ''; })()}</section>
       <section class="m-card m-tr-card"><h3>Переклад<span class="m-count" id="m-count"></span></h3>
         <textarea id="m-tr" class="m-textarea" spellcheck="false" autocapitalize="sentences" placeholder="Напишіть переклад…" aria-label="Переклад">${esc(e?.target ?? '')}</textarea>
+        <div id="m-issues" class="m-issues">${issuesHtml()}</div>
       </section>
       <div id="m-prev" class="m-prev"></div>
-      <div id="m-issues" class="m-issues">${issuesHtml()}</div>
     </div>
     <div class="m-actions" id="m-actions"><div class="m-act2"><button class="m-mini" data-sub="scene">${icon('rows')} Сцена</button><button class="m-mini" data-approve>${icon('check')} Вичитати</button><button class="m-mini danger" data-clear>Очистити</button></div><div class="m-act1"><button class="m-ic" data-step="-1" aria-label="Попередній рядок" ${store.neighbour(-1) ? '' : 'disabled'}>${icon('prev')}</button><button class="m-ic" data-step="1" aria-label="Наступний рядок" ${store.neighbour(1) ? '' : 'disabled'}>${icon('next')}</button><button class="m-primary" data-send>${icon('send')}<span>Надіслати</span></button></div></div>`;
   }
@@ -863,7 +863,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (termShown && !q('#m-tcard')) { termShown = null; renderTermCard(); }
     if (q('[data-send]')) {
       const why = store.send();
-      if (why) { say(why, true); buzz(30); return; }
+      if (why) { say(/^Є помилка QA/.test(why) ? 'Є помилка QA: виправте її під полем' : why, true); buzz(30); document.getElementById('m-issues')?.scrollIntoView({ block: 'nearest' }); return; }
       buzz(14);
       const next = store.neighbour(1);
       if (next) { store.select(next.key); say('Надіслано'); render(); $('m-main').scrollTop = 0; } else { say('Це був останній рядок у списку'); render(); }
@@ -872,7 +872,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (q('[data-copy]')) { const c = store.current; if (c) { ($('m-tr') as HTMLTextAreaElement).value = c.unit.source; store.write(c.unit.source); refreshMeta(); autosize(); } return; }
     if (q('[data-approve]')) {
       const why = store.approve();
-      if (why) { say(why, true); return; }
+      if (why) { say(/^Є помилка QA/.test(why) ? 'Є помилка QA: виправте її під полем' : why, true); document.getElementById('m-issues')?.scrollIntoView({ block: 'nearest' }); return; }
       say('Вичитано'); render(); return;
     }
     if ((x = q('[data-clear]'))) {
@@ -891,7 +891,7 @@ export async function start(root: HTMLElement): Promise<void> {
     }
     if (q('[data-gcancel]')) { Object.assign(gl, { en: '', uk: '', alt: '', qa: true, edit: false }); render(); return; }
     if ((x = q('[data-gedit]'))) { const t = store.saved.terms.find(y => y.en === x!.dataset.gedit); if (t) { Object.assign(gl, { en: t.en, uk: t.uk, alt: (t.alt ?? []).join(', '), qa: t.qa !== false, edit: true }); render(); $('m-main').scrollTop = 0; } return; }
-    if ((x = q('[data-gdel]'))) { store.removeTerm(x.dataset.gdel!); say('Термін видалено'); render(); return; }
+    if ((x = q('[data-tdel]'))) { store.removeTerm(x.dataset.tdel!); say('Термін видалено'); render(); return; }
     if ((x = q('[data-actopen]'))) { const k = x.dataset.actopen!; if (act.open.has(k)) act.open.delete(k); else act.open.add(k); const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
     if ((x = q('[data-undojournal]'))) { const r = store.undoJournalBatch(x.dataset.undojournal!); say(r.done ? undoReport(r) : 'Рядки вже змінено: скасувати нічого', !r.done); buzz(14); render(); return; }
     if ((x = q('[data-undoauto]'))) { const [at, kind] = x.dataset.undoauto!.split('|'); const n = store.undoAutoFill(Number(at), kind!); say(n ? `Скасовано: ${plural(n, ['рядок', 'рядки', 'рядків'])}` : 'Нічого скасовувати', !n); buzz(14); render(); return; }
@@ -1082,7 +1082,16 @@ export async function start(root: HTMLElement): Promise<void> {
   mainEl.addEventListener('scroll', updateTop, { passive: true });
   topBtn.addEventListener('click', () => mainEl.scrollTo({ top: 0, behavior: 'smooth' }));
   new MutationObserver(updateTop).observe(mainEl, { childList: true });
-  document.addEventListener('focusin', e => { if ((e.target as HTMLElement).matches(TEXTY)) $('m-app').classList.add('kb'); });
+  /** The field the translator writes in stays in sight above the action bar when the keyboard opens or the screen changes size. */
+  const WRITE = '#m-tr, #scn-tr, .m-cell, #m-q';
+  const showField = (t: Element | null, block: ScrollLogicalPosition): void => { if (t && t.matches(WRITE)) (t as HTMLElement).scrollIntoView({ block, behavior: 'auto' }); };
+  document.addEventListener('focusin', e => {
+    const t = e.target as HTMLElement;
+    if (t.matches(TEXTY)) $('m-app').classList.add('kb');
+    // The keyboard takes a moment to come up: bring the field into the middle once it has.
+    if (t.matches(WRITE)) setTimeout(() => { if (document.activeElement === t) showField(t, 'center'); }, 260);
+  });
+  window.visualViewport?.addEventListener('resize', () => showField(document.activeElement, 'nearest'));
   document.addEventListener('focusout', () => { setTimeout(() => { if (!document.activeElement?.matches(TEXTY)) $('m-app').classList.remove('kb'); }, 120); });
   // A swipe across the editor moves to the next / previous row.
   let sx = 0, sy = 0, st = 0, sw = false;

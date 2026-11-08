@@ -497,3 +497,15 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-toast .m-tmsg{flex:1;min-width:0}
 .m-toast .m-tundo{pointer-events:auto;flex:none;min-height:36px;padding:0 12px;border:0;border-radius:var(--r2);background:transparent;color:#b7a6ff;font:inherit;font-weight:600;cursor:pointer}
 .m-toast .m-tundo:active{background:rgba(183,166,255,.18)}
+
+/* ---------- wave 3: the keyboard ---------- */
+/* with the keyboard up there is one row of actions (step, step, send): the field and its remarks keep the room */
+.kb .m-act2{display:none}
+.kb .m-actions{padding:6px 12px}
+.kb .m-actions .m-ic{width:44px;height:44px}
+.kb .m-primary{min-height:44px}
+.kb .m-toasts{bottom:72px}
+.m-main.tab-edit{scroll-padding-bottom:132px}
+.kb .m-main.tab-edit{scroll-padding-bottom:72px}
+/* the remarks stand inside the translation card, right under the field */
+.m-tr-card .m-issues{margin-top:10px}

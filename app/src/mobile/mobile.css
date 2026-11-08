@@ -204,9 +204,6 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-var span{grid-column:1/-1;overflow-wrap:anywhere}.m-var small{color:var(--mute)}
 .m-row.picked{background:rgba(255,255,255,.09);box-shadow:inset 3px 0 0 var(--accent)}
 .m-mini.on{background:rgba(255,255,255,.14)}
-.m-selbar{position:sticky;bottom:8px;display:flex;align-items:center;gap:6px;margin:8px;padding:8px 10px;border:1px solid var(--line);border-radius:999px;background:var(--raised);box-shadow:0 4px 16px rgba(0,0,0,.4)}
-.m-selbar b{min-width:28px;text-align:center}.m-selbar .m-mini:disabled{opacity:.4}
-.m-selbar{gap:4px;margin:8px 4px}.m-selbar .m-mini{padding:0 9px;font-size:13px}
 .m-prev{margin:0 0 8px}.m-prev[hidden]{display:none}.m-prev small{color:var(--mute)}
 .m-prevbox{width:calc(var(--lim) * 1ch);max-width:100%;margin-top:4px;padding:6px 8px;border:1px dashed var(--line);border-radius:var(--r2,8px);background:var(--raised);font:14px/1.4 ui-monospace,Menlo,Consolas,monospace;overflow:hidden}
 .m-prevbox div{white-space:pre;overflow:hidden}
@@ -364,21 +361,13 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-act2 .m-mini.danger.armed{background:rgba(247,84,100,.85);border-color:var(--bad)}
 
 /* the handle on the left of a card: dragging along it selects, without scrolling the page */
-.m-chk,.m-gut{flex:none;touch-action:none;display:grid;place-items:center;width:44px;min-height:44px;margin:-8px 0 -8px -14px}
-.m-chk::before{content:'';width:22px;height:22px;border-radius:50%;border:2px solid var(--dim);box-sizing:border-box}
-.m-chk.on::before{background:var(--accent);border-color:var(--accent);box-shadow:inset 0 0 0 4px var(--bg)}
-.m-gut input{width:22px;height:22px;margin:0}
 .m-af{align-items:center}
 /* bars at the bottom: translucent with a blur like the search field */
 .m-afbar,.scn-bar{background:rgba(35,37,40,.62);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
-.m-selbar{background:rgba(42,44,48,.62);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
 .m-afrow .m-primary{white-space:nowrap;flex:1;justify-content:center;padding:0 12px;min-width:0}
 .m-afrow .m-mini{background:rgba(255,255,255,.1);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 
 /* one selection look for «Рядки» and «Автозаповнення» */
-.m-chk{width:44px;min-height:44px;margin:-8px 0 -8px -14px}
-.m-chk::before{width:24px;height:24px;border:2px solid var(--dim)}
-.m-chk.on::before{background:var(--accent) center/14px no-repeat url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'><path d='M5 12.5l4.5 4.5L19 7.5'/></svg>");border-color:var(--accent);box-shadow:none}
 .m-row,.m-af{border:1px solid var(--line)}
 .m-row.picked,.m-af.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset;background:rgba(139,114,232,.10)}
 .m-af{display:flex;gap:10px;align-items:center;padding:12px 14px;border-radius:var(--r2);background:var(--raised);min-height:64px}
@@ -388,10 +377,6 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-main:has(.m-afbar){display:flex;flex-direction:column;padding-bottom:0}.m-main:has(.m-afbar)>.m-afbar{margin-top:auto}
 
 /* selection: cells as big as the normal rows, the bar built like the editor's action bar */
-.m-chk{width:28px;min-height:28px;height:28px;margin:0 0 0 -2px;position:relative;display:block}
-.m-chk::before{position:absolute;inset:2px;width:auto;height:auto;border:2px solid var(--dim)}
-.m-chk.on::before{border-color:var(--accent)}
-.m-chk::after{content:'';position:absolute;inset:-12px -8px}
 .m-row.picked{box-shadow:0 0 0 1px var(--accent) inset!important;border-color:var(--accent)}
 .m-af{display:flex;gap:12px;align-items:flex-start;width:100%;min-height:64px;padding:12px;background:var(--raised);border:1px solid var(--line);border-radius:var(--r2)}
 .m-af-t{flex:1}.m-af-t small{font-size:12px;color:var(--mute)}
@@ -404,7 +389,6 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-afbar .m-act2 .m-mini.danger.armed{background:rgba(247,84,100,.85);border-color:var(--bad)}
 .m-ic.cnt{font:600 14px system-ui;color:var(--mute);pointer-events:none}
 .m-afbar .m-act1 .m-primary{flex:1;min-height:52px;justify-content:center;white-space:nowrap}
-.m-selbar{display:none}
 
 /* search sits at the bottom, in reach of the thumb: translucent haze above the nav, like the action bars */
 .m-searchbar{position:sticky;top:auto;bottom:0;z-index:4;padding:14px 12px 8px;background:none;pointer-events:none;isolation:isolate}
@@ -415,7 +399,6 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-row,.m-af{position:relative}
 .m-edge{position:absolute;left:0;top:0;bottom:0;width:48px;touch-action:none;z-index:1}
 .m-row.picked,.m-af.sel{box-shadow:inset 0 0 0 1px var(--accent),inset 7px 0 0 var(--accent)!important;border-color:var(--accent);background:rgba(139,114,232,.12)}
-.m-chk{display:none}
 
 .m-found{display:block;width:100%;text-align:left;margin-top:8px;padding:12px 14px;border-radius:16px;border:1px solid var(--line);background:var(--panel);color:var(--text);font:inherit}
 .m-found small{display:block;color:var(--dim);font-size:11px}
@@ -551,3 +534,37 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
   .kb .m-actions .m-act2{display:flex}
   .scn-quick .m-textarea{min-height:48px}
 }
+
+/* ---------- wave 3: labelled header buttons, sheets from the bottom ---------- */
+.m-hdr.txt,.m-hdr:has(.m-hdr-t){width:auto;min-width:56px;padding:0 6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0}
+.m-hdr .m-hdr-t{font-size:11.5px;line-height:1.1;color:var(--mute);white-space:nowrap}
+.m-hdr svg{width:20px;height:20px}
+.m-hdr.on .m-hdr-t{color:var(--text)}
+.m-hdr .m-badge{top:2px;right:8px}
+/* the hint sheet and the tools menu come up from the bottom, like the term card; the header stays reachable above the scrim */
+.m-sheet,.m-menu{top:auto;bottom:0;border-radius:18px 18px 0 0;border-bottom:0;border-top:1px solid var(--line);box-shadow:0 -10px 30px rgba(0,0,0,.45);background:var(--panel)}
+.m-sheet.in{animation:m-up .2s cubic-bezier(.2,.8,.2,1)}
+.m-menu{animation:m-up .18s cubic-bezier(.2,.8,.2,1);padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))}
+.m-sheet .m-grab,.m-menu .m-grab{display:block;flex:none;width:36px;height:4px;margin:8px auto 4px;background:var(--dim)}
+.m-hdr[data-menu][aria-expanded=true] svg{transform:rotate(180deg)}
+
+/* ---------- wave 3: scene stepping, comment mark, four pills in the editor ---------- */
+.scn-nav{display:flex;align-items:center;gap:8px}
+.scn-nav-t{flex:1;min-width:0;display:flex;flex-direction:column}
+.scn-nav-t b{font-size:16px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scn-nav-t small{color:var(--mute)}
+.m-ic.sm{width:44px;height:44px}
+.scn-bar{gap:6px}
+.scn-bar button{padding:0 8px;font-size:14px;min-height:48px;white-space:nowrap}
+.m-cmk{display:inline-flex;vertical-align:-3px;margin-left:6px;color:var(--accent-2)}
+.m-cmk svg{width:15px;height:15px}
+.m-act2 .m-mini{flex:1 1 0;min-width:0;justify-content:center;padding:0 6px;white-space:nowrap}
+.scn-tag.bad{white-space:normal}
+
+/* ---------- wave 3: terms and control codes of the original are easy to hit ---------- */
+/* vertical padding of an inline box makes the tap area taller without changing the line height; the paint stays on the content box */
+.m-source .th,.m-source .code{padding-inline:4px;margin-inline:-4px;background-clip:content-box;-webkit-tap-highlight-color:rgba(181,137,214,.25)}
+.m-source .th{padding-block:8px;border-bottom:0;text-decoration:underline dotted #b589d6 1.5px;text-underline-offset:4px}
+.m-source .th.miss{text-decoration:underline wavy #f0c477;text-underline-offset:4px}
+.m-source .code{padding-block:10px}
+.m-tcard .mono{font-family:ui-monospace,Menlo,Consolas,monospace}

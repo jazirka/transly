@@ -1,4 +1,4 @@
-import { HINT_GLYPH, HINT_LABEL, KIND_LABEL, byHintOrder, commentId, historyRows, openThreads, restoreNote, sourceTermHits, targetHasTerm, threadsOf, batchTitle, batchUndoLabel, undoReport, setIgnored, canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, describePage, displayLength, limitFor } from '../core';
+import { HINT_GLYPH, HINT_LABEL, KIND_LABEL, explainCodes, sceneTitle, stepScene, byHintOrder, commentId, historyRows, openThreads, restoreNote, sourceTermHits, targetHasTerm, threadsOf, batchTitle, batchUndoLabel, undoReport, setIgnored, canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, describePage, displayLength, limitFor } from '../core';
 import type { Comment, DiffSeg, Entry, GameFile } from '../core';
 import { artifactDb, describeClaude, loadClaudeConfig, saveClaudeConfig } from '../ui/claude';
 import { describeGithub, githubApi, githubConfigured, loadGithubConfig, saveGithubConfig } from '../ui/github';
@@ -8,8 +8,9 @@ import { markupTerms } from '../ui/markup';
 import { androidBridge, publishWidget } from '../ui/android';
 import type { WidgetStats } from '../ui/android';
 import { buildWidget } from './widgetdata';
-import { FILTERS, STATUS_LABEL, Store } from './store';
-import type { Filter, Shown, Sort } from './store';
+import { FILTERS, STATUS_LABEL, Store, skippedText } from './store';
+import type { BulkResult, Filter, Shown, Sort } from './store';
+import { scenesOf } from '../ui/scenecache';
 import { icon } from './icons';
 import { canUpdate, checkUpdate, installUpdate, loadUpdateCfg, saveUpdateCfg } from './update';
 import type { UpdateCheck } from './update';
@@ -20,7 +21,7 @@ const SHAPE: Record<Shown, string> = { new: 'sd-new', draft: 'sd-draft', done: '
 
 export async function start(root: HTMLElement): Promise<void> {
   const store = await Store.open();
-  let tab: Tab = store.hasGame ? (store.key ? 'edit' : 'rows') : 'more';
+  let tab: Tab = store.hasGame ? (store.key ? 'edit' : 'rows') : 'files';
   let menu = false;
   /** Fields the keyboard opens for: only these switch the app into keyboard mode (a checkbox does not). */
   const TEXTY = 'textarea, input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=range]):not([type=file])';
@@ -28,7 +29,9 @@ export async function start(root: HTMLElement): Promise<void> {
   let busy = '';
   type Sub = 'scene' | 'find' | 'speakers' | 'settings' | 'consistency' | 'glossary' | 'autofill' | 'sendlog' | 'search';
   let sub: Sub | null = null;
-  let scope: 'file' | 'all' = 'file';
+  let scope: 'file' | 'all' | 'group' = 'file';
+  /** The group whose rows the Rows screen shows (scope «group»), and the group whose less common actions are open. */
+  let gscope: string | null = null; let gmore: string | null = null;
   let layout: 'cards' | 'table' = (() => { try { return localStorage.getItem('transly-m-layout') === 'table' ? 'table' : 'cards'; } catch { return 'cards'; } })();
   /** The table needs room for its columns (a landscape phone, a tablet); on a narrow screen the rows are cards whatever was chosen. */
   const wide = matchMedia('(min-width: 700px)');
@@ -108,6 +111,12 @@ export async function start(root: HTMLElement): Promise<void> {
     say(`Надіслати ${plural(n, ['рядок', 'рядки', 'рядків'])}? Торкніться ще раз, щоб підтвердити`);
     return false;
   };
+  /** Redraw without losing the place in the list (a group's menu, its actions). */
+  const renderKeep = (): void => { const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; };
+  /** A toast about a bulk action: how many rows, what was left out and why, and «Скасувати» for the whole action. */
+  const sayBulk = (verb: string, r: BulkResult): void => { say(`${verb}: ${r.done}${skippedText(r)}`, r.done === 0, r.batch); };
+  /** How a row's state reads: a row sent back says so. */
+  const stateLabel = (st: Shown, e: { status?: string; returned?: boolean } | undefined): string => (e?.returned && e.status === 'draft' ? 'повернено на доопрацювання' : STATUS_LABEL[st]);
   /** What each tab was showing when it was left: the sub-screen and the scroll position. */
   const mem: Record<Tab, { sub: Sub | null; scroll: number }> = { files: { sub: null, scroll: 0 }, rows: { sub: null, scroll: 0 }, edit: { sub: null, scroll: 0 }, more: { sub: null, scroll: 0 } };
   const go = (t: Tab): void => { tab = t; sheet = false; menu = false; sub = null; mem[t] = { sub: null, scroll: 0 }; render(); };
@@ -148,7 +157,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!store.view(file) || !store.unit(file, key)) return 'Рядка вже немає';
     store.open(file, key); sheet = false; menu = false; sub = null; tab = 'edit'; render();
     if (action === 'keyboard') setTimeout(() => { const t = document.getElementById('m-tr') as HTMLTextAreaElement | null; if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } }, 250);
-    if (action === 'send') { const r = store.send(); render(); if (r) { say(r, true); return r; } say('Надіслано'); return 'ok'; }
+    if (action === 'send') { const r = store.send(); render(); if (r.why) { say(r.why, true); return r.why; } say('Надіслано', false, r.batch); return 'ok'; }
     return 'ok';
   }
 
@@ -157,21 +166,23 @@ export async function start(root: HTMLElement): Promise<void> {
   const TOOLS: [Sub, string, string][] = [['find', 'Знайти й замінити', 'sync'], ['speakers', 'Хто говорить', 'rows'], ['sendlog', 'Активність', 'send'], ['search', 'Пошук скрізь', 'search'], ['glossary', 'Глосарій', 'book'], ['autofill', 'Автозаповнення', 'edit'], ['consistency', 'Узгодженість', 'check'], ['settings', 'Налаштування', 'more']];
   function toolsBtn(): string {
     if (sub || !store.hasGame) return '';
-    return `<button class="m-hdr ${menu ? 'on' : ''}" data-menu aria-pressed="${menu}" aria-label="Інструменти" aria-expanded="${menu}">${icon('down')}</button>`;
+    return `<button class="m-hdr ${menu ? 'on' : ''}" data-menu aria-pressed="${menu}" aria-label="Інструменти" aria-expanded="${menu}">${icon('down')}<span class="m-hdr-t">Інструменти</span></button>`;
   }
   /** Top-bar button of the editor: glossary, memory, comments and history of the open row. */
   function helpBtn(): string {
     const c = store.current; if (tab !== 'edit' || sub || !c) return '';
     const n = store.terms(c.unit).length + store.suggestions(c.unit, c.entry).length + openThreads(c.entry);
-    return `<button class="m-hdr ${sheet ? 'on' : ''}" data-sheet aria-pressed="${sheet}" aria-label="Глосарій, пам’ять перекладів, коментарі, історія">${icon('book')}${n ? `<span class="m-badge">${n > 9 ? '9+' : n}</span>` : ''}</button>`;
+    return `<button class="m-hdr ${sheet ? 'on' : ''}" data-sheet aria-pressed="${sheet}" aria-label="Підказки: глосарій, пам’ять перекладів, коментарі, історія">${icon('book')}<span class="m-hdr-t">Підказки</span>${n ? `<span class="m-badge">${n > 9 ? '9+' : n}</span>` : ''}</button>`;
   }
   function renderChrome(): void {
     const tot = store.totals();
     const pct = tot.total ? Math.floor((100 * tot.translated) / tot.total) : 0;
-    const title = tab === 'files' ? 'Файли гри' : tab === 'rows' ? (store.view()?.label ?? store.file ?? 'Рядки') : tab === 'edit' ? (store.file ?? 'Переклад') : 'Ще';
+    const gName = scope === 'group' && gscope ? store.groupsList().find(x => x.id === gscope)?.name : undefined;
+    const title = tab === 'files' ? 'Файли гри' : tab === 'rows' ? (gName ? `Група «${gName}»` : store.view()?.label ?? store.file ?? 'Рядки') : tab === 'edit' ? (store.file ?? 'Переклад') : 'Ще';
     let where = '';
     if (tab === 'edit' && !sub && store.current) { const list = store.rows(), pos = list.findIndex(x => x.key === store.current!.unit.key); if (pos >= 0) where = `Рядок ${pos + 1} з ${list.length} · `; }
     else if (tab === 'rows' && !sub && scope === 'file' && store.view()) where = `${store.rows().length} з ${store.view()!.units.length} · `;
+    else if (tab === 'rows' && !sub && scope === 'group' && gscope) where = `${plural(store.groupRowList(gscope).length, ['рядок', 'рядки', 'рядків'])} · `;
     const subline = tab === 'more' || !store.hasGame || sub ? '' : `${where}${pct}% · ${store.saveOk ? 'збережено' : 'не збережено!'}`;
     $('m-bar').innerHTML = `${sub ? '<button class="m-back" data-subback aria-label="Назад">' + icon('prev') + '</button>' : ''}<div class="m-title"><b>${esc(sub ? SUB_TITLE[sub] : title)}</b>${subline ? `<small class="${store.saveOk ? '' : 'bad'}">${esc(subline)}</small>` : ''}</div>${busy || updBusy ? `<span class="m-busy" role="status"><i class="m-spin"></i>${esc(busy || 'Перевіряю…')}</span>` : ''}${helpBtn()}${toolsBtn()}`;
     $('m-bar').classList.toggle('loading', !!(busy || updBusy));
@@ -184,9 +195,9 @@ export async function start(root: HTMLElement): Promise<void> {
   function bar(done: number, total: number): string { const p = total ? Math.round((100 * done) / total) : 0; return `<span class="m-meter" aria-hidden="true"><i style="width:${p}%"></i></span>`; }
 
   function screenFiles(): string {
-    if (!store.hasGame) return empty('Файлів ще немає', 'Відкрийте файли гри або проєкт у розділі «Ще».', 'more', 'Відкрити файли');
-    const bar = fsel ? selBar(fpicked.size, store.views.length, fpicked.size === store.views.length, 'data-fall', '', `<button class="m-primary" data-fgroup ${fpicked.size ? '' : 'disabled'} aria-haspopup="menu" aria-expanded="${fmenu}">У групу</button>`, 'data-fselect') : '';
-    return `<div class="m-sortrow m-frow"><span>${store.groupsList().length ? plural(store.groupsList().length, ['група', 'групи', 'груп']) : 'Груп ще немає'}</span><button class="m-mini" data-gnew aria-label="Нова група">＋ Група</button><button class="m-mini ${fsel ? 'on' : ''}" data-fselect aria-pressed="${fsel}">${fsel ? 'Готово' : 'Вибрати файли'}</button></div>${gcreating ? '<form class="m-gnew" data-gcreateform><input id="g-name" placeholder="Назва групи" aria-label="Назва нової групи" maxlength="60" autocomplete="off"><button class="m-mini" type="submit">Створити</button></form>' : ''}${fmenu && fsel ? groupMenu() : ''}<div id="m-flist">${filesList()}</div>${bar}<div class="m-searchbar"><label class="m-search m-pill">${icon('search')}<span class="m-ph" aria-hidden="true">Пошук файлу</span><input id="m-fq" type="search" placeholder=" " aria-label="Пошук файлу" value="${esc(fq)}" enterkeyhint="search" autocomplete="off"></label></div>`;
+    if (!store.hasGame) return `<div class="m-empty"><h2>Файлів ще немає</h2><p>Оберіть файли гри (RPG Maker .json, .po, .csv, .rpy) або збережений проєкт.</p><button class="m-primary" data-pick>${icon('folder')}<span>Обрати файли…</span></button><button class="m-secondary" data-go="more">Інші способи: проєкт, синхронізація</button></div>`;
+    const bar = fsel ? selBar(fpicked.size, store.views.length, fpicked.size === store.views.length, 'data-fall', '', `<button class="m-primary" data-fgroup ${fpicked.size ? '' : 'disabled'} aria-haspopup="menu" aria-expanded="${fmenu}">У групу</button>`, 'data-fselect', fmenu ? groupMenu() : '') : '';
+    return `<div class="m-sortrow m-frow"><span>${store.groupsList().length ? plural(store.groupsList().length, ['група', 'групи', 'груп']) : 'Груп ще немає'}</span><button class="m-mini" data-gnew aria-label="Нова група">＋ Група</button><button class="m-mini ${fsel ? 'on' : ''}" data-fselect aria-pressed="${fsel}">${fsel ? 'Готово' : 'Вибрати файли'}</button></div>${gcreating ? '<form class="m-gnew" data-gcreateform><input id="g-name" placeholder="Назва групи" aria-label="Назва нової групи" maxlength="60" autocomplete="off"><button class="m-mini" type="submit">Створити</button></form>' : ''}<div id="m-flist">${filesList()}</div>${bar}<div class="m-searchbar"><label class="m-search m-pill">${icon('search')}<span class="m-ph" aria-hidden="true">Пошук файлу</span><input id="m-fq" type="search" placeholder=" " aria-label="Пошук файлу" value="${esc(fq)}" enterkeyhint="search" autocomplete="off"></label></div>`;
   }
   /** Where the ticked files can go: a group, out of groups, or a new group. */
   function groupMenu(): string {
@@ -212,7 +223,7 @@ export async function start(root: HTMLElement): Promise<void> {
       const open = gopen.has(g.id) || !!q;
       const acts = open ? (grename === g.id
         ? `<form class="m-grename" data-grsave="${esc(g.id)}"><input id="gr-ren" value="${esc(g.name)}" aria-label="Нова назва групи" maxlength="60" autocomplete="off"><button class="m-mini" type="submit">Гаразд</button></form>`
-        : `<div class="m-gacts"><button class="m-mini" data-gsend="${esc(g.id)}" ${all.length ? '' : 'disabled'}>Надіслати</button><button class="m-mini" data-grename="${esc(g.id)}">Назва</button><button class="m-mini" data-gcolor="${esc(g.id)}">Колір</button><button class="m-mini danger" data-gdel="${esc(g.id)}">${gdel === g.id ? 'Справді видалити?' : 'Видалити'}</button></div>`) : '';
+        : `<div class="m-gacts"><button class="m-mini" data-grows="${esc(g.id)}" ${all.length ? '' : 'disabled'}>Рядки</button><button class="m-mini" data-gsend="${esc(g.id)}" ${all.length ? '' : 'disabled'}>Надіслати</button><button class="m-mini ${gmore === g.id ? 'on' : ''}" data-gmore="${esc(g.id)}" aria-expanded="${gmore === g.id}" aria-label="Інші дії групи">⋯</button>${gmore === g.id ? `<button class="m-mini" data-grename="${esc(g.id)}">Назва</button><button class="m-mini" data-gcolor="${esc(g.id)}">Колір</button><button class="m-mini danger" data-gdel="${esc(g.id)}">${gdel === g.id ? 'Справді видалити?' : 'Видалити'}</button>` : ''}</div>`) : '';
       return `<div class="m-grp"><button class="m-cat-h m-grp-h" data-gfold="${esc(g.id)}" aria-expanded="${open}"><span class="m-cat-c">${icon('down')}</span><i class="m-gdot" style="background:${esc(g.color ?? '#8b72e8')}"></i><b>${esc(g.name)}</b><small>${all.length} · ${t.all ? Math.round((100 * t.tr) / t.all) : 0}%</small></button>${open ? `${acts}${files.length ? `<ul class="m-list">${files.map(fileItem).join('')}</ul>` : '<p class="m-none">Файлів немає: «Вибрати файли», потім «У групу»</p>'}` : ''}</div>`;
     }).join('')}</section>`;
   }
@@ -235,7 +246,23 @@ export async function start(root: HTMLElement): Promise<void> {
     }).join('');
   }
 
+  /** The rows of every file of a group as one list (searchable); a tap opens the row in the editor. */
+  function screenGroupRows(id: string): string {
+    const g = store.groupsList().find(x => x.id === id);
+    if (!g) { scope = 'file'; gscope = null; return screenRows(); }
+    const all = store.groupRowList(id), q = store.q.trim().toLowerCase();
+    const list = q ? all.filter(h => (h.unit.source + ' ' + (store.entry(h.file, h.unit.key)?.target ?? '') + ' ' + h.unit.key).toLowerCase().includes(q)) : all;
+    const shown = list.slice(0, PAGE * page);
+    return `<div class="m-tools"><label class="m-search">${icon('search')}<input id="m-q" type="search" placeholder="Пошук у групі «${esc(g.name)}»" aria-label="Пошук у групі" value="${esc(store.q)}" enterkeyhint="search" autocomplete="off"></label>
+      <div class="m-scope" role="group" aria-label="Де шукати"><button data-scope="file">Файл</button><button class="on" data-scope="group" aria-pressed="true">Група «${esc(g.name)}»</button></div></div>
+      <ul class="m-list rows">${shown.map(h => {
+        const e = store.entry(h.file, h.unit.key), st = store.shown(h.unit, e);
+        return `<li><button class="m-row" data-hit="${esc(h.file)}" data-hitkey="${esc(h.unit.key)}"><span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span><span class="m-row-t"><small>${esc(store.view(h.file)?.label ?? h.file.replace(/\.json$/, ''))} · ${esc(store.speaker(h.unit) || KIND_LABEL[h.unit.kind])}</small><span class="m-src">${esc(h.unit.source.replace(/\s+/g, ' '))}</span><span class="m-tr ${e?.target ? '' : 'none'}">${e?.target ? esc(e.target.replace(/\s+/g, ' ')) : '—'}</span></span></button></li>`;
+      }).join('') || '<li class="m-none">Нічого не знайдено</li>'}${list.length > shown.length ? `<li class="m-more-li"><button class="m-mini" data-more>Показати ще ${Math.min(PAGE, list.length - shown.length)} · ${shown.length} з ${list.length}</button></li>` : ''}</ul>`;
+  }
+
   function screenRows(): string {
+    if (scope === 'group' && gscope) return screenGroupRows(gscope);
     const v = store.view();
     if (!v) return empty('Файл не вибрано', 'Оберіть файл у розділі «Файли».', 'files', 'До файлів');
     if (scope === 'all') return screenAll();
@@ -252,8 +279,8 @@ export async function start(root: HTMLElement): Promise<void> {
       ${wide.matches ? `<div class="m-scope m-layout" role="group" aria-label="Вигляд"><button class="${L === 'cards' ? 'on' : ''}" data-layout="cards">Картки</button><button class="${L === 'table' ? 'on' : ''}" data-layout="table">Таблиця</button></div>` : ''}</div>
       ${L === 'table' ? tableHtml(v.name, shown, rows.length) : `<ul class="m-list rows">${shown.map((u, i) => {
         const e = store.entry(v.name, u.key), st = store.shown(u, e);
-        return `<li><button class="m-row ${u.key === store.key && !selecting ? 'cur' : ''} ${selecting && picked.has(u.key) ? 'picked' : ''}" ${selecting ? `data-pickkey="${esc(u.key)}" aria-pressed="${picked.has(u.key)}"` : `data-key="${esc(u.key)}"`}>${selecting ? '<span class="m-edge" aria-hidden="true"></span>' : ''}<span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span><span class="m-row-t"><small>${i + 1} · ${esc(store.speaker(u) || KIND_LABEL[u.kind])}</small><span class="m-src">${esc(u.source.replace(/\s+/g, ' '))}</span><span class="m-tr ${e?.target ? '' : 'none'}">${e?.target ? esc(e.target.replace(/\s+/g, ' ')) : '—'}</span></span></button></li>`;
-      }).join('') || '<li class="m-none">Нічого не знайдено</li>'}${rows.length > shown.length ? `<li class="m-more-li"><button class="m-mini" data-more>Показати ще ${Math.min(PAGE, rows.length - shown.length)} · ${shown.length} з ${rows.length}</button></li>` : ''}</ul>`}${selecting && L === 'cards' ? selBar(picked.size, rows.length, picked.size === rows.length && rows.length > 0, 'data-selall', `<button class="m-mini" data-selcopy ${picked.size ? '' : 'disabled'}>Оригінал</button><button class="m-mini danger" data-selclear ${picked.size ? '' : 'disabled'}>Очистити</button>`, `<button class="m-primary" data-selsend ${picked.size ? '' : 'disabled'}>${icon('check')}<span>Надіслати</span></button>`, 'data-select') : ''}${selecting && layout === 'cards' ? '' : sbar}`;
+        return `<li><button class="m-row ${u.key === store.key && !selecting ? 'cur' : ''} ${selecting && picked.has(u.key) ? 'picked' : ''}" ${selecting ? `data-pickkey="${esc(u.key)}" aria-pressed="${picked.has(u.key)}"` : `data-key="${esc(u.key)}"`}>${selecting ? '<span class="m-edge" aria-hidden="true"></span>' : ''}<span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span><span class="m-row-t"><small>${i + 1} · ${esc(store.speaker(u) || KIND_LABEL[u.kind])}${threadsOf(e?.comments).length ? ` <span class="m-cmk" title="Є коментарі" aria-label="Є коментарі">${icon('cm')}</span>` : ''}</small><span class="m-src">${esc(u.source.replace(/\s+/g, ' '))}</span><span class="m-tr ${e?.target ? '' : 'none'}">${e?.target ? esc(e.target.replace(/\s+/g, ' ')) : '—'}</span></span></button></li>`;
+      }).join('') || '<li class="m-none">Нічого не знайдено</li>'}${rows.length > shown.length ? `<li class="m-more-li"><button class="m-mini" data-more>Показати ще ${Math.min(PAGE, rows.length - shown.length)} · ${shown.length} з ${rows.length}</button></li>` : ''}</ul>`}${selecting && L === 'cards' ? selBar(picked.size, rows.length, picked.size === rows.length && rows.length > 0, 'data-selall', `<button class="m-mini" data-selcopy ${picked.size ? '' : 'disabled'}>Оригінал</button><button class="m-mini" data-seltm ${picked.size ? '' : 'disabled'}>З пам’яті</button><button class="m-mini danger" data-selclear ${picked.size ? '' : 'disabled'}>Очистити</button>`, `<button class="m-ic" data-selappr ${picked.size ? '' : 'disabled'} aria-label="Вичитати вибрані" title="Вичитати вибрані">${icon('check')}</button><button class="m-primary" data-selsend ${picked.size ? '' : 'disabled'}>${icon('send')}<span>Надіслати</span></button>`, 'data-select') : ''}${selecting && layout === 'cards' ? '' : sbar}`;
   }
 
   /** The table: columns scroll sideways, a tap on a translation writes right in the cell, a tap on a number opens the row. */
@@ -299,12 +326,26 @@ export async function start(root: HTMLElement): Promise<void> {
   }
 
   /* ---------- sub-screens (opened from the editor or «Ще») ---------- */
+  /** Go to the next (1) or previous (-1) scene: its first line without a translation becomes the open one. */
+  function stepSceneBy(d: 1 | -1): void {
+    const v = store.view(), c = store.current; if (!v || !c) return;
+    const to = stepScene(scenesOf(v.units), c.unit.key, d);
+    const first = to?.units.find(u => !store.entry(v.name, u.key)?.target) ?? to?.units[0];
+    if (first) { store.select(first.key); scn.picked = first.key; render(); $('m-main').scrollTop = 0; buzz(8); }
+  }
+  /** The scene a row is in: the event page it belongs to (with its place among the scenes of the file), or a few rows around it in a file that has no scenes. */
+  function sceneOf(v: NonNullable<ReturnType<typeof store.view>>, key: string): { units: typeof v.units; i: number; n: number; title: string } {
+    const idx = scenesOf(v.units), at = idx?.byKey.get(key);
+    const sc = idx && at !== undefined ? idx.scenes[at] : undefined;
+    return sc && idx ? { units: sc.units, i: at! + 1, n: idx.scenes.length, title: sceneTitle(sc) } : { units: sceneUnits(v.units, key), i: 0, n: 0, title: '' };
+  }
   /** The scene as the message windows of the game: colours, names, choices, width check; a tap picks a line, the bar below acts on it. */
   function screenScene(): string {
     const c = store.current, v = store.view();
     if (!c || !v) return empty('Рядок не вибрано', 'Спершу оберіть рядок.', 'rows', 'До рядків');
-    if (!scn.picked || !v.units.some(u => u.key === scn.picked)) scn.picked = c.unit.key;
-    const around = sceneUnits(v.units, c.unit.key), lines = sceneLines(around);
+    const here = sceneOf(v, c.unit.key), around = here.units, lines = sceneLines(around);
+    // The picked line must belong to this scene (the open row may have moved to another one meanwhile).
+    if (!scn.picked || !around.some(u => u.key === scn.picked)) scn.picked = c.unit.key;
     const actors = store.views.find(x => x.name === 'Actors.json');
     const actorName = (n: number): string | undefined => { const u = actors?.units.find(x => x.key === `[${n}].name`); return u ? (store.saved.files['Actors.json']?.[u.key]?.target || u.source) : undefined; };
     const limit = store.lineLimit();
@@ -323,11 +364,12 @@ export async function start(root: HTMLElement): Promise<void> {
       return `<button class="scn-box ${cls} ${u.key === scn.picked ? 'cur' : ''}" data-scpick="${esc(u.key)}" aria-pressed="${u.key === scn.picked}"><span class="sd ${SHAPE[st]}" title="${STATUS_LABEL[st]}"></span><span class="scn-in">${inner}</span></button>`;
     };
     const orig = (u: (typeof v.units)[number], missing: boolean): string => (scn.mode === 'both' && !missing ? `<div class="scn-orig">${u.source.split('\n').map(x => `<div>${esc(x)}</div>`).join('')}</div>` : '');
-    const tag = (missing: boolean, over: boolean): string => `${missing && scn.mode !== 'src' ? '<span class="scn-tag">не перекладено</span>' : ''}${over ? '<span class="scn-tag bad">рядок задовгий для вікна гри</span>' : ''}`;
+    const tag = (missing: boolean, over: boolean, bad = ''): string => `${missing && scn.mode !== 'src' ? '<span class="scn-tag">не перекладено</span>' : ''}${over ? '<span class="scn-tag bad">рядок задовгий для вікна гри</span>' : ''}${bad ? `<span class="scn-tag bad">${esc(bad)}</span>` : ''}`;
+    const badOf = (u: (typeof v.units)[number]): string => { const e = store.entry(v.name, u.key); return e?.target ? store.issues(u, e).find(i => i.severity === 'bad')?.message ?? '' : ''; };
     const one = (l: ReturnType<typeof sceneLines>[number]): string => {
-      if (l.kind === 'choice') return `<div class="scn-choice" role="group" aria-label="Варіанти відповіді"><small>Вибір гравця</small>${l.units.map((u, i) => { const t = body(u); return box(u, `<span class="scn-n">${i + 1}</span><span>${t.html}${orig(u, t.missing)}${tag(t.missing, t.over)}</span>`, 'opt'); }).join('')}</div>`;
+      if (l.kind === 'choice') return `<div class="scn-choice" role="group" aria-label="Варіанти відповіді"><small>Вибір гравця</small>${l.units.map((u, i) => { const t = body(u); return box(u, `<span class="scn-n">${i + 1}</span><span>${t.html}${orig(u, t.missing)}${tag(t.missing, t.over, badOf(u))}</span>`, 'opt'); }).join('')}</div>`;
       const u = l.unit, t = body(u), who = store.speaker(u);
-      return box(u, `${who ? `<span class="scn-who">${esc(who)}</span>` : ''}<span class="scn-win${l.kind === 'scroll' ? ' scroll' : ''}">${t.html}</span>${orig(u, t.missing)}${tag(t.missing, t.over)}`);
+      return box(u, `${who ? `<span class="scn-who">${esc(who)}</span>` : ''}<span class="scn-win${l.kind === 'scroll' ? ' scroll' : ''}">${t.html}</span>${orig(u, t.missing)}${tag(t.missing, t.over, badOf(u))}`);
     };
     const all = lines.flatMap(l => (l.kind === 'choice' ? l.units : [l.unit]));
     const st = all.map(u => store.entry(v.name, u.key)?.status ?? 'new');
@@ -335,12 +377,12 @@ export async function start(root: HTMLElement): Promise<void> {
     const page = around[0]?.page, cond = page ? describePage(page, store.saved.sysNames).join('; ') : '';
     const canSend = all.some(u => store.entry(v.name, u.key)?.status === 'draft');
     const modes: ['both' | 'tr' | 'src', string][] = [['both', 'Обидва'], ['tr', 'Переклад'], ['src', 'Оригінал']];
-    return `<div class="m-scene"><div class="scn-head"><b>${esc(v.label ?? v.name)}</b><small>${plural(all.length, ['рядок', 'рядки', 'рядків'])} · перекладено ${done} · вичитано ${appr} · надіслано ${wait}</small>${cond ? `<small class="scn-cond">Умови: ${esc(cond)}</small>` : ''}</div>
+    return `<div class="m-scene"><div class="scn-head">${here.n ? `<div class="scn-nav"><button class="m-ic sm" data-scstep="-1" aria-label="Попередня сцена" ${stepScene(scenesOf(v.units), c.unit.key, -1) ? '' : 'disabled'}>${icon('prev')}</button><span class="scn-nav-t"><b>${esc(here.title)}</b><small>сцена ${here.i} із ${here.n}</small></span><button class="m-ic sm" data-scstep="1" aria-label="Наступна сцена" ${stepScene(scenesOf(v.units), c.unit.key, 1) ? '' : 'disabled'}>${icon('next')}</button></div>` : `<b>${esc(v.label ?? v.name)}</b>`}<small>${plural(all.length, ['рядок', 'рядки', 'рядків'])} · перекладено ${done} · вичитано ${appr} · надіслано ${wait}</small>${cond ? `<small class="scn-cond">Умови: ${esc(cond)}</small>` : ''}</div>
       <div class="m-dseg scn-modes" role="group" aria-label="Що показувати">${modes.map(([k, l]) => `<button data-scmode="${k}" class="${scn.mode === k ? 'on' : ''}" aria-pressed="${scn.mode === k}">${l}</button>`).join('')}</div>
       <label class="m-check"><input type="checkbox" id="scn-real" ${scn.real ? 'checked' : ''}> Вікно як у грі: ширина в пікселях (816 px, шрифт 28)</label>
       <div class="scn-list">${lines.map(one).join('') || '<p class="m-none">У цій сцені немає текстових рядків</p>'}</div></div>
       <div class="scn-quick"><div class="scn-q-src">${esc((v.units.find(u => u.key === scn.picked)?.source ?? '').replace(/\s+/g, ' '))}</div><textarea id="scn-tr" class="m-textarea" spellcheck="false" autocapitalize="sentences" placeholder="Переклад вибраного рядка" aria-label="Переклад вибраного рядка">${esc(store.entry(v.name, scn.picked)?.target ?? '')}</textarea></div>
-      <div class="scn-bar"><button class="m-secondary" data-scedit>${icon('edit')}<span>Редагувати</span></button><button class="m-primary" data-scenesend ${canSend ? '' : 'disabled'}>${icon('send')}<span>Надіслати сцену</span></button></div>`;
+      <div class="scn-bar"><button class="m-secondary" data-scedit>${icon('edit')}<span>Редагувати</span></button><button class="m-secondary" data-sceneappr ${all.some(u => store.entry(v.name, u.key)?.target && store.entry(v.name, u.key)?.status !== 'appr') ? '' : 'disabled'} aria-label="Вичитати всю сцену">${icon('check')}<span>Вичитати</span></button><button class="m-primary" data-scenesend ${canSend ? '' : 'disabled'} aria-label="Надіслати всю сцену">${icon('send')}<span>Надіслати</span></button></div>`;
   }
 
   function screenFind(): string {
@@ -417,8 +459,8 @@ export async function start(root: HTMLElement): Promise<void> {
 
   /** Lines made only of words that are already known: shown first, written only after the tap. */
   /** The bar both selection screens share, built like the editor's action bar: pills above, square buttons and the main action below. */
-  function selBar(n: number, total: number, allOn: boolean, allAttr: string, pills: string, primary: string, exitAttr: string): string {
-    return `<div class="m-afbar" role="toolbar" aria-label="Дії з вибраним"><div class="m-act2"><button class="m-mini" ${allAttr}>${allOn ? 'Зняти вибір' : 'Вибрати всі'}</button>${pills}</div>
+  function selBar(n: number, total: number, allOn: boolean, allAttr: string, pills: string, primary: string, exitAttr: string, above = ''): string {
+    return `<div class="m-afbar" role="toolbar" aria-label="Дії з вибраним">${above}<div class="m-act2"><button class="m-mini" ${allAttr}>${allOn ? 'Зняти вибір' : 'Вибрати всі'}</button>${pills}</div>
       <div class="m-act1"><button class="m-ic" ${exitAttr} aria-label="Вийти з вибору">${icon('x')}</button><span class="m-ic cnt" aria-label="Вибрано ${n} з ${total}">${n}/${total}</span>${primary}</div></div>`;
   }
   function screenAutofill(): string {
@@ -496,7 +538,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const u = c.unit, e = c.entry, st = store.shown(u, e), v = store.view();
     const terms = store.terms(u);
     return `<div class="m-edit" id="m-edit">
-      <div class="m-ctx"><span class="m-tag">${esc(KIND_LABEL[u.kind])}</span>${store.speaker(u) ? `<span class="m-tag who">${esc(store.speaker(u))}</span>` : ''}${v?.label ? `<span class="m-tag">${esc(v.label)}</span>` : ''}<span class="m-status"><span class="sd ${SHAPE[st]}"></span>${STATUS_LABEL[st]}</span></div>
+      <div class="m-ctx"><span class="m-tag">${esc(KIND_LABEL[u.kind])}</span>${store.speaker(u) ? `<span class="m-tag who">${esc(store.speaker(u))}</span>` : ''}${v?.label ? `<span class="m-tag">${esc(v.label)}</span>` : ''}<span class="m-status"><span class="sd ${SHAPE[st]}"></span>${stateLabel(st, e)}</span></div>
       <section class="m-card"><h3>Оригінал</h3><div class="m-source" id="m-source">${sourceHtml(u.source, terms, e?.target ?? '')}</div>${store.refs(c.file, u.key).map(r => `<div class="m-ref"><small>Довідка · ${esc(r.lang.toUpperCase())}</small>${esc(r.text)}</div>`).join('')}${(() => { const w = store.usageOf(c.file, u.key); return w.length ? `<div class="m-ref"><small>Де видається</small>${w.map(esc).join('<br>')}</div>` : ''; })()}</section>
       <section class="m-card m-tr-card"><h3>Переклад<span class="m-count" id="m-count"></span></h3>
         <textarea id="m-tr" class="m-textarea" spellcheck="false" autocapitalize="sentences" placeholder="Напишіть переклад…" aria-label="Переклад">${esc(e?.target ?? '')}</textarea>
@@ -504,7 +546,7 @@ export async function start(root: HTMLElement): Promise<void> {
       </section>
       <div id="m-prev" class="m-prev"></div>
     </div>
-    <div class="m-actions" id="m-actions"><div class="m-act2"><button class="m-mini" data-sub="scene">${icon('rows')} Сцена</button><button class="m-mini" data-approve>${icon('check')} Вичитати</button><button class="m-mini danger" data-clear>Очистити</button></div><div class="m-act1"><button class="m-ic" data-step="-1" aria-label="Попередній рядок" ${store.neighbour(-1) ? '' : 'disabled'}>${icon('prev')}</button><button class="m-ic" data-step="1" aria-label="Наступний рядок" ${store.neighbour(1) ? '' : 'disabled'}>${icon('next')}</button><button class="m-primary" data-send>${icon('send')}<span>Надіслати</span></button></div></div>`;
+    <div class="m-actions" id="m-actions"><div class="m-act2"><button class="m-mini" data-sub="scene">${icon('rows')} Сцена</button>${c.entry?.status === 'appr' ? '' : `<button class="m-mini" data-approve>${icon('check')} Вичитати</button>`}${c.entry?.status === 'done' || c.entry?.status === 'appr' ? `<button class="m-mini" data-rework title="Повернути на доопрацювання">${icon('undo')} Повернути</button>` : ''}<button class="m-mini danger" data-clear>Очистити</button></div><div class="m-act1"><button class="m-ic" data-step="-1" aria-label="Попередній рядок" ${store.neighbour(-1) ? '' : 'disabled'}>${icon('prev')}</button><button class="m-ic" data-step="1" aria-label="Наступний рядок" ${store.neighbour(1) ? '' : 'disabled'}>${icon('next')}</button><button class="m-primary" data-send>${icon('send')}<span>Надіслати</span></button></div></div>`;
   }
 
   function screenMore(): string {
@@ -547,7 +589,21 @@ export async function start(root: HTMLElement): Promise<void> {
 
   /* ---------- the card of a glossary term (a tap on the term in the original) ---------- */
   let termShown: string | null = null;
+  /** The control code whose card is shown (the same bottom card as for a term). */
+  let codeShown: string | null = null;
+  function renderCodeCard(): void {
+    let box = document.getElementById('m-tcard');
+    const c = store.current;
+    if (!codeShown || !c) { box?.remove(); return; }
+    if (!box) { box = document.createElement('aside'); box.id = 'm-tcard'; box.className = 'm-tcard'; box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', 'Керівний код гри'); root.appendChild(box); }
+    const actor = (n: number): string | undefined => { const u = store.views.find(x => x.name === 'Actors.json')?.units.find(x => x.key === `[${n}].name`); return u ? store.saved.files['Actors.json']?.[u.key]?.target || u.source : undefined; };
+    const meaning = explainCodes(codeShown, actor, store.saved.sysNames)[0]?.meaning ?? 'керівний код гри';
+    const has = (c.entry?.target ?? '').includes(codeShown);
+    box.innerHTML = `<div class="m-tc-r"><span class="m-tc-l">КОД</span><div><b class="mono">${esc(codeShown)}</b><div class="m-tc-n">${esc(meaning)}. Гра підставляє це сама: код має стояти в перекладі так само, як в оригіналі.</div></div></div>
+      <div class="m-tc-x">${has ? '' : `<button class="m-primary" data-cc="insert">Вставити ${esc(codeShown)}</button>`}<button class="m-secondary" data-cc="close">Закрити</button></div>`;
+  }
   function renderTermCard(): void {
+    if (codeShown) { renderCodeCard(); return; }
     let box = document.getElementById('m-tcard');
     const t0 = termShown ? store.saved.terms.find(y => y.en === termShown) : undefined;
     const c = store.current;
@@ -558,7 +614,18 @@ export async function start(root: HTMLElement): Promise<void> {
       <div class="m-tc-r en"><span class="m-tc-l">EN</span><div><b>${esc(t0.en)}</b>${t0.note ? `<div class="m-tc-n">${esc(t0.note)}</div>` : ''}</div></div>
       <div class="m-tc-x"><button class="m-primary" data-tc="insert">Вставити «${esc(t0.uk)}»</button><button class="m-secondary" data-tc="edit">Змінити</button><button class="m-secondary" data-tc="close">Закрити</button></div>`;
   }
-  const showTermCard = (en: string): void => { termShown = en; renderTermCard(); };
+  const showTermCard = (en: string): void => { termShown = en; codeShown = null; renderTermCard(); };
+  /** The term or code of the original nearest to a tap (within about 22 px), when the tap itself fell on neither. */
+  function nearestWord(e: MouseEvent): HTMLElement | null {
+    const src = document.getElementById('m-source');
+    if (!src || !(e.target as HTMLElement).closest?.('#m-source')) return null;
+    let best: HTMLElement | null = null, d = 22;
+    for (const w of src.querySelectorAll<HTMLElement>('.th[data-term], .code[data-hk]')) for (const r of w.getClientRects()) {
+      const dx = Math.max(r.left - e.clientX, 0, e.clientX - r.right), dy = Math.max(r.top - e.clientY, 0, e.clientY - r.bottom), dist = Math.hypot(dx, dy);
+      if (dist < d) { d = dist; best = w; }
+    }
+    return best;
+  }
 
   /* ---------- the hints sheet ---------- */
   /** Thread with an open answer form; comment being edited; comment waiting for the second tap of a deletion. */
@@ -595,7 +662,7 @@ export async function start(root: HTMLElement): Promise<void> {
       const badge: Partial<Record<Sub, number>> = { autofill: store.autofill().length, consistency: store.inconsistent().length, sendlog: store.sends().length + store.autos().length + store.journal().length };
       const short: Partial<Record<Sub, string>> = { find: 'Заміна', search: 'Пошук', autofill: 'Авто', speakers: 'Мовці' };
       const item = (k: Sub): string => { const [, l, ic] = TOOLS.find(t => t[0] === k)!; return `<button class="m-mi" data-sub="${k}">${icon(ic)}<span>${short[k] ?? l}</span>${badge[k] ? `<i>${badge[k]! > 99 ? '99+' : badge[k]}</i>` : ''}</button>`; };
-      wrap.innerHTML = `<div class="m-scrim" data-close></div><nav class="m-menu" aria-label="Інструменти"><div class="m-mgrid">${(['find', 'search', 'autofill', 'consistency', 'speakers', 'glossary', 'sendlog'] as Sub[]).map(item).join('')}</div>
+      wrap.innerHTML = `<div class="m-scrim" data-close></div><nav class="m-menu" aria-label="Інструменти"><span class="m-grab" aria-hidden="true"></span><div class="m-mgrid">${(['find', 'search', 'autofill', 'consistency', 'speakers', 'glossary', 'sendlog'] as Sub[]).map(item).join('')}</div>
         <div class="m-msep"></div><button class="m-mi wide" data-sub="settings">${icon('more')}<span>Налаштування</span></button></nav>`;
       return;
     }
@@ -614,6 +681,7 @@ export async function start(root: HTMLElement): Promise<void> {
       : cur === 'cm' ? threadsHtml(c.entry)
       : historyHtml(hist);
     wrap.innerHTML = `<div class="m-scrim ${fresh ? 'in' : ''}" data-close></div><aside class="m-sheet ${fresh ? 'in' : ''} ${cur === 'cm' ? 'tall' : ''}" role="dialog" aria-label="Допомога до рядка">
+      <span class="m-grab" aria-hidden="true"></span>
       <div class="m-stabs" role="tablist">${tabs.map(([k, l]) => `<button role="tab" data-stab="${k}" aria-selected="${k === cur}" class="${k === cur ? 'on' : ''}">${l}${counts[k] ? `<i>${counts[k]}</i>` : ''}</button>`).join('')}<span class="m-stab-ind" id="m-stab-ind"></span></div>
       <div class="m-spanel ${dir}" id="m-spanel">${panel}</div>
       ${cur === 'cm' ? `<form class="m-composer" data-cmform><textarea id="m-cm" rows="2" maxlength="400" placeholder="Написати коментар…" aria-label="Новий коментар"></textarea><button type="submit" class="m-send" aria-label="Надіслати коментар" disabled>${icon('send')}</button></form>` : ''}
@@ -671,7 +739,7 @@ export async function start(root: HTMLElement): Promise<void> {
       pv.innerHTML = lim ? `<small>Вікно гри: ${lim} зн. у рядку</small><div class="m-prevbox">${lines.map(l => { const plain = [...l.replace(/\\[A-Za-z]+(\[[^\]]*\])?|\\[.|!<>^{}$]/g, '')]; const over = plain.length - lim; return `<div class="${over > 0 ? 'over' : ''}">${esc(l) || '&nbsp;'}${over > 0 ? `<em>+${over}</em>` : ''}</div>`; }).join('')}</div>` : '';
     }
     const box = document.getElementById('m-issues'); if (box) box.innerHTML = issuesHtml();
-    const stEl = document.querySelector('.m-status'); if (stEl) { const st = store.shown(c.unit, c.entry); stEl.innerHTML = `<span class="sd ${SHAPE[st]}"></span>${STATUS_LABEL[st]}`; }
+    const stEl = document.querySelector('.m-status'); if (stEl) { const st = store.shown(c.unit, c.entry); stEl.innerHTML = `<span class="sd ${SHAPE[st]}"></span>${stateLabel(st, c.entry)}`; }
   }
 
   /* ---------- actions ---------- */
@@ -773,19 +841,34 @@ export async function start(root: HTMLElement): Promise<void> {
     const q = <T extends HTMLElement>(sel: string): T | null => t.closest<T>(sel);
     let x: HTMLElement | null;
     if ((x = q('[data-go]'))) { if (x.closest('#m-nav')) switchTab(x.dataset.go as Tab); else go(x.dataset.go as Tab); return; }
-    if ((x = q('[data-sub]'))) { sub = x.dataset.sub as Sub; sheet = false; menu = false; render(); $('m-main').scrollTop = 0; return; }
+    if ((x = q('[data-sub]'))) { sub = x.dataset.sub as Sub; if (sub === 'scene' && store.current) scn.picked = store.current.unit.key; sheet = false; menu = false; render(); $('m-main').scrollTop = 0; return; }
     if (q('[data-subback]')) { sub = null; render(); return; }
     if ((x = q('[data-layout]'))) { layout = x.dataset.layout as 'cards' | 'table'; try { localStorage.setItem('transly-m-layout', layout); } catch { /* private mode */ } render(); return; }
     if ((x = q('[data-cell]'))) { editCell(x); return; }
-    if ((x = q('[data-scope]'))) { scope = x.dataset.scope as 'file' | 'all'; render(); return; }
-    if ((x = q('[data-hit]'))) { store.open(x.dataset.hit!, x.dataset.hitkey!); scope = 'file'; go('edit'); return; }
+    if ((x = q('[data-scope]'))) { scope = x.dataset.scope as 'file' | 'all' | 'group'; page = 1; render(); return; }
+    if ((x = q('[data-hit]'))) { store.open(x.dataset.hit!, x.dataset.hitkey!); if (scope === 'all') scope = 'file'; go('edit'); return; }
     if ((x = q('[data-scpick]'))) { scn.picked = x.dataset.scpick!; const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
     if ((x = q('[data-scmode]'))) { scn.mode = x.dataset.scmode as typeof scn.mode; const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
     if (q('[data-scedit]')) { store.select(scn.picked); sub = null; go('edit'); return; }
-    if (q('[data-scenesend]')) { const v = store.view(), c = store.current; if (v && c) { if (!armed(sceneUnits(v.units, c.unit.key).length, 'scene')) return; const r = store.sendMany(v.name, sceneUnits(v.units, c.unit.key)); say(`Надіслано: ${r.sent}${r.skipped ? ` · пропущено: ${r.skipped}` : ''}`, r.sent === 0, r.batch); buzz(14); render(); } return; }
+    if (q('[data-scenesend]') || q('[data-sceneappr]')) {
+      const v = store.view(), c = store.current;
+      if (v && c) {
+        const units = sceneOf(v, c.unit.key).units, approve = !!q('[data-sceneappr]');
+        // Sending takes the drafts (what is sent or approved already is not an error); approving takes every row with a translation.
+        const todo = approve ? units : units.filter(u => store.entry(v.name, u.key)?.status === 'draft');
+        if (!armed(todo.length, approve ? 'scene-appr' : 'scene')) return;
+        const r = approve ? store.approveMany(v.name, todo, 'вичитано (вся сцена)') : store.sendMany(v.name, todo, 'scene');
+        sayBulk(approve ? 'Вичитано' : 'Надіслано', r); buzz(14);
+        // The line a QA error stopped is shown with its remark: the view goes to the first of them.
+        if (r.blocked[0]) { scn.picked = r.blocked[0].key; render(); document.querySelector('.scn-box.cur')?.scrollIntoView({ block: 'center' }); return; }
+        render();
+      }
+      return;
+    }
+    if ((x = q('[data-scstep]'))) { stepSceneBy(Number(x.dataset.scstep) as 1 | -1); return; }
     if (q('[data-dofind]')) { fr.matches = store.find({ find: fr.find, replace: fr.replace, caseSensitive: fr.cs, wholeWord: fr.word }); if (!fr.find) say('Вкажіть, що шукати', true); else if (!fr.matches.length) say('Нічого не знайдено'); render(); return; }
-    if (q('[data-doreplace]')) { const n = store.replaceAll(fr.matches); fr.matches = []; say(`Замінено в рядках: ${n}`); buzz(14); render(); return; }
-    if ((x = q('[data-uni]'))) { const [gi, vi] = x.dataset.uni!.split('|').map(Number); const g = store.inconsistent()[gi!]; const v = g?.variants[vi!]; if (g && v) { const n = store.unify(g.source, v.target); say(`Уніфіковано рядків: ${n}`); buzz(14); } render(); return; }
+    if (q('[data-doreplace]')) { const r = store.replaceAll(fr.matches); fr.matches = []; say(`Замінено в рядках: ${r.n}`, false, r.batch); buzz(14); render(); return; }
+    if ((x = q('[data-uni]'))) { const [gi, vi] = x.dataset.uni!.split('|').map(Number); const g = store.inconsistent()[gi!]; const v = g?.variants[vi!]; if (g && v) { const r = store.unify(g.source, v.target); say(`Уніфіковано рядків: ${r.n}`, false, r.batch); buzz(14); } render(); return; }
     if (q('[data-refpick]')) { refLang = ($<HTMLInputElement>('rf-lang').value || '').trim().toLowerCase(); if (!refLang) { say('Вкажіть код мови, наприклад ru або pl', true); return; } $<HTMLInputElement>('m-reffile').click(); return; }
     if ((x = q('[data-cat]'))) { const k = x.dataset.cat!; if (collapsedCats.has(k)) collapsedCats.delete(k); else collapsedCats.add(k); try { localStorage.setItem('transly-m-cats', JSON.stringify([...collapsedCats])); } catch { /* private mode */ } const l = document.getElementById('m-flist'); if (l) l.innerHTML = filesList(); return; }
     if (q('[data-termfile]')) { $<HTMLInputElement>('m-termfile').click(); return; }
@@ -799,7 +882,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (q('[data-fselect]')) { fsel = !fsel; fpicked.clear(); fmenu = false; render(); return; }
     if ((x = q('[data-fpick]'))) { const f = x.dataset.fpick!; if (fpicked.has(f)) fpicked.delete(f); else fpicked.add(f); fmenu = false; render(); return; }
     if (q('[data-fall]')) { if (fpicked.size === store.views.length) fpicked.clear(); else store.views.forEach(v => fpicked.add(v.name)); fmenu = false; render(); return; }
-    if (q('[data-fgroup]')) { fmenu = !fmenu; render(); if (fmenu) $('m-main').scrollTop = 0; return; }
+    if (q('[data-fgroup]')) { fmenu = !fmenu; renderKeep(); return; }
     if ((x = q('[data-fplace]'))) {
       const id = x.dataset.fplace!, files = [...fpicked];
       store.placeFiles(files, id || null);
@@ -807,19 +890,21 @@ export async function start(root: HTMLElement): Promise<void> {
       fsel = false; fmenu = false; fpicked.clear(); render(); return;
     }
     if (q('[data-gnew]')) { gcreating = !gcreating; render(); if (gcreating) document.getElementById('g-name')?.focus(); return; }
-    if ((x = q('[data-gfold]'))) { const id = x.dataset.gfold!; if (gopen.has(id)) gopen.delete(id); else gopen.add(id); grename = null; gdel = null; render(); return; }
-    if ((x = q('[data-gsend]'))) { const r = store.sendGroup(x.dataset.gsend!); say(`Надіслано: ${r.sent}${r.skipped ? `, пропущено ${r.skipped}` : ''}`, !r.sent, r.batch); render(); return; }
-    if ((x = q('[data-grename]'))) { grename = x.dataset.grename!; render(); document.getElementById('gr-ren')?.focus(); return; }
+    if ((x = q('[data-gfold]'))) { const id = x.dataset.gfold!; if (gopen.has(id)) gopen.delete(id); else gopen.add(id); grename = null; gdel = null; gmore = null; renderKeep(); return; }
+    if ((x = q('[data-gsend]'))) { sayBulk('Надіслано', store.sendGroup(x.dataset.gsend!)); renderKeep(); return; }
+    if ((x = q('[data-gmore]'))) { gmore = gmore === x.dataset.gmore ? null : x.dataset.gmore!; gdel = null; renderKeep(); return; }
+    if ((x = q('[data-grows]'))) { scope = 'group'; gscope = x.dataset.grows!; page = 1; store.setQuery(''); go('rows'); return; }
+    if ((x = q('[data-grename]'))) { grename = x.dataset.grename!; renderKeep(); document.getElementById('gr-ren')?.focus(); return; }
     if ((x = q('[data-gcolor]'))) {
       const id = x.dataset.gcolor!, g = store.groupsList().find(y => y.id === id), cs = store.groupColors;
       if (g) store.recolorGroup(id, cs[(cs.indexOf(g.color ?? '') + 1) % cs.length]!);
-      render(); return;
+      renderKeep(); return;
     }
     if ((x = q('[data-gdel]'))) {
       const id = x.dataset.gdel!;
-      if (gdel !== id) { gdel = id; render(); setTimeout(() => { if (gdel === id) { gdel = null; if (tab === 'files') render(); } }, 4000); return; }
+      if (gdel !== id) { gdel = id; renderKeep(); setTimeout(() => { if (gdel === id) { gdel = null; if (tab === 'files') render(); } }, 4000); return; }
       gdel = null; const name = store.groupsList().find(y => y.id === id)?.name ?? '';
-      store.removeGroup(id); say(`Групу «${name}» видалено; файли лишилися`); render(); return;
+      store.removeGroup(id); if (gscope === id) { scope = 'file'; gscope = null; } gmore = null; say(`Групу «${name}» видалено; файли лишилися`); renderKeep(); return;
     }
     if ((x = q('[data-file]'))) { store.open(x.dataset.file!); go('rows'); return; }
     if ((x = q('[data-filter]'))) { store.setFilter(x.dataset.filter as Filter); render(); return; }
@@ -827,11 +912,18 @@ export async function start(root: HTMLElement): Promise<void> {
     if (q('[data-select]')) { selecting = !selecting; picked.clear(); if (selecting) hintOnce(); render(); return; }
     if ((x = q('[data-pickkey]'))) { const k = x.dataset.pickkey!; if (picked.has(k)) picked.delete(k); else picked.add(k); render(); return; }
     if (q('[data-selall]')) { const all = store.rows(); if (picked.size === all.length) picked.clear(); else all.forEach(u => picked.add(u.key)); render(); return; }
-    if (q('[data-selsend]') || q('[data-selclear]') || q('[data-selcopy]')) {
+    if (q('[data-seltm]')) {
       const v = store.view(); if (!v) return; const us = v.units.filter(u => picked.has(u.key));
-      if (q('[data-selsend]')) { if (!armed(us.length, 'sel')) return; const r = store.sendMany(v.name, us); say(`Надіслано: ${r.sent}${r.skipped ? ` · пропущено: ${r.skipped}` : ''}`, r.sent === 0, r.batch); }
+      buzz(14); picked.clear(); say('Підставляю з пам’яті…');
+      void store.memoryFill(v.name, us).then(r => { say(r.n ? `З пам’яті: ${r.n}` : 'Збігів від 70% для порожніх вибраних рядків немає', !r.n, r.batch); render(); });
+      render(); return;
+    }
+    if (q('[data-selsend]') || q('[data-selappr]') || q('[data-selclear]') || q('[data-selcopy]')) {
+      const v = store.view(); if (!v) return; const us = v.units.filter(u => picked.has(u.key));
+      if (q('[data-selsend]')) { if (!armed(us.length, 'sel')) return; sayBulk('Надіслано', store.sendMany(v.name, us)); }
+      else if (q('[data-selappr]')) { if (!armed(us.length, 'sel-appr')) return; sayBulk('Вичитано', store.approveMany(v.name, us)); }
       else if (q('[data-selclear]')) { if (!confirmTap(q('[data-selclear]')!, `Очистити ${us.length}?`)) return; const r = store.clearMany(v.name, us); say(`Очищено: ${r.n}`, false, r.batch); }
-      else { const n = us.filter(u => store.writeAtCopy(v.name, u)).length; say(`Скопійовано оригінал: ${n}`); }
+      else { const r = store.copyMany(v.name, us); say(`Скопійовано оригінал: ${r.n}`, false, r.batch); }
       buzz(14); picked.clear(); render(); return;
     }
     if ((x = q('[data-key]'))) { openRow(x.dataset.key!); return; }
@@ -857,27 +949,37 @@ export async function start(root: HTMLElement): Promise<void> {
       store.restore(text, restoreNote(r.rec, x.dataset.hv === 'before' ? 'before' : 'text', fmtTime(r.rec.at)));
       say('Текст відновлено. Повернути попередній можна тут же, в історії'); buzz(10); render(); return;
     }
-    if ((x = q('.th[data-term]'))) { showTermCard(x.dataset.term!); return; }
+    // A term or a control code of the original opens its card; a tap that just misses one goes to the nearest within reach, not to nothing.
+    {
+      const hit = q('#m-source .th[data-term], #m-source .code[data-hk]') ?? nearestWord(e as MouseEvent);
+      if (hit) { codeShown = hit.matches('.code') ? hit.dataset.hk ?? null : null; if (codeShown) { termShown = null; renderCodeCard(); } else showTermCard(hit.dataset.term!); return; }
+    }
+    if ((x = q('[data-cc]'))) { if (x.dataset.cc === 'insert' && codeShown) insert(codeShown); codeShown = null; renderTermCard(); return; }
     if ((x = q('[data-tc]'))) {
       const t0 = store.saved.terms.find(y => y.en === termShown);
       if (x.dataset.tc === 'insert' && t0) insert(t0.uk);
       else if (x.dataset.tc === 'edit' && t0) { Object.assign(gl, { en: t0.en, uk: t0.uk, alt: (t0.alt ?? []).join(', '), qa: t0.qa !== false, edit: true }); sub = 'glossary'; termShown = null; render(); return; }
       termShown = null; renderTermCard(); return;
     }
-    if (termShown && !q('#m-tcard')) { termShown = null; renderTermCard(); }
+    if ((termShown || codeShown) && !q('#m-tcard')) { termShown = null; codeShown = null; renderTermCard(); }
     if (q('[data-send]')) {
-      const why = store.send();
-      if (why) { say(/^Є помилка QA/.test(why) ? 'Є помилка QA: виправте її під полем' : why, true); buzz(30); document.getElementById('m-issues')?.scrollIntoView({ block: 'nearest' }); return; }
+      const r = store.send();
+      if (r.why) { say(/^Є помилка QA/.test(r.why) ? 'Є помилка QA: виправте її під полем' : r.why, true); buzz(30); document.getElementById('m-issues')?.scrollIntoView({ block: 'nearest' }); return; }
       buzz(14);
       const next = store.neighbour(1);
-      if (next) { store.select(next.key); say('Надіслано'); render(); $('m-main').scrollTop = 0; } else { say('Це був останній рядок у списку'); render(); }
+      if (next) { store.select(next.key); say('Надіслано', false, r.batch); render(); $('m-main').scrollTop = 0; } else { say('Це був останній рядок у списку', false, r.batch); render(); }
       return;
     }
     if (q('[data-copy]')) { const c = store.current; if (c) { ($('m-tr') as HTMLTextAreaElement).value = c.unit.source; store.write(c.unit.source); refreshMeta(); autosize(); } return; }
     if (q('[data-approve]')) {
-      const why = store.approve();
-      if (why) { say(/^Є помилка QA/.test(why) ? 'Є помилка QA: виправте її під полем' : why, true); document.getElementById('m-issues')?.scrollIntoView({ block: 'nearest' }); return; }
-      say('Вичитано'); render(); return;
+      const r = store.approve();
+      if (r.why) { say(/^Є помилка QA/.test(r.why) ? 'Є помилка QA: виправте її під полем' : r.why, true); document.getElementById('m-issues')?.scrollIntoView({ block: 'nearest' }); return; }
+      say('Вичитано', false, r.batch); render(); return;
+    }
+    if (q('[data-rework]')) {
+      const r = store.back();
+      if (r.why) { say(r.why, true); return; }
+      say('Повернено на доопрацювання', false, r.batch); render(); return;
     }
     if ((x = q('[data-clear]'))) {
       if (!confirmTap(x)) return;
@@ -886,7 +988,7 @@ export async function start(root: HTMLElement): Promise<void> {
       ($('m-tr') as HTMLTextAreaElement).value = ''; refreshMeta(); autosize(); return;
     }
     if ((x = q('[data-ins]'))) { insert(x.dataset.ins ?? ''); return; }
-    if (q('[data-wrap]')) { if (store.wrap()) { render(); } else say('Рядки вже вміщаються'); return; }
+    if (q('[data-wrap]')) { const r = store.wrap(); if (r) { say('Рядки перенесено за шириною вікна', false, r.batch); render(); } else say('Рядки вже вміщаються'); return; }
     if ((x = q('[data-ign]'))) { store.mutate((_f, _u, en) => setIgnored(en as NonNullable<typeof en>, x!.dataset.ign!, true, Date.now())); refreshMeta(); return; }
     if (q('[data-gsave]')) {
       const v = (id: string): string => $<HTMLInputElement>(id).value;
@@ -904,7 +1006,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if ((x = q('[data-afnew]'))) { Object.assign(gl, { en: x.dataset.afnew!, uk: '', alt: '', qa: true, edit: false }); sub = 'glossary'; render(); $('m-main').scrollTop = 0; return; }
     if (q('[data-afall]')) { const list = store.autofill(); const allOn = list.every(p => !af.off.has(p.file + '|' + p.key)); if (allOn) list.forEach(p => af.off.add(p.file + '|' + p.key)); else af.off.clear(); const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
     if ((x = q('[data-afk]'))) { const k = x.dataset.afk!; if (af.off.has(k)) af.off.delete(k); else af.off.add(k); const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
-    if (q('[data-afapply]')) { const n = store.applyAutofill(store.autofill().filter(p => !af.off.has(p.file + '|' + p.key))); af.off.clear(); say(`Вписано рядків: ${n}`); buzz(14); render(); return; }
+    if (q('[data-afapply]')) { const r = store.applyAutofill(store.autofill().filter(p => !af.off.has(p.file + '|' + p.key))); af.off.clear(); say(`Вписано рядків: ${r.n}`, false, r.batch); buzz(14); render(); return; }
     if (q('[data-gadd]')) { const c = store.current; gl.en = c && c.unit.source.length <= 40 ? c.unit.source : ''; gl.uk = ''; gl.edit = false; sheet = false; sub = 'glossary'; render(); return; }
     if ((x = q('[data-gk]'))) { gk = x.dataset.gk as typeof gk; renderSheet(); return; }
     if ((x = q('[data-stab]'))) { sheetTab = x.dataset.stab as typeof sheetTab; renderSheet(); return; }
@@ -1043,7 +1145,7 @@ export async function start(root: HTMLElement): Promise<void> {
     setTimeout(() => { lpFired = false; }, 350);
   }
   let hinted = false;
-  const hintOnce = (): void => { if (!hinted) { hinted = true; say('Ведіть пальцем по кружечках, щоб вибрати кілька'); } };
+  const hintOnce = (): void => { if (!hinted) { hinted = true; say('Торкайтеся рядків або ведіть пальцем по лівому краю, щоб вибрати кілька'); } };
   /** Start selecting: the card under the finger flips, and every card the finger passes gets the same state. */
   function startDrag(card: HTMLElement, x: number, y: number): void {
     lpFired = true; buzz(18);
@@ -1105,8 +1207,8 @@ export async function start(root: HTMLElement): Promise<void> {
   document.addEventListener('focusout', () => { setTimeout(() => { if (!document.activeElement?.matches(TEXTY)) $('m-app').classList.remove('kb'); }, 120); });
   // A swipe across the editor moves to the next / previous row.
   let sx = 0, sy = 0, st = 0, sw = false;
-  root.addEventListener('touchstart', e => { sw = tab === 'edit' && e.touches.length === 1 && !(e.target as HTMLElement).closest('textarea, button, input, .m-sheet'); if (sw) { sx = e.touches[0]!.clientX; sy = e.touches[0]!.clientY; st = Date.now(); } }, { passive: true });
-  root.addEventListener('touchend', e => { if (!sw) return; sw = false; const c = e.changedTouches[0]!, dx = c.clientX - sx, dy = c.clientY - sy; if (Date.now() - st < 700 && Math.abs(dx) > 80 && Math.abs(dy) < Math.abs(dx) / 2) step(dx < 0 ? 1 : -1); }, { passive: true });
+  root.addEventListener('touchstart', e => { sw = (tab === 'edit' || sub === 'scene') && e.touches.length === 1 && !(e.target as HTMLElement).closest('textarea, button, input, .m-sheet, .m-menu, #m-tcard'); if (sw) { sx = e.touches[0]!.clientX; sy = e.touches[0]!.clientY; st = Date.now(); } }, { passive: true });
+  root.addEventListener('touchend', e => { if (!sw) return; sw = false; const c = e.changedTouches[0]!, dx = c.clientX - sx, dy = c.clientY - sy; if (Date.now() - st < 700 && Math.abs(dx) > 80 && Math.abs(dy) < Math.abs(dx) / 2) { if (sub === 'scene') stepSceneBy(dx < 0 ? 1 : -1); else step(dx < 0 ? 1 : -1); } }, { passive: true });
   window.addEventListener('pagehide', () => void store.flush());
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') void store.flush(); });
   // What the Android shell calls: the back button (close the sheet, then one screen up), saving on leaving, a row opened from the widget.

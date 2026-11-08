@@ -1,4 +1,4 @@
-import { recordChange, sendBack, sourceTermHits, submit, targetHasTerm, termsIn } from '../core';
+import { approveEntry, sendBack, sourceTermHits, targetHasTerm, termsIn } from '../core';
 import type { BatchKind, Entry, Unit } from '../core';
 import { $, esc, toast } from './dom';
 import { namesOfRow, realOf, tmListHtml } from './hintcards';
@@ -114,17 +114,11 @@ function approve(ctx: Ctx, u: Unit): void {
   if (!cur?.target.trim()) { toast('Переклад порожній'); return; }
   const opts = { blockErrors: s.saved.settings.blockErrors, qa: ctx.qaOpts() };
   const now = Date.now();
-  let next: Entry = cur;
-  if (cur.status !== 'done' && cur.status !== 'appr') {
-    const r = submit(cur, u, 'translate', now, opts);
-    if (!r.ok) { toast(r.reason, { sticky: true }); return; }
-    next = r.entry;
-  }
-  const r2 = submit(next, u, 'review', now, opts);
+  const r2 = approveEntry(cur, u, now, opts);
   if (!r2.ok) { toast(r2.reason, { sticky: true }); return; }
-  ctx.commit([{ file, key: u.key, next: r2.entry, text: r2.entry.target }], 'approve', 'вичитано');
+  const batch = ctx.commit([{ file, key: u.key, next: r2.entry, text: r2.entry.target }], 'approve', 'вичитано');
   ctx.persist(); ctx.invalidateTm(); ctx.render();
-  toast('Вичитано');
+  undoToast(ctx, 'Вичитано', batch);
 }
 
 /** Clicks in the panel's own parts. `setText` writes a text into the row as one change (see `focus.ts`). */
@@ -141,7 +135,7 @@ export function rowPanelClick(ctx: Ctx, t: HTMLElement, setText: (u: Unit, text:
     case 'approve': approve(ctx, u); break;
     case 'more': { const k = `${s.current}|${u.key}`; if (expanded.has(k)) expanded.delete(k); else expanded.add(k); ctx.render(); break; }
     case 'back':
-      if (cur) { ents[u.key] = recordChange(cur, sendBack(cur, Date.now()), 'повернуто на доопрацювання', '', s.who, Date.now()); ctx.persist(); ctx.render(); toast('Повернено на доопрацювання'); }
+      if (cur) { const batch = ctx.commit([{ file: s.current, key: u.key, next: sendBack(cur, Date.now()), text: cur.target }], 'back'); ctx.persist(); ctx.render(); undoToast(ctx, 'Повернено на доопрацювання', batch); }
       break;
     case 'clear':
       if (!cur?.target) { toast('Переклад уже порожній'); break; }

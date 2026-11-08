@@ -72,6 +72,21 @@ export function submit(prev: Entry | undefined, unit: Unit, stage: Stage, now: n
   return { ok: true, entry: e };
 }
 
+/**
+ * Approve a row in one step: a draft is sent first (so the history can tell both), then approved. Refused with a reason
+ * when there is no translation, or when a QA error blocks the send. A row that is already approved stays approved.
+ */
+export function approveEntry(prev: Entry | undefined, unit: Unit, now: number, opts: SubmitOptions = { blockErrors: true, qa: DEFAULT_QA }): SubmitResult {
+  if (!prev || !prev.target.trim()) return { ok: false, reason: 'Переклад порожній' };
+  let next = prev;
+  if (next.status !== 'done' && next.status !== 'appr') {
+    const r = submit(next, unit, 'translate', now, opts);
+    if (!r.ok) return r;
+    next = r.entry;
+  }
+  return submit(next, unit, 'review', now, opts);
+}
+
 /** Reviewer sends a unit back to the translator. */
 export function sendBack(prev: Entry, now: number): Entry {
   return { ...prev, status: 'draft', returned: true, mt: now };

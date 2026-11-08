@@ -1,4 +1,4 @@
-import { describePage, displayLength, edit, sceneTitle, sourceTermHits, submit, targetHasTerm, termsIn } from '../core';
+import { approveEntry, describePage, displayLength, edit, sceneTitle, sourceTermHits, submit, targetHasTerm, termsIn } from '../core';
 import type { Entry, RowChange, SceneInfo, Unit } from '../core';
 import { $, esc, plural, toast } from './dom';
 import { KIND_LABEL, nameMarks, namesOfRow, qaRows } from './hintcards';
@@ -196,12 +196,12 @@ function wholeScene(ctx: Ctx, what: 'send' | 'appr'): void {
   const changes: RowChange[] = [];
   const blocked: string[] = [];
   for (const u of at.sc.units) {
-    let next: Entry | undefined = ents[u.key];
-    if (!next?.target.trim()) continue;
-    if (what === 'send' && next.status !== 'draft') continue;
-    if (next.status !== 'done' && next.status !== 'appr') { const r = submit(next, u, 'translate', now, opts); if (!r.ok) { blocked.push(u.key); continue; } next = r.entry; }
-    if (what === 'appr') { const r = submit(next, u, 'review', now, opts); if (!r.ok) { blocked.push(u.key); continue; } next = r.entry; }
-    changes.push({ file: at.file, key: u.key, next, text: next.target });
+    const cur: Entry | undefined = ents[u.key];
+    if (!cur?.target.trim()) continue;
+    if (what === 'send' && cur.status !== 'draft') continue;
+    const r = what === 'send' ? submit(cur, u, 'translate', now, opts) : approveEntry(cur, u, now, opts);
+    if (!r.ok) { blocked.push(u.key); continue; }
+    changes.push({ file: at.file, key: u.key, next: r.entry, text: r.entry.target });
   }
   const batch = changes.length ? ctx.commit(changes, what === 'send' ? 'scene' : 'approve', what === 'send' ? undefined : 'вичитано (вся сцена)') : undefined;
   ctx.persist(); ctx.invalidateTm(); ctx.render();

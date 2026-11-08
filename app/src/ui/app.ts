@@ -1,5 +1,5 @@
 import { Autosave, DupIndex, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, lengthDeviation, limitFor, note, pluginCandidates, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, viewsFromSnapshot, wrapLines } from '../core';
-import { GroupIndex, KIND_LABEL, UndoStack, groupRows, liveGroups } from '../core';
+import { GroupIndex, KIND_LABEL, UndoStack, approveEntry, groupRows, liveGroups } from '../core';
 import type { Entry, FileView, GameFile, Group, RowChange, SavedProject, Unit } from '../core';
 import { openBuild } from './build-dialog';
 import { dataDirOf, forgetGameDir, isDesktop, rememberedGameDir, reopenGameDir, reopenGameDirDesktop, setProject } from './desktop';
@@ -1281,11 +1281,8 @@ export async function start(root: HTMLElement): Promise<void> {
     for (const k of s.checked) {
       const u = unitMap.get(k);
       if (!u || !visible.has(u)) continue;
-      let next = ents[k];
       const miss = (why: string): void => { skipped.set(why.slice(0, 40), (skipped.get(why.slice(0, 40)) ?? 0) + 1); };
-      if (!next?.target.trim()) { miss('Переклад порожній'); continue; }
-      if (next.status !== 'done' && next.status !== 'appr') { const r1 = submit(next, u, 'translate', now, opts); if (!r1.ok) { miss(r1.reason); continue; } next = r1.entry; }
-      const r2 = submit(next, u, 'review', now, opts);
+      const r2 = approveEntry(ents[k], u, now, opts);
       if (r2.ok) changes.push({ file: v.name, key: k, next: r2.entry, text: r2.entry.target }); else miss(r2.reason);
     }
     const batch = changes.length ? ctx.commit(changes, 'approve', 'вичитано') : undefined;

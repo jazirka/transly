@@ -1,4 +1,4 @@
-import { GROUP_COLORS, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines } from '../core';
+import { GROUP_COLORS, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines, approveEntry, sendBack, threadsOf, rowsOfGroup } from '../core';
 import type { BatchKind, Group, Entry, GlossaryTerm, RowChange, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
 import { IdbStore } from '../ui/idb';
 
@@ -6,11 +6,24 @@ import { IdbStore } from '../ui/idb';
  * The phone app's own model: what is loaded, what is open and what the rows list shows. It talks to the shared core
  * (formats, QA, merging, glossary, sync) and to the browser's storage, and knows nothing about the desktop UI.
  */
-export type Filter = 'all' | 'new' | 'draft' | 'done' | 'appr' | 'qa';
+export type Filter = 'all' | 'new' | 'draft' | 'done' | 'appr' | 'qa' | 'cm';
 export type Sort = 'order' | 'new' | 'qa' | 'long';
 export type Shown = Status | 'qa';
 
-export const FILTERS: [Filter, string][] = [['all', 'Усі'], ['new', 'Без перекладу'], ['draft', 'Чернетки'], ['done', 'Надіслані'], ['appr', 'Вичитано'], ['qa', 'Помилки']];
+/** What a bulk action did: how many rows, how many were left out and why (reason → count), which rows a QA error stopped, and the action's id for the undo. */
+export interface BulkResult { done: number; skipped: number; why: Map<string, number>; blocked: { key: string; reason: string }[]; batch?: string }
+
+/** A short name for why a row was left out (the full reason of `submit` is long). */
+export const reasonKey = (reason: string): string => (reason.startsWith('Є помилка QA') ? 'помилка QA' : reason === 'Переклад порожній' ? 'без перекладу' : reason);
+
+/** The words for a toast about the rows that were left out: «пропущено: 3 (помилка QA: 2; уже надіслано: 1)». */
+export function skippedText(r: Pick<BulkResult, 'skipped' | 'why'>): string {
+  if (!r.skipped) return '';
+  const parts = [...r.why].slice(0, 3).map(([k, n]) => `${k.replace(/^Рядок /, '').replace(/^уже /, 'уже ')}: ${n}`);
+  return ` · пропущено: ${r.skipped}${parts.length ? ` (${parts.join('; ')})` : ''}`;
+}
+
+export const FILTERS: [Filter, string][] = [['all', 'Усі'], ['new', 'Без перекладу'], ['draft', 'Чернетки'], ['done', 'Надіслані'], ['appr', 'Вичитано'], ['qa', 'Помилки'], ['cm', 'З коментарями']];
 export const STATUS_LABEL: Record<Shown, string> = { new: 'без перекладу', draft: 'чернетка', done: 'надіслано', appr: 'вичитано', qa: 'є помилка QA' };
 const natural = (a: string, b: string): number => a.localeCompare(b, 'en', { numeric: true });
 
@@ -116,7 +129,8 @@ export class Store {
     const q = this.q.trim().toLowerCase();
     let list = v.units.filter(u => {
       const e = ents[u.key];
-      if (this.filter !== 'all') {
+      if (this.filter === 'cm') { if (!threadsOf(e?.comments).length) return false; }
+      else if (this.filter !== 'all') {
         const st = this.shown(u, e);
         if (this.filter === 'qa' ? st !== 'qa' : (e?.status ?? 'new') !== this.filter) return false;
       }
@@ -161,10 +175,13 @@ export class Store {
     this.entries(c.file)[c.unit.key] = edit(c.entry, c.unit, text, this.stage, Date.now());
     this.tmCache = null; this.persist();
   }
-  /** Copy the original into an empty translation; false when there already is a translation. */
-  writeAtCopy(file: string, u: Unit): boolean {
-    if (this.entry(file, u.key)?.target) return false;
-    this.writeAt(file, u.key, u.source); return true;
+  /** Put the original into the empty translations of these rows, as one action of the journal (rows that have a translation stay as they are). */
+  copyMany(file: string, units: Unit[]): { n: number; batch?: string } {
+    const now = Date.now(), changes: RowChange[] = [];
+    for (const u of units) { if (this.entry(file, u.key)?.target) continue; changes.push({ file, key: u.key, next: edit(this.entry(file, u.key), u, u.source, this.stage, now), text: u.source }); }
+    const batch = changes.length ? this.commit(changes, 'copy') : undefined;
+    if (batch) { this.tmCache = null; this.persist(); this.emit(); }
+    return { n: changes.length, batch };
   }
   /** Typing into a cell of the table: any row, not only the open one. */
   writeAt(file: string, key: string, text: string): void {
@@ -178,28 +195,56 @@ export class Store {
     this.entries(file)[key] = edit(this.entry(file, key), u, text, this.stage, Date.now());
     this.tmCache = null; this.persist();
   }
-  /** Send to review / approve the open row. Returns a reason when it is refused. */
-  send(): string | null {
-    const c = this.current; if (!c) return 'Рядок не вибрано';
+  /** Send the open row. Refused with a reason (`why`), or done as an action of the journal (`batch`) that can be taken back. */
+  send(): { why?: string; batch?: string } {
+    const c = this.current; if (!c) return { why: 'Рядок не вибрано' };
     const r = submit(c.entry, c.unit, this.stage, Date.now(), { blockErrors: this.saved.settings.blockErrors, qa: this.qaOpts() });
-    if (!r.ok) return r.reason;
+    if (!r.ok) return { why: r.reason };
     const now = Date.now();
-    this.entries(c.file)[c.unit.key] = recordChange(c.entry, r.entry, 'надіслано', r.entry.target, this.who, now);
+    const batch = this.commit([{ file: c.file, key: c.unit.key, next: r.entry, text: r.entry.target }], 'send', 'надіслано');
     this.lastSame = this.saved.settings.propagate ? propagate(this.saved, this.dups(), c.file, c.unit, this.entries(c.file)[c.unit.key]!, this.stage, now, this.who, newBatch(this.stage === 'translate' ? 'twin' : 'approve', now)) : 0;
-    this.tmCache = null; this.persist(); this.emit(); return null;
+    this.tmCache = null; this.persist(); this.emit(); return { batch };
   }
-  /** Approve the open row: a draft is sent first, so the history says both. Returns why it cannot be done, or null. */
-  approve(): string | null {
-    const c = this.current; if (!c) return 'Рядок не вибрано';
-    if (!c.entry?.target.trim()) return 'Переклад порожній';
+  /** Approve the open row: a draft is sent first, so the history says both. */
+  approve(): { why?: string; batch?: string } {
+    const c = this.current; if (!c) return { why: 'Рядок не вибрано' };
+    const r = approveEntry(c.entry, c.unit, Date.now(), { blockErrors: this.saved.settings.blockErrors, qa: this.qaOpts() });
+    if (!r.ok) return { why: r.reason };
+    const batch = this.commit([{ file: c.file, key: c.unit.key, next: r.entry, text: r.entry.target }], 'approve', 'вичитано');
+    this.tmCache = null; this.persist(); this.emit(); return { batch };
+  }
+  /** Send a sent or approved row back to the translator (it becomes a draft marked «повернено»). */
+  back(): { why?: string; batch?: string } {
+    const c = this.current; if (!c) return { why: 'Рядок не вибрано' };
+    if (c.entry?.status !== 'done' && c.entry?.status !== 'appr') return { why: 'Рядок ще не надіслано' };
+    const batch = this.commit([{ file: c.file, key: c.unit.key, next: sendBack(c.entry, Date.now()), text: c.entry.target }], 'back');
+    this.tmCache = null; this.persist(); this.emit(); return { batch };
+  }
+  /** Approve every row of these units that can be approved (a draft is sent first). */
+  approveMany(file: string, units: Unit[], what = 'вичитано'): BulkResult {
+    const now = Date.now(), changes: RowChange[] = [], why = new Map<string, number>(), blocked: { key: string; reason: string }[] = [];
     const opts = { blockErrors: this.saved.settings.blockErrors, qa: this.qaOpts() };
-    const now = Date.now();
-    let next = c.entry;
-    if (next.status !== 'done' && next.status !== 'appr') { const r1 = submit(next, c.unit, 'translate', now, opts); if (!r1.ok) return r1.reason; next = r1.entry; }
-    const r2 = submit(next, c.unit, 'review', now, opts);
-    if (!r2.ok) return r2.reason;
-    this.commit([{ file: c.file, key: c.unit.key, next: r2.entry, text: r2.entry.target }], 'approve', 'вичитано');
-    this.tmCache = null; this.persist(); this.emit(); return null;
+    for (const u of units) {
+      const r = approveEntry(this.entry(file, u.key), u, now, opts);
+      if (r.ok) changes.push({ file, key: u.key, next: r.entry, text: r.entry.target });
+      else { const k = reasonKey(r.reason); why.set(k, (why.get(k) ?? 0) + 1); if (k === 'помилка QA') blocked.push({ key: u.key, reason: r.reason }); }
+    }
+    const batch = changes.length ? this.commit(changes, 'approve', what) : undefined;
+    if (batch) { this.tmCache = null; this.persist(); this.emit(); }
+    return { done: changes.length, skipped: units.length - changes.length, why, blocked, batch };
+  }
+  /** Fill the empty rows of these units from the translation memory (a match of 70% or more); a batch of rows at a time, so a long selection does not freeze the screen. */
+  async memoryFill(file: string, units: Unit[], progress?: (n: number, total: number) => void): Promise<{ n: number; batch?: string }> {
+    const now = Date.now(), changes: RowChange[] = [], todo = units.filter(u => !this.entry(file, u.key)?.target);
+    for (let i = 0; i < todo.length; i++) {
+      const u = todo[i]!;
+      const m = this.tm().find(u.source, { min: 70, limit: 1 })[0];
+      if (m) changes.push({ file, key: u.key, next: edit(this.entry(file, u.key), u, m.t, this.stage, now), text: m.t, what: `підставлено з пам’яті (${m.score}%)` });
+      if (i % 40 === 39) { progress?.(i + 1, todo.length); await new Promise(r => setTimeout(r, 0)); }
+    }
+    const batch = changes.length ? this.commit(changes, 'memory') : undefined;
+    if (batch) { this.tmCache = null; this.persist(); this.emit(); }
+    return { n: changes.length, batch };
   }
   comment(text: string): void { this.mutate((_f, _u, e) => addComment(e, this.who, text, Date.now())); }
   /** Answer a comment of the open row; the answer joins the thread. */
@@ -230,19 +275,24 @@ export class Store {
     if (batch) { this.tmCache = null; this.persist(); this.emit(); }
     return { n: changes.length, batch };
   }
-  /** Send every translated row of these units that can be sent (the rest are counted, not blocked). */
-  sendMany(file: string, units: Unit[]): { sent: number; skipped: number; batch?: string } {
-    let skipped = 0; const now = Date.now(), changes: RowChange[] = [];
+  /** Send every translated row of these units that can be sent (the rest are counted with the reason, not blocked). Rows that are already sent are not an error and are not counted. */
+  sendMany(file: string, units: Unit[], kind: BatchKind = 'send'): BulkResult {
+    const now = Date.now(), changes: RowChange[] = [], why = new Map<string, number>(), blocked: { key: string; reason: string }[] = [];
+    const opts = { blockErrors: this.saved.settings.blockErrors, qa: this.qaOpts() };
+    let already = 0;
     for (const u of units) {
       const e = this.entry(file, u.key);
-      if (!e?.target.trim()) { skipped++; continue; }
-      const r = submit(e, u, this.stage, now, { blockErrors: this.saved.settings.blockErrors, qa: this.qaOpts() });
-      if (!r.ok) { skipped++; continue; }
-      changes.push({ file, key: u.key, next: r.entry, text: r.entry.target });
+      if (e && (e.status === 'done' || e.status === 'appr')) { already++; continue; }
+      const r = submit(e, u, this.stage, now, opts);
+      if (r.ok) { changes.push({ file, key: u.key, next: r.entry, text: r.entry.target }); continue; }
+      const k = reasonKey(r.reason);
+      why.set(k, (why.get(k) ?? 0) + 1);
+      if (k === 'помилка QA') blocked.push({ key: u.key, reason: r.reason });
     }
-    const batch = changes.length ? this.commit(changes, 'send', 'надіслано') : undefined;
-    if (batch) { this.persist(); this.emit(); }
-    return { sent: changes.length, skipped, batch };
+    const batch = changes.length ? this.commit(changes, kind, kind === 'send' ? 'надіслано' : undefined) : undefined;
+    if (batch) { this.tmCache = null; this.persist(); this.emit(); }
+    void already;
+    return { done: changes.length, skipped: [...why.values()].reduce((a, b) => a + b, 0), why, blocked, batch };
   }
   /* ---------- groups of files ---------- */
   groupsList(): Group[] { return liveGroups(this.saved); }
@@ -258,28 +308,41 @@ export class Store {
   recolorGroup(id: string, color: string): void { if (recolorGroup(this.saved, id, color, Date.now())) { this.persist(); this.emit(); } }
   removeGroup(id: string): void { if (deleteGroup(this.saved, id, Date.now())) { this.persist(); this.emit(); } }
   /** Send every row of the files of a group that can be sent, as one action of the journal. */
-  sendGroup(id: string): { sent: number; skipped: number; batch?: string } {
-    let skipped = 0; const now = Date.now(), changes: RowChange[] = [];
-    for (const file of this.groupFiles(id)) for (const u of this.view(file)?.units ?? []) {
+  sendGroup(id: string): BulkResult {
+    const files = this.groupFiles(id);
+    const total: BulkResult = { done: 0, skipped: 0, why: new Map(), blocked: [], batch: undefined };
+    const changesAll: RowChange[] = [];
+    const now = Date.now(), opts = { blockErrors: this.saved.settings.blockErrors, qa: this.qaOpts() };
+    for (const file of files) for (const u of this.view(file)?.units ?? []) {
       const e = this.entry(file, u.key);
-      if (!e?.target.trim()) { skipped++; continue; }
-      const r = submit(e, u, this.stage, now, { blockErrors: this.saved.settings.blockErrors, qa: this.qaOpts() });
-      if (!r.ok) { skipped++; continue; }
-      changes.push({ file, key: u.key, next: r.entry, text: r.entry.target });
+      if (e && (e.status === 'done' || e.status === 'appr')) continue;
+      const r = submit(e, u, this.stage, now, opts);
+      if (r.ok) { changesAll.push({ file, key: u.key, next: r.entry, text: r.entry.target }); continue; }
+      const k = reasonKey(r.reason);
+      total.why.set(k, (total.why.get(k) ?? 0) + 1); total.skipped++;
+      if (k === 'помилка QA') total.blocked.push({ key: `${file}\u001f${u.key}`, reason: r.reason });
     }
-    const batch = changes.length ? this.commit(changes, 'send', 'надіслано') : undefined;
-    if (batch) { this.persist(); this.emit(); }
-    return { sent: changes.length, skipped, batch };
+    total.done = changesAll.length;
+    if (changesAll.length) { total.batch = this.commit(changesAll, 'send', 'надіслано'); this.tmCache = null; this.persist(); this.emit(); }
+    return total;
+  }
+  /** The rows of every file of a group, as (file, row) pairs in the order of the game (the phone shows them as one list, a tap opens the row). */
+  groupRowList(id: string): { file: string; unit: Unit }[] {
+    const by = new Map(this.views.map(v => [v.name, new Map(v.units.map(u => [u.key, u]))] as const));
+    const out: { file: string; unit: Unit }[] = [];
+    for (const r of rowsOfGroup(this.saved, this.views, id)) { const u = by.get(r.file)?.get(r.key); if (u) out.push({ file: r.file, unit: u }); }
+    return out;
   }
   find(o: { find: string; replace: string; caseSensitive: boolean; wholeWord: boolean }): ReturnType<typeof findReplace> { return findReplace(this.views, this.saved, o); }
-  replaceAll(matches: ReturnType<typeof findReplace>): number {
+  replaceAll(matches: ReturnType<typeof findReplace>): { n: number; batch?: string } {
     const now = Date.now(), changes: RowChange[] = [];
     for (const m of matches) {
       const u = this.unit(m.file, m.key); if (!u) continue;
       changes.push({ file: m.file, key: m.key, next: edit(this.entry(m.file, m.key), u, m.after, this.stage, now), text: m.after });
     }
-    if (changes.length) { this.commit(changes, 'replace'); this.tmCache = null; this.persist(); this.emit(); }
-    return changes.length;
+    const batch = changes.length ? this.commit(changes, 'replace') : undefined;
+    if (batch) { this.tmCache = null; this.persist(); this.emit(); }
+    return { n: changes.length, batch };
   }
   refLangs(): string[] { return referenceSets(this.saved.reference).map(r => r.lang); }
   /** Another-language copy of the game: its lines are paired with the originals. Returns pairs found and rows in the paired files. */
@@ -341,20 +404,21 @@ export class Store {
   /** Short untranslated lines that are one or two words short of being composed, with the words that block them. */
   almost(): ReturnType<typeof autofillAlmost> { return autofillAlmost(this.views, this.saved); }
   /** Write the proposals as drafts marked as autofilled; rows that got a translation meanwhile are skipped. */
-  applyAutofill(list: { file: string; key: string; target: string }[]): number {
+  applyAutofill(list: { file: string; key: string; target: string }[]): { n: number; batch?: string } {
     const now = Date.now(), changes: RowChange[] = [];
     for (const p of list) {
       const u = this.unit(p.file, p.key); if (!u || this.entry(p.file, p.key)?.target?.trim()) continue;
       changes.push({ file: p.file, key: p.key, next: edit(this.entry(p.file, p.key), u, p.target, this.stage, now), text: p.target });
     }
-    if (changes.length) { this.commit(changes, 'words'); this.tmCache = null; this.persist(); this.emit(); }
-    return changes.length;
+    const batch = changes.length ? this.commit(changes, 'words') : undefined;
+    if (batch) { this.tmCache = null; this.persist(); this.emit(); }
+    return { n: changes.length, batch };
   }
   /** The same original translated in different ways. */
   inconsistent(): ReturnType<typeof inconsistencies> { return inconsistencies(this.views, this.saved, 60); }
   /** Give every row of one original the chosen translation; returns how many rows changed. */
-  unify(source: string, target: string): number {
-    const g = this.inconsistent().find(x => x.source === source); if (!g) return 0;
+  unify(source: string, target: string): { n: number; batch?: string } {
+    const g = this.inconsistent().find(x => x.source === source); if (!g) return { n: 0 };
     const now = Date.now(), changes: RowChange[] = [];
     for (const v of g.variants) {
       if (v.target === target) continue;
@@ -363,9 +427,9 @@ export class Store {
         changes.push({ file: w.file, key: w.key, next: edit(this.entry(w.file, w.key), u, target, this.stage, now), text: target });
       }
     }
-    const n = changes.length;
-    if (n) { this.commit(changes, 'unify'); this.tmCache = null; this.persist(); this.emit(); }
-    return n;
+    const batch = changes.length ? this.commit(changes, 'unify') : undefined;
+    if (batch) { this.tmCache = null; this.persist(); this.emit(); }
+    return { n: changes.length, batch };
   }
   setSpeakers(draft: Map<string, string>): number {
     const m = (this.saved.speakers ??= {}); let changed = 0;
@@ -378,13 +442,15 @@ export class Store {
     if (changed) { this.persist(); this.emit(); }
     return changed;
   }
-  wrap(): boolean {
-    const c = this.current; if (!c) return false;
-    const lim = limitFor(this.lineLimit(), c.unit.face); if (!lim) return false;
+  /** Re-flow the open row to the width of the game window; the batch of the action, or undefined when nothing had to change. */
+  wrap(): { batch?: string } | null {
+    const c = this.current; if (!c) return null;
+    const lim = limitFor(this.lineLimit(), c.unit.face); if (!lim) return null;
     const text = wrapLines(c.entry?.target ?? '', lim);
-    if (text === (c.entry?.target ?? '')) return false;
-    this.mutate((_f, u, e) => { const now = Date.now(); return recordChange(e, edit(e, u, text, this.stage, now), 'перенесено рядки', text, this.who, now); });
-    return true;
+    if (text === (c.entry?.target ?? '')) return null;
+    const batch = this.commit([{ file: c.file, key: c.unit.key, next: edit(c.entry, c.unit, text, this.stage, Date.now()), text }], 'wrap');
+    this.tmCache = null; this.persist(); this.emit();
+    return { batch };
   }
 
   /* ---------- bringing data in ---------- */

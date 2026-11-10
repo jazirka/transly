@@ -1,4 +1,4 @@
-import { HINT_GLYPH, HINT_LABEL, KIND_LABEL, explainCodes, sceneTitle, stepScene, byHintOrder, commentId, historyRows, openThreads, restoreNote, sourceTermHits, targetHasTerm, threadsOf, batchTitle, batchUndoLabel, undoReport, setIgnored, canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, describePage, displayLength, limitFor } from '../core';
+import { HINT_GLYPH, HINT_LABEL, KIND_LABEL, explainCodes, sceneTitle, stepScene, byHintOrder, commentId, historyRows, openThreads, restoreNote, sourceTermHits, targetHasTerm, threadsOf, batchTitle, batchUndoLabel, undoReport, setIgnored, canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, describePage, displayLength, flowText, limitFor } from '../core';
 import type { Comment, DiffSeg, Entry, GameFile } from '../core';
 import { artifactDb, describeClaude, loadClaudeConfig, saveClaudeConfig } from '../ui/claude';
 import { describeGithub, githubApi, githubConfigured, loadGithubConfig, saveGithubConfig } from '../ui/github';
@@ -251,7 +251,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const g = store.groupsList().find(x => x.id === id);
     if (!g) { scope = 'file'; gscope = null; return screenRows(); }
     const all = store.groupRowList(id), q = store.q.trim().toLowerCase();
-    const list = q ? all.filter(h => (h.unit.source + ' ' + (store.entry(h.file, h.unit.key)?.target ?? '') + ' ' + h.unit.key).toLowerCase().includes(q)) : all;
+    const list = q ? all.filter(h => (h.unit.source + ' ' + flowText(store.entry(h.file, h.unit.key)?.target ?? '') + ' ' + h.unit.key).toLowerCase().includes(q)) : all;
     const shown = list.slice(0, PAGE * page);
     return `<div class="m-tools"><label class="m-search">${icon('search')}<input id="m-q" type="search" placeholder="Пошук у групі «${esc(g.name)}»" aria-label="Пошук у групі" value="${esc(store.q)}" enterkeyhint="search" autocomplete="off"></label>
       <div class="m-scope" role="group" aria-label="Де шукати"><button data-scope="file">Файл</button><button class="on" data-scope="group" aria-pressed="true">Група «${esc(g.name)}»</button></div></div>

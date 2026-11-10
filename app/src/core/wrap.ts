@@ -1,6 +1,8 @@
-import { CODE_SOURCE, displayLength } from './controlCodes';
+import { CODE_SOURCE, displayLength, visibleText } from './controlCodes';
 import { hyphenPoints, isHyphenatable } from './hyphen';
 import type { FileView } from './project';
+import type { WrapSettings } from './wrapconfig';
+import { MV_WINDOW, pixelBudget } from './gamewindow';
 
 /** Width of the longest line, not counting control codes. */
 export const maxLineWidth = (text: string): number => Math.max(0, ...text.split('\n').map(displayLength));
@@ -119,3 +121,72 @@ export const limitFor = (limit: number, face?: string): number => (limit && face
 export function unwrap(text: string): string {
   return text.replace(/([\p{L}'’ʼ])[-‐‑\u00AD]\n(\p{Ll})/gu, '$1$2').replace(/[ \t]*\n[ \t]*/g, ' ').trim();
 }
+
+/**
+ * Everything the wrapping of a project's messages depends on, resolved once: the settings of the tool «Перенесення
+ * рядків», the width in characters (the project's line limit, or the original's own), and, for a width in pixels, the
+ * function that measures text in the browser (the core has no DOM).
+ */
+export interface WrapPlan {
+  settings: WrapSettings;
+  /** Width in characters of a line without a face picture; 0 = the original gives no hint to take it from. */
+  limit: number;
+  /** The translator turned the width off: nothing is wrapped and no line is called too wide. */
+  disabled?: boolean;
+  /** Width of text in pixels of the game's font at `settings.px.font`; without it a width in pixels falls back to characters. */
+  measure?: (text: string) => number;
+}
+
+type MessageLike = { kind?: string | undefined; key?: string | undefined; face?: string | undefined };
+
+/** A unit that is a message in the game's window (RPG Maker dialogue and scrolling text). Ren'Py lines (`L12`) are shaped by their engine. */
+export const isMessageUnit = (u: MessageLike): boolean => (u.kind === 'dialogue' || u.kind === 'scroll') && !/^L\d+$/.test(u.key ?? '');
+
+/** True when the width is counted in pixels and there is a way to measure them. */
+export const usesPixels = (plan: WrapPlan): boolean => plan.settings.unit === 'px' && !!plan.measure;
+
+/** The width of one message in what `measureOf` counts; 0 = nothing to wrap by. A face picture takes room from the text. */
+export function widthOf(plan: WrapPlan, unit: MessageLike): number {
+  if (plan.disabled) return 0;
+  if (usesPixels(plan)) return pixelBudget(!!unit.face, { ...MV_WINDOW, width: plan.settings.px.width, font: plan.settings.px.font });
+  return limitFor(plan.limit, unit.face);
+}
+
+/** How a plan measures a piece of text: pixels through the browser's function, otherwise characters. Control codes take no room either way. */
+export const measureOf = (plan: WrapPlan): ((text: string) => number) => {
+  const m = plan.measure;
+  return usesPixels(plan) && m ? (s: string) => m(visibleText(s)) : displayLength;
+};
+
+/** Wrap one message the way the project is set up; the text is returned as it was when there is no width to wrap by. */
+export function wrapMessage(plan: WrapPlan, unit: MessageLike, text: string): WrapResult {
+  const s = plan.settings;
+  return planWrap(text, { width: widthOf(plan, unit), measure: measureOf(plan), hyphen: s.hyphen, hyphenChar: s.hyphenChar, minLeft: s.minLeft, minRight: s.minRight, keep: s.keep, maxLines: unit.kind === 'dialogue' ? s.maxLines : 0 });
+}
+
+/** The parts of a plan that change the result, as one short text (for caches). */
+export const planSig = (p: WrapPlan | undefined): string => {
+  if (!p) return '';
+  const s = p.settings;
+  return [s.mode, s.unit, s.hyphen, s.hyphenChar, s.minLeft, s.minRight, s.keep, s.maxLines, s.px.width, s.px.font, p.limit, p.disabled ? 1 : 0, p.measure ? 'm' : ''].join(',');
+};
+
+/** What the width of a plan is counted in, as a word for a sentence («символів», «пікселів»). */
+export const unitWord = (plan: WrapPlan): string => (usesPixels(plan) ? 'пікселів' : 'символів');
+
+/** How many lines of text one message of a unit has once the game shows it: wrapped when the project wraps (at build or on send), as written when wrapping is off. */
+export function linesShown(plan: WrapPlan, unit: MessageLike, text: string): number {
+  if (plan.settings.mode === 'off' || widthOf(plan, unit) <= 0) return text ? text.split('\n').length : 0;
+  return wrapMessage(plan, unit, text).lines;
+}
+
+/** The lines of a message that are wider than the window: how many, and the widest one in the plan's own measure. */
+export function tooWide(plan: WrapPlan, unit: MessageLike, text: string): { count: number; widest: number; width: number } {
+  const width = isMessageUnit(unit) ? widthOf(plan, unit) : 0, measure = measureOf(plan);
+  if (width <= 0) return { count: 0, widest: 0, width: 0 };
+  const widths = text.split('\n').map(measure);
+  return { count: widths.filter(w => w > width).length, widest: Math.max(0, ...widths), width };
+}
+
+/** `unwrap` for searching: a text with no line break is returned as it is, without the cost of a regular expression. */
+export const flowText = (text: string): string => (text.includes('\n') ? unwrap(text) : text);

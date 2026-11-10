@@ -1,4 +1,6 @@
-import { GROUP_COLORS, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines, approveEntry, sendBack, threadsOf, rowsOfGroup } from '../core';
+import { GROUP_COLORS, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines, approveEntry, sendBack, threadsOf, rowsOfGroup, flowText, wrapMessage, wrapOf } from '../core';
+import type { QaOptions, WrapPlan } from '../core';
+import { pxMeasure } from '../ui/measure';
 import type { BatchKind, Group, Entry, GlossaryTerm, RowChange, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
 import { IdbStore } from '../ui/idb';
 
@@ -84,7 +86,9 @@ export class Store {
   totals(): FileStats { const t: FileStats = { total: 0, translated: 0, approved: 0, done: 0 }; for (const v of this.views) { const s = this.stats(v.name); t.total += s.total; t.translated += s.translated; t.approved += s.approved; t.done += s.done; } return t; }
   speaker(u: Unit): string { return speakerOf(u, this.saved.speakers ?? {}); }
 
-  qaOpts(): { tolerancePct: number; terms: SavedProject['terms']; lineLimit: number } { return { tolerancePct: this.saved.settings.tolerancePct, terms: this.saved.terms, lineLimit: this.lineLimit() }; }
+  /** What the project says about wrapping messages (the tool «Перенесення рядків»), with the width resolved. */
+  wrapPlan(): WrapPlan { const w = wrapOf(this.saved.settings); return { settings: w, limit: this.lineLimit(), disabled: this.saved.settings.lineLimit < 0, ...(w.unit === 'px' ? { measure: pxMeasure(w.px.font) } : {}) }; }
+  qaOpts(): QaOptions { return { tolerancePct: this.saved.settings.tolerancePct, terms: this.saved.terms, lineLimit: this.lineLimit(), wrap: this.wrapPlan() }; }
   private autoLim: { views: FileView[]; n: number } | null = null;
   /** The automatic limit scans every file: it is computed once per set of files, not once per row. */
   lineLimit(): number {
@@ -97,7 +101,7 @@ export class Store {
   terms(u: Unit): ReturnType<typeof termsIn<SavedProject['terms'][number]>> { return termsIn(u.source, this.saved.terms); }
   tm(): TmIndex {
     if (this.tmCache) return this.tmCache;
-    const tm = new TmIndex();
+    const tm = new TmIndex({ flow: wrapOf(this.saved.settings).mode === 'text' });
     for (const v of this.views) { const ents = this.saved.files[v.name]; if (!ents) continue; for (const u of v.units) { const e = ents[u.key]; if (e?.target.trim()) tm.add({ s: u.source, t: e.target, src: v.name }); } }
     for (const m of this.saved.memory) tm.add({ s: m.s, t: m.t, src: 'Імпорт' });
     return (this.tmCache = tm);
@@ -115,7 +119,7 @@ export class Store {
     for (const v of this.views) {
       const ents = this.saved.files[v.name] ?? {};
       for (const u of v.units) {
-        if ((u.source + ' ' + (ents[u.key]?.target ?? '') + ' ' + u.key).toLowerCase().includes(needle)) { out.push({ file: v.name, unit: u }); if (out.length >= limit) return out; }
+        if ((u.source + ' ' + flowText(ents[u.key]?.target ?? '') + ' ' + u.key).toLowerCase().includes(needle)) { out.push({ file: v.name, unit: u }); if (out.length >= limit) return out; }
       }
     }
     return out;
@@ -134,7 +138,7 @@ export class Store {
         const st = this.shown(u, e);
         if (this.filter === 'qa' ? st !== 'qa' : (e?.status ?? 'new') !== this.filter) return false;
       }
-      return !q || (u.source + ' ' + (e?.target ?? '') + ' ' + u.key + ' ' + this.speaker(u)).toLowerCase().includes(q);
+      return !q || (u.source + ' ' + flowText(e?.target ?? '') + ' ' + u.key + ' ' + this.speaker(u)).toLowerCase().includes(q);
     });
     if (this.sort === 'new') list = [...list].sort((a, b) => Number(!!ents[a.key]?.target) - Number(!!ents[b.key]?.target));
     else if (this.sort === 'long') list = [...list].sort((a, b) => b.source.length - a.source.length);
@@ -445,8 +449,8 @@ export class Store {
   /** Re-flow the open row to the width of the game window; the batch of the action, or undefined when nothing had to change. */
   wrap(): { batch?: string } | null {
     const c = this.current; if (!c) return null;
-    const lim = limitFor(this.lineLimit(), c.unit.face); if (!lim) return null;
-    const text = wrapLines(c.entry?.target ?? '', lim);
+    const plan = this.wrapPlan(); if (plan.disabled) return null;
+    const text = wrapMessage(plan, c.unit, c.entry?.target ?? '').text;
     if (text === (c.entry?.target ?? '')) return null;
     const batch = this.commit([{ file: c.file, key: c.unit.key, next: edit(c.entry, c.unit, text, this.stage, Date.now()), text }], 'wrap');
     this.tmCache = null; this.persist(); this.emit();

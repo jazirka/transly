@@ -1,6 +1,7 @@
 import { displayLength, missingCodes } from './controlCodes';
 import { candidateTerms, hasTermIn, prepareText, targetHasTerm, termsStamp } from './glossary';
-import { limitFor, maxLineWidth, wrapLines } from './wrap';
+import { isMessageUnit, limitFor, linesShown, maxLineWidth, planSig, tooWide, unitWord, wrapLines, wrapMessage } from './wrap';
+import type { WrapPlan } from './wrap';
 import type { Entry, Unit } from './model';
 
 export type Severity = 'bad' | 'warn';
@@ -14,7 +15,7 @@ export type IssueCat = 'error' | 'term' | 'context' | 'style' | 'info';
 export interface IssueFix { label: string; text: string }
 export interface Issue {
   /** The rule that raised it. Ignoring a warning stores this key (`Entry.ign`). */
-  key: 'codes' | 'len' | 'term' | 'wrap' | 'empty-src-changed' | (string & {});
+  key: 'codes' | 'len' | 'term' | 'wrap' | 'lines' | 'empty-src-changed' | (string & {});
   severity: Severity;
   cat: IssueCat;
   message: string;
@@ -25,7 +26,14 @@ export interface Issue {
   codes?: string[];
 }
 export interface Term { en: string; uk: string; alt?: string[]; /** false = hint only */ qa?: boolean }
-export interface QaOptions { tolerancePct: number; terms: Term[]; /** Longest allowed line of a message; 0 or missing = not checked. */ lineLimit?: number }
+export interface QaOptions {
+  tolerancePct: number;
+  terms: Term[];
+  /** Longest allowed line of a message; 0 or missing = not checked. Ignored when `wrap` is given. */
+  lineLimit?: number;
+  /** The project's line wrapping: when it is given, the width rule follows its mode, unit and width, and the number of lines is watched. */
+  wrap?: WrapPlan;
+}
 
 export const DEFAULT_QA: QaOptions = { tolerancePct: 25, terms: [] };
 
@@ -36,7 +44,30 @@ export function lengthDeviation(source: string, target: string): number {
   return Math.round(((displayLength(target) - s) / s) * 100);
 }
 
-type UnitLike = Pick<Unit, 'source'> & Partial<Pick<Unit, 'kind' | 'face'>>;
+type UnitLike = Pick<Unit, 'source'> & Partial<Pick<Unit, 'kind' | 'face' | 'key'>>;
+
+/**
+ * The two advices about the shape of a message. `wrap`: a line is wider than the window, and nothing will wrap it (the
+ * mode is «in the text» or «off»; in the mode «at build» the game files are wrapped by the build, so the project's own
+ * text is not asked to fit). `lines`: the message has more lines than the window shows; the game pages it, so this is
+ * only a heads-up.
+ */
+function wrapIssues(unit: UnitLike, target: string, plan: WrapPlan): Issue[] {
+  if (!isMessageUnit(unit)) return [];
+  const out: Issue[] = [];
+  const mode = plan.settings.mode, wide = tooWide(plan, unit, target);
+  if (wide.count && mode !== 'build') {
+    const r = wrapMessage(plan, unit, target);
+    out.push({ key: 'wrap', severity: 'warn', cat: 'style', message: `Рядок задовгий для вікна: ${Math.round(wide.widest)} ${unitWord(plan)}, зазвичай до ${wide.width}. ${r.changed ? 'Натисніть «Перенести за шириною»' : 'Слово не вміщається, скоротіть його'}`, ...(r.changed ? { fix: { label: 'Перенести за шириною', text: r.text } } : {}) });
+  }
+  const max = plan.settings.maxLines;
+  if (unit.kind === 'dialogue' && max > 0) {
+    // «At build» and «in the text»: the lines the game will really show; «off»: the lines as written.
+    const n = linesShown(plan, unit, target);
+    if (n > max) out.push({ key: 'lines', severity: 'warn', cat: 'style', message: `У повідомленні ${n} рядків, а вікно показує ${max}: гра покаже його на кількох сторінках` });
+  }
+  return out;
+}
 
 export function check(unit: UnitLike, target: string, opts: QaOptions = DEFAULT_QA): Issue[] {
   if (!target.trim()) return [];
@@ -47,11 +78,12 @@ export function check(unit: UnitLike, target: string, opts: QaOptions = DEFAULT_
   if (Math.abs(dev) > opts.tolerancePct) {
     out.push({ key: 'len', severity: 'warn', cat: 'style', message: `Довжина відрізняється від оригіналу на ${dev > 0 ? '+' : ''}${dev}%. Рекомендація: якнайближче до оригіналу` });
   }
-  if (opts.lineLimit && (unit.kind === 'dialogue' || unit.kind === 'scroll')) {
+  if (opts.wrap) out.push(...wrapIssues(unit, target, opts.wrap));
+  else if (opts.lineLimit && (unit.kind === 'dialogue' || unit.kind === 'scroll')) {
     const limit = limitFor(opts.lineLimit, unit.face), w = maxLineWidth(target);
     if (w > limit) {
       const wrapped = wrapLines(target, limit);
-      out.push({ key: 'wrap', severity: 'warn', cat: 'style', message: `Рядок задовгий для вікна: ${w} символів, зазвичай до ${limit}. Натисніть «Перенести рядки»`, ...(wrapped !== target ? { fix: { label: 'Перенести рядки', text: wrapped } } : {}) });
+      out.push({ key: 'wrap', severity: 'warn', cat: 'style', message: `Рядок задовгий для вікна: ${w} символів, зазвичай до ${limit}. Натисніть «Перенести за шириною»`, ...(wrapped !== target ? { fix: { label: 'Перенести за шириною', text: wrapped } } : {}) });
     }
   }
   const sourceText = prepareText(unit.source);
@@ -72,7 +104,7 @@ export function check(unit: UnitLike, target: string, opts: QaOptions = DEFAULT_
 const memo = new WeakMap<Entry, { sig: string; source: string; kind?: string; face?: string; issues: Issue[] }>();
 
 /** Everything `check` depends on besides the row and its original, as one short text. */
-const optsSig = (o: QaOptions): string => `${o.tolerancePct}|${o.lineLimit ?? 0}|${termsStamp(o.terms)}`;
+const optsSig = (o: QaOptions): string => `${o.tolerancePct}|${o.lineLimit ?? 0}|${planSig(o.wrap)}|${termsStamp(o.terms)}`;
 
 /** Issues of a row (before the translator's ignores). */
 function issuesOf(unit: UnitLike, entry: Entry, opts: QaOptions): Issue[] {

@@ -1,4 +1,6 @@
-import { Autosave, DupIndex, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, lengthDeviation, limitFor, note, pluginCandidates, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, viewsFromSnapshot, wrapLines } from '../core';
+import { Autosave, DupIndex, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf } from '../core';
+import type { QaOptions, WrapPlan } from '../core';
+import { pxMeasure } from './measure';
 import { GroupIndex, KIND_LABEL, UndoStack, approveEntry, groupRows, liveGroups } from '../core';
 import type { Entry, FileView, GameFile, Group, RowChange, SavedProject, Unit } from '../core';
 import { openBuild } from './build-dialog';
@@ -211,7 +213,9 @@ export async function start(root: HTMLElement): Promise<void> {
   };
   let usageCache: { game: State['game']; u: ReturnType<typeof buildUsage> } | null = null;
   let namesCache: { views: State['views']; idx: GameNameIndex } | null = null;
-  const qaOpts = () => ({ tolerancePct: s.saved.settings.tolerancePct, terms: s.saved.terms, lineLimit: lineLimit() });
+  /** What the project says about wrapping messages (the tool «Перенесення рядків»), with the width resolved. */
+  const wrapPlan = (): WrapPlan => { const w = wrapOf(s.saved.settings); return { settings: w, limit: lineLimit(), disabled: s.saved.settings.lineLimit < 0, ...(w.unit === 'px' ? { measure: pxMeasure(w.px.font) } : {}) }; };
+  const qaOpts = (): QaOptions => ({ tolerancePct: s.saved.settings.tolerancePct, terms: s.saved.terms, lineLimit: lineLimit(), wrap: wrapPlan() });
   /**
    * Several files shown as one table: the rows are copies whose key is `file␟key`, and this object reads and writes
    * the entries of the files they came from, so everything that works on one file works on the group unchanged.
@@ -248,7 +252,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const ctx: Ctx = {
     s, autosave,
     entries: file => (file === GROUP ? groupEntries : (s.saved.files[file] ??= {})),
-    qaOpts, lineLimit,
+    qaOpts, lineLimit, wrapPlan,
     usage: () => { if (!usageCache || usageCache.game !== s.game) usageCache = { game: s.game, u: buildUsage(s.game, f => s.saved.labels?.[f]) }; return usageCache.u; },
     gameDir: () => dataDir,
     built: n => { s.lastBuild = { at: Date.now(), n }; renderTop(); },
@@ -319,7 +323,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const inContext = (u: Unit, e: Entry | undefined): boolean => {
     if (s.q) {
       const q = s.q.toLowerCase();
-      if (!(u.source + ' ' + (e?.target ?? '') + ' ' + u.key + ' ' + ctx.speaker(u)).toLowerCase().includes(q)) return false;
+      if (!(u.source + ' ' + flowText(e?.target ?? '') + ' ' + u.key + ' ' + ctx.speaker(u)).toLowerCase().includes(q)) return false;
     }
     if (s.speaker !== null && ctx.speaker(u) !== s.speaker) return false;
     if (s.lenFilter !== 'all') {
@@ -1133,7 +1137,7 @@ export async function start(root: HTMLElement): Promise<void> {
         const ents = s.saved.files[v.name] ?? {};
         for (const u of v.units) {
           const e = ents[u.key];
-          if (!(u.source + ' ' + (e?.target ?? '') + ' ' + u.key).toLowerCase().includes(q)) continue;
+          if (!(u.source + ' ' + flowText(e?.target ?? '') + ' ' + u.key).toLowerCase().includes(q)) continue;
           rows.push({ t: 'row', file: v.name, key: u.key, kind: 'Рядки', title: u.source.replace(/\s+/g, ' ').slice(0, 90), sub: e?.target ? e.target.replace(/\s+/g, ' ').slice(0, 90) : '', where: `${fileTitle(v.name)} · ${shortKey(u.key)}`, status: shownStatus(ctx, u, e) });
           if (rows.length >= 8) break outer;
         }
@@ -1177,16 +1181,15 @@ export async function start(root: HTMLElement): Promise<void> {
   /** Re-flow every translated message of the current file whose lines are wider than the game window. */
   function wrapFile(): void {
     const v = ctx.view();
-    const limit = lineLimit();
     if (!v) { toast('Спершу відкрийте файл'); return; }
-    if (!limit) { toast('Ширину рядка вимкнено в налаштуваннях'); return; }
+    const plan = wrapPlan();
+    if (plan.disabled || (!plan.limit && plan.settings.unit !== 'px')) { toast('Ширину рядка вимкнено в «Перенесення рядків»'); return; }
     const ents = ctx.entries(v.name);
     const changes: RowChange[] = [];
     for (const u of v.units) {
       const e = ents[u.key];
-      if (!e?.target || (u.kind !== 'dialogue' && u.kind !== 'scroll')) continue;
-      if (!activeIssues(u, e, qaOpts()).some(i => i.key === 'wrap')) continue;
-      const text = wrapLines(e.target, limitFor(limit, u.face));
+      if (!e?.target || !isMessageUnit(u) || !tooWide(plan, u, e.target).count) continue;
+      const text = wrapMessage(plan, u, e.target).text;
       if (text !== e.target) changes.push({ file: v.name, key: u.key, next: edit(e, u, text, ctx.stage(), Date.now()), text });
     }
     const n = changes.length;

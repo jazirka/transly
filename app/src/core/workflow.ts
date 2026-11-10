@@ -1,5 +1,6 @@
 import { activeIssues, DEFAULT_QA } from './qa';
 import type { QaOptions } from './qa';
+import { isMessageUnit, wrapMessage } from './wrap';
 import type { Comment, Entry, Unit } from './model';
 
 /** Which pass the user is working in. */
@@ -61,6 +62,12 @@ export function submit(prev: Entry | undefined, unit: Unit, stage: Stage, now: n
     if (prev.status === 'appr') return { ok: false, reason: 'Рядок уже вичитано' };
   } else if (prev.status !== 'done' && prev.status !== 'appr') {
     return { ok: false, reason: 'Рядок ще не надіслано' };
+  }
+  // The wrapping mode «in the text»: the line breaks are put in when the row is sent, so what is reviewed is what the game shows.
+  const plan = opts.qa.wrap;
+  if (stage === 'translate' && plan?.settings.mode === 'text' && isMessageUnit(unit)) {
+    const w = wrapMessage(plan, unit, prev.target);
+    if (w.changed) prev = { ...prev, target: w.text };
   }
   if (opts.blockErrors) {
     const errors = activeIssues(unit, prev, opts.qa).filter(i => i.severity === 'bad');

@@ -1,5 +1,5 @@
-import { TmIndex, activeIssues } from '../core';
-import type { BatchKind, GameNameIndex, RowChange, Usage } from '../core';
+import { TmIndex, activeIssues, wrapOf } from '../core';
+import type { BatchKind, GameNameIndex, QaOptions, RowChange, Usage, WrapPlan } from '../core';
 import type { Autosave, DupIndex, UndoStack, Entry, FileView, GameFile, Group, RowRef, SavedProject, Status, Unit } from '../core';
 
 export type Mode = 'table' | 'edit' | 'scene';
@@ -77,7 +77,9 @@ export interface Ctx {
   entries(file: string): Record<string, Entry>;
   /** Who speaks this unit (game name, or the translator's face/event mapping). */
   speaker(u: Unit): string;
-  qaOpts(): { tolerancePct: number; terms: { en: string; uk: string; alt?: string[]; qa?: boolean }[]; lineLimit?: number };
+  qaOpts(): QaOptions;
+  /** The project's line wrapping with its width resolved (mode, unit, hyphenation). */
+  wrapPlan(): WrapPlan;
   /** Effective longest line of a message, 0 when not checked. */
   lineLimit(): number;
   /** Names the game's database defines (items, skills, characters…). */
@@ -122,7 +124,7 @@ export interface Ctx {
 }
 
 export function buildTm(s: State): TmIndex {
-  const tm = new TmIndex();
+  const tm = new TmIndex({ flow: wrapOf(s.saved.settings).mode === 'text' });
   for (const v of s.views) {
     const ents = s.saved.files[v.name];
     if (!ents) continue;

@@ -1,4 +1,4 @@
-import { activeIssues, sourceTermHits, targetHasTerm, targetTermHits, displayLength, edit as editFn, lengthDeviation, limitFor, newBatch, openThreads, propagate, recordChange, referenceSets, setIgnored, submit, termsIn, wrapLines } from '../core';
+import { activeIssues, sourceTermHits, targetHasTerm, targetTermHits, displayLength, edit as editFn, lengthDeviation, linesShown, newBatch, openThreads, propagate, recordChange, referenceSets, setIgnored, submit, termsIn, tooWide, unitWord, wrapMessage } from '../core';
 import type { BatchKind, Entry, Unit } from '../core';
 import { $, buzz, esc, plural, toast } from './dom';
 import { discussClick, renderDiscuss } from './discuss';
@@ -169,12 +169,18 @@ function meter(ctx: Ctx, u: Unit): void {
   $('#c-ch').textContent = `${n} / ${rl} зн.`;
   $('#cnt2').classList.toggle('over', !!t && d > tol);
   $('#cnt2').classList.toggle('mid', !!t && d <= tol && d > tol / 2);
-  // A line longer than the game's window is said right under the field, with the way to fix it.
-  const limit = u.kind === 'dialogue' || u.kind === 'scroll' ? limitFor(ctx.lineLimit(), u.face) : 0;
-  const long = limit ? t.split('\n').filter(l => displayLength(l) > limit).length : 0;
-  const wh = $('#f-wrap');
-  wh.hidden = !long;
-  if (long) wh.innerHTML = `<span><b>Рядок довший за вікно гри</b> (до ${limit} зн.): ${plural(long, ['рядок', 'рядки', 'рядків'])}</span><button type="button" class="btn" data-wrap>Перенести за шириною</button>`;
+  // A line longer than the game's window is said right under the field, with the way to fix it; so is a message with more lines than the window shows.
+  const plan = ctx.wrapPlan(), wide = tooWide(plan, u, t), wh = $('#f-wrap');
+  const said: string[] = [];
+  if (wide.count) {
+    const word = unitWord(plan);
+    const auto = plan.settings.mode === 'build' ? `: гра перенесе її сама (≈${plural(linesShown(plan, u, t), ['рядок', 'рядки', 'рядків'])})` : `: ${plural(wide.count, ['рядок', 'рядки', 'рядків'])}`;
+    said.push(`<b>Рядок довший за вікно гри</b> (до ${wide.width} ${word})${auto}`);
+  }
+  const max = plan.settings.maxLines, shown = u.kind === 'dialogue' && max > 0 && t ? linesShown(plan, u, t) : 0;
+  if (shown > max) said.push(`<b>${plural(shown, ['рядок', 'рядки', 'рядків'])}</b>, а вікно показує ${max}: гра покаже на кількох сторінках`);
+  wh.hidden = !said.length;
+  if (said.length) wh.innerHTML = `<span>${said.join(' · ')}</span>${wide.count ? '<button type="button" class="btn" data-wrap>Перенести за шириною</button>' : ''}`;
 }
 
 function refreshQa(ctx: Ctx, u: Unit): void {
@@ -308,10 +314,10 @@ export function focusClick(ctx: Ctx, t: HTMLElement): boolean {
     undoToast(ctx, 'Переклад очищено', setText(ctx, u, '', 'очищено', 'clear')); return true;
   }
   if (t.closest('[data-wrap]')) {
-    const limit = limitFor(ctx.lineLimit(), u.face);
-    if (!limit) { toast('Ширину рядка вимкнено в налаштуваннях'); return true; }
-    const text = wrapLines(ta.value, limit);
-    if (text === ta.value) toast('Рядки вже вміщаються'); else setText(ctx, u, text, 'перенесено рядки');
+    const plan = ctx.wrapPlan();
+    if (plan.disabled) { toast('Ширину рядка вимкнено в «Перенесення рядків»'); return true; }
+    const r = wrapMessage(plan, u, ta.value);
+    if (!r.changed) toast('Рядки вже вміщаються'); else setText(ctx, u, r.text, 'перенесено рядки');
     return true;
   }
   if (t.closest('#b-save')) { send(ctx); return true; }

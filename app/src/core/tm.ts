@@ -1,4 +1,5 @@
 import { displayLength } from './controlCodes';
+import { unwrap } from './wrap';
 
 export interface TmEntry { s: string; t: string; /** where it came from, e.g. file name or "Імпорт" */ src: string }
 export interface TmMatch extends TmEntry { score: number }
@@ -28,6 +29,8 @@ interface Indexed extends TmEntry { w: Set<string>; len: number }
 export class TmIndex {
   private items: Indexed[] = [];
   private byWord = new Map<string, number[]>();
+  /** `flow`: the translations carry line breaks put in for the game window (wrapping «in the text»); matches give them back as one flowing text, which is wrapped again when it is sent. */
+  constructor(private readonly opts: { flow?: boolean } = {}) {}
 
   add(e: TmEntry): void {
     if (!e.s.trim() || !e.t.trim()) return;
@@ -57,7 +60,7 @@ export class TmIndex {
       if (overlap / union < 0.3) continue;
       if (Math.abs(it.len - ql) > Math.max(ql, it.len) * 0.6) continue;
       const score = similarity(qn, norm(it.s));
-      if (score >= min) out.push({ s: it.s, t: it.t, src: it.src, score });
+      if (score >= min) out.push({ s: it.s, t: this.opts.flow ? unwrap(it.t) : it.t, src: it.src, score });
     }
     return out.sort((a, b) => b.score - a.score).slice(0, limit);
   }

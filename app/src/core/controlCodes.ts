@@ -10,7 +10,10 @@ const WIDTH_CODE = new RegExp(`${CODE.source}|\\\\G`, 'g');
 /** What a code takes on screen: an escaped backslash is one character, the currency name `\G` about three, every other code nothing. */
 const codeWidth = (code: string): string => (code === '\\\\' ? '\\' : code === '\\G' ? '000' : '');
 
-export const displayLength = (text: string): number => [...text.replace(WIDTH_CODE, codeWidth).replace(/\n/g, '')].length;
+/** The text as it takes room on the screen: control codes gone (`\G` stands for a few characters), line breaks gone. Measure this, not the raw text. */
+export const visibleText = (text: string): string => text.replace(WIDTH_CODE, codeWidth).replace(/\n/g, '');
+
+export const displayLength = (text: string): number => [...visibleText(text)].length;
 
 /** Codes in `source` that are missing in `target` (multiset difference). */
 export function missingCodes(source: string, target: string): string[] {

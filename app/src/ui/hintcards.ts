@@ -1,4 +1,4 @@
-import { HINT_GLYPH, HINT_LABEL, KIND_LABEL, activeIssues, byHintOrder, check, describePage, explainCodes, limitFor, prepareText, sceneAt, sourceChanged, targetHasTerm, termRangesIn, termRangesInTarget, usageKey } from '../core';
+import { HINT_GLYPH, HINT_LABEL, KIND_LABEL, activeIssues, byHintOrder, check, describePage, explainCodes, isMessageUnit, prepareText, sceneAt, sourceChanged, targetHasTerm, termRangesIn, termRangesInTarget, usageKey, usesPixels, widthOf } from '../core';
 import type { Entry, GlossaryTerm, Unit } from '../core';
 import { esc, plural } from './dom';
 import { scenesOf } from './scenecache';
@@ -209,7 +209,7 @@ export function chipsHtml(ctx: Ctx, u: Unit): string {
   const { s } = ctx;
   const r = realOf(ctx, u);
   const label = ctx.view()?.label ?? s.views.find(v => v.name === r.file)?.label;
-  const limit = u.kind === 'dialogue' || u.kind === 'scroll' ? limitFor(ctx.lineLimit(), u.face) : 0;
+  const plan = ctx.wrapPlan(), limit = isMessageUnit(u) ? widthOf(plan, u) : 0;
   const sc = scenesOf(s.views.find(v => v.name === r.file)?.units ?? []);
   const first = sc ? sceneAt(sc, r.key)?.units[0] : undefined;
   const uk = usageKey(r.file, r.key);
@@ -223,7 +223,7 @@ export function chipsHtml(ctx: Ctx, u: Unit): string {
     ctx.speaker(u) ? st(ctx.speaker(u), 'Хто говорить') : '',
     label ? st(label, 'Місцевість') : '',
     u.note ? st(`позначка: ${u.note}`, 'Позначка розробників') : '',
-    limit ? st(`рядок до ${limit} зн.`, `Ширина рядка в грі${u.face ? ' (поруч обличчя)' : ''}`) : '',
+    limit ? st(`рядок до ${limit} ${usesPixels(plan) ? 'px' : 'зн.'}`, `Ширина рядка в грі${u.face ? ' (поруч обличчя)' : ''}${plan.settings.mode === 'build' ? '. Гра переносить рядки сама' : ''}`) : '',
   ].filter(Boolean);
   const acts = [
     first?.page ? act('cond', 'умови сторінки', 'Коли показується ця сцена') : '',

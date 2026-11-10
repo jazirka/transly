@@ -29,8 +29,12 @@ export function openBuild(ctx: Ctx, dataDir: string | null, onBuilt: (n: number)
   const run = () => build(s.game, s.views, s.saved, { onlyApproved: ($('#bd-appr', dlg) as HTMLInputElement).checked, includeDrafts: !!(dlg.querySelector('#bd-draft') as HTMLInputElement | null)?.checked, blockErrors: ($('#bd-block', dlg) as HTMLInputElement).checked, qa: ctx.qaOpts() });
   const sum = () => {
     const r = run();
+    const w = r.wrap, max = ctx.wrapPlan().settings.maxLines;
+    const wrapNote = w.messages || w.tooMany || w.over
+      ? ` Перенесення рядків: ${plural(w.messages, ['повідомлення', 'повідомлення', 'повідомлень'])}${w.hyphens ? `, слів із переносом ${w.hyphens}` : ''}${w.tooMany ? `. Понад ${max} рядки: ${w.tooMany} (гра покаже їх на кількох сторінках)` : ''}${w.over ? `. Слово не вміщається в рядок у ${w.over}` : ''}.`
+      : '';
     $('#bd-sum', dlg).textContent = r.included
-      ? `У збірку потрапить ${plural(r.included, ['рядок', 'рядки', 'рядків'])} у ${plural(r.files.length, ['файлі', 'файлах', 'файлах'])}. Пропущено: ${r.skipped}${r.blocked.length ? ` (з них через помилки QA: ${r.blocked.length})` : ''}.`
+      ? `У збірку потрапить ${plural(r.included, ['рядок', 'рядки', 'рядків'])} у ${plural(r.files.length, ['файлі', 'файлах', 'файлах'])}. Пропущено: ${r.skipped}${r.blocked.length ? ` (з них через помилки QA: ${r.blocked.length})` : ''}.${wrapNote}`
       : 'У збірку поки нічого не потрапить: немає надісланих чи вичитаних рядків.';
     dlg.querySelectorAll<HTMLButtonElement>('#bd-dir,#bd-zip,#bd-play,#bd-apply').forEach(b => { b.disabled = !r.included; });
   };

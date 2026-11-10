@@ -3,6 +3,7 @@ import type { QaOptions } from './qa';
 import { apply, isTextFormat, formatOf } from './engine';
 import type { Entry, GameFile, Translations } from './model';
 import type { FileView, SavedProject } from './project';
+import { isMessageUnit, wrapMessage } from './wrap';
 
 export interface BuildOptions {
   /** Only reviewed (appr) units go into the build; otherwise units waiting for review (done) are included too. */
@@ -23,11 +24,25 @@ export interface BuildResult {
   skipped: number;
   /** Keys (`file::key`) left out because of QA errors. */
   blocked: string[];
+  /** The line wrapping done by the build (mode «at build»; the project's own text is never changed). */
+  wrap: { /** Messages whose lines were rearranged. */ messages: number; /** Hyphens put into words. */ hyphens: number; /** Messages that have more lines than the window shows. */ tooMany: number; /** Messages with a word that still does not fit a line. */ over: number };
+}
+
+/** The row as the game gets it: its message wrapped for the window. The project's row is not touched. */
+function wrapped(plan: NonNullable<QaOptions['wrap']>, u: FileView['units'][number], e: Entry, stats: BuildResult['wrap']): Entry {
+  const r = wrapMessage(plan, u, e.target);
+  if (r.tooMany) stats.tooMany++;
+  if (r.over.length) stats.over++;
+  if (!r.changed) return e;
+  stats.messages++;
+  stats.hyphens += r.hyphenated;
+  return { ...e, target: r.text };
 }
 
 export function build(game: GameFile[], views: FileView[], saved: SavedProject, opts: BuildOptions): BuildResult {
   const byName = new Map(game.map(f => [f.name, f]));
-  const out: BuildResult = { files: [], included: 0, skipped: 0, blocked: [] };
+  const out: BuildResult = { files: [], included: 0, skipped: 0, blocked: [], wrap: { messages: 0, hyphens: 0, tooMany: 0, over: 0 } };
+  const plan = opts.qa.wrap, wrapping = !!plan && plan.settings.mode === 'build';
   for (const v of views) {
     const file = byName.get(v.name);
     const entries = saved.files[v.name];
@@ -43,7 +58,7 @@ export function build(game: GameFile[], views: FileView[], saved: SavedProject, 
         out.blocked.push(`${v.name}::${u.key}`);
         continue;
       }
-      use[u.key] = e;
+      use[u.key] = wrapping && plan && formatOf(file) === 'rpgmaker' && isMessageUnit(u) ? wrapped(plan, u, e, out.wrap) : e;
       out.included++;
     }
     if (Object.keys(use).length) {

@@ -106,6 +106,21 @@ Control-code QA (`\C[2]`, `\V[1]`…) currently knows RPG Maker codes only; plac
   - *Your own breaks* are kept unless a line is too wide (or always re-flowed, if chosen). A message with more lines than the window shows (4 by default, 0 turns it off) only gets a warning, since the game pages it; nothing is cut. The example in the tool shows how the window will show a text, with a ruler per line.
   - The width setting that used to be in Settings is here now; the QA advice "line too wide" appears only in the modes *in the text* and *off* (in *at build* the build wraps), while "N lines, the window shows 4" appears in all of them.
 
+## QA rules about the form of a translation
+
+Tools → Правила QA… (also a button in Settings; on the phone Tools → Правила QA). The checks on the *form* of the text come as a registry of rules, each with a stable id (the id is what «Ignore» stores for a row, so ids never change) and a level the project chooses: **off**, **advice** (the default: it shows under the field and in the row list, can be mended with one click, and blocks nothing) or **error** (the row cannot be sent or built until it is mended). Only damaged control codes are an error by default. Old projects have no choices stored and so block nothing new; the choices live in the project settings (`qa`) and sync with them.
+
+- `code-malformed` (error): a Cyrillic letter instead of a Latin one in `\C[2]`, a space inside the code (`\C [2]`, `\ C[2]`), a missing `]`, a non-number where the game wants one (`\C[red]`), the wide `＼`. The same text in the original is the game's own and is not flagged.
+- `uk-homoglyph`: a Latin letter drawn like a Cyrillic one inside a Ukrainian word (`Cила`), a Cyrillic word that is really `HP`/`XIX` of the original, a lone Latin `i`/`a`/`o`/`y`/`c` between Ukrainian words. Latin that stands in the original, the built-in list (HP, MP, NPC, units, Roman numerals, `x2`, `3D`) and the project's list «Латинські слова, які можна лишати» are left alone. The fix is offered only when every letter has a pair in the other alphabet.
+- `uk-foreign-letters`: `ы э ъ ё` and the other Cyrillic letters outside the Ukrainian alphabet (no automatic fix).
+- `uk-normalization`: «й» and «ї» written as two characters (fixed to one).
+- `ws-hidden`: zero-width characters, soft hyphen, line/paragraph separators, unusual spaces (an emoji joiner is left alone; a normal no-break space too).
+- `ws-edges`: spaces and line breaks at the start or end differ from the original. In names, terms and plugin texts they must match; in dialogue lines only what was *added* is flagged, since the original's trailing spaces mean nothing.
+- `ws-double`: two spaces in a row that the original does not have.
+- `uk-apostrophe`: a wrong sign (`` ` ´ ‘ ′ " ``) between two Ukrainian letters; optionally one apostrophe for the whole project (`’`, `ʼ` or `'`).
+
+The overview of advices: the status bar shows «Поради: N» (click to filter), the filter chip «З порадами», Перехід → Наступна порада, a small ring in the table. A length that differs from the original is not counted there (it stays a recommendation under the field). In the tool, each rule shows how many rows of the open file it found and **Виправити в файлі**: one action of the journal («виправлено за правилом»), statuses stay as they are, **Скасувати** takes it back. More rules (end punctuation, numbers, repeated words, quotes and dashes, placeholders) come later.
+
 ## Glossary matching by language
 
 Words are told apart by script. **English** (the term and the source text): plurals and verb forms (`skills`, `boxes`, `bodies`, `knives`, `making`), possessives, and British/American spelling (`armour`/`armor`, `defence`/`defense`, `colour`, `grey`, `travelled`, `-ise`/`-ize`); whole words only, phrases across spaces and hyphens, control codes ignored. **Ukrainian** (the translation): every word by its stem, so any case, number and the usual alternations match (`меч` ~ `мечем`/`мечів`, `нога` ~ `нозі`, `рука` ~ `руці`, `кінь` ~ `коня`, `навичка` ~ `навичок`). Terms are looked up through an index of their first word, so a dictionary of thousands stays fast.

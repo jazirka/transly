@@ -1,4 +1,4 @@
-import { Autosave, DupIndex, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf } from '../core';
+import { Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf } from '../core';
 import type { QaOptions, WrapPlan } from '../core';
 import { pxMeasure } from './measure';
 import { openWrapTool } from './wrap-dialog';
@@ -26,7 +26,8 @@ import { IdbStore, loadHandle, saveHandle } from './idb';
 import { openImport } from './import-dialog';
 
 import { autoCheck } from './updates';
-import { openConsistency, openFindReplace } from './tools-dialogs';
+import { openFindReplace } from './tools-dialogs';
+import { openLinkTool } from './links-dialog';
 import { openPluginTexts } from './plugins-dialog';
 import { openActivity, openAutofill } from './activity-dialog';
 import { markup } from './markup';
@@ -193,7 +194,7 @@ export async function start(root: HTMLElement): Promise<void> {
   let tmCache: ReturnType<typeof buildTm> | null = null;
   let tmStale = false, tmBuiltAt = 0;
   let unitMap = new Map<string, Unit>();
-  let dupCache: { views: State['views']; idx: DupIndex } | null = null;
+  let linkCache: { views: State['views']; idx: LinkIndex } | null = null;
 
   const input = el('input');
   input.type = 'file'; input.hidden = true; input.id = 'folder-input';
@@ -268,7 +269,7 @@ export async function start(root: HTMLElement): Promise<void> {
     },
     invalidateTm: () => { tmCache = null; tmStale = false; },
     softTm: () => { tmStale = true; },
-    dups: () => { if (!dupCache || dupCache.views !== s.views) dupCache = { views: s.views, idx: new DupIndex(s.views) }; return dupCache.idx; },
+    links: () => { if (!linkCache || linkCache.views !== s.views) linkCache = { views: s.views, idx: new LinkIndex(s.views) }; return linkCache.idx; },
     persist: () => autosave.queue(s.saved),
     stage: () => 'translate',
     history: new UndoStack(),
@@ -1172,7 +1173,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const MENUS: Record<string, MenuItem[]> = {
     'Файл': [{ t: 'Відкрити папку гри…', fn: () => void openFolder() }, { t: 'Відкрити файли або вставити JSON…', fn: openImportDlg }, '-', { t: 'Зібрати…', fn: doBuild }, { t: 'Запустити вибране', fn: runSelected, sc: 'F5' }, '-', { t: 'Налаштування…', fn: () => openSettingsDlg() }],
     'Перехід': [{ t: 'Наступний рядок без перекладу', fn: () => jump('new', 1) }, { t: 'Наступна помилка QA', fn: () => jump('qa', 1) }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: 'Ctrl+K' }],
-    'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Перевірити узгодженість…', fn: () => openConsistency(ctx) }, { t: 'Автозаповнення за словами…', fn: () => openAutofill(ctx) }, { t: 'Активність…', fn: () => openActivity(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенесення рядків…', fn: () => openWrapTool(ctx, { wrapFile }) }],
+    'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Зв’язані рядки…', fn: () => openLinkTool(ctx) }, { t: 'Автозаповнення за словами…', fn: () => openAutofill(ctx) }, { t: 'Активність…', fn: () => openActivity(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенесення рядків…', fn: () => openWrapTool(ctx, { wrapFile }) }],
   };
   /** The phone has no title bar: its «Ще» list is the same menus plus what the title bar offers on the desktop. */
   const PHONE_MENUS: Record<string, MenuItem[]> = {
@@ -1273,6 +1274,11 @@ export async function start(root: HTMLElement): Promise<void> {
     ctx.persist(); ctx.invalidateTm(); renderAll();
     const nSkip = [...skipped.values()].reduce((a, b) => a + b, 0);
     undoToast(ctx, `Надіслано: ${ok}${nSkip ? `. Пропущено: ${nSkip} (${[...skipped.keys()].slice(0, 2).join('; ')})` : ''}`, batch, nSkip > 0);
+    // Rows with the same original are not touched by a bulk send: say how many have something to look at.
+    if (ok && linkModeOf(s.saved.settings) !== 'off') {
+      const todo = pendingLinks(s.saved, ctx.links(), changes);
+      if (todo) toast(`Зв’язаних рядків до перегляду: ${todo}`, { action: { label: 'Переглянути', run: () => openLinkTool(ctx) } });
+    }
   }
   /** Approve the ticked rows: a draft is sent first, so the history says both. */
   function bulkApprove(): void {

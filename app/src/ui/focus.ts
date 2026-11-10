@@ -1,4 +1,4 @@
-import { activeIssues, sourceTermHits, targetHasTerm, targetTermHits, displayLength, edit as editFn, lengthDeviation, linesShown, newBatch, openThreads, propagate, recordChange, referenceSets, setIgnored, submit, termsIn, tooWide, unitWord, wrapMessage } from '../core';
+import { activeIssues, afterSend, linkModeOf, sourceTermHits, targetHasTerm, targetTermHits, displayLength, edit as editFn, lengthDeviation, linesShown, openThreads, recordChange, referenceSets, setIgnored, submit, termsIn, tooWide, unitWord, wrapMessage } from '../core';
 import type { BatchKind, Entry, Unit } from '../core';
 import { $, buzz, esc, plural, toast } from './dom';
 import { discussClick, renderDiscuss } from './discuss';
@@ -10,6 +10,7 @@ import { CODE_RE, markupTerms } from './markup';
 import { autoSize, drawMarks, insertAtCursor } from './text-editor';
 import { hideTermCard } from './termcard';
 import { drawLinks } from './links';
+import { openLinkRows } from './links-dialog';
 import { isDesktop, openLink, rememberedGameDir } from './desktop';
 import { drawPic, picOfFace, picsOfRow } from './gameimg';
 import type { Pic } from './gameimg';
@@ -287,10 +288,19 @@ export function send(ctx: Ctx): void {
   if (!r.ok) { if (s.mode === 'scene') sceneBlocked(ctx, u.key, r.reason); else toast(r.reason, { sticky: true }); return; }
   const now = Date.now();
   ents[u.key] = recordChange(ents[u.key], r.entry, 'надіслано', r.entry.target, s.who, now);
-  const same = s.saved.settings.propagate ? propagate(s.saved, ctx.dups(), realOf(ctx, u).file, { ...u, key: realOf(ctx, u).key }, ents[u.key]!, 'translate', now, s.who, newBatch('twin', now)) : 0;
+  // What happens to the rows with the same original depends on the project's mode (see `links.ts`): the empty ones are filled
+  // at once as one action with its «Скасувати», the ones that differ are offered for a look (or updated, in the automatic mode).
+  const real = realOf(ctx, u);
+  const sync = afterSend(s.saved, ctx.links(), linkModeOf(s.saved.settings), real.file, real.key, now);
+  const batch = sync.changes.length ? ctx.commit(sync.changes, 'link') : undefined;
   s.sess.n++;
   ctx.persist(); ctx.invalidateTm();
-  toast('Надіслано' + (same ? `. Також у ${plural(same, ['однаковому рядку', 'однакових рядках', 'однакових рядках'])}` : ''));
+  const look = (): void => openLinkRows(ctx, real.file, real.key);
+  const differ = `Зв’язаних рядків відрізняється: ${sync.pending}`;
+  const text = 'Надіслано' + (batch ? `. Також у ${plural(sync.changes.length, ['однаковому рядку', 'однакових рядках', 'однакових рядках'])}` : '');
+  if (batch) { undoToast(ctx, text, batch); if (sync.pending) toast(differ, { action: { label: 'Переглянути', run: look } }); }
+  else if (sync.pending) toast(`${text}. ${differ}`, { action: { label: 'Переглянути', run: look } });
+  else toast(text);
   const list = ctx.visible();
   const i = list.findIndex(x => x.key === u.key);
   const next = list[i + 1] ?? list[i];

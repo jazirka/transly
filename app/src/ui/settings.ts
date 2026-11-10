@@ -1,5 +1,5 @@
-import { touchTerms, DEFAULT_SETTINGS, emptyProject, parseDelimited, parseHtmlTable, parseTerms, referenceSets, serialize, termsFromTable, withoutReference } from '../core';
-import type { GlossaryTerm } from '../core';
+import { touchTerms, DEFAULT_SETTINGS, emptyProject, linkModeOf, parseDelimited, parseHtmlTable, parseTerms, referenceSets, serialize, termsFromTable, withoutReference } from '../core';
+import type { GlossaryTerm, LinkMode } from '../core';
 import { $, el, esc, plural, toast } from './dom';
 import { isDesktop } from './desktop';
 import { showDialog } from './modal';
@@ -47,7 +47,8 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
     <div class="grid"><label for="st-tol">Радити, коли переклад відрізняється від оригіналу понад, %</label><input id="st-tol" type="number" min="5" max="100" step="5" value="${st.tolerancePct}">
       <label for="st-who">Ваше ім’я в коментарях та історії</label><input id="st-who" maxlength="40" value="${st.who}"></div>
     <label class="achk"><input type="checkbox" id="st-block" ${st.blockErrors ? 'checked' : ''}> Не надсилати рядок із помилкою QA</label>
-    <label class="achk"><input type="checkbox" id="st-prop" ${st.propagate ? 'checked' : ''}> Підставляти переклад у рядки з таким самим оригіналом (в інших файлах теж)</label>
+    <div class="grid"><label for="st-link">Рядки з однаковим оригіналом (зв’язані)</label><select id="st-link"><option value="ask" ${linkModeOf(st) === 'ask' ? 'selected' : ''}>питати, коли переклад різниться (рекомендовано)</option><option value="auto" ${linkModeOf(st) === 'auto' ? 'selected' : ''}>оновлювати самі</option><option value="off" ${linkModeOf(st) === 'off' ? 'selected' : ''}>не зв’язувати</option></select></div>
+    <p class="hint">Порожні зв’язані рядки заповнюються одразу після надсилання (цю дію можна відмінити в повідомленні). Рядок, який ви змінили пізніше, ніколи не перезаписується без вашого вибору.</p>
     <div class="grid"><label for="st-wrap">Перенесення рядків у повідомленнях гри</label><button class="btn" type="button" id="st-wrap">Налаштувати…</button></div>
     <p class="hint">Коли й за якою шириною рядки розбиваються, чи переносяться слова з дефісом, коли попереджати про четвертий рядок. Довжина тексту не обмежується: застосунок лише радить.</p>
     <details><summary>Тексти плагінів</summary><p class="hint">Частина ігор показує текст командами плагінів, а не вікнами повідомлень. ${st.pluginCommands.length ? `Зараз увімкнено: ${esc(st.pluginCommands.join(', '))}.` : 'Поки нічого не увімкнено.'}</p><div class="acts l"><button class="btn" type="button" id="st-plug">Обрати команди з текстом…</button></div></details>
@@ -125,14 +126,15 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
     if (!(v >= 5 && v <= 100)) { toast('Відсоток має бути від 5 до 100'); return false; }
     st.tolerancePct = v;
     st.blockErrors = ($('#st-block', dlg) as HTMLInputElement).checked;
-    st.propagate = ($('#st-prop', dlg) as HTMLInputElement).checked;
+    st.linkMode = ($('#st-link', dlg) as HTMLSelectElement).value as LinkMode;
+    st.propagate = st.linkMode !== 'off';
     st.who = ($('#st-who', dlg) as HTMLInputElement).value.trim() || DEFAULT_SETTINGS.who;
     ctx.s.saved.settingsAt = Date.now();
     ctx.s.who = st.who;
     ctx.persist(); ctx.render();
     return true;
   };
-  for (const id of ['#st-tol', '#st-who', '#st-block', '#st-prop']) $(id, dlg).addEventListener('change', applyGeneral);
+  for (const id of ['#st-tol', '#st-who', '#st-block', '#st-link']) $(id, dlg).addEventListener('change', applyGeneral);
   $('#st-close', dlg).addEventListener('click', () => { if (applyGeneral()) dlg.close(); });
   const addTerms = (terms: GlossaryTerm[]): { added: number; merged: number } => {
     let added = 0, merged = 0;

@@ -1,5 +1,5 @@
 import { HINT_GLYPH, HINT_LABEL, KIND_LABEL, explainCodes, sceneTitle, stepScene, byHintOrder, commentId, historyRows, openThreads, restoreNote, sourceTermHits, targetHasTerm, threadsOf, batchTitle, batchUndoLabel, undoReport, setIgnored, canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, describePage, DEFAULT_LINE_LIMIT, DEFAULT_WRAP, MV_WINDOW, autoLineLimit, flowText, isMessageUnit, linesShown, measureOf, pixelBudget, unitWord, usesPixels, widthOf, wrapMessage, wrapOf } from '../core';
-import type { WrapSettings } from '../core';
+import type { LinkMode, LinkState, WrapSettings } from '../core';
 import { pxMeasure } from '../ui/measure';
 import type { Comment, DiffSeg, Entry, GameFile } from '../core';
 import { artifactDb, describeClaude, loadClaudeConfig, saveClaudeConfig } from '../ui/claude';
@@ -51,6 +51,9 @@ export async function start(root: HTMLElement): Promise<void> {
   const act = { open: new Set<string>() };
   const gl = { q: '', en: '', uk: '', alt: '', qa: true, edit: false };
   const af = { off: new Set<string>() };
+  /** The links screen: one cluster to review (opened from the card under the translation), or null for the list of all. */
+  const lk: { scope: { file: string; key: string } | null; off: Set<string> } = { scope: null, off: new Set() };
+  const fileOf = (f: string): string => store.view(f)?.label ?? f.replace(/\.json$/, '');
   const sp = { q: '', draft: new Map<string, string>() };
   let upd: UpdateCheck | null = null;
   let updMsg = '';
@@ -97,6 +100,12 @@ export async function start(root: HTMLElement): Promise<void> {
     t.dataset.timer = String(window.setTimeout(() => leave(t), life));
   };
   const buzz = (ms = 10): void => { try { navigator.vibrate?.(ms); } catch { /* no vibrator */ } };
+  /** The message after a send: it can be taken back; the rows with the same original that were filled have their own «Скасувати», and the ones that differ are counted. */
+  const saySent = (r: ReturnType<typeof store.send>, text: string): void => {
+    const l = r.link;
+    if (l?.batch) { say(text, false, r.batch); say(`Також у ${plural(l.n, ['однаковому рядку', 'однакових рядках', 'однакових рядках'])}${l.pending ? ` · відрізняється: ${l.pending}` : ''}`, false, l.batch); }
+    else say(l?.pending ? `${text} · зв’язаних рядків відрізняється: ${l.pending}` : text, false, r.batch);
+  };
   /** A destructive button asks twice: the first tap turns it into «Точно очистити?» for 4 seconds. */
   const confirmTap = (btn: HTMLElement, label = 'Точно очистити?'): boolean => {
     if (btn.dataset.armed) { delete btn.dataset.armed; btn.classList.remove('armed'); return true; }
@@ -145,7 +154,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t === 'files') return s || fq.trim() ? '•' : '';
     return s ? '•' : '';
   }
-  const SUB_TITLE: Record<Sub, string> = { scene: 'Сцена', find: 'Знайти й замінити', speakers: 'Хто говорить', settings: 'Налаштування', wrap: 'Перенесення рядків', consistency: 'Узгодженість', glossary: 'Глосарій', autofill: 'Автозаповнення', sendlog: 'Активність', search: 'Пошук скрізь' };
+  const SUB_TITLE: Record<Sub, string> = { scene: 'Сцена', find: 'Знайти й замінити', speakers: 'Хто говорить', settings: 'Налаштування', wrap: 'Перенесення рядків', consistency: 'Зв’язані рядки', glossary: 'Глосарій', autofill: 'Автозаповнення', sendlog: 'Активність', search: 'Пошук скрізь' };
 
   /* ---------- widgets ---------- */
   let wTimer = 0;
@@ -159,13 +168,13 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!store.view(file) || !store.unit(file, key)) return 'Рядка вже немає';
     store.open(file, key); sheet = false; menu = false; sub = null; tab = 'edit'; render();
     if (action === 'keyboard') setTimeout(() => { const t = document.getElementById('m-tr') as HTMLTextAreaElement | null; if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } }, 250);
-    if (action === 'send') { const r = store.send(); render(); if (r.why) { say(r.why, true); return r.why; } say('Надіслано', false, r.batch); return 'ok'; }
+    if (action === 'send') { const r = store.send(); render(); if (r.why) { say(r.why, true); return r.why; } saySent(r, 'Надіслано'); return 'ok'; }
     return 'ok';
   }
 
   /* ---------- chrome ---------- */
   /** The tools (find and replace, speakers, activity, glossary, autofill, consistency, settings): one menu pinned to the top bar of every screen. */
-  const TOOLS: [Sub, string, string][] = [['find', 'Знайти й замінити', 'sync'], ['speakers', 'Хто говорить', 'rows'], ['sendlog', 'Активність', 'send'], ['search', 'Пошук скрізь', 'search'], ['glossary', 'Глосарій', 'book'], ['autofill', 'Автозаповнення', 'edit'], ['consistency', 'Узгодженість', 'check'], ['wrap', 'Перенесення рядків', 'rows'], ['settings', 'Налаштування', 'more']];
+  const TOOLS: [Sub, string, string][] = [['find', 'Знайти й замінити', 'sync'], ['speakers', 'Хто говорить', 'rows'], ['sendlog', 'Активність', 'send'], ['search', 'Пошук скрізь', 'search'], ['glossary', 'Глосарій', 'book'], ['autofill', 'Автозаповнення', 'edit'], ['consistency', 'Зв’язані рядки', 'check'], ['wrap', 'Перенесення рядків', 'rows'], ['settings', 'Налаштування', 'more']];
   function toolsBtn(): string {
     if (sub || !store.hasGame) return '';
     return `<button class="m-hdr ${menu ? 'on' : ''}" data-menu aria-pressed="${menu}" aria-label="Інструменти" aria-expanded="${menu}">${icon('down')}<span class="m-hdr-t">Інструменти</span></button>`;
@@ -484,10 +493,44 @@ export async function start(root: HTMLElement): Promise<void> {
       ${list.map(a => `<div class="m-af2"><b>${esc(a.source)}</b>${a.blockers.map(b => (b.reason === 'ambiguous' ? amb(b.word, b.variants) : unk(b.word))).join('')}</div>`).join('')}`;
   }
 
+  const LINK_LABEL: Record<LinkState, string> = { main: 'еталон', same: 'такий самий', empty: 'без перекладу', differs: 'інший', edited: 'змінено пізніше', unlinked: 'відв’язано', draft: 'чернетка' };
+  /** The tool «Зв’язані рядки»: rows with the same original that do not agree (or one cluster, from the card in the editor). */
   function screenConsistency(): string {
-    const groups = store.inconsistent();
-    if (!groups.length) return '<div class="m-more"><p class="m-none">Однакові оригінали перекладено однаково</p></div>';
-    return `<div class="m-more"><p class="m-hint">Один оригінал перекладено по-різному. Оберіть варіант, і він з’явиться в усіх рядках.</p>${groups.map((g, gi) => `<section class="m-card"><b>${esc(g.source.slice(0, 120))}</b>${g.variants.map((v, vi) => `<div class="m-var"><span>${esc(v.target.slice(0, 160))}</span><small>${plural(v.where.length, ['рядок', 'рядки', 'рядків'])}</small><button class="m-mini" data-uni="${gi}|${vi}">Лишити цей</button><button class="m-mini ghost" data-hit="${esc(v.where[0]!.file)}" data-hitkey="${esc(v.where[0]!.key)}">Відкрити</button></div>`).join('')}</section>`).join('')}</div>`;
+    if (lk.scope) return screenLinkRows(lk.scope);
+    const r = store.linkClusters(60);
+    if (!r.total) return '<div class="m-more"><p class="m-none">Усе узгоджено: зв’язані рядки мають однаковий переклад</p></div>';
+    const cards = r.clusters.map((c, ci) => {
+      const first = c.view.rows[0]!;
+      const variants = c.variants.map((v, vi) => `<div class="m-var"><span>${esc(v.target.slice(0, 160))}${v.rows.some(x => x.ref === c.view.main?.ref) ? ' ★' : ''}</span><small>× ${v.rows.length}</small><button class="m-mini" data-lkkeep="${ci}|${vi}">Лишити цей</button></div>`).join('');
+      const fill = c.variants.length === 1 && c.counts.empty ? `<div class="m-var"><span>Без перекладу</span><small>${c.counts.empty}</small><button class="m-mini" data-lkfill="${ci}">Заповнити</button></div>` : '';
+      return `<section class="m-card"><b>${esc(c.text.slice(0, 120))}</b><small>${plural(c.view.rows.length, ['рядок', 'рядки', 'рядків'])}${c.counts.unlinked ? `, відв’язано ${c.counts.unlinked}` : ''}</small>${variants}${fill}<button class="m-mini ghost" data-hit="${esc(first.file)}" data-hitkey="${esc(first.key)}">Відкрити перший</button></section>`;
+    }).join('');
+    return `<div class="m-more"><p class="m-hint">Рядки з однаковим оригіналом зв’язані: їхній переклад має бути однаковим. Оберіть варіант, який лишається всюди (він стає головним), або заповніть порожні. Відв’язані рядки не чіпаються.${store.linkMode() === 'off' ? ' Зв’язування вимкнено в налаштуваннях: рядки не оновлюються самі.' : ''}</p>${r.total > r.clusters.length ? `<p class="m-hint">Показано ${r.clusters.length} з ${r.total}.</p>` : ''}${cards}</div>`;
+  }
+  /** One cluster: the rows that would take the reference, to tick and update. */
+  function screenLinkRows(sc: { file: string; key: string }): string {
+    const plan = store.linkPlan(sc.file, sc.key), back = '<button class="m-mini ghost" data-lkback>Усі зв’язані рядки</button>';
+    if (!plan?.view.reference) return `<div class="m-more"><p class="m-none">Для цих рядків немає чого поширювати: жоден не надіслано</p>${back}</div>`;
+    const items = [...plan.fills, ...plan.updates, ...plan.edited];
+    if (!items.length) return `<div class="m-more"><p class="m-none">Зв’язані рядки вже однакові</p>${back}</div>`;
+    const ref = plan.view.reference, n = items.filter(r => !lk.off.has(r.ref)).length;
+    return `<div class="m-more"><section class="m-card"><b>${esc(plan.view.text.slice(0, 120))}</b><small>Еталон${plan.view.main ? ' (головний, який ви обрали)' : ' (надіслано останнім)'}: ${esc(ref.target.slice(0, 160))} · ${esc(fileOf(ref.file))}</small></section>
+      <p class="m-hint">Вибрано ${n} з ${items.length}.${plan.edited.length ? ' Рядки, змінені пізніше за еталон, не позначені.' : ''}</p>
+      ${items.map((r, i) => `<label class="m-check m-opt"><input type="checkbox" data-lkpick="${i}" ${lk.off.has(r.ref) ? '' : 'checked'}><span>${esc(fileOf(r.file))} · ${LINK_LABEL[r.state]}${r.status === 'appr' ? ' · вичитано (стане «надіслано»)' : ''}<small class="m-hint">${esc(r.target.slice(0, 120)) || '—'} → ${esc(ref.target.slice(0, 120))}</small></span></label>`).join('')}
+      <button class="m-primary wide" data-lkgo ${n ? '' : 'disabled'}>Оновити вибрані</button>${back}</div>`;
+  }
+  /** The card under the translation: the rows that share the original and what the translator can do with them. */
+  function linksCard(c: NonNullable<typeof store.current>): string {
+    const v = store.linkView(c.file, c.unit.key);
+    if (!v) return '';
+    const plan = store.linkPlan(c.file, c.unit.key), todo = plan ? plan.fills.length + plan.updates.length + plan.edited.length : 0;
+    const ordered = [v.self, ...v.rows.filter(x => x !== v.self)].slice(0, 6);
+    const rows = ordered.map(r => {
+      const i = v.rows.indexOf(r), self = r === v.self, isMain = v.main?.ref === r.ref;
+      return `<div class="m-lkrow${self ? ' me' : ''}"><span class="m-lks lk-${r.state}">${isMain ? 'головний ★' : LINK_LABEL[r.state]}</span><small>${self ? 'цей рядок' : esc(fileOf(r.file))}</small>${r.target.trim() ? `<span class="m-lkt">${esc(r.target.slice(0, 100))}</span>` : ''}<span class="m-lka">${self ? '' : `<button class="m-mini ghost" data-lkopen="${i}">Відкрити</button>`}${r.state === 'unlinked' ? `<button class="m-mini ghost" data-lkrelink="${i}">Зв’язати</button>` : `<button class="m-mini ghost" data-lkunlink="${i}">Відв’язати</button>`}${self && r.target.trim() ? (isMain ? `<button class="m-mini ghost" data-lkclear="${i}">Скинути головний</button>` : `<button class="m-mini ghost" data-lkmain="${i}">Зробити головним</button>`) : ''}</span></div>`;
+    }).join('');
+    const more = v.rows.length > 6 ? `<small class="m-hint">І ще ${v.rows.length - 6}</small>` : '';
+    return `<section class="m-card" id="m-lk"><h3>Зв’язані рядки<span class="m-count">${v.rows.length - 1}</span></h3>${store.linkMode() === 'off' ? '<small class="m-hint">Зв’язування вимкнено в налаштуваннях</small>' : ''}${rows}${more}${todo && plan?.view.reference ? `<button class="m-secondary wide" data-lkreview>Оновити зв’язані (${todo})</button>` : ''}</section>`;
   }
 
   /** The tool «Перенесення рядків»: the same choices as on the computer, applied as they change. */
@@ -575,7 +618,7 @@ export async function start(root: HTMLElement): Promise<void> {
     return `<div class="m-more"><section class="m-card"><label class="m-lbl" for="s-tol">Допуск довжини перекладу відносно оригіналу, %</label><input id="s-tol" class="m-input" type="number" min="5" max="100" step="5" value="${st.tolerancePct}">
       <button class="m-secondary wide" data-sub="wrap">${icon('rows')}<span>Перенесення рядків…</span></button>
       <label class="m-check"><input type="checkbox" id="s-block" ${st.blockErrors ? 'checked' : ''}> Не надсилати рядок із помилкою QA</label>
-      <label class="m-check"><input type="checkbox" id="s-prop" ${st.propagate ? 'checked' : ''}> Переносити переклад в однакові рядки</label>
+      <label class="m-lbl" for="s-link">Рядки з однаковим оригіналом (зв’язані)</label><select id="s-link" class="m-input"><option value="ask" ${store.linkMode() === 'ask' ? 'selected' : ''}>питати, коли переклад різниться (рекомендовано)</option><option value="auto" ${store.linkMode() === 'auto' ? 'selected' : ''}>оновлювати самі</option><option value="off" ${store.linkMode() === 'off' ? 'selected' : ''}>не зв’язувати</option></select>
       <label class="m-lbl" for="s-who">Ваше ім’я в коментарях та історії</label><input id="s-who" class="m-input" value="${esc(st.who)}" maxlength="40" autocomplete="off"></section>
       <section class="m-card"><h3>Довідкові мови</h3><p class="m-hint">Копія тієї ж гри іншою мовою: її рядки показуються під оригіналом як підказка.</p>
         ${store.refLangs().map(l => `<div class="m-var"><span>${esc(l.toUpperCase())}</span><small></small><button class="m-mini ghost" data-refdel="${esc(l)}">Прибрати</button></div>`).join('')}
@@ -626,6 +669,7 @@ export async function start(root: HTMLElement): Promise<void> {
         <div id="m-issues" class="m-issues">${issuesHtml()}</div>
       </section>
       <div id="m-prev" class="m-prev"></div>
+      ${linksCard(c)}
     </div>
     <div class="m-actions" id="m-actions"><div class="m-act2"><button class="m-mini" data-sub="scene">${icon('rows')} Сцена</button>${c.entry?.status === 'appr' ? '' : `<button class="m-mini" data-approve>${icon('check')} Вичитати</button>`}${c.entry?.status === 'done' || c.entry?.status === 'appr' ? `<button class="m-mini" data-rework title="Повернути на доопрацювання">${icon('undo')} Повернути</button>` : ''}<button class="m-mini danger" data-clear>Очистити</button></div><div class="m-act1"><button class="m-ic" data-step="-1" aria-label="Попередній рядок" ${store.neighbour(-1) ? '' : 'disabled'}>${icon('prev')}</button><button class="m-ic" data-step="1" aria-label="Наступний рядок" ${store.neighbour(1) ? '' : 'disabled'}>${icon('next')}</button><button class="m-primary" data-send>${icon('send')}<span>Надіслати</span></button></div></div>`;
   }
@@ -740,7 +784,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const wrap = $('m-sheet'); wrap.hidden = !sheet && !menu;
     if (menu) {
       wrap.dataset.open = '';
-      const badge: Partial<Record<Sub, number>> = { autofill: store.autofill().length, consistency: store.inconsistent().length, sendlog: store.sends().length + store.autos().length + store.journal().length };
+      const badge: Partial<Record<Sub, number>> = { autofill: store.autofill().length, consistency: store.linkTodo(), sendlog: store.sends().length + store.autos().length + store.journal().length };
       const short: Partial<Record<Sub, string>> = { find: 'Заміна', search: 'Пошук', autofill: 'Авто', speakers: 'Мовці', wrap: 'Перенос' };
       const item = (k: Sub): string => { const [, l, ic] = TOOLS.find(t => t[0] === k)!; return `<button class="m-mi" data-sub="${k}">${icon(ic)}<span>${short[k] ?? l}</span>${badge[k] ? `<i>${badge[k]! > 99 ? '99+' : badge[k]}</i>` : ''}</button>`; };
       wrap.innerHTML = `<div class="m-scrim" data-close></div><nav class="m-menu" aria-label="Інструменти"><span class="m-grab" aria-hidden="true"></span><div class="m-mgrid">${(['find', 'search', 'autofill', 'consistency', 'speakers', 'glossary', 'wrap', 'sendlog'] as Sub[]).map(item).join('')}</div>
@@ -927,7 +971,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const q = <T extends HTMLElement>(sel: string): T | null => t.closest<T>(sel);
     let x: HTMLElement | null;
     if ((x = q('[data-go]'))) { if (x.closest('#m-nav')) switchTab(x.dataset.go as Tab); else go(x.dataset.go as Tab); return; }
-    if ((x = q('[data-sub]'))) { sub = x.dataset.sub as Sub; if (sub === 'scene' && store.current) scn.picked = store.current.unit.key; sheet = false; menu = false; render(); $('m-main').scrollTop = 0; return; }
+    if ((x = q('[data-sub]'))) { sub = x.dataset.sub as Sub; if (sub === 'consistency') lk.scope = null; if (sub === 'scene' && store.current) scn.picked = store.current.unit.key; sheet = false; menu = false; render(); $('m-main').scrollTop = 0; return; }
     if (q('[data-subback]')) { sub = null; render(); return; }
     if ((x = q('[data-layout]'))) { layout = x.dataset.layout as 'cards' | 'table'; try { localStorage.setItem('transly-m-layout', layout); } catch { /* private mode */ } render(); return; }
     if ((x = q('[data-cell]'))) { editCell(x); return; }
@@ -954,7 +998,16 @@ export async function start(root: HTMLElement): Promise<void> {
     if ((x = q('[data-scstep]'))) { stepSceneBy(Number(x.dataset.scstep) as 1 | -1); return; }
     if (q('[data-dofind]')) { fr.matches = store.find({ find: fr.find, replace: fr.replace, caseSensitive: fr.cs, wholeWord: fr.word }); if (!fr.find) say('Вкажіть, що шукати', true); else if (!fr.matches.length) say('Нічого не знайдено'); render(); return; }
     if (q('[data-doreplace]')) { const r = store.replaceAll(fr.matches); fr.matches = []; say(`Замінено в рядках: ${r.n}`, false, r.batch); buzz(14); render(); return; }
-    if ((x = q('[data-uni]'))) { const [gi, vi] = x.dataset.uni!.split('|').map(Number); const g = store.inconsistent()[gi!]; const v = g?.variants[vi!]; if (g && v) { const r = store.unify(g.source, v.target); say(`Уніфіковано рядків: ${r.n}`, false, r.batch); buzz(14); } render(); return; }
+    if ((x = q('[data-lkkeep]'))) { const [ci, vi] = x.dataset.lkkeep!.split('|').map(Number); const c = store.linkClusters(60).clusters[ci!]; const v = c?.variants[vi!]; if (c && v) { const f = c.view.rows[0]!; const r = store.keepVariant(f.file, f.key, v.rows[0]!); say(r.n ? `Узгоджено рядків: ${r.n}` : 'Головний переклад обрано', false, r.batch); buzz(14); } render(); return; }
+    if ((x = q('[data-lkfill]'))) { const c = store.linkClusters(60).clusters[Number(x.dataset.lkfill)]; if (c) { const f = c.view.rows[0]!; const r = store.fillLinked(f.file, f.key); say(`Заповнено рядків: ${r.n}`, false, r.batch); buzz(14); } render(); return; }
+    if ((x = q('[data-lkopen]'))) { const c = store.current; const row = c && store.linkView(c.file, c.unit.key)?.rows[Number(x.dataset.lkopen)]; if (row) { store.open(row.file, row.key); render(); $('m-main').scrollTop = 0; } return; }
+    if ((x = q('[data-lkunlink]'))) { const c = store.current; const row = c && store.linkView(c.file, c.unit.key)?.rows[Number(x.dataset.lkunlink)]; if (row) { store.unlinkRow(row); say('Рядок відв’язано'); render(); } return; }
+    if ((x = q('[data-lkrelink]'))) { const c = store.current; const row = c && store.linkView(c.file, c.unit.key)?.rows[Number(x.dataset.lkrelink)]; if (row) { store.relinkRow(row); say('Рядок знову зв’язано'); render(); } return; }
+    if ((x = q('[data-lkmain]'))) { const c = store.current; const row = c && store.linkView(c.file, c.unit.key)?.rows[Number(x.dataset.lkmain)]; if (row) { store.setMainRow(row); const n = store.linkPlan(c!.file, c!.unit.key); const k = n ? n.fills.length + n.updates.length + n.edited.length : 0; say(k ? `Головний переклад обрано. Інших рядків: ${k}` : 'Головний переклад обрано'); render(); } return; }
+    if ((x = q('[data-lkclear]'))) { const c = store.current; const row = c && store.linkView(c.file, c.unit.key)?.rows[Number(x.dataset.lkclear)]; if (row) { store.clearMainRow(row.source); say('Головний переклад скинуто'); render(); } return; }
+    if (q('[data-lkreview]')) { const c = store.current; if (c) { const plan = store.linkPlan(c.file, c.unit.key); lk.scope = { file: c.file, key: c.unit.key }; lk.off = new Set((plan?.edited ?? []).map(r => r.ref)); sub = 'consistency'; sheet = false; menu = false; render(); $('m-main').scrollTop = 0; } return; }
+    if (q('[data-lkback]')) { lk.scope = null; render(); return; }
+    if (q('[data-lkgo]')) { const sc = lk.scope; const plan = sc && store.linkPlan(sc.file, sc.key); if (plan?.view.reference) { const items = [...plan.fills, ...plan.updates, ...plan.edited].filter(r => !lk.off.has(r.ref)); const r = store.applyLinks(plan.view.reference.target, items); say(`Оновлено зв’язані рядки: ${r.n}`, false, r.batch); buzz(14); } lk.scope = null; render(); return; }
     if (q('[data-refpick]')) { refLang = ($<HTMLInputElement>('rf-lang').value || '').trim().toLowerCase(); if (!refLang) { say('Вкажіть код мови, наприклад ru або pl', true); return; } $<HTMLInputElement>('m-reffile').click(); return; }
     if ((x = q('[data-cat]'))) { const k = x.dataset.cat!; if (collapsedCats.has(k)) collapsedCats.delete(k); else collapsedCats.add(k); try { localStorage.setItem('transly-m-cats', JSON.stringify([...collapsedCats])); } catch { /* private mode */ } const l = document.getElementById('m-flist'); if (l) l.innerHTML = filesList(); return; }
     if (q('[data-termfile]')) { $<HTMLInputElement>('m-termfile').click(); return; }
@@ -1053,7 +1106,7 @@ export async function start(root: HTMLElement): Promise<void> {
       if (r.why) { say(/^Є помилка QA/.test(r.why) ? 'Є помилка QA: виправте її під полем' : r.why, true); buzz(30); document.getElementById('m-issues')?.scrollIntoView({ block: 'nearest' }); return; }
       buzz(14);
       const next = store.neighbour(1);
-      if (next) { store.select(next.key); say('Надіслано', false, r.batch); render(); $('m-main').scrollTop = 0; } else { say('Це був останній рядок у списку', false, r.batch); render(); }
+      if (next) { store.select(next.key); saySent(r, 'Надіслано'); render(); $('m-main').scrollTop = 0; } else { saySent(r, 'Це був останній рядок у списку'); render(); }
       return;
     }
     if (q('[data-copy]')) { const c = store.current; if (c) { ($('m-tr') as HTMLTextAreaElement).value = c.unit.source; store.write(c.unit.source); refreshMeta(); autosize(); } return; }
@@ -1172,10 +1225,12 @@ export async function start(root: HTMLElement): Promise<void> {
   root.addEventListener('change', e => {
     const t = e.target as HTMLElement;
     if (t.id === 'gh-auto') { const cfg = loadGithubConfig(); cfg.everyMin = (t as HTMLInputElement).checked ? 5 : 0; saveGithubConfig(cfg); say(cfg.everyMin ? 'Автосинхронізація ввімкнена' : 'Автосинхронізацію вимкнено'); if (cfg.everyMin) void autoSync('on'); return; }
+    if ((t as HTMLInputElement).dataset?.lkpick !== undefined) { const sc = lk.scope, plan = sc && store.linkPlan(sc.file, sc.key), r = plan && [...plan.fills, ...plan.updates, ...plan.edited][Number((t as HTMLInputElement).dataset.lkpick)]; if (r) { if ((t as HTMLInputElement).checked) lk.off.delete(r.ref); else lk.off.add(r.ref); const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; } return; }
     if (t.id === 'scn-real') { scn.real = (t as HTMLInputElement).checked; const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
     if (t.id === 'f-word') fr.word = (t as HTMLInputElement).checked;
     else if (t.id === 'f-case') fr.cs = (t as HTMLInputElement).checked;
-    else if (t.id === 's-block' || t.id === 's-prop') { store.saved.settings[t.id === 's-block' ? 'blockErrors' : 'propagate'] = (t as HTMLInputElement).checked; store.saved.settingsAt = Date.now(); store.persist(); }
+    else if (t.id === 's-block') { store.saved.settings.blockErrors = (t as HTMLInputElement).checked; store.saved.settingsAt = Date.now(); store.persist(); }
+    else if (t.id === 's-link') { const m = (t as HTMLSelectElement).value as LinkMode; store.saved.settings.linkMode = m; store.saved.settings.propagate = m !== 'off'; store.saved.settingsAt = Date.now(); store.persist(); }
     else if (t.id === 'w-face') { wp.face = (t as HTMLInputElement).checked; wrapPreview(); }
     else if (t.id.startsWith('w-') && t.id !== 'w-ex') applyWrapForm(true);
     else if ((t as HTMLInputElement).name?.startsWith('w-')) applyWrapForm(true);

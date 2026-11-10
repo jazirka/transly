@@ -488,3 +488,19 @@ input::placeholder,textarea::placeholder{color:#9a9ea6;opacity:1}
 .tab .x,.ph .ico,.xclr,.grp-x,.grp-add,.tc-arr,.lk,.sw{min-width:24px;min-height:24px}
 .slist .chip,.st-pill,.qa-row .fix,.qa-row .ign,.btabs .r button{min-height:24px}
 .grp-fold{min-width:24px}
+
+/* «Зв’язані рядки» in the right panel */
+.pn-sec[hidden]{display:none}
+.pn-lh{font-size:12.5px}
+.pn-lrow{display:grid;gap:4px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r2)}
+.pn-lrow.me{border-color:var(--accent)}
+.pn-lt{display:flex;justify-content:space-between;gap:8px;font-size:12px}
+.pn-ls{font-weight:600}
+.pn-ls.lk-differs,.pn-ls.lk-edited{color:var(--warn)}
+.pn-ls.lk-empty,.pn-ls.lk-unlinked,.pn-ls.lk-draft{color:var(--mute)}
+.pn-ls.lk-same,.pn-ls.lk-main{color:var(--ok)}
+.pn-lx{font-size:13px;overflow-wrap:anywhere}
+.pn-la{display:flex;flex-wrap:wrap;gap:6px}
+.pn-lb{min-height:24px;padding:2px 8px;border:1px solid var(--line);border-radius:var(--r2);background:none;color:var(--text);font:inherit;font-size:12px;cursor:pointer}
+.pn-lb:hover{background:rgba(255,255,255,.06)}
+.pn-lb:focus-visible{outline:2px solid var(--accent);outline-offset:1px}

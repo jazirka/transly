@@ -1,4 +1,4 @@
-import { edit, findReplace, inconsistencies } from '../core';
+import { edit, findReplace } from '../core';
 import type { FileView, RowChange, RowRef } from '../core';
 import { dialog } from './settings';
 import { $, esc, plural, toast } from './dom';
@@ -51,39 +51,4 @@ export function openFindReplace(ctx: Ctx, scope?: { title: string; rows: RowRef[
     toast(`Замінено: ${plural(n, ['переклад', 'переклади', 'перекладів'])}`);
   });
   run();
-}
-
-/** Originals that are translated in different ways; pick one variant and apply it everywhere. */
-export function openConsistency(ctx: Ctx): void {
-  const { s } = ctx;
-  const groups = inconsistencies(s.views, s.saved);
-  const dlg = dialog(`<form method="dialog"><h2 id="cs-t">Узгодженість перекладів</h2>
-    <p class="hint">Один і той самий оригінал перекладено по-різному. Іноді це правильно (різний контекст), іноді розбіжність. Оберіть варіант, який має бути всюди.</p>
-    <p class="sum" id="cs-sum" role="status"></p><div class="sp-list" id="cs-list"></div>
-    <div class="acts"><button class="btn" value="cancel">Закрити</button></div></form>`, 'cs-t');
-  const draw = () => {
-    $('#cs-sum', dlg).textContent = groups.length ? `Розбіжностей: ${groups.length}` : 'Розбіжностей немає: однакові оригінали перекладено однаково';
-    $('#cs-list', dlg).innerHTML = groups.slice(0, 60).map((g, gi) => `<div class="sp-row cs-row"><div class="sp-b"><b>${esc(g.source.slice(0, 120))}</b>${g.variants.map((v, vi) => `<div class="cs-v"><span>${esc(v.target.slice(0, 120))} <span class="hint">× ${v.where.length}</span></span><button class="btn" type="button" data-g="${gi}" data-v="${vi}">Лише цей варіант</button></div>`).join('')}</div></div>`).join('');
-  };
-  dlg.addEventListener('click', e => {
-    const b = (e.target as HTMLElement).closest<HTMLElement>('[data-g]');
-    if (!b) return;
-    const g = groups[Number(b.dataset.g)]!, keep = g.variants[Number(b.dataset.v)]!;
-    const changes: RowChange[] = [];
-    for (const v of g.variants) {
-      if (v === keep) continue;
-      for (const w of v.where) {
-        const u = s.views.find(x => x.name === w.file)?.units.find(x => x.key === w.key);
-        const ents = ctx.entries(w.file);
-        if (!u || !ents[w.key]) continue;
-        changes.push({ file: w.file, key: w.key, next: edit(ents[w.key]!, u, keep.target, ctx.stage(), Date.now()), text: keep.target });
-      }
-    }
-    const n = changes.length;
-    if (n) ctx.commit(changes, 'unify');
-    groups.splice(groups.indexOf(g), 1);
-    ctx.persist(); ctx.invalidateTm(); ctx.render(); draw();
-    toast(`Узгоджено: ${plural(n, ['рядок', 'рядки', 'рядків'])}`);
-  });
-  draw();
 }

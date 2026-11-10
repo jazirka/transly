@@ -3,6 +3,7 @@ import type { BatchKind, Entry, Unit } from '../core';
 import { $, esc, toast } from './dom';
 import { namesOfRow, realOf, tmListHtml } from './hintcards';
 import { renderHistory } from './history-panel';
+import { linksClick, linksHtml } from './links-panel';
 import { STATUS_CAP, shownStatus } from './state';
 import { undoToast } from './undo-toast';
 import type { Ctx } from './state';
@@ -21,6 +22,7 @@ const sec = (id: string, title: string, body: string, extra = ''): string => `<s
 export const ROW_PANEL_HTML = ['<div class="pn-empty-all hint">Оберіть рядок</div>',
   sec('tr', 'Переклад: українська', '<div class="pn-b" id="pn-tr"></div>'),
   sec('sg', 'Пропозиції', '<div class="pn-b" id="pn-sg"></div>'),
+  sec('lk', 'Зв’язані рядки', '<div class="pn-b" id="pn-lk"></div>'),
   sec('tm', 'Терміни й назви з гри', '<div class="pn-b" id="pn-tm"></div>'),
   sec('cm', 'Обговорення', `<div class="pn-b" id="pn-cm"><div id="cm-list" class="cm-list"></div>
     <div class="cm-new"><textarea class="cmin" id="cm-in" placeholder="Нове обговорення цього рядка…" aria-label="Новий коментар"></textarea>
@@ -84,9 +86,7 @@ function termsHtml(ctx: Ctx, u: Unit, target: string): string {
 function proposalsHtml(ctx: Ctx, u: Unit, target: string): string {
   const r = realOf(ctx, u);
   const tm = tmListHtml(ctx, u, target);
-  const same = ctx.dups().others(r.file, r.key).length;
-  const sameBtn = same ? `<button type="button" class="pn-row" data-hc="ctx" data-hk="same"><span class="pn-eq" aria-hidden="true">=</span>Однаковий оригінал: ${same} ${same === 1 ? 'рядок' : 'рядків'} <span aria-hidden="true">▾</span></button>` : '';
-  return tm + sameBtn || '<div class="hint">Збігів немає</div>';
+  return tm || '<div class="hint">Збігів немає</div>';
 }
 
 /** Fill the panel for the open row. */
@@ -103,6 +103,9 @@ export function renderRowPanel(ctx: Ctx, u: Unit | undefined, e: Entry | undefin
   const target = e?.target ?? '';
   $('#pn-tr').innerHTML = `${versionCard(ctx, u, e)}<div class="pn-sub">Попередні версії</div><div class="hist" id="hist-list"></div>`;
   $('#pn-sg').innerHTML = proposalsHtml(ctx, u, target);
+  const lk = linksHtml(ctx, u);
+  $('#pn-lk').innerHTML = lk;
+  document.querySelector<HTMLElement>('.pn-sec[data-sec="lk"]')!.hidden = !lk;
   $('#pn-tm').innerHTML = termsHtml(ctx, u, target);
   const file = ctx.s.current;
   if (file) renderHistory(ctx, `${file}|${u.key}`, e);
@@ -123,6 +126,7 @@ function approve(ctx: Ctx, u: Unit): void {
 
 /** Clicks in the panel's own parts. `setText` writes a text into the row as one change (see `focus.ts`). */
 export function rowPanelClick(ctx: Ctx, t: HTMLElement, setText: (u: Unit, text: string, what: string, kind?: BatchKind) => string | undefined): boolean {
+  if (linksClick(ctx, t)) return true;
   const h = t.closest<HTMLElement>('[data-pn]');
   if (h) { const id = h.dataset.pn!; if (folded.has(id)) folded.delete(id); else folded.add(id); ctx.render(); return true; }
   const a = t.closest<HTMLElement>('[data-pa]');

@@ -161,7 +161,7 @@ function factCard(ctx: Ctx, which: string): string {
   }
   if (which === 'db') return `<div class="tc-row"><span class="tc-lang">БАЗА</span><div class="tc-main"><b>Примітка розробників у базі</b><div class="tc-note"><code>${esc(u.dbNote ?? '')}</code></div></div></div>`;
   if (which === 'same') {
-    const rows = ctx.dups().others(r.file, r.key);
+    const rows = ctx.links().clusterOf(r.file, r.key)?.rows.filter(x => !(x.file === r.file && x.key === r.key)) ?? [];
     return `<div class="tc-row"><span class="tc-lang">=</span><div class="tc-main"><b>Однаковий оригінал: ${plural(rows.length, ['рядок', 'рядки', 'рядків'])}</b><div class="tc-same">${rows.slice(0, 10).map(x => { const t = ctx.entries(x.file)[x.key]?.target; return `<button type="button" class="tc-s" data-hca="goto" data-file="${esc(x.file)}" data-key="${esc(x.key)}"><span>${t ? esc(oneLine(t, 60)) : '<i>ще не перекладено</i>'}</span><small>${esc(x.file.replace(/\.json$/, ''))} · ${esc(x.key.replace(/^.*\.list/, 'list'))}</small></button>`; }).join('')}${rows.length > 10 ? `<div class="tc-note">Показано 10 із ${rows.length}.</div>` : ''}</div></div></div>`;
   }
   return '';
@@ -214,7 +214,7 @@ export function chipsHtml(ctx: Ctx, u: Unit): string {
   const first = sc ? sceneAt(sc, r.key)?.units[0] : undefined;
   const uk = usageKey(r.file, r.key);
   const used = uk ? ctx.usage().get(uk) ?? [] : [];
-  const same = ctx.dups().others(r.file, r.key).length;
+  const same = ctx.links().others(r.file, r.key);
   const st = (t: string, title: string): string => `<span class="cc" title="${esc(title)}">${esc(t)}</span>`;
   const act = (which: string, t: string, title: string, warn = false): string => `<button type="button" class="cc act ${warn ? 'warn' : ''}" data-hc="ctx" data-hk="${which}" title="${esc(title)}">${esc(t)} <span aria-hidden="true">▾</span></button>`;
   // What the row is (plain words) and what can be opened (buttons); the header puts a divider before each group.
@@ -229,7 +229,7 @@ export function chipsHtml(ctx: Ctx, u: Unit): string {
     first?.page ? act('cond', 'умови сторінки', 'Коли показується ця сцена') : '',
     used.length ? act('used', 'де видається', 'Де гравець це отримує') : '',
     u.dbNote ? act('db', 'примітка в базі', 'Примітка розробників у базі даних') : '',
-    same ? act('same', `однакових: ${same}`, 'Інші рядки з тим самим оригіналом', true) : '',
+    same ? act('same', `зв’язано: ${same}`, 'Інші рядки з тим самим оригіналом (докладніше в правій панелі)', true) : '',
   ].filter(Boolean);
   const sep = '<span class="fsep" aria-hidden="true"></span>';
   return (meta.length ? sep + meta.join('<span class="fdot" aria-hidden="true"></span>') : '') + (acts.length ? sep + acts.join('') : '');

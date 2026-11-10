@@ -1,5 +1,5 @@
-import { GROUP_COLORS, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines, approveEntry, sendBack, threadsOf, rowsOfGroup, flowText, wrapMessage, wrapOf } from '../core';
-import type { QaOptions, WrapPlan } from '../core';
+import { GROUP_COLORS, LinkIndex, afterSend, clearMain, linkChanges, linkModeOf, linkView, planLinkSync, relinkRow, reviewClusters, setMain, unlinkRow, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines, approveEntry, sendBack, threadsOf, rowsOfGroup, flowText, wrapMessage, wrapOf } from '../core';
+import type { LinkRowView, QaOptions, WrapPlan } from '../core';
 import { pxMeasure } from '../ui/measure';
 import type { BatchKind, Group, Entry, GlossaryTerm, RowChange, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
 import { IdbStore } from '../ui/idb';
@@ -41,14 +41,13 @@ export class Store {
   q = '';
   /** Translate pass or review pass. */
   stage: Stage = 'translate';
-  /** How many identical rows the last send filled in too. */
-  lastSame = 0;
   saveOk = true;
   savedAt: number | null = null;
   private autosave: Autosave;
   private listeners = new Set<() => void>();
   private tmCache: TmIndex | null = null;
-  private dupCache: { views: FileView[]; idx: DupIndex } | null = null;
+  private linkCache: { views: FileView[]; idx: LinkIndex } | null = null;
+  private linkTodoCache: number | null = null;
 
   private constructor(private idb: IdbStore, saved: SavedProject) {
     this.saved = saved;
@@ -66,7 +65,7 @@ export class Store {
   }
 
   onChange(fn: () => void): void { this.listeners.add(fn); }
-  private emit(): void { for (const f of this.listeners) f(); }
+  private emit(): void { this.linkTodoCache = null; for (const f of this.listeners) f(); }
   persist(): void { this.autosave.queue(this.saved); }
   flush(): Promise<void> { return this.autosave.flush(); }
   get who(): string { return this.saved.settings.who; }
@@ -124,7 +123,8 @@ export class Store {
     }
     return out;
   }
-  private dups(): DupIndex { if (!this.dupCache || this.dupCache.views !== this.views) this.dupCache = { views: this.views, idx: new DupIndex(this.views) }; return this.dupCache.idx; }
+  /** The rows that share an original (linked rows), by the files that are loaded. */
+  links(): LinkIndex { if (!this.linkCache || this.linkCache.views !== this.views) this.linkCache = { views: this.views, idx: new LinkIndex(this.views) }; return this.linkCache.idx; }
 
   /** Rows of the open file after the filter, the search and the sort. */
   rows(): Unit[] {
@@ -199,15 +199,21 @@ export class Store {
     this.entries(file)[key] = edit(this.entry(file, key), u, text, this.stage, Date.now());
     this.tmCache = null; this.persist();
   }
-  /** Send the open row. Refused with a reason (`why`), or done as an action of the journal (`batch`) that can be taken back. */
-  send(): { why?: string; batch?: string } {
+  /**
+   * Send the open row. Refused with a reason (`why`), or done as an action of the journal (`batch`) that can be taken back.
+   * `link` tells what the mode of the project did with the rows that have the same original: the empty ones were filled
+   * (its own action `link.batch`), `link.pending` rows differ and wait for a look.
+   */
+  send(): { why?: string; batch?: string; link?: { batch?: string; n: number; pending: number } } {
     const c = this.current; if (!c) return { why: 'Рядок не вибрано' };
     const r = submit(c.entry, c.unit, this.stage, Date.now(), { blockErrors: this.saved.settings.blockErrors, qa: this.qaOpts() });
     if (!r.ok) return { why: r.reason };
     const now = Date.now();
     const batch = this.commit([{ file: c.file, key: c.unit.key, next: r.entry, text: r.entry.target }], 'send', 'надіслано');
-    this.lastSame = this.saved.settings.propagate ? propagate(this.saved, this.dups(), c.file, c.unit, this.entries(c.file)[c.unit.key]!, this.stage, now, this.who, newBatch(this.stage === 'translate' ? 'twin' : 'approve', now)) : 0;
-    this.tmCache = null; this.persist(); this.emit(); return { batch };
+    const sync = afterSend(this.saved, this.links(), linkModeOf(this.saved.settings), c.file, c.unit.key, now);
+    const lb = sync.changes.length ? this.commit(sync.changes, 'link') : undefined;
+    this.tmCache = null; this.persist(); this.emit();
+    return { batch, ...(lb || sync.pending ? { link: { ...(lb ? { batch: lb } : {}), n: sync.changes.length, pending: sync.pending } } : {}) };
   }
   /** Approve the open row: a draft is sent first, so the history says both. */
   approve(): { why?: string; batch?: string } {
@@ -418,23 +424,39 @@ export class Store {
     if (batch) { this.tmCache = null; this.persist(); this.emit(); }
     return { n: changes.length, batch };
   }
-  /** The same original translated in different ways. */
-  inconsistent(): ReturnType<typeof inconsistencies> { return inconsistencies(this.views, this.saved, 60); }
-  /** Give every row of one original the chosen translation; returns how many rows changed. */
-  unify(source: string, target: string): { n: number; batch?: string } {
-    const g = this.inconsistent().find(x => x.source === source); if (!g) return { n: 0 };
-    const now = Date.now(), changes: RowChange[] = [];
-    for (const v of g.variants) {
-      if (v.target === target) continue;
-      for (const w of v.where) {
-        const u = this.unit(w.file, w.key); if (!u) continue;
-        changes.push({ file: w.file, key: w.key, next: edit(this.entry(w.file, w.key), u, target, this.stage, now), text: target });
-      }
-    }
-    const batch = changes.length ? this.commit(changes, 'unify') : undefined;
-    if (batch) { this.tmCache = null; this.persist(); this.emit(); }
+  /** The mode of the project for rows with the same original. */
+  linkMode(): ReturnType<typeof linkModeOf> { return linkModeOf(this.saved.settings); }
+  /** The cluster of rows that share the original of this row, with the state of each, or null. */
+  linkView(file: string, key: string): ReturnType<typeof linkView> { return linkView(this.saved, this.links(), file, key); }
+  linkPlan(file: string, key: string): ReturnType<typeof planLinkSync> { return planLinkSync(this.saved, this.links(), file, key); }
+  /** Clusters with rows that differ or are empty next to a translation, the biggest first. */
+  linkClusters(limit = 60): ReturnType<typeof reviewClusters> { return reviewClusters(this.saved, this.links(), limit); }
+  /** How many clusters have something to look at (for the badge of the menu; remembered until the next change). */
+  linkTodo(): number { return (this.linkTodoCache ??= reviewClusters(this.saved, this.links(), 1).total); }
+  /** Write the reference into the given rows as one action of the journal. */
+  applyLinks(reference: string, rows: LinkRowView[]): { n: number; batch?: string } {
+    const changes = linkChanges(reference, rows, Date.now());
+    if (!changes.length) return { n: 0 };
+    const batch = this.commit(changes, 'link');
+    this.tmCache = null; this.persist(); this.emit();
     return { n: changes.length, batch };
   }
+  /** Keep this variant in a cluster: its row becomes the main one and the rest (also the empty rows) take its text. */
+  keepVariant(file: string, key: string, variantRow: { file: string; key: string; source: string }): { n: number; batch?: string } {
+    setMain(this.saved, variantRow, Date.now());
+    const v = this.linkView(file, key), ref = v?.reference;
+    if (!v || !ref) { this.persist(); this.emit(); return { n: 0 }; }
+    return this.applyLinks(ref.target, v.rows.filter(r => r.state === 'empty' || r.state === 'differs' || r.state === 'edited'));
+  }
+  /** Fill the empty rows of a cluster from its reference. */
+  fillLinked(file: string, key: string): { n: number; batch?: string } {
+    const plan = this.linkPlan(file, key);
+    return plan?.view.reference ? this.applyLinks(plan.view.reference.target, plan.fills) : { n: 0 };
+  }
+  setMainRow(row: { file: string; key: string; source: string }): void { setMain(this.saved, row, Date.now()); this.persist(); this.emit(); }
+  clearMainRow(source: string): void { clearMain(this.saved, source, Date.now()); this.persist(); this.emit(); }
+  unlinkRow(row: { file: string; key: string; source: string }): void { unlinkRow(this.saved, row, Date.now()); this.persist(); this.emit(); }
+  relinkRow(row: { file: string; key: string }): void { relinkRow(this.saved, row, Date.now()); this.persist(); this.emit(); }
   setSpeakers(draft: Map<string, string>): number {
     const m = (this.saved.speakers ??= {}); let changed = 0;
     for (const [k, v] of draft) {

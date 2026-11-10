@@ -158,6 +158,19 @@ export function afterSend(saved: SavedProject, idx: LinkIndex, mode: LinkMode, f
   };
 }
 
+/** How many rows next to the given ones (in their clusters) have something to look at: empty, different or changed later. Each row is counted once. */
+export function pendingLinks(saved: SavedProject, idx: LinkIndex, rows: { file: string; key: string }[]): number {
+  const seen = new Set<string>(), done = new Set<string>();
+  for (const r of rows) {
+    const c = idx.clusterOf(r.file, r.key);
+    if (!c || done.has(c.text)) continue;
+    done.add(c.text);
+    const plan = planLinkSync(saved, idx, r.file, r.key);
+    if (plan) for (const x of [...plan.fills, ...plan.updates, ...plan.edited]) seen.add(x.ref);
+  }
+  return seen.size;
+}
+
 /* ---------- what the translator decides ---------- */
 
 const put = (saved: SavedProject, id: string, item: LinkItem): void => { (saved.links ??= {})[id] = item; };

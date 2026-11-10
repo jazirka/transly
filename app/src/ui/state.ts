@@ -1,6 +1,6 @@
 import { TmIndex, activeIssues, wrapOf } from '../core';
 import type { BatchKind, GameNameIndex, QaOptions, RowChange, Usage, WrapPlan } from '../core';
-import type { Autosave, DupIndex, UndoStack, Entry, FileView, GameFile, Group, RowRef, SavedProject, Status, Unit } from '../core';
+import type { Autosave, LinkIndex, UndoStack, Entry, FileView, GameFile, Group, RowRef, SavedProject, Status, Unit } from '../core';
 
 export type Mode = 'table' | 'edit' | 'scene';
 export type Filter = 'all' | 'new' | 'draft' | 'done' | 'appr' | 'qa' | 'cm';
@@ -98,7 +98,8 @@ export interface Ctx {
   invalidateTm(): void;
   /** The memory is a little out of date (a row was typed in): it is rebuilt on its next use, but not more than about once a second. */
   softTm(): void;
-  dups(): DupIndex;
+  /** The rows that share an original (linked rows), by the files that are loaded. */
+  links(): LinkIndex;
   persist(): void;
   /** Always the translate pass: a translation is approved with the ✓ in the right panel, not in a mode of its own. */
   /** Always `translate`: a row is sent from the editor and approved by a separate action (the old review mode is gone). */

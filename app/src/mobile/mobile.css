@@ -568,3 +568,12 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-source .th.miss{text-decoration:underline wavy #f0c477;text-underline-offset:4px}
 .m-source .code{padding-block:10px}
 .m-tcard .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+
+/* «Перенесення рядків» */
+.m-opt{align-items:flex-start;min-height:0;padding:4px 0}.m-opt small{display:block}.m-opt input{margin-top:2px;flex:none}
+.m-err{margin:0;padding:10px 14px;border-radius:var(--r2);background:rgba(247,84,100,.14);color:#ffb3bb;font-size:13px}
+.m-wview{display:grid;gap:2px;margin-top:4px;padding:10px 12px;border-radius:var(--r2);background:linear-gradient(#1b2a5a,#101a3c);border:2px solid #c8d0ee;color:#fff;font:15px/1.45 sans-serif}
+.m-wview .ln{display:flex;justify-content:space-between;gap:10px;min-height:1.45em;white-space:pre-wrap;overflow-wrap:anywhere}
+.m-wview .ln em{flex:none;font-style:normal;font-size:12px;color:#c8d0ee}
+.m-wview .ln.over{background:rgba(255,80,80,.24)}.m-wview .ln.next{opacity:.72}
+.m-wview .pg{margin:4px 0;padding-top:4px;border-top:1px dashed #c8d0ee;font-size:12px;color:#c8d0ee}

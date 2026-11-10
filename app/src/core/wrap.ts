@@ -111,6 +111,9 @@ export function autoLineLimit(views: FileView[]): number {
   return Math.min(120, Math.max(20, widths[Math.floor(widths.length * 0.95)]!));
 }
 
+/** The width in characters taken when the original gives no hint to take it from (too few hand-wrapped lines): about what fits the standard 816 px window of RPG Maker MV/MZ. */
+export const DEFAULT_LINE_LIMIT = 50;
+
 /** Limit for one unit: a message with a face picture has a narrower text area. */
 export const limitFor = (limit: number, face?: string): number => (limit && face ? Math.floor(limit * 0.8) : limit);
 
@@ -129,7 +132,7 @@ export function unwrap(text: string): string {
  */
 export interface WrapPlan {
   settings: WrapSettings;
-  /** Width in characters of a line without a face picture; 0 = the original gives no hint to take it from. */
+  /** Width in characters of a line without a face picture; 0 = the original gives no hint to take it from (`DEFAULT_LINE_LIMIT` is taken then). */
   limit: number;
   /** The translator turned the width off: nothing is wrapped and no line is called too wide. */
   disabled?: boolean;
@@ -149,7 +152,7 @@ export const usesPixels = (plan: WrapPlan): boolean => plan.settings.unit === 'p
 export function widthOf(plan: WrapPlan, unit: MessageLike): number {
   if (plan.disabled) return 0;
   if (usesPixels(plan)) return pixelBudget(!!unit.face, { ...MV_WINDOW, width: plan.settings.px.width, font: plan.settings.px.font });
-  return limitFor(plan.limit, unit.face);
+  return limitFor(plan.limit || DEFAULT_LINE_LIMIT, unit.face);
 }
 
 /** How a plan measures a piece of text: pixels through the browser's function, otherwise characters. Control codes take no room either way. */

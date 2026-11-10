@@ -69,6 +69,17 @@ describe('збірка з перенесенням рядків (режим «п
   });
 });
 
+describe('ширина, яку не вдалося визначити за оригіналом', () => {
+  it('береться типова: 50 символів, 40 з портретом; вимкнена ширина лишається вимкненою', async () => {
+    const { widthOf, DEFAULT_LINE_LIMIT } = await import('../src/core');
+    expect(DEFAULT_LINE_LIMIT).toBe(50);
+    expect(widthOf(plan({}, 0), { kind: 'dialogue' })).toBe(50);
+    expect(widthOf(plan({}, 0), { kind: 'dialogue', face: 'Actor1#0' })).toBe(40);
+    expect(widthOf({ ...plan({}, 0), disabled: true }, { kind: 'dialogue' })).toBe(0);
+    expect(widthOf(plan({}, 33), { kind: 'dialogue' })).toBe(33);
+  });
+});
+
 describe('QA: wrap і lines', () => {
   const unit = { source: 'x', kind: 'dialogue' as const, key: 'events[1].pages[0].list[0]' };
   it('у режимі «при збірці» ширина не вимагається, а число рядків так', () => {

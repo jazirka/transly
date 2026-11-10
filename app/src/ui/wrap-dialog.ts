@@ -1,4 +1,4 @@
-import { DEFAULT_WRAP, autoLineLimit, flowText, isMessageUnit, linesShown, measureOf, tooWide, unitWord, widthOf, wrapMessage, wrapOf } from '../core';
+import { DEFAULT_LINE_LIMIT, DEFAULT_WRAP, autoLineLimit, flowText, isMessageUnit, linesShown, measureOf, tooWide, unitWord, widthOf, wrapMessage, wrapOf } from '../core';
 import type { WrapSettings } from '../core';
 import { $, esc, plural, toast } from './dom';
 import { dialog } from './settings';
@@ -30,8 +30,8 @@ export function openWrapTool(ctx: Ctx, actions: { wrapFile: () => void }): void 
       ${radio('wp-mode', 'off', 'Не переносити', 'Лише попереджати про задовгі рядки; ставите розриви самі.', w0.mode === 'off')}</fieldset>
     <fieldset class="wp-fs"><legend>Ширина рядка</legend>
       <div class="grid"><label for="wp-unit">Рахувати в</label><select id="wp-unit">${opt('chars', 'символах', !pxMode)}${opt('px', 'пікселях вікна гри', pxMode)}</select></div>
-      <div class="grid" id="wp-chars"><label for="wp-lim-mode">Ширина</label><select id="wp-lim-mode">${opt('auto', `за оригіналом${auto ? ` (зараз ${auto})` : ' (не визначено)'}`, st.lineLimit === 0)}${opt('custom', 'своє число', st.lineLimit > 0)}${opt('off', 'не обмежувати', st.lineLimit < 0)}</select>
-        <label for="wp-lim">Символів у рядку</label><input id="wp-lim" type="number" min="10" max="200" value="${st.lineLimit > 0 ? st.lineLimit : auto || 50}"></div>
+      <div class="grid" id="wp-chars"><label for="wp-lim-mode">Ширина</label><select id="wp-lim-mode">${opt('auto', `за оригіналом${auto ? ` (зараз ${auto})` : ` (не визначено, діє ${DEFAULT_LINE_LIMIT})`}`, st.lineLimit === 0)}${opt('custom', 'своє число', st.lineLimit > 0)}${opt('off', 'не обмежувати', st.lineLimit < 0)}</select>
+        <label for="wp-lim">Символів у рядку</label><input id="wp-lim" type="number" min="10" max="200" value="${st.lineLimit > 0 ? st.lineLimit : auto || DEFAULT_LINE_LIMIT}"></div>
       <div class="grid" id="wp-px"><label for="wp-pxw">Ширина вікна гри, px</label><input id="wp-pxw" type="number" min="320" max="4096" value="${w0.px.width}">
         <label for="wp-pxf">Шрифт гри, px</label><input id="wp-pxf" type="number" min="10" max="96" value="${w0.px.font}">
         <label class="achk wp-span"><input type="checkbox" id="wp-pxoff" ${st.lineLimit < 0 ? 'checked' : ''}> Не обмежувати ширину</label></div>

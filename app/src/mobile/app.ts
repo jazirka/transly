@@ -1,4 +1,6 @@
-import { HINT_GLYPH, HINT_LABEL, KIND_LABEL, explainCodes, sceneTitle, stepScene, byHintOrder, commentId, historyRows, openThreads, restoreNote, sourceTermHits, targetHasTerm, threadsOf, batchTitle, batchUndoLabel, undoReport, setIgnored, canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, describePage, displayLength, flowText, limitFor } from '../core';
+import { HINT_GLYPH, HINT_LABEL, KIND_LABEL, explainCodes, sceneTitle, stepScene, byHintOrder, commentId, historyRows, openThreads, restoreNote, sourceTermHits, targetHasTerm, threadsOf, batchTitle, batchUndoLabel, undoReport, setIgnored, canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, describePage, DEFAULT_LINE_LIMIT, DEFAULT_WRAP, MV_WINDOW, autoLineLimit, flowText, isMessageUnit, linesShown, measureOf, pixelBudget, unitWord, usesPixels, widthOf, wrapMessage, wrapOf } from '../core';
+import type { WrapSettings } from '../core';
+import { pxMeasure } from '../ui/measure';
 import type { Comment, DiffSeg, Entry, GameFile } from '../core';
 import { artifactDb, describeClaude, loadClaudeConfig, saveClaudeConfig } from '../ui/claude';
 import { describeGithub, githubApi, githubConfigured, loadGithubConfig, saveGithubConfig } from '../ui/github';
@@ -27,7 +29,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const TEXTY = 'textarea, input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=range]):not([type=file])';
   let sheet = false; let sheetTab: 'terms' | 'tm' | 'cm' | 'hist' | 'dict' | null = null; let gk: 'Тлумачення' | 'Синоніми' = 'Тлумачення';
   let busy = '';
-  type Sub = 'scene' | 'find' | 'speakers' | 'settings' | 'consistency' | 'glossary' | 'autofill' | 'sendlog' | 'search';
+  type Sub = 'scene' | 'find' | 'speakers' | 'settings' | 'wrap' | 'consistency' | 'glossary' | 'autofill' | 'sendlog' | 'search';
   let sub: Sub | null = null;
   let scope: 'file' | 'all' | 'group' = 'file';
   /** The group whose rows the Rows screen shows (scope «group»), and the group whose less common actions are open. */
@@ -45,7 +47,7 @@ export async function start(root: HTMLElement): Promise<void> {
   let selecting = false; const picked = new Set<string>();
   /** Groups of files: files ticked for "into a group", the menu, groups unfolded, the group being renamed or asked about deletion. */
   let fsel = false; const fpicked = new Set<string>(); let fmenu = false; const gopen = new Set<string>(); let grename: string | null = null; let gdel: string | null = null; let gcreating = false;
-  const scn: { mode: 'both' | 'tr' | 'src'; real: boolean; picked: string; ctx: CanvasRenderingContext2D | null } = { mode: 'both', real: false, picked: '', ctx: null };
+  const scn: { mode: 'both' | 'tr' | 'src'; real: boolean; picked: string } = { mode: 'both', real: false, picked: '' };
   const act = { open: new Set<string>() };
   const gl = { q: '', en: '', uk: '', alt: '', qa: true, edit: false };
   const af = { off: new Set<string>() };
@@ -143,7 +145,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t === 'files') return s || fq.trim() ? '•' : '';
     return s ? '•' : '';
   }
-  const SUB_TITLE: Record<Sub, string> = { scene: 'Сцена', find: 'Знайти й замінити', speakers: 'Хто говорить', settings: 'Налаштування', consistency: 'Узгодженість', glossary: 'Глосарій', autofill: 'Автозаповнення', sendlog: 'Активність', search: 'Пошук скрізь' };
+  const SUB_TITLE: Record<Sub, string> = { scene: 'Сцена', find: 'Знайти й замінити', speakers: 'Хто говорить', settings: 'Налаштування', wrap: 'Перенесення рядків', consistency: 'Узгодженість', glossary: 'Глосарій', autofill: 'Автозаповнення', sendlog: 'Активність', search: 'Пошук скрізь' };
 
   /* ---------- widgets ---------- */
   let wTimer = 0;
@@ -163,7 +165,7 @@ export async function start(root: HTMLElement): Promise<void> {
 
   /* ---------- chrome ---------- */
   /** The tools (find and replace, speakers, activity, glossary, autofill, consistency, settings): one menu pinned to the top bar of every screen. */
-  const TOOLS: [Sub, string, string][] = [['find', 'Знайти й замінити', 'sync'], ['speakers', 'Хто говорить', 'rows'], ['sendlog', 'Активність', 'send'], ['search', 'Пошук скрізь', 'search'], ['glossary', 'Глосарій', 'book'], ['autofill', 'Автозаповнення', 'edit'], ['consistency', 'Узгодженість', 'check'], ['settings', 'Налаштування', 'more']];
+  const TOOLS: [Sub, string, string][] = [['find', 'Знайти й замінити', 'sync'], ['speakers', 'Хто говорить', 'rows'], ['sendlog', 'Активність', 'send'], ['search', 'Пошук скрізь', 'search'], ['glossary', 'Глосарій', 'book'], ['autofill', 'Автозаповнення', 'edit'], ['consistency', 'Узгодженість', 'check'], ['wrap', 'Перенесення рядків', 'rows'], ['settings', 'Налаштування', 'more']];
   function toolsBtn(): string {
     if (sub || !store.hasGame) return '';
     return `<button class="m-hdr ${menu ? 'on' : ''}" data-menu aria-pressed="${menu}" aria-label="Інструменти" aria-expanded="${menu}">${icon('down')}<span class="m-hdr-t">Інструменти</span></button>`;
@@ -348,14 +350,14 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!scn.picked || !around.some(u => u.key === scn.picked)) scn.picked = c.unit.key;
     const actors = store.views.find(x => x.name === 'Actors.json');
     const actorName = (n: number): string | undefined => { const u = actors?.units.find(x => x.key === `[${n}].name`); return u ? (store.saved.files['Actors.json']?.[u.key]?.target || u.source) : undefined; };
-    const limit = store.lineLimit();
-    const measure = (t: string): number => { scn.ctx ??= document.createElement('canvas').getContext('2d'); if (scn.ctx) scn.ctx.font = '28px sans-serif'; return scn.ctx?.measureText(t).width ?? t.length * 14; };
-    const plain = (l: string): string => l.replace(/\\[A-Za-z]+\[\d+\]|\\[{}.|!><^$]/g, '');
+    const plan = store.wrapPlan(), realMeasure = pxMeasure(MV_WINDOW.font), measure = measureOf(plan);
     const body = (u: (typeof v.units)[number]): { html: string; missing: boolean; over: boolean } => {
-      const tr = store.entry(v.name, u.key)?.target ?? '', missing = !tr;
-      const shown = scn.mode === 'src' || (missing && scn.mode !== 'tr') ? u.source : tr || u.source;
-      const checked = (u.kind === 'dialogue' || u.kind === 'scroll') && !missing, max = checked ? limitFor(limit, u.face) : 0;
-      const wide = (l: string): boolean => (scn.real ? measure(plain(l)) > (u.face ? 612 : 780) : !!max && displayLength(l) > max);
+      const tr = store.entry(v.name, u.key)?.target ?? '', missing = !tr, message = isMessageUnit(u);
+      // «At build» the game window gets the translation wrapped by the build: show it as the game will.
+      const asGame = message && !missing && scn.mode !== 'src' && plan.settings.mode === 'build' ? wrapMessage(plan, u, tr).text : tr;
+      const shown = scn.mode === 'src' || (missing && scn.mode !== 'tr') ? u.source : asGame || u.source;
+      const checked = message && !missing, max = checked ? widthOf(plan, u) : 0;
+      const wide = (l: string): boolean => (scn.real ? realMeasure(l) > pixelBudget(!!u.face) : !!max && measure(l) > max);
       const rows = shown.split('\n');
       return { missing, over: checked && rows.some(wide), html: rows.map(l => `<div class="scn-ln${checked && wide(l) ? ' over' : ''}">${gameHtml(l, actorName, n => store.saved.sysNames?.variables[n]) || '&nbsp;'}</div>`).join('') };
     };
@@ -488,11 +490,90 @@ export async function start(root: HTMLElement): Promise<void> {
     return `<div class="m-more"><p class="m-hint">Один оригінал перекладено по-різному. Оберіть варіант, і він з’явиться в усіх рядках.</p>${groups.map((g, gi) => `<section class="m-card"><b>${esc(g.source.slice(0, 120))}</b>${g.variants.map((v, vi) => `<div class="m-var"><span>${esc(v.target.slice(0, 160))}</span><small>${plural(v.where.length, ['рядок', 'рядки', 'рядків'])}</small><button class="m-mini" data-uni="${gi}|${vi}">Лишити цей</button><button class="m-mini ghost" data-hit="${esc(v.where[0]!.file)}" data-hitkey="${esc(v.where[0]!.key)}">Відкрити</button></div>`).join('')}</section>`).join('')}</div>`;
   }
 
+  /** The tool «Перенесення рядків»: the same choices as on the computer, applied as they change. */
+  const WRAP_SAMPLE = 'Мандрівник дістався перекладацького містечка наприкінці осені, і там на нього чекав старий друг, якого він не бачив багато років.';
+  const wp = { text: '', face: false };
+  function screenWrap(): string {
+    const st = store.saved.settings, w = wrapOf(st), auto = autoLineLimit(store.views), px = w.unit === 'px';
+    if (!wp.text) { const c = store.current; wp.text = c && isMessageUnit(c.unit) ? flowText(c.entry?.target ?? '') : ''; if (!wp.text) wp.text = WRAP_SAMPLE; }
+    const opt = (v: string, l: string, on: boolean): string => `<option value="${v}" ${on ? 'selected' : ''}>${l}</option>`;
+    const radio = (name: string, v: string, l: string, h: string, on: boolean): string => `<label class="m-check m-opt"><input type="radio" name="${name}" value="${v}" ${on ? 'checked' : ''}><span>${l}<small class="m-hint">${h}</small></span></label>`;
+    return `<div class="m-more">
+      <section class="m-card"><h3>Коли переносити</h3>
+        ${radio('w-mode', 'build', 'Під час збірки й запуску гри (рекомендовано)', 'Текст у проєкті лишається без розривів. Збірка робиться на комп’ютері; тут цей режим лише впливає на поради.', w.mode === 'build')}
+        ${radio('w-mode', 'text', 'У тексті, коли надсилаю рядок', 'Розриви стають частиною перекладу.', w.mode === 'text')}
+        ${radio('w-mode', 'off', 'Не переносити', 'Лише радити, коли рядок задовгий.', w.mode === 'off')}</section>
+      <section class="m-card"><h3>Ширина рядка</h3>
+        <label class="m-lbl" for="w-unit">Рахувати в</label><select id="w-unit" class="m-input">${opt('chars', 'символах', !px)}${opt('px', 'пікселях вікна гри', px)}</select>
+        <div ${px ? 'hidden' : ''} id="w-chars"><label class="m-lbl" for="w-lim-mode">Ширина</label><select id="w-lim-mode" class="m-input">${opt('auto', `за оригіналом${auto ? ` (зараз ${auto})` : ` (не визначено, діє ${DEFAULT_LINE_LIMIT})`}`, st.lineLimit === 0)}${opt('custom', 'своє число', st.lineLimit > 0)}${opt('off', 'не обмежувати', st.lineLimit < 0)}</select>
+          <label class="m-lbl" for="w-lim">Символів у рядку</label><input id="w-lim" class="m-input" type="number" inputmode="numeric" min="10" max="200" value="${st.lineLimit > 0 ? st.lineLimit : auto || DEFAULT_LINE_LIMIT}" ${st.lineLimit > 0 ? '' : 'disabled'}></div>
+        <div ${px ? '' : 'hidden'} id="w-px"><label class="m-lbl" for="w-pxw">Ширина вікна гри, px</label><input id="w-pxw" class="m-input" type="number" inputmode="numeric" min="320" max="4096" value="${w.px.width}">
+          <label class="m-lbl" for="w-pxf">Шрифт гри, px</label><input id="w-pxf" class="m-input" type="number" inputmode="numeric" min="10" max="96" value="${w.px.font}">
+          <label class="m-check"><input type="checkbox" id="w-pxoff" ${st.lineLimit < 0 ? 'checked' : ''}> Не обмежувати ширину</label></div>
+        <p class="m-hint">Пікселі враховують справжню ширину літер, але шрифт гри невідомий, тож вимір приблизний. Поруч із портретом текст вужчий.</p></section>
+      <section class="m-card"><h3>Переніс слів</h3>
+        <label class="m-lbl" for="w-hy">Слово по складах, з дефісом</label><select id="w-hy" class="m-input">${opt('off', 'не переносити слова', w.hyphen === 'off')}${opt('needed', 'лише коли треба (рекомендовано)', w.hyphen === 'needed')}${opt('fill', 'коли краще заповнює рядок', w.hyphen === 'fill')}</select>
+        <label class="m-lbl" for="w-hc">Знак переносу</label><input id="w-hc" class="m-input" maxlength="2" value="${esc(w.hyphenChar)}" autocomplete="off">
+        <label class="m-lbl" for="w-ml">Літер перед переносом, не менше</label><input id="w-ml" class="m-input" type="number" inputmode="numeric" min="1" max="6" value="${w.minLeft}">
+        <label class="m-lbl" for="w-mr">Літер після переносу, не менше</label><input id="w-mr" class="m-input" type="number" inputmode="numeric" min="1" max="6" value="${w.minRight}">
+        <p class="m-hint">Слова з латинкою, цифрами, кодами всередині та слова з дефісом не розбиваються.</p></section>
+      <section class="m-card"><h3>Розриви, які поставили ви</h3>
+        ${radio('w-keep', 'long', 'Зберігати, переносити лише задовгі (рекомендовано)', 'Охайно розбитий текст не чіпається.', w.keep === 'long')}
+        ${radio('w-keep', 'reflow', 'Збирати текст заново завжди', 'Старі розриви ігноруються.', w.keep === 'reflow')}
+        <label class="m-lbl" for="w-max">Радити, коли рядків у повідомленні більше, ніж (0 вимикає)</label><input id="w-max" class="m-input" type="number" inputmode="numeric" min="0" max="12" value="${w.maxLines}">
+        <p class="m-hint">Вікно показує ${w.maxLines || 4} рядки; довше повідомлення гра покаже на кількох сторінках. Нічого не обрізається.</p></section>
+      <p class="m-err" id="w-err" role="alert" hidden></p>
+      <section class="m-card"><h3>Приклад</h3>
+        <label class="m-lbl" for="w-ex">Текст для перевірки</label><textarea id="w-ex" class="m-textarea sm" rows="3" spellcheck="false">${esc(wp.text)}</textarea>
+        <label class="m-check"><input type="checkbox" id="w-face" ${wp.face ? 'checked' : ''}> Поруч портрет персонажа</label>
+        <div id="w-view" class="m-wview" aria-live="polite"></div><p class="m-hint" id="w-stat" role="status"></p></section></div>`;
+  }
+  /** What the form holds as settings, or the reason it cannot be saved yet. */
+  function readWrapForm(): { wrap: WrapSettings; lineLimit: number } | string {
+    const v = (id: string): string => ($(id) as HTMLInputElement | HTMLSelectElement).value, n = (id: string): number => Number(v(id));
+    const ok = (x: number, lo: number, hi: number): boolean => Number.isFinite(x) && x >= lo && x <= hi;
+    const checked = (name: string): string => document.querySelector<HTMLInputElement>(`input[name="${name}"]:checked`)?.value ?? '';
+    const st = store.saved.settings, w0 = wrapOf(st), unit = v('w-unit') === 'px' ? 'px' : 'chars';
+    let lineLimit = 0;
+    if (unit === 'px') {
+      if (!ok(n('w-pxw'), 320, 4096)) return 'Ширина вікна: від 320 до 4096 пікселів';
+      if (!ok(n('w-pxf'), 10, 96)) return 'Шрифт: від 10 до 96 пікселів';
+      lineLimit = ($('w-pxoff') as HTMLInputElement).checked ? -1 : st.lineLimit < 0 ? 0 : st.lineLimit;
+    } else {
+      const m = v('w-lim-mode');
+      if (m === 'custom' && !ok(n('w-lim'), 10, 200)) return 'Ширина рядка: від 10 до 200 символів';
+      lineLimit = m === 'off' ? -1 : m === 'custom' ? Math.round(n('w-lim')) : 0;
+    }
+    if ([...v('w-hc')].length !== 1 || /\s/.test(v('w-hc'))) return 'Знак переносу це один видимий символ';
+    if (!ok(n('w-ml'), 1, 6) || !ok(n('w-mr'), 1, 6)) return 'Літер при переносі: від 1 до 6';
+    if (!ok(n('w-max'), 0, 12)) return 'Кількість рядків: від 0 до 12';
+    return { lineLimit, wrap: { ...DEFAULT_WRAP, mode: checked('w-mode') as WrapSettings['mode'], unit, hyphen: v('w-hy') as WrapSettings['hyphen'], hyphenChar: v('w-hc'), minLeft: n('w-ml'), minRight: n('w-mr'), keep: checked('w-keep') as WrapSettings['keep'], maxLines: n('w-max'), px: { width: unit === 'px' ? n('w-pxw') : w0.px.width, font: unit === 'px' ? n('w-pxf') : w0.px.font } } };
+  }
+  /** The example under the form: the text as the window will show it. */
+  function wrapPreview(): void {
+    const view = document.getElementById('w-view'); if (!view) return;
+    const plan = store.wrapPlan(), unit = { kind: 'dialogue' as const, key: 'events[0].pages[0].list[0]', ...(wp.face ? { face: 'Actor1#0' } : {}) };
+    const width = widthOf(plan, unit), measure = measureOf(plan), mode = plan.settings.mode;
+    const r = mode === 'off' || width <= 0 ? null : wrapMessage(plan, unit, wp.text);
+    const lines = (r ? r.text : wp.text).split('\n'), max = plan.settings.maxLines;
+    view.innerHTML = wp.text.trim() ? lines.map((l, i) => { const m = Math.round(measure(l)), over = width > 0 && m > width; return `${max > 0 && i === max ? '<div class="pg">Далі: наступна сторінка вікна</div>' : ''}<div class="ln${over ? ' over' : ''}${max > 0 && i >= max ? ' next' : ''}"><span>${esc(l) || '&nbsp;'}</span>${width > 0 ? `<em>${m}/${width}</em>` : ''}</div>`; }).join('') : '<div class="m-hint">Немає тексту</div>';
+    const n = linesShown(plan, unit, wp.text);
+    $('w-stat').textContent = [mode === 'build' ? 'Так гра покаже цей текст; у проєкті він лишається без розривів.' : mode === 'text' ? 'Так текст запишеться, коли ви надішлете рядок.' : 'Переносу немає: текст як написаний.', `Рядків: ${n}`, r?.hyphenated ? `слів із переносом: ${r.hyphenated}` : '', max > 0 && n > max ? `понад ${max}: гра покаже на кількох сторінках` : '', width > 0 ? `ширина до ${width} ${unitWord(plan)}` : 'ширину вимкнено'].filter(Boolean).join(' · ') + '.';
+  }
+  /** Save the form (when it is valid) and redraw the example; `final` also redraws the screen, e.g. after the unit changed. */
+  function applyWrapForm(final: boolean): void {
+    const r = readWrapForm(), err = $('w-err');
+    err.hidden = typeof r !== 'string'; err.textContent = typeof r === 'string' ? r : '';
+    if (typeof r === 'string') return;
+    const st = store.saved.settings;
+    if (JSON.stringify(wrapOf(st)) !== JSON.stringify(r.wrap) || st.lineLimit !== r.lineLimit) { st.wrap = r.wrap; st.lineLimit = r.lineLimit; store.saved.settingsAt = Date.now(); store.persist(); }
+    if (final) { const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; } else wrapPreview();
+  }
+
   function screenSettings(): string {
-    const st = store.saved.settings, lim = st.lineLimit;
+    const st = store.saved.settings;
     return `<div class="m-more"><section class="m-card"><label class="m-lbl" for="s-tol">Допуск довжини перекладу відносно оригіналу, %</label><input id="s-tol" class="m-input" type="number" min="5" max="100" step="5" value="${st.tolerancePct}">
-      <label class="m-lbl" for="s-mode">Ширина рядка в повідомленні (вікно гри)</label><select id="s-mode" class="m-input"><option value="auto" ${lim === 0 ? 'selected' : ''}>За оригіналом гри (зараз ${store.lineLimit() || '—'})</option><option value="custom" ${lim > 0 ? 'selected' : ''}>Своє число</option><option value="off" ${lim < 0 ? 'selected' : ''}>Не перевіряти</option></select>
-      <input id="s-lim" class="m-input" type="number" min="10" max="200" value="${lim > 0 ? lim : store.lineLimit() || 50}" ${lim > 0 ? '' : 'disabled'} aria-label="Символів у рядку">
+      <button class="m-secondary wide" data-sub="wrap">${icon('rows')}<span>Перенесення рядків…</span></button>
       <label class="m-check"><input type="checkbox" id="s-block" ${st.blockErrors ? 'checked' : ''}> Не надсилати рядок із помилкою QA</label>
       <label class="m-check"><input type="checkbox" id="s-prop" ${st.propagate ? 'checked' : ''}> Переносити переклад в однакові рядки</label>
       <label class="m-lbl" for="s-who">Ваше ім’я в коментарях та історії</label><input id="s-who" class="m-input" value="${esc(st.who)}" maxlength="40" autocomplete="off"></section>
@@ -510,7 +591,7 @@ export async function start(root: HTMLElement): Promise<void> {
       ${pluginsCard()}
       <section class="m-card"><h3>Небезпечна зона</h3><p class="m-hint">Видаляє весь переклад, глосарій та імпортовану пам’ять на цьому телефоні. Файли гри не змінюються.</p>
         <button class="m-mini danger wide" data-reset>${resetArmed ? 'Так, видалити весь переклад' : 'Скинути проєкт…'}</button></section>
-      <p class="m-hint">Довжина тексту не обмежується: застосунок лише попереджає, коли переклад дуже відрізняється від оригіналу або рядок ширший за вікно гри.</p></div>`;
+      <p class="m-hint">Довжина тексту не обмежується: застосунок лише радить, коли переклад дуже відрізняється від оригіналу або рядок ширший за вікно гри.</p></div>`;
   }
 
   /** Plugins show text through their own commands; the translator ticks the ones that hold lines for the player. */
@@ -660,9 +741,9 @@ export async function start(root: HTMLElement): Promise<void> {
     if (menu) {
       wrap.dataset.open = '';
       const badge: Partial<Record<Sub, number>> = { autofill: store.autofill().length, consistency: store.inconsistent().length, sendlog: store.sends().length + store.autos().length + store.journal().length };
-      const short: Partial<Record<Sub, string>> = { find: 'Заміна', search: 'Пошук', autofill: 'Авто', speakers: 'Мовці' };
+      const short: Partial<Record<Sub, string>> = { find: 'Заміна', search: 'Пошук', autofill: 'Авто', speakers: 'Мовці', wrap: 'Перенос' };
       const item = (k: Sub): string => { const [, l, ic] = TOOLS.find(t => t[0] === k)!; return `<button class="m-mi" data-sub="${k}">${icon(ic)}<span>${short[k] ?? l}</span>${badge[k] ? `<i>${badge[k]! > 99 ? '99+' : badge[k]}</i>` : ''}</button>`; };
-      wrap.innerHTML = `<div class="m-scrim" data-close></div><nav class="m-menu" aria-label="Інструменти"><span class="m-grab" aria-hidden="true"></span><div class="m-mgrid">${(['find', 'search', 'autofill', 'consistency', 'speakers', 'glossary', 'sendlog'] as Sub[]).map(item).join('')}</div>
+      wrap.innerHTML = `<div class="m-scrim" data-close></div><nav class="m-menu" aria-label="Інструменти"><span class="m-grab" aria-hidden="true"></span><div class="m-mgrid">${(['find', 'search', 'autofill', 'consistency', 'speakers', 'glossary', 'wrap', 'sendlog'] as Sub[]).map(item).join('')}</div>
         <div class="m-msep"></div><button class="m-mi wide" data-sub="settings">${icon('more')}<span>Налаштування</span></button></nav>`;
       return;
     }
@@ -714,12 +795,13 @@ export async function start(root: HTMLElement): Promise<void> {
     }
     const entered = vk !== viewKey;
     if (entered) { viewKey = vk; main.classList.add('enter'); }
-    main.innerHTML = sub ? ({ scene: screenScene, find: screenFind, speakers: screenSpeakers, settings: screenSettings, consistency: screenConsistency, glossary: screenGlossary, autofill: screenAutofill, sendlog: screenSendLog, search: screenSearch }[sub])() : tab === 'files' ? screenFiles() : tab === 'rows' ? screenRows() : tab === 'edit' ? screenEdit() : screenMore();
+    main.innerHTML = sub ? ({ scene: screenScene, find: screenFind, speakers: screenSpeakers, settings: screenSettings, wrap: screenWrap, consistency: screenConsistency, glossary: screenGlossary, autofill: screenAutofill, sendlog: screenSendLog, search: screenSearch }[sub])() : tab === 'files' ? screenFiles() : tab === 'rows' ? screenRows() : tab === 'edit' ? screenEdit() : screenMore();
     renderSheet();
     // a field that was removed by this redraw cannot report that it lost the focus
     if (!document.activeElement?.matches(TEXTY)) $('m-app').classList.remove('kb');
     if (entered && tab === 'rows' && !sub) requestAnimationFrame(() => document.querySelector('.m-row.cur, .m-table tr.cur')?.scrollIntoView({ block: 'center' }));
     if (tab === 'edit' && !sub) { refreshMeta(); autosize(); }
+    if (sub === 'wrap') wrapPreview();
     if (tab === 'more') void artifactDb().then(db => { const el = document.getElementById('m-claude'); if (db && el) el.hidden = false; });
   }
   store.onChange(() => { renderChrome(); });
@@ -732,11 +814,15 @@ export async function start(root: HTMLElement): Promise<void> {
     if (n) n.textContent = `${[...t].length} / ${[...c.unit.source].length}`;
     const pv = document.getElementById('m-prev');
     if (pv) {
-      const lim = limitFor(store.lineLimit(), c.unit.face);
-      const lines = t.split('\n');
-      pv.hidden = !lim || !t.trim();
-      pv.style.setProperty('--lim', String(lim || 0));
-      pv.innerHTML = lim ? `<small>Вікно гри: ${lim} зн. у рядку</small><div class="m-prevbox">${lines.map(l => { const plain = [...l.replace(/\\[A-Za-z]+(\[[^\]]*\])?|\\[.|!<>^{}$]/g, '')]; const over = plain.length - lim; return `<div class="${over > 0 ? 'over' : ''}">${esc(l) || '&nbsp;'}${over > 0 ? `<em>+${over}</em>` : ''}</div>`; }).join('')}</div>` : '';
+      const plan = store.wrapPlan(), width = isMessageUnit(c.unit) ? widthOf(plan, c.unit) : 0, px = usesPixels(plan), mode = plan.settings.mode;
+      pv.hidden = width <= 0 || !t.trim();
+      if (!pv.hidden) {
+        const measure = measureOf(plan), max = c.unit.kind === 'dialogue' ? plan.settings.maxLines : 0;
+        const lines = (mode === 'build' ? wrapMessage(plan, c.unit, t).text : t).split('\n');
+        if (px) pv.style.removeProperty('--lim'); else pv.style.setProperty('--lim', String(width));
+        const n = linesShown(plan, c.unit, t);
+        pv.innerHTML = `<small>${mode === 'build' ? `Так гра покаже: до ${width} ${px ? 'px' : 'зн.'} у рядку` : `Вікно гри: ${width} ${px ? 'px' : 'зн.'} у рядку`}${max > 0 && n > max ? ` · ${n} рядків, вікно показує ${max}: гра покаже на кількох сторінках` : ''}</small><div class="m-prevbox">${lines.map(l => { const over = Math.round(measure(l)) - width; return `<div class="${over > 0 ? 'over' : ''}">${esc(l) || '&nbsp;'}${over > 0 ? `<em>+${over}</em>` : ''}</div>`; }).join('')}</div>`;
+      }
     }
     const box = document.getElementById('m-issues'); if (box) box.innerHTML = issuesHtml();
     const stEl = document.querySelector('.m-status'); if (stEl) { const st = store.shown(c.unit, c.entry); stEl.innerHTML = `<span class="sd ${SHAPE[st]}"></span>${stateLabel(st, c.entry)}`; }
@@ -1073,7 +1159,8 @@ export async function start(root: HTMLElement): Promise<void> {
     else if (t.id === 'sp-q') { sp.q = (t as HTMLInputElement).value; const keep = (t as HTMLInputElement).selectionStart ?? 0; render(); const qi = document.getElementById('sp-q') as HTMLInputElement; qi.focus(); qi.setSelectionRange(keep, keep); }
     else if (t.classList.contains('m-spin')) sp.draft.set((t as HTMLInputElement).dataset.k!, (t as HTMLInputElement).value);
     else if (t.id === 's-tol') { const n = Number((t as HTMLInputElement).value); if (n >= 5 && n <= 100) { store.saved.settings.tolerancePct = n; store.saved.settingsAt = Date.now(); store.persist(); } }
-    else if (t.id === 's-lim') { const n = Number((t as HTMLInputElement).value); if (n >= 10 && n <= 200) { store.saved.settings.lineLimit = Math.round(n); store.saved.settingsAt = Date.now(); store.persist(); } }
+    else if (t.id === 'w-ex') { wp.text = (t as HTMLTextAreaElement).value; wrapPreview(); }
+    else if (t.id.startsWith('w-')) applyWrapForm(false);
     else if (t.id === 's-who') { store.saved.settings.who = (t as HTMLInputElement).value.trim() || 'Ви'; store.saved.settingsAt = Date.now(); store.persist(); }
     else if (t.id === 'g-q') { gl.q = (t as HTMLInputElement).value; const p = (t as HTMLInputElement).selectionStart; render(); const i = $<HTMLInputElement>('g-q'); i.focus(); if (p !== null) i.setSelectionRange(p, p); }
     else if (t.id === 'm-cm') { const ta = t as HTMLTextAreaElement; ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 140) + 'px'; const b = ta.form?.querySelector<HTMLButtonElement>('.m-send'); if (b) b.disabled = !ta.value.trim(); }
@@ -1089,7 +1176,9 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.id === 'f-word') fr.word = (t as HTMLInputElement).checked;
     else if (t.id === 'f-case') fr.cs = (t as HTMLInputElement).checked;
     else if (t.id === 's-block' || t.id === 's-prop') { store.saved.settings[t.id === 's-block' ? 'blockErrors' : 'propagate'] = (t as HTMLInputElement).checked; store.saved.settingsAt = Date.now(); store.persist(); }
-    else if (t.id === 's-mode') { const m = (t as HTMLSelectElement).value; store.saved.settings.lineLimit = m === 'off' ? -1 : m === 'custom' ? Math.round(Number((document.getElementById('s-lim') as HTMLInputElement).value)) || 50 : 0; store.saved.settingsAt = Date.now(); store.persist(); render(); }
+    else if (t.id === 'w-face') { wp.face = (t as HTMLInputElement).checked; wrapPreview(); }
+    else if (t.id.startsWith('w-') && t.id !== 'w-ex') applyWrapForm(true);
+    else if ((t as HTMLInputElement).name?.startsWith('w-')) applyWrapForm(true);
     if ((t as HTMLInputElement).dataset?.pl !== undefined) { const c = t as HTMLInputElement; if (c.checked) plPick?.add(c.dataset.pl!); else plPick?.delete(c.dataset.pl!); return; }
     if (t.id === 'm-termfile') { const f = (t as HTMLInputElement).files?.[0]; (t as HTMLInputElement).value = ''; if (f) void f.text().then(text => { const r = store.importTermsFile(f.name, text, $<HTMLInputElement>('i-termqa')?.checked ?? false); say(r ? `Додано термінів: ${r.added}${r.merged ? `, доповнено варіантами: ${r.merged}` : ''}${r.skipped ? `, пропущено рядків: ${r.skipped}` : ''}` : 'У файлі не знайдено термінів: потрібна колонка «Оригінал» і хоча б одна «Переклад»', !r); render(); }).catch(() => say('Не вдалося прочитати файл', true)); return; }
     if (t.id === 'm-sort') { store.setSort((t as HTMLSelectElement).value as Sort); render(); }

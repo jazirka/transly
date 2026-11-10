@@ -1,4 +1,5 @@
-import { describePage, displayLength, jumpTarget, limitFor, sceneLines, sceneUnits, submit } from '../core';
+import { MV_WINDOW, describePage, isMessageUnit, jumpTarget, measureOf, pixelBudget, sceneLines, sceneUnits, submit, widthOf, wrapMessage } from '../core';
+import { pxMeasure } from './measure';
 import type { RowChange, SceneLine, Unit } from '../core';
 import { isDesktop } from './desktop';
 import { $, el, esc, plural, toast } from './dom';
@@ -30,9 +31,8 @@ export function openScene(ctx: Ctx, start: Unit): void {
   let mode: Mode = 'both';
   let picked = start.key;
   let real = false;
-  const measure = (() => { const c = document.createElement('canvas').getContext('2d'); if (c) c.font = '28px sans-serif'; return (t: string) => c?.measureText(t).width ?? t.length * 14; })();
-  const plain = (l: string) => l.replace(/\\[A-Za-z]+\[\d+\]|\\[{}.|!><^$]/g, '');
-  const limit = ctx.lineLimit();
+  const plan = ctx.wrapPlan();
+  const realMeasure = pxMeasure(MV_WINDOW.font);
   const desk = isDesktop() && !!ctx.gameDir();
 
   const opener = document.activeElement as HTMLElement | null;
@@ -57,10 +57,13 @@ export function openScene(ctx: Ctx, start: Unit): void {
   const textOf = (u: Unit): { html: string; missing: boolean; over: boolean } => {
     const tr = entries[u.key]?.target ?? '';
     const missing = !tr;
-    const shown = mode === 'src' || (missing && mode !== 'tr') ? u.source : tr || u.source;
-    const max = u.kind === 'dialogue' || u.kind === 'scroll' ? limitFor(limit, u.face) : 0;
-    const wide = (l: string): boolean => (real ? measure(plain(l)) > (u.face ? 612 : 780) : !!max && displayLength(l) > max);
-    const checked = (u.kind === 'dialogue' || u.kind === 'scroll') && !missing;
+    const message = isMessageUnit(u);
+    // «At build» the game window gets the translation wrapped by the build: show it as the game will.
+    const asGame = message && !missing && mode !== 'src' && plan.settings.mode === 'build' ? wrapMessage(plan, u, tr).text : tr;
+    const shown = mode === 'src' || (missing && mode !== 'tr') ? u.source : asGame || u.source;
+    const max = message ? widthOf(plan, u) : 0, measure = measureOf(plan);
+    const wide = (l: string): boolean => (real ? realMeasure(l) > pixelBudget(!!u.face) : !!max && measure(l) > max);
+    const checked = message && !missing;
     const over = checked && shown.split('\n').some(wide);
     const body = shown.split('\n').map(l => `<div class="scn-ln${checked && wide(l) ? ' scn-over' : ''}" ${checked && wide(l) ? 'title="Рядок задовгий для вікна гри"' : ''}>${gameHtml(l, actorName, n => s.saved.sysNames?.variables[n]) || '&nbsp;'}</div>`).join('');
     return { html: body, missing, over };

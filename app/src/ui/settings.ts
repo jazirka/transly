@@ -29,17 +29,16 @@ export function dialog(html: string, labelId: string): HTMLDialogElement {
 let lastSettingsTab = 0;
 
 /** Things the settings dialog starts but the shell owns. */
-export interface SettingsActions { reset: () => void; adopt: () => void; plugins: () => void; importFiles: () => void; folder: { text: () => string; change: () => void; forget: () => void } }
+export interface SettingsActions { reset: () => void; adopt: () => void; plugins: () => void; wrap: () => void; importFiles: () => void; folder: { text: () => string; change: () => void; forget: () => void } }
 
 /** The tab to open first (by name), or the one that was open last. */
 export type SettingsTab = 'Загальні' | 'Глосарій і пам’ять' | 'Гра і мови' | 'Синхронізація' | 'Застосунок';
 
-export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugins: onPlugins, importFiles: onFiles, folder: onFolder }: SettingsActions, tab?: SettingsTab): void {
+export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugins: onPlugins, wrap: onWrap, importFiles: onFiles, folder: onFolder }: SettingsActions, tab?: SettingsTab): void {
   const st = ctx.s.saved.settings;
   const sync = loadSyncConfig();
   const gh = loadGithubConfig();
   const cl = loadClaudeConfig();
-  const autoNow = st.lineLimit === 0 ? ctx.lineLimit() : 0;
   const dlg = dialog(`<form method="dialog"><h2 id="st-t">Налаштування</h2>
     ${isDesktop() ? `<div class="folder-set"><label for="st-folder">Папка гри цього проєкту</label><div class="folder-row"><span id="st-folder" class="path" tabindex="0"></span><button class="btn" type="button" id="st-folder-change">Змінити…</button><button class="btn" type="button" id="st-folder-forget">Забути</button></div>
       <p class="hint">Папка запам’ятовується для проєкту й відновлюється під час запуску. Якщо її перенесено чи видалено, програма покаже банер із вибором нової, а переклад і оригінали в проєкті збережуться.</p>
@@ -49,9 +48,8 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
       <label for="st-who">Ваше ім’я в коментарях та історії</label><input id="st-who" maxlength="40" value="${st.who}"></div>
     <label class="achk"><input type="checkbox" id="st-block" ${st.blockErrors ? 'checked' : ''}> Не надсилати рядок із помилкою QA</label>
     <label class="achk"><input type="checkbox" id="st-prop" ${st.propagate ? 'checked' : ''}> Підставляти переклад у рядки з таким самим оригіналом (в інших файлах теж)</label>
-    <div class="grid"><label for="st-lim-mode">Ширина рядка в повідомленні (вікно гри)</label><select id="st-lim-mode"><option value="auto" ${st.lineLimit === 0 ? 'selected' : ''}>За оригіналом гри${autoNow ? ` (зараз ${autoNow})` : ''}</option><option value="custom" ${st.lineLimit > 0 ? 'selected' : ''}>Своє число</option><option value="off" ${st.lineLimit < 0 ? 'selected' : ''}>Не перевіряти</option></select>
-      <label for="st-lim">Символів у рядку</label><input id="st-lim" type="number" min="10" max="200" value="${st.lineLimit > 0 ? st.lineLimit : autoNow || 50}" ${st.lineLimit > 0 ? '' : 'disabled'}></div>
-    <p class="hint">Довжина тексту не обмежується: застосунок лише попереджає, коли переклад дуже відрізняється від оригіналу або рядок ширший за вікно гри (коли поруч показано портрет персонажа, вікно вужче). Кнопка «Перенести за шириною» розбиває текст сама.</p>
+    <div class="grid"><label for="st-wrap">Перенесення рядків у повідомленнях гри</label><button class="btn" type="button" id="st-wrap">Налаштувати…</button></div>
+    <p class="hint">Коли й за якою шириною рядки розбиваються, чи переносяться слова з дефісом, коли попереджати про четвертий рядок. Довжина тексту не обмежується: застосунок лише радить.</p>
     <details><summary>Тексти плагінів</summary><p class="hint">Частина ігор показує текст командами плагінів, а не вікнами повідомлень. ${st.pluginCommands.length ? `Зараз увімкнено: ${esc(st.pluginCommands.join(', '))}.` : 'Поки нічого не увімкнено.'}</p><div class="acts l"><button class="btn" type="button" id="st-plug">Обрати команди з текстом…</button></div></details>
     <details><summary>Імпорт глосарію</summary>
       <p class="hint">З файлу: таблиця Google Sheets, збережена як веб-сторінка (.html), або .csv / .tsv із колонками «Оригінал», «Переклад 1…», «Опис», «Розділ».</p>
@@ -118,26 +116,23 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
   TABS.forEach(([name], i) => { const b = el('button'); b.type = 'button'; b.setAttribute('role', 'tab'); b.textContent = name; b.addEventListener('click', () => show(i)); bar.appendChild(b); });
   form.querySelector('h2')!.after(bar);
   show(shown);
-  $('#st-lim-mode', dlg).addEventListener('change', e => { ($('#st-lim', dlg) as HTMLInputElement).disabled = (e.target as HTMLSelectElement).value !== 'custom'; });
+  $('#st-wrap', dlg).addEventListener('click', () => { dlg.close(); onWrap(); });
   $('#st-plug', dlg).addEventListener('click', () => { dlg.close(); onPlugins(); });
   $('#st-files', dlg).addEventListener('click', () => { dlg.close(); onFiles(); });
   /* The general settings are applied as they change (like the sync ones below), so there is nothing to save and «Закрити» loses nothing. */
   const applyGeneral = (): boolean => {
     const v = Number(($('#st-tol', dlg) as HTMLInputElement).value);
     if (!(v >= 5 && v <= 100)) { toast('Відсоток має бути від 5 до 100'); return false; }
-    const mode = ($('#st-lim-mode', dlg) as HTMLSelectElement).value, lim = Number(($('#st-lim', dlg) as HTMLInputElement).value);
-    if (mode === 'custom' && !(lim >= 10 && lim <= 200)) { toast('Ширина рядка має бути від 10 до 200 символів'); return false; }
     st.tolerancePct = v;
     st.blockErrors = ($('#st-block', dlg) as HTMLInputElement).checked;
     st.propagate = ($('#st-prop', dlg) as HTMLInputElement).checked;
-    st.lineLimit = mode === 'off' ? -1 : mode === 'custom' ? Math.round(lim) : 0;
     st.who = ($('#st-who', dlg) as HTMLInputElement).value.trim() || DEFAULT_SETTINGS.who;
     ctx.s.saved.settingsAt = Date.now();
     ctx.s.who = st.who;
     ctx.persist(); ctx.render();
     return true;
   };
-  for (const id of ['#st-tol', '#st-who', '#st-block', '#st-prop', '#st-lim-mode', '#st-lim']) $(id, dlg).addEventListener('change', applyGeneral);
+  for (const id of ['#st-tol', '#st-who', '#st-block', '#st-prop']) $(id, dlg).addEventListener('change', applyGeneral);
   $('#st-close', dlg).addEventListener('click', () => { if (applyGeneral()) dlg.close(); });
   const addTerms = (terms: GlossaryTerm[]): { added: number; merged: number } => {
     let added = 0, merged = 0;

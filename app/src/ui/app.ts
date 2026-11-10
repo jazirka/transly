@@ -1,6 +1,7 @@
 import { Autosave, DupIndex, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf } from '../core';
 import type { QaOptions, WrapPlan } from '../core';
 import { pxMeasure } from './measure';
+import { openWrapTool } from './wrap-dialog';
 import { GroupIndex, KIND_LABEL, UndoStack, approveEntry, groupRows, liveGroups } from '../core';
 import type { Entry, FileView, GameFile, Group, RowChange, SavedProject, Unit } from '../core';
 import { openBuild } from './build-dialog';
@@ -1055,6 +1056,7 @@ export async function start(root: HTMLElement): Promise<void> {
         forget: () => { forgetGameDir(); folderSeq++; folder = { kind: 'none' }; dataDir = null; renderFolderBar(); renderTop(); },
       },
       plugins: () => openPluginTexts(ctx, setPluginCommands),
+      wrap: () => openWrapTool(ctx, { wrapFile }),
       importFiles: openImportDlg,
     }, tab);
   }
@@ -1170,7 +1172,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const MENUS: Record<string, MenuItem[]> = {
     'Файл': [{ t: 'Відкрити папку гри…', fn: () => void openFolder() }, { t: 'Відкрити файли або вставити JSON…', fn: openImportDlg }, '-', { t: 'Зібрати…', fn: doBuild }, { t: 'Запустити вибране', fn: runSelected, sc: 'F5' }, '-', { t: 'Налаштування…', fn: () => openSettingsDlg() }],
     'Перехід': [{ t: 'Наступний рядок без перекладу', fn: () => jump('new', 1) }, { t: 'Наступна помилка QA', fn: () => jump('qa', 1) }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: 'Ctrl+K' }],
-    'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Перевірити узгодженість…', fn: () => openConsistency(ctx) }, { t: 'Автозаповнення за словами…', fn: () => openAutofill(ctx) }, { t: 'Активність…', fn: () => openActivity(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенести довгі рядки у файлі', fn: wrapFile }],
+    'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Перевірити узгодженість…', fn: () => openConsistency(ctx) }, { t: 'Автозаповнення за словами…', fn: () => openAutofill(ctx) }, { t: 'Активність…', fn: () => openActivity(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенесення рядків…', fn: () => openWrapTool(ctx, { wrapFile }) }],
   };
   /** The phone has no title bar: its «Ще» list is the same menus plus what the title bar offers on the desktop. */
   const PHONE_MENUS: Record<string, MenuItem[]> = {

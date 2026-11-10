@@ -187,7 +187,7 @@ function masculine(n: Noun): Paradigm {
   const P = blank();
   const L = n.lemma, ob = oblique(n);
   const soft = n.cls === 'm_s' || n.cls === 'm_y', mixed = n.cls === 'm_m', y = n.cls === 'm_y';
-  const { stem } = ob, flags = [...n.flags, ...ob.flags], base = n.p * ob.p;
+  const { stem } = ob, flags = [...n.flags.filter(f => f !== 'animacy-guess'), ...ob.flags], base = n.p * ob.p;
   const add = (cell: Cell, form: string, p = 1, extra: string[] = []): void => { P[cell].push(F(form, Math.min(0.99, base * p), [...flags, ...extra])); };
   const last = stem.slice(-1), velarEnd = !soft && !mixed && !!VELAR[last];
   add('nom.sg', L);
@@ -504,6 +504,7 @@ export function ukRetarget(oldPhrase: string, newPhrase: string, observed: strin
   const ambiguous = others.some(x => x.pr >= 0.7 * best.pr);
   const conf = (p: number, fl: string[], amb: boolean): Conf => { const s = Math.round(p * (amb ? 0.6 : 1) * 1000) / 1000; return { score: s, level: levelOf(s), flags: [...new Set([...fl, ...(amb ? ['ambiguous-case'] : [])])] }; };
   const seen = new Set<string>([best.r.text]);
-  const alts = others.filter(x => !seen.has(x.r.text) && !!seen.add(x.r.text)).map(x => ({ text: x.r.text, conf: conf(x.r.p, x.r.fl, false) }));
+  // the vocative and other unlikely cells are not offered as an alternative
+  const alts = others.filter(x => x.pr >= 0.35 * best.pr && !seen.has(x.r.text) && !!seen.add(x.r.text)).map(x => ({ text: x.r.text, conf: conf(x.r.p, x.r.fl, false) }));
   return { text: best.r.text, conf: conf(best.r.p, best.r.fl, ambiguous), cells: results.map(x => x.cell), alts, ambiguous };
 }

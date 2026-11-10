@@ -28,6 +28,7 @@ import { openImport } from './import-dialog';
 import { autoCheck } from './updates';
 import { openFindReplace } from './tools-dialogs';
 import { openLinkTool } from './links-dialog';
+import { openTermSyncTool } from './termsync-dialog';
 import { openPluginTexts } from './plugins-dialog';
 import { openActivity, openAutofill } from './activity-dialog';
 import { markup } from './markup';
@@ -1173,7 +1174,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const MENUS: Record<string, MenuItem[]> = {
     'Файл': [{ t: 'Відкрити папку гри…', fn: () => void openFolder() }, { t: 'Відкрити файли або вставити JSON…', fn: openImportDlg }, '-', { t: 'Зібрати…', fn: doBuild }, { t: 'Запустити вибране', fn: runSelected, sc: 'F5' }, '-', { t: 'Налаштування…', fn: () => openSettingsDlg() }],
     'Перехід': [{ t: 'Наступний рядок без перекладу', fn: () => jump('new', 1) }, { t: 'Наступна помилка QA', fn: () => jump('qa', 1) }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: 'Ctrl+K' }],
-    'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Зв’язані рядки…', fn: () => openLinkTool(ctx) }, { t: 'Автозаповнення за словами…', fn: () => openAutofill(ctx) }, { t: 'Активність…', fn: () => openActivity(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенесення рядків…', fn: () => openWrapTool(ctx, { wrapFile }) }],
+    'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Зв’язані рядки…', fn: () => openLinkTool(ctx) }, { t: 'Оновити за глосарієм…', fn: () => openTermSyncTool(ctx) }, { t: 'Автозаповнення за словами…', fn: () => openAutofill(ctx) }, { t: 'Активність…', fn: () => openActivity(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенесення рядків…', fn: () => openWrapTool(ctx, { wrapFile }) }],
   };
   /** The phone has no title bar: its «Ще» list is the same menus plus what the title bar offers on the desktop. */
   const PHONE_MENUS: Record<string, MenuItem[]> = {

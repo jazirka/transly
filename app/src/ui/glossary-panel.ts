@@ -1,6 +1,7 @@
-import { joinAlts, removeTerm, saveTerm } from '../core';
+import { joinAlts, removeTerm, saveTerm, termChange } from '../core';
 import type { GlossaryTerm } from '../core';
 import { $, esc, plural, toast } from './dom';
+import { offerTermSync } from './termsync-dialog';
 import type { Ctx } from './state';
 
 /**
@@ -119,6 +120,9 @@ export function wireGlossary(ctx: Ctx): void {
   $('#gl-form').addEventListener('submit', e => {
     e.preventDefault();
     const val = (id: string): string => ($(id) as HTMLInputElement | HTMLTextAreaElement).value;
+    // a copy of the term as it was: after the change its old rendering is looked for in the translations
+    const was = editing ? ctx.s.saved.terms.find(x => norm(x.en) === norm(editing!)) : undefined;
+    const prev = was ? { en: was.en, uk: was.uk, alt: [...(was.alt ?? [])] } : undefined;
     const r = saveTerm(ctx.s.saved, { en: val('#gl-en'), uk: val('#gl-uk'), alt: val('#gl-alt'), kind: val('#gl-kind'), note: val('#gl-note'), qa: ($('#gl-qa') as HTMLInputElement).checked }, Date.now(), editing || undefined);
     if (r === null) { toast('Заповніть оригінал і переклад'); return; }
     if (r === 'exists') { toast('Такий термін уже є: змініть його у списку'); return; }
@@ -126,6 +130,11 @@ export function wireGlossary(ctx: Ctx): void {
     editing = null;
     ctx.persist(); ctx.invalidateTm(); ctx.render();
     toast(r === 'added' ? `Термін «${en}» додано` : `Термін «${en}» змінено`);
+    if (r === 'changed') {
+      const now = ctx.s.saved.terms.find(x => norm(x.en) === norm(en));
+      const change = now ? termChange(prev, { en: now.en, uk: now.uk, alt: now.alt }) : null;
+      if (change) offerTermSync(ctx, change);
+    }
   });
 }
 

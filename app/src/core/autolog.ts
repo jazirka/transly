@@ -1,6 +1,7 @@
 import type { Entry } from './model';
 import type { FileView, SavedProject } from './project';
 import { note } from './workflow';
+import { BATCH_INFO } from './journal';
 
 /** What the app fills in by itself, each with the history note it leaves on the row. */
 export type AutoKind = 'words' | 'twin';
@@ -12,7 +13,7 @@ export interface AutoItem { file: string; key: string; source: string; target: s
 export interface AutoBatch { kind: AutoKind; at: number; items: AutoItem[] }
 
 const kindOf = (what: string): AutoKind | null => (what === AUTO_NOTE.words ? 'words' : what === AUTO_NOTE.twin ? 'twin' : null);
-export const isAutoNote = (what: string): boolean => kindOf(what) !== null;
+export const isAutoNote = (what: string): boolean => kindOf(what) !== null || what === BATCH_INFO.link.what;
 
 /**
  * Rows the app filled in by itself that are still as it left them: the newest history record of the row is the automatic

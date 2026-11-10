@@ -3,6 +3,8 @@ import type { GlossaryTerm } from './glossary';
 import type { ReferenceBundle } from './reference';
 import type { Group, Member } from './groups';
 import { mergeGroupData } from './groups';
+import { mergeLinkData } from './links';
+import type { LinkItem, LinkMode } from './links';
 import { extract } from './engine';
 import type { ExtractOptions } from './rpgmaker';
 import { merge } from './merge';
@@ -52,13 +54,15 @@ export interface SavedProject {
   groups?: Record<string, Group>;
   /** What each file, scene or row is put into (see `groups.ts`). */
   members?: Record<string, Member>;
+  /** The exceptions to «rows with the same original are linked»: unlinked rows and chosen main translations (see `links.ts`). */
+  links?: Record<string, LinkItem>;
 }
 
 /** The layout this build writes (see `SavedProject.schema`). */
 export const SCHEMA = 2;
 
 /** Top-level fields this build knows. Everything else in a project file belongs to a newer version and is passed through unchanged. */
-const KNOWN = new Set(['version', 'name', 'sourceLang', 'targetLang', 'resetEpoch', 'files', 'memory', 'terms', 'settings', 'settingsAt', 'snapshot', 'reference', 'labels', 'sysNames', 'speakers', 'assetsRev', 'schema', 'deletedTerms', 'groups', 'members']);
+const KNOWN = new Set(['version', 'name', 'sourceLang', 'targetLang', 'resetEpoch', 'files', 'memory', 'terms', 'settings', 'settingsAt', 'snapshot', 'reference', 'labels', 'sysNames', 'speakers', 'assetsRev', 'schema', 'deletedTerms', 'groups', 'members', 'links']);
 const extrasOf = (p: object): Record<string, unknown> => Object.fromEntries(Object.entries(p).filter(([k]) => !KNOWN.has(k)));
 
 export interface ProjectSettings {
@@ -78,6 +82,8 @@ export interface ProjectSettings {
   lineLimit: number;
   /** Line wrapping (the tool «Перенесення рядків»); missing in older projects, read it with `wrapOf`. */
   wrap?: Partial<WrapSettings>;
+  /** What happens to rows with the same original when one is sent; missing in older projects, read it with `linkModeOf`. */
+  linkMode?: LinkMode;
 }
 
 export const DEFAULT_SETTINGS: ProjectSettings = { tolerancePct: 25, blockErrors: true, who: 'Ви', propagate: true, pluginCommands: [], pluginsAsked: false, lineLimit: 0 };
@@ -172,6 +178,7 @@ export function deserialize(text: string): SavedProject {
     ...(o.deletedTerms ? { deletedTerms: o.deletedTerms } : {}),
     ...(o.groups ? { groups: o.groups } : {}),
     ...(o.members ? { members: o.members } : {}),
+    ...(o.links ? { links: o.links } : {}),
   };
 }
 
@@ -250,7 +257,7 @@ export function mergeProjects(a: SavedProject, b: SavedProject, since = 0): Proj
   const extra: Record<string, unknown> = {};
   const xa = extrasOf(a), xb = extrasOf(b);
   for (const k of new Set([...Object.keys(xa), ...Object.keys(xb)])) { const v = mergeUnknown(xa[k], xb[k], epoch); if (v !== undefined) extra[k] = v; }
-  const grp = mergeGroupData(a, b, epoch);
+  const grp = mergeGroupData(a, b, epoch), lnk = mergeLinkData(a, b, epoch);
   const project: SavedProject = {
       ...newer, ...extra, schema: Math.max(a.schema ?? 1, b.schema ?? 1, SCHEMA),
       settings: { ...settingsFrom.settings, pluginsAsked: a.settings.pluginsAsked || b.settings.pluginsAsked }, ...(settingsAt ? { settingsAt } : {}), resetEpoch: epoch, files, ...(snapshot ? { snapshot } : {}), ...(reference ? { reference } : {}), ...(assetsRev ? { assetsRev } : {}),
@@ -260,11 +267,12 @@ export function mergeProjects(a: SavedProject, b: SavedProject, since = 0): Proj
       memory: union(a.memory, b.memory, v => v.s + '\u0001' + v.t),
       terms,
       ...(Object.keys(deleted).length ? { deletedTerms: deleted } : {}),
-      ...grp,
+      ...grp, ...lnk,
   };
   if (!Object.keys(deleted).length) delete project.deletedTerms;
   if (!grp.groups) delete project.groups;
   if (!grp.members) delete project.members;
+  if (!lnk.links) delete project.links;
   return { project, conflicts, olderPeer: (b.schema ?? 1) < SCHEMA };
 }
 

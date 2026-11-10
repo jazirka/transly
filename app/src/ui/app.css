@@ -141,3 +141,13 @@
 .ts-conf.high{color:var(--ok)}
 .ts-conf.medium,.ts-conf.low{color:var(--warn)}
 .ts-row select{margin-top:4px;height:28px;max-width:100%;border:1px solid var(--line);border-radius:var(--r2);background:var(--bg);color:var(--text)}
+
+/* The tool «Правила QA» and the mark of an advice in the table */
+.qr{max-width:760px}
+.qr-list{display:grid;gap:6px;margin-top:10px}
+.qr-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;padding:8px 0;border-top:1px solid var(--line,rgba(127,127,127,.25));align-items:start}
+.qr-main small{display:block;margin-top:2px}
+.qr-side{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;justify-content:flex-end}
+.qr-cnt{color:var(--mute);font-size:12px;min-width:56px;text-align:right}
+@media (max-width:640px){.qr-row{grid-template-columns:1fr}.qr-side{justify-content:flex-start}}
+.gr .st .adv{display:inline-block;width:7px;height:7px;margin-left:5px;flex:none;box-sizing:border-box;border:1.5px solid var(--info);border-radius:50%}

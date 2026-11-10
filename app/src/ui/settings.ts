@@ -29,12 +29,12 @@ export function dialog(html: string, labelId: string): HTMLDialogElement {
 let lastSettingsTab = 0;
 
 /** Things the settings dialog starts but the shell owns. */
-export interface SettingsActions { reset: () => void; adopt: () => void; plugins: () => void; wrap: () => void; importFiles: () => void; folder: { text: () => string; change: () => void; forget: () => void } }
+export interface SettingsActions { reset: () => void; adopt: () => void; plugins: () => void; wrap: () => void; qa: () => void; importFiles: () => void; folder: { text: () => string; change: () => void; forget: () => void } }
 
 /** The tab to open first (by name), or the one that was open last. */
 export type SettingsTab = 'Загальні' | 'Глосарій і пам’ять' | 'Гра і мови' | 'Синхронізація' | 'Застосунок';
 
-export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugins: onPlugins, wrap: onWrap, importFiles: onFiles, folder: onFolder }: SettingsActions, tab?: SettingsTab): void {
+export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugins: onPlugins, wrap: onWrap, qa: onQa, importFiles: onFiles, folder: onFolder }: SettingsActions, tab?: SettingsTab): void {
   const st = ctx.s.saved.settings;
   const sync = loadSyncConfig();
   const gh = loadGithubConfig();
@@ -50,6 +50,7 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
     <div class="grid"><label for="st-link">Рядки з однаковим оригіналом (зв’язані)</label><select id="st-link"><option value="ask" ${linkModeOf(st) === 'ask' ? 'selected' : ''}>питати, коли переклад різниться (рекомендовано)</option><option value="auto" ${linkModeOf(st) === 'auto' ? 'selected' : ''}>оновлювати самі</option><option value="off" ${linkModeOf(st) === 'off' ? 'selected' : ''}>не зв’язувати</option></select></div>
     <p class="hint">Порожні зв’язані рядки заповнюються одразу після надсилання (цю дію можна відмінити в повідомленні). Рядок, який ви змінили пізніше, ніколи не перезаписується без вашого вибору.</p>
     <div class="grid"><label for="st-wrap">Перенесення рядків у повідомленнях гри</label><button class="btn" type="button" id="st-wrap">Налаштувати…</button></div>
+    <div class="grid"><label for="st-qa">Правила перевірки тексту (літери, пробіли, апостроф, коди)</label><button class="btn" type="button" id="st-qa">Налаштувати…</button></div>
     <p class="hint">Коли й за якою шириною рядки розбиваються, чи переносяться слова з дефісом, коли попереджати про четвертий рядок. Довжина тексту не обмежується: застосунок лише радить.</p>
     <details><summary>Тексти плагінів</summary><p class="hint">Частина ігор показує текст командами плагінів, а не вікнами повідомлень. ${st.pluginCommands.length ? `Зараз увімкнено: ${esc(st.pluginCommands.join(', '))}.` : 'Поки нічого не увімкнено.'}</p><div class="acts l"><button class="btn" type="button" id="st-plug">Обрати команди з текстом…</button></div></details>
     <details><summary>Імпорт глосарію</summary>
@@ -118,6 +119,7 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
   form.querySelector('h2')!.after(bar);
   show(shown);
   $('#st-wrap', dlg).addEventListener('click', () => { dlg.close(); onWrap(); });
+  $('#st-qa', dlg).addEventListener('click', () => { dlg.close(); onQa(); });
   $('#st-plug', dlg).addEventListener('click', () => { dlg.close(); onPlugins(); });
   $('#st-files', dlg).addEventListener('click', () => { dlg.close(); onFiles(); });
   /* The general settings are applied as they change (like the sync ones below), so there is nothing to save and «Закрити» loses nothing. */

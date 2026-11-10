@@ -3,7 +3,7 @@ import type { BatchKind, GameNameIndex, QaOptions, RowChange, Usage, WrapPlan } 
 import type { Autosave, LinkIndex, UndoStack, Entry, FileView, GameFile, Group, RowRef, SavedProject, Status, Unit } from '../core';
 
 export type Mode = 'table' | 'edit' | 'scene';
-export type Filter = 'all' | 'new' | 'draft' | 'done' | 'appr' | 'qa' | 'cm';
+export type Filter = 'all' | 'new' | 'draft' | 'done' | 'appr' | 'qa' | 'adv' | 'cm';
 export type SideTab = 'panel';
 export type LeftTab = 'files' | 'rows' | 'glossary' | 'scenes';
 export type LenFilter = 'all' | 'far' | 'longer' | 'shorter';

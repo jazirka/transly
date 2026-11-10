@@ -15,7 +15,15 @@ type RowLike = Pick<Unit, 'source'> & Partial<Pick<Unit, 'kind' | 'face' | 'key'
 /** The advices of a row that the translator has not ignored. */
 export const adviceOf = (unit: RowLike, entry: Entry | undefined, opts: QaOptions): Issue[] => activeIssues(unit, entry, opts).filter(i => i.severity === 'warn');
 
-export const hasAdvice = (unit: RowLike, entry: Entry | undefined, opts: QaOptions): boolean => !!entry?.target && adviceOf(unit, entry, opts).length > 0;
+/**
+ * Remarks the overview does not count. A length that differs from the original is a recommendation under the field, and
+ * a translation is longer or shorter than its original in many rows by nature: counting them would drown the advices
+ * the translator can actually mend.
+ */
+const NOT_COUNTED = new Set(['len']);
+
+/** Does the row have an advice the overview shows (the counter, the filter «З порадами», the jump to the next one)? */
+export const hasAdvice = (unit: RowLike, entry: Entry | undefined, opts: QaOptions): boolean => !!entry?.target && adviceOf(unit, entry, opts).some(i => !NOT_COUNTED.has(i.key));
 
 /** The number of rows with an advice in the files. */
 export function adviceCount(views: FileView[], saved: SavedProject, opts: QaOptions): number {

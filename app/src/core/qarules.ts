@@ -25,6 +25,8 @@ export interface QaRules {
 }
 
 interface RuleCtx {
+  /** The kind of the row (a dialogue, a name, a term of the game…), when it is known. */
+  kind: string | undefined;
   source: string;
   target: string;
   ms: string;
@@ -217,15 +219,18 @@ const EDGE_LEAD = /^[ \t\n\u00A0]*/, EDGE_TAIL = /[ \t\n\u00A0]*$/;
 const ruleEdges: QaRule = {
   id: 'ws-edges', cat: 'style', def: 'warn', fixable: true,
   title: 'Пробіли на краях',
-  explain: 'На початку чи в кінці перекладу пробілів або переходів на новий рядок не стільки, скільки в оригіналі. Гра склеює повідомлення разом, тому зайвий або загублений пробіл видно на екрані.',
+  explain: 'На початку чи в кінці перекладу пробілів або переходів на новий рядок не стільки, скільки в оригіналі. У назвах, термінах і текстах плагінів гра склеює рядок з іншим текстом, тому зайвий або загублений пробіл видно на екрані. У репліках діалогів лише зайві пробіли й переходи на новий рядок: оригінал часто має хвостові пробіли, які нічого не значать.',
   run(c) {
     if (c.source.trim().length < 2 || !c.target.trim()) return null;
     const sl = EDGE_LEAD.exec(c.source)![0], st = EDGE_TAIL.exec(c.source)![0];
     const tl = EDGE_LEAD.exec(c.target)![0], tt = EDGE_TAIL.exec(c.target)![0];
-    if (sl === tl && st === tt) return null;
+    // a line of a message: only what the translator added is wrong; the original's own padding is not asked for
+    const message = c.kind === 'dialogue' || c.kind === 'scroll';
+    const lead = message ? tl.length > sl.length : sl !== tl, tail = message ? tt.length > st.length : st !== tt;
+    if (!lead && !tail) return null;
     const core = c.target.slice(tl.length, c.target.length - tt.length);
-    const what = sl !== tl ? 'на початку' : 'в кінці';
-    return { message: `Пробіли ${what} не такі, як в оригіналі`, detail: 'Виправлення копіює пробіли й переходи на новий рядок з країв оригіналу.', fixed: sl + core + st };
+    const fixedLead = lead ? sl : tl, fixedTail = tail ? st : tt;
+    return { message: `Пробіли ${lead ? 'на початку' : 'в кінці'} ${message ? 'зайві' : 'не такі, як в оригіналі'}`, detail: 'Виправлення копіює пробіли й переходи на новий рядок з країв оригіналу.', fixed: fixedLead + core + fixedTail };
   },
 };
 
@@ -270,10 +275,10 @@ export const QA_RULES: QaRule[] = [ruleCodeMalformed, ruleHomoglyph, ruleForeign
 export const RULE_BY_ID: Record<string, QaRule> = Object.fromEntries(QA_RULES.map(r => [r.id, r]));
 
 /** The remarks of the enabled rules for a translation, one per rule. */
-export function runRules(source: string, target: string, rules: QaRules): Issue[] {
+export function runRules(source: string, target: string, rules: QaRules, kind?: string): Issue[] {
   let srcWords: Set<string> | null = null;
   const ms = maskCodes(source), mt = maskCodes(target);
-  const ctx: RuleCtx = { source, target, ms, mt, rules, srcWords: () => (srcWords ??= new Set(scriptWords(ms).map(w => w.text))) };
+  const ctx: RuleCtx = { kind, source, target, ms, mt, rules, srcWords: () => (srcWords ??= new Set(scriptWords(ms).map(w => w.text))) };
   const out: Issue[] = [];
   for (const r of QA_RULES) {
     const sev = rules.sev[r.id] ?? r.def;

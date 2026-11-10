@@ -1,4 +1,5 @@
 import { journalBatches, undoJournal, undoReport } from '../core';
+import type { UndoResult } from '../core';
 import { toast } from './dom';
 import type { Ctx } from './state';
 
@@ -6,10 +7,14 @@ import type { Ctx } from './state';
  * Take an action of the journal back (or, for an undo, repeat it) and tell how it went. The line Ctrl+Z walks along
  * follows: the action leaves its back line, and what took it back goes to the forward line.
  */
-function runUndo(ctx: Ctx, id: string): { done: number; skipped: number } {
+export function undoBatch(ctx: Ctx, id: string): UndoResult {
   const r = undoJournal(ctx.s.saved, id, ctx.s.who, Date.now());
   ctx.persist(); ctx.invalidateTm(); ctx.render();
   if (r.done) { if (r.kind === 'undo') ctx.history.redone(id, r.batch); else ctx.history.undone(id, r.batch); }
+  return r;
+}
+function runUndo(ctx: Ctx, id: string): UndoResult {
+  const r = undoBatch(ctx, id);
   toast(undoReport(r));
   return r;
 }

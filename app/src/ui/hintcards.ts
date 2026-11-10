@@ -177,7 +177,7 @@ export function qaRows(ctx: Ctx, u: Unit, e: Entry | undefined): { html: string;
   let h = '';
   if (sourceChanged(e, u)) h += `<div class="qa-row warn cat-context">${kind('context')}<span class="qa-msg">Оригінал змінено в грі після перекладу. Було: «${esc(e?.src ?? '')}». Перевірте переклад</span></div>`;
   if (t) {
-    h += iss.map(x => `<div class="qa-row ${x.severity} cat-${x.cat}">${kind(x.cat)}<span class="qa-msg">${esc(x.message)}</span><span class="qa-act">${x.fix ? `<button class="fix" data-fix="${esc(x.key)}" title="Застосувати виправлення (можна скасувати в історії рядка)">${esc(x.fix.label)}</button>` : ''}<button class="ign" data-ign="${x.key}" title="Не вважати проблемою для цього рядка">Ігнорувати</button></span></div>`).join('');
+    h += iss.map(x => `<div class="qa-row ${x.severity} cat-${x.cat}">${kind(x.cat)}<span class="qa-msg"${x.detail ? ` title="${esc(x.detail)}"` : ''}>${esc(x.message)}</span><span class="qa-act">${x.fix ? `<button class="fix" data-fix="${esc(x.key)}" title="Застосувати виправлення (можна скасувати в історії рядка)">${esc(x.fix.label)}</button>` : ''}<button class="ign" data-ign="${x.key}" title="Не вважати проблемою для цього рядка">Ігнорувати</button></span></div>`).join('');
     h += ignored.map(x => `<div class="qa-row muted"><span class="dot"></span><span class="qa-msg">${esc(x.message)}</span><span class="qa-act"><span class="tagi">ігноровано</span><button class="ign" data-unign="${x.key}">Повернути</button></span></div>`).join('');
   }
   return { html: h, count: t ? iss.length : 0 };

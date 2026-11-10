@@ -97,7 +97,7 @@ export function check(unit: UnitLike, target: string, opts: QaOptions = DEFAULT_
       out.push({ key: 'term', severity: 'warn', cat: 'term', message: `Термін «${t.en}» має бути «${[t.uk, ...(t.alt ?? [])].join('» або «')}» за глосарієм` });
     }
   }
-  if (opts.rules) out.push(...runRules(unit.source, target, opts.rules));
+  if (opts.rules) out.push(...runRules(unit.source, target, opts.rules, unit.kind));
   return out;
 }
 

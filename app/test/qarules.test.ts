@@ -3,7 +3,7 @@ import {
   DEFAULT_QA, QA_RULES, activeIssues, adviceCount, build, check, commitRows, deserialize, emptyProject, fixRule, keepFromText, keepToText, maskCodes,
   mergeProjects, qaOf, readGame, ruleStats, serialize, submit, undoJournal, withRuleLevel,
 } from '../src/core';
-import type { Entry, GameFile, Issue, QaOptions, QaSettings } from '../src/core';
+import type { Entry, GameFile, Issue, QaOptions, QaSettings, UnitKind } from '../src/core';
 
 /* The letters that look alike are written as names, so an editor cannot hide which alphabet a test uses. */
 const L = { a: 'a', c: 'c', e: 'e', i: 'i', o: 'o', p: 'p', x: 'x', y: 'y', B: 'B', C: 'C', H: 'H', K: 'K', M: 'M', P: 'P' };
@@ -11,25 +11,25 @@ const U = (...cp: number[]): string => String.fromCodePoint(...cp);
 const CYR = { С: U(0x421), о: U(0x43e), а: U(0x430), е: U(0x435), і: U(0x456), х: U(0x445), В: U(0x412), К: U(0x41a), М: U(0x41c), Н: U(0x41d), Р: U(0x420), Х: U(0x425), І: U(0x406) };
 
 const opts = (q?: QaSettings): QaOptions => ({ ...DEFAULT_QA, rules: qaOf(q ? { qa: q } : undefined) });
-const run = (id: string, source: string, target: string, q?: QaSettings): Issue | undefined => check({ source, kind: 'dialogue' }, target, opts(q)).find(i => i.key === id);
+const run = (id: string, source: string, target: string, q?: QaSettings, kind: UnitKind = 'dialogue'): Issue | undefined => check({ source, kind }, target, opts(q)).find(i => i.key === id);
 const fixed = (id: string, source: string, target: string, q?: QaSettings): string | undefined => run(id, source, target, q)?.fix?.text;
 
 type Pos = [source: string, target: string, fixed: string | null];
 
-function positives(id: string, cases: Pos[], q?: QaSettings): void {
+function positives(id: string, cases: Pos[], q?: QaSettings, kind?: UnitKind): void {
   it.each(cases)(`${id}: %j → %j`, (source, target, want) => {
-    const issue = run(id, source, target, q);
+    const issue = run(id, source, target, q, kind);
     expect(issue, 'має бути зауваження').toBeDefined();
     if (want === null) expect(issue!.fix).toBeUndefined();
     else {
       expect(issue!.fix?.text).toBe(want);
       // the fix is complete: the rule has nothing more to say, and fixing again changes nothing
-      expect(run(id, source, want, q)).toBeUndefined();
+      expect(run(id, source, want, q, kind)).toBeUndefined();
     }
   });
 }
-const negatives = (id: string, cases: [source: string, target: string][], q?: QaSettings): void => {
-  it.each(cases)(`${id} мовчить: %j → %j`, (source, target) => { expect(run(id, source, target, q)).toBeUndefined(); });
+const negatives = (id: string, cases: [source: string, target: string][], q?: QaSettings, kind?: UnitKind): void => {
+  it.each(cases)(`${id} мовчить: %j → %j`, (source, target) => { expect(run(id, source, target, q, kind)).toBeUndefined(); });
 };
 
 describe('керівні коди: допоміжне', () => {
@@ -196,6 +196,7 @@ describe('ws-hidden', () => {
 });
 
 describe('ws-edges', () => {
+  // in a name, a term or a plugin text the edges must be as in the original
   positives('ws-edges', [
     ['Hi', ' Привіт', 'Привіт'],
     ['Hi ', 'Привіт', 'Привіт '],
@@ -207,11 +208,18 @@ describe('ws-edges', () => {
     ['Hi', '\nПривіт', 'Привіт'],
     ['Hi ', 'Привіт  ', 'Привіт '],
     ['\\C[2]Hi ', '\\C[2]Привіт', '\\C[2]Привіт '],
-  ]);
+  ], undefined, 'name');
   negatives('ws-edges', [
     ['Hi', 'Привіт'], [' Hi', ' Привіт'], ['Hi ', 'Привіт '], ['Hi\n', 'Привіт\n'], ['Hi\u00A0', 'Привіт\u00A0'],
     ['!', ' !'], ['Hi', ''], ['Hi', '   '], ['\\C[2]Hi', '\\C[2]Привіт'], ['A b', 'А б'],
-  ]);
+  ], undefined, 'name');
+  // a line of a dialogue: only what the translator added
+  positives('ws-edges', [
+    ['Hi', ' Привіт', 'Привіт'], ['Hi', 'Привіт ', 'Привіт'], ['Hi', 'Привіт\n', 'Привіт'], ['Hi ', 'Привіт  ', 'Привіт '], [' Hi', '   Привіт', ' Привіт'],
+  ], undefined, 'dialogue');
+  negatives('ws-edges', [
+    ['Hi ', 'Привіт'], ['Hi\n', 'Привіт'], ['  Hi', 'Привіт'], ['Hi ', 'Привіт '], ['Hi', 'Привіт'],
+  ], undefined, 'dialogue');
 });
 
 describe('ws-double', () => {

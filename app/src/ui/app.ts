@@ -1,7 +1,8 @@
-import { Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf } from '../core';
+import { Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, qaOf } from '../core';
 import type { QaOptions, WrapPlan } from '../core';
 import { pxMeasure } from './measure';
 import { openWrapTool } from './wrap-dialog';
+import { openQaRules } from './qarules-dialog';
 import { GroupIndex, KIND_LABEL, UndoStack, approveEntry, groupRows, liveGroups } from '../core';
 import type { Entry, FileView, GameFile, Group, RowChange, SavedProject, Unit } from '../core';
 import { openBuild } from './build-dialog';
@@ -72,7 +73,7 @@ const SVG = {
 const ls = (k: string): string | null => { try { return localStorage.getItem(k); } catch { return null; } };
 const UI_KEY = 'transly.ui.v1';
 
-const FILTERS: [Filter, string][] = [['all', 'Усі'], ['new', 'Без перекладу'], ['draft', 'Чернетки'], ['done', 'Надіслані'], ['appr', 'Вичитані'], ['qa', 'Помилки'], ['cm', 'З коментарями']];
+const FILTERS: [Filter, string][] = [['all', 'Усі'], ['new', 'Без перекладу'], ['draft', 'Чернетки'], ['done', 'Надіслані'], ['appr', 'Вичитані'], ['qa', 'Помилки'], ['adv', 'З порадами'], ['cm', 'З коментарями']];
 const LEN_LABEL = { far: 'далеко від оригіналу', longer: 'довші за оригінал', shorter: 'коротші за оригінал' } as const;
 const FORMAT_LABEL: Record<string, string> = { json: 'RPG Maker MV · UTF-8', po: 'gettext · UTF-8', pot: 'gettext · UTF-8', csv: 'CSV · UTF-8', tsv: 'TSV · UTF-8', rpy: 'Ren’Py · UTF-8' };
 
@@ -141,7 +142,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
   </div>
   <nav class="bnav" id="bnav" aria-label="Розділи"><button data-bn="files" aria-label="Файли"><svg viewBox="0 0 16 16"><path d="M2.5 4.5v8h11v-6.5h-6l-1.5-1.5z"/></svg><span>Файли</span></button><button data-bn="rows" aria-label="Рядки"><svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h10"/></svg><span>Рядки</span></button><button data-bn="edit" aria-label="Редактор"><svg viewBox="0 0 16 16"><path d="M3 13l.7-3L11 2.7a1.4 1.4 0 0 1 2 2L5.7 12z"/></svg><span>Редактор</span></button><button data-bn="help" aria-label="Вказівки"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M6.3 6.3a1.8 1.8 0 1 1 2.6 1.6c-.6.3-.9.7-.9 1.4M8 11.6v.1"/></svg><span>Вказівки</span></button><button data-bn="more" aria-label="Ще"><svg viewBox="0 0 16 16"><circle cx="3.5" cy="8" r="1" fill="currentColor"/><circle cx="8" cy="8" r="1" fill="currentColor"/><circle cx="12.5" cy="8" r="1" fill="currentColor"/></svg><span>Ще</span></button></nav>
   <footer class="status">
-    <span class="ok" id="sb-save"></span><span id="sb-load" class="busy" role="status" hidden></span><span id="sb-fmt"></span><span id="sb-qa"></span><span id="st-sel"></span>
+    <span class="ok" id="sb-save"></span><span id="sb-load" class="busy" role="status" hidden></span><span id="sb-fmt"></span><span id="sb-qa"></span><span id="sb-adv" class="sbtn" role="button" tabindex="0" title="Показати рядки з порадами" hidden></span><span id="st-sel"></span>
     <span id="sb-sync" class="sbtn" role="button" tabindex="0" title="Налаштування синхронізації"></span><span id="sb-build" class="sbtn" role="button" tabindex="0" title="Зібрати (F5)"></span>
     <div class="r"><span id="sb-file"></span><span id="sb-sess"></span></div>
   </footer>
@@ -218,7 +219,7 @@ export async function start(root: HTMLElement): Promise<void> {
   let namesCache: { views: State['views']; idx: GameNameIndex } | null = null;
   /** What the project says about wrapping messages (the tool «Перенесення рядків»), with the width resolved. */
   const wrapPlan = (): WrapPlan => { const w = wrapOf(s.saved.settings); return { settings: w, limit: lineLimit(), disabled: s.saved.settings.lineLimit < 0, ...(w.unit === 'px' ? { measure: pxMeasure(w.px.font) } : {}) }; };
-  const qaOpts = (): QaOptions => ({ tolerancePct: s.saved.settings.tolerancePct, terms: s.saved.terms, lineLimit: lineLimit(), wrap: wrapPlan() });
+  const qaOpts = (): QaOptions => ({ tolerancePct: s.saved.settings.tolerancePct, terms: s.saved.terms, lineLimit: lineLimit(), wrap: wrapPlan(), rules: qaOf(s.saved.settings) });
   /**
    * Several files shown as one table: the rows are copies whose key is `file␟key`, and this object reads and writes
    * the entries of the files they came from, so everything that works on one file works on the group unchanged.
@@ -336,13 +337,14 @@ export async function start(root: HTMLElement): Promise<void> {
     }
     return true;
   };
-  const matchesStatus = (u: Unit, e: Entry | undefined, f: Filter): boolean => {
+  const matchesStatus = (u: Unit, e: Entry | undefined, f: Filter, opts?: QaOptions): boolean => {
     switch (f) {
       case 'new': return (e?.status ?? 'new') === 'new';
       case 'draft': return e?.status === 'draft';
       case 'done': return e?.status === 'done';
       case 'appr': return e?.status === 'appr';
       case 'qa': return shownStatus(ctx, u, e) === 'qa';
+      case 'adv': return hasAdvice(u, e, opts ?? qaOpts());
       case 'cm': return threadsOf(e?.comments).length > 0;
       default: return true;
     }
@@ -351,7 +353,8 @@ export async function start(root: HTMLElement): Promise<void> {
     const v = ctx.view();
     if (!v) return [];
     const ents = ctx.entries(v.name);
-    const list = v.units.filter(u => inContext(u, ents[u.key]) && (!withStatus || matchesStatus(u, ents[u.key], s.filter)));
+    const opts = withStatus && s.filter === 'adv' ? qaOpts() : undefined;
+    const list = v.units.filter(u => inContext(u, ents[u.key]) && (!withStatus || matchesStatus(u, ents[u.key], s.filter, opts)));
     if (s.sort === 'order') return list;
     // Array.sort is stable: rows with the same rank keep the order of the file.
     const rank = (u: Unit): number => {
@@ -495,8 +498,9 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!v) return '';
     const ents = ctx.entries(v.name);
     const ctxUnits = v.units.filter(u => inContext(u, ents[u.key]));
+    const opts = qaOpts();
     return FILTERS.map(([f, l]) => {
-      const n = f === 'all' ? ctxUnits.length : ctxUnits.filter(u => matchesStatus(u, ents[u.key], f)).length;
+      const n = f === 'all' ? ctxUnits.length : ctxUnits.filter(u => matchesStatus(u, ents[u.key], f, opts)).length;
       // A filter that finds nothing is not offered (unless it is the chosen one): the row stays short and nothing is cut off.
       if (n === 0 && f !== 'all' && s.filter !== f) return '';
       return `<button class="chip ${s.filter === f ? 'on' : ''}" data-filter="${f}" aria-pressed="${s.filter === f}">${l} <span class="n">${n}</span></button>`;
@@ -522,11 +526,12 @@ export async function start(root: HTMLElement): Promise<void> {
   function rowHtml(u: Unit, n: number): string {
     const e = entryOf(u), sel = u.key === s.cur, chk = s.checked.has(u.key);
     const st = shownStatus(ctx, u, e);
+    const adv = st !== 'qa' && hasAdvice(u, e, qaOpts());
     const hits = enforced();
     const len = e?.target ? `${displayLength(e.target)}/${displayLength(u.source)}` : '—';
     return `<div class="gr ${sel ? 'sel' : ''} ${chk ? 'chk' : ''}" role="row" tabindex="${sel ? 0 : -1}" aria-selected="${sel}" data-key="${esc(u.key)}">
       <div class="ln" role="gridcell"><span class="num">${n}</span><input type="checkbox" class="rc" ${chk ? 'checked' : ''} aria-label="Вибрати рядок ${n}"></div>
-      <div class="st" role="gridcell"><span class="sd ${st}" title="${STATUS_LABEL[st]}"${st === 'qa' ? ` data-hc="qa" data-hk="${esc(u.key)}"` : ''}></span><span class="vh">${STATUS_LABEL[st]}</span></div>
+      <div class="st" role="gridcell"><span class="sd ${st}" title="${STATUS_LABEL[st]}"${st === 'qa' ? ` data-hc="qa" data-hk="${esc(u.key)}"` : ''}></span><span class="vh">${STATUS_LABEL[st]}</span>${adv ? '<span class="adv" title="Є порада QA: відкрийте рядок, щоб побачити" data-hc="qa" data-hk="' + esc(u.key) + '"></span><span class="vh">Є порада</span>' : ''}</div>
       <div role="gridcell"><span class="key" title="${esc(u.key)}">${esc(shortKey(u.key))}</span>${cmIcon(e)}</div>
       <div class="who" role="gridcell">${esc(ctx.speaker(u))}</div>
       <div class="src" role="gridcell">${markup(flow(u.source), hits)}<span class="skey" aria-hidden="true">${esc(shortKey(u.key))}</span></div>
@@ -561,12 +566,13 @@ export async function start(root: HTMLElement): Promise<void> {
 
 
   function renderTabs(): void {
+    const tabOpts = qaOpts();
     $('#tabs-host').innerHTML = s.open.map(n => {
       const v = s.views.find(x => x.name === n);
       if (!v) return '';
       const ents = s.saved.files[n] ?? {};
       let qa = 0;
-      for (const u of v.units) { const e = ents[u.key]; if (e && e.target && activeIssues(u, e, qaOpts()).some(i => i.severity === 'bad')) qa++; }
+      for (const u of v.units) { const e = ents[u.key]; if (e && e.target && activeIssues(u, e, tabOpts).some(i => i.severity === 'bad')) qa++; }
       const [ic, lab] = fileIcon(n);
       const on = n === s.current;
       // A tab is short: the game's label (or the file's name); when two open tabs would read the same, the full name.
@@ -671,14 +677,18 @@ export async function start(root: HTMLElement): Promise<void> {
   function renderStatus(): void {
     const v = ctx.view();
     const ents = v ? ctx.entries(v.name) : {};
-    let qa = 0;
-    if (v) for (const u of v.units) { const e = ents[u.key]; if (e && e.target && activeIssues(u, e, qaOpts()).some(i => i.severity === 'bad')) qa++; }
+    let qa = 0, adv = 0;
+    const opts = qaOpts();
+    if (v) for (const u of v.units) { const e = ents[u.key]; if (e && e.target) { if (activeIssues(u, e, opts).some(i => i.severity === 'bad')) qa++; if (hasAdvice(u, e, opts)) adv++; } }
     const sv = $('#sb-save');
     sv.textContent = !s.saveOk ? '○ Не збережено: повторю спробу' : s.savedAt ? '● Збережено о ' + new Date(s.savedAt).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '● Зміни зберігаються автоматично';
     sv.className = s.saveOk ? 'ok' : 'bad';
     $('#sb-fmt').textContent = s.current && s.current !== GROUP ? FORMAT_LABEL[s.current.split('.').pop() ?? ''] ?? '' : '';
     $('#sb-qa').textContent = qa ? plural(qa, ['помилка QA', 'помилки QA', 'помилок QA']) : 'Помилок QA немає';
     $('#sb-qa').className = qa ? 'bad' : 'ok';
+    const ab = $('#sb-adv');
+    ab.hidden = !adv;
+    ab.textContent = adv ? `Поради: ${adv}` : '';
     const u = s.cur ? ctx.unit(s.cur) : undefined;
     $('#st-sel').textContent = u && v ? `Рядок ${v.units.indexOf(u) + 1} · ${STATUS_LABEL[shownStatus(ctx, u, entryOf(u))]}` : '';
     if (v) {
@@ -1059,6 +1069,7 @@ export async function start(root: HTMLElement): Promise<void> {
       },
       plugins: () => openPluginTexts(ctx, setPluginCommands),
       wrap: () => openWrapTool(ctx, { wrapFile }),
+      qa: () => openQaRules(ctx),
       importFiles: openImportDlg,
     }, tab);
   }
@@ -1173,8 +1184,8 @@ export async function start(root: HTMLElement): Promise<void> {
   /** The menu bar of the desktop: what is already a button of the title bar (the modes, the shortcuts) is not repeated here. */
   const MENUS: Record<string, MenuItem[]> = {
     'Файл': [{ t: 'Відкрити папку гри…', fn: () => void openFolder() }, { t: 'Відкрити файли або вставити JSON…', fn: openImportDlg }, '-', { t: 'Зібрати…', fn: doBuild }, { t: 'Запустити вибране', fn: runSelected, sc: 'F5' }, '-', { t: 'Налаштування…', fn: () => openSettingsDlg() }],
-    'Перехід': [{ t: 'Наступний рядок без перекладу', fn: () => jump('new', 1) }, { t: 'Наступна помилка QA', fn: () => jump('qa', 1) }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: 'Ctrl+K' }],
-    'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Зв’язані рядки…', fn: () => openLinkTool(ctx) }, { t: 'Оновити за глосарієм…', fn: () => openTermSyncTool(ctx) }, { t: 'Автозаповнення за словами…', fn: () => openAutofill(ctx) }, { t: 'Активність…', fn: () => openActivity(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенесення рядків…', fn: () => openWrapTool(ctx, { wrapFile }) }],
+    'Перехід': [{ t: 'Наступний рядок без перекладу', fn: () => jump('new', 1) }, { t: 'Наступна помилка QA', fn: () => jump('qa', 1) }, { t: 'Наступна порада', fn: () => jump('adv', 1) }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: 'Ctrl+K' }],
+    'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Зв’язані рядки…', fn: () => openLinkTool(ctx) }, { t: 'Оновити за глосарієм…', fn: () => openTermSyncTool(ctx) }, { t: 'Автозаповнення за словами…', fn: () => openAutofill(ctx) }, { t: 'Активність…', fn: () => openActivity(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенесення рядків…', fn: () => openWrapTool(ctx, { wrapFile }) }, { t: 'Правила QA…', fn: () => openQaRules(ctx) }],
   };
   /** The phone has no title bar: its «Ще» list is the same menus plus what the title bar offers on the desktop. */
   const PHONE_MENUS: Record<string, MenuItem[]> = {
@@ -1201,22 +1212,23 @@ export async function start(root: HTMLElement): Promise<void> {
     if (n) { ctx.persist(); ctx.invalidateTm(); renderAll(); }
     if (n) undoToast(ctx, `Перенесено рядки: ${plural(n, ['репліка', 'репліки', 'реплік'])}`, batch); else toast('Задовгих рядків у файлі немає');
   }
-  function jump(kind: 'new' | 'qa', dir: 1 | -1): void {
+  function jump(kind: 'new' | 'qa' | 'adv', dir: 1 | -1): void {
     const v = ctx.view();
     if (!v) return;
     const ents = ctx.entries(v.name);
+    const opts = kind === 'adv' ? qaOpts() : undefined;
     const n = v.units.length;
     const start = Math.max(0, v.units.findIndex(u => u.key === s.cur));
     for (let k = 1; k <= n; k++) {
       const u = v.units[((start + dir * k) % n + n) % n]!;
       const e = ents[u.key];
-      if (kind === 'new' ? (e?.status ?? 'new') === 'new' : shownStatus(ctx, u, e) === 'qa') {
+      if (kind === 'new' ? (e?.status ?? 'new') === 'new' : kind === 'adv' ? hasAdvice(u, e, opts!) : shownStatus(ctx, u, e) === 'qa') {
         s.filter = 'all'; s.q = ''; s.speaker = null; s.lenFilter = 'all';
         ctx.select(u.key, s.mode === 'table' ? undefined : s.mode);
         return;
       }
     }
-    toast(kind === 'new' ? 'Рядків без перекладу немає' : 'Помилок QA немає');
+    toast(kind === 'new' ? 'Рядків без перекладу немає' : kind === 'adv' ? 'Порад немає' : 'Помилок QA немає');
   }
   function toggleKeys(): void {
     const k = $('#keypop');
@@ -1389,6 +1401,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const cfgItem = t.closest<HTMLElement>('#cfgpop [data-cfg]');
     if (cfgItem) { runCfg = cfgItem.dataset.cfg as RunCfg; try { localStorage.setItem('transly.runcfg', runCfg); } catch { /* private mode */ } closeCfgMenu(); renderRunCfg(); return; }
     if (t.closest('#run-btn')) { runSelected(); return; }
+    if (t.closest('#sb-adv')) { s.filter = 'adv'; renderAll(); return; }
     if (t.closest('#sb-build')) { doBuild(); return; }
     if (t.closest('#sb-sync')) { openSettingsDlg('Синхронізація'); return; }
     if (t.closest('#lp-search,#mt-search')) { openSearch(); return; }

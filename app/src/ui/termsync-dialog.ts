@@ -1,37 +1,15 @@
 import { proposeTermSync, termChanges } from '../core';
 import type { TermChange, TermProposal, TermSpan, TermSync } from '../core';
 import { $, esc, plural, toast } from './dom';
+import { CONF_LABEL, flagsText, markHtml } from './termsync-html';
 import { dialog } from './settings';
 import { undoToast } from './undo-toast';
 import type { Ctx } from './state';
-
-/** The words for how sure a replacement is. */
-export const CONF_LABEL = { high: 'впевнено', medium: 'перевірте', low: 'сумнівно' } as const;
-/** Why a replacement is not sure, in plain words. */
-export const FLAG_TEXT: Record<string, string> = {
-  fleeting: 'випадна голосна', 'fleeting?': 'можлива випадна голосна', alt: 'чергування голосної', 'alt?': 'можливе чергування голосної',
-  'gen-a-u': 'родовий на -а чи на -у?', 'ambiguous-case': 'форма підходить до кількох відмінків', 'no-source': 'в оригіналі немає цього терміна',
-  'animacy-guess': 'істота чи ні: вгадано', compound: 'складне слово', 'adj-guess': 'прикметник упізнано за місцем у фразі', 'soft-guess': 'тип слова вгадано',
-  'mass-noun': 'збірне слово у множині', 'rare-plural': 'рідкісна форма множини', voc: 'кличний відмінок', 'gen-pl?': 'родовий множини вгадано',
-  'frozen-differs': 'решта фрази відрізняється', 'й-stem': 'основа на -й', 'unknown-shape': 'незвична будова слова',
-};
-export const flagsText = (flags: string[]): string => [...new Set(flags.map(f => FLAG_TEXT[f]).filter(Boolean))].join('; ');
 
 /** The last change of a term in this session: the tool «Оновити за глосарієм…» offers it again. */
 let last: TermChange | null = null;
 /** How many rows are drawn at first and each time «Показати ще». */
 const PAGE = 100;
-
-/** The text with the changed places marked: `<del>` for what is replaced, `<ins>` for what comes. */
-export function markHtml(p: TermProposal, side: 'old' | 'new', choice: number[] = []): string {
-  let out = '', at = 0;
-  p.spans.forEach((s: TermSpan, i) => {
-    const text = (choice[i] ?? -1) >= 0 && s.alts[choice[i]!] ? s.alts[choice[i]!]!.text : s.text;
-    if (side === 'old') { out += esc(p.before.slice(at, s.start)) + `<del>${esc(s.old)}</del>`; at = s.end; }
-    else { out += esc(p.before.slice(at, s.start)) + `<ins>${esc(text)}</ins>`; at = s.end; }
-  });
-  return (out + esc(p.before.slice(at))).replace(/\n/g, '<br>');
-}
 
 /** After a term was changed: say, in a message with a button, how many rows hold the old rendering. Nothing opens by itself. */
 export function offerTermSync(ctx: Ctx, change: TermChange): void {

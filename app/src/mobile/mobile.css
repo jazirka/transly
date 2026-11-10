@@ -588,3 +588,10 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-lks.lk-same,.m-lks.lk-main{color:var(--ok)}
 .m-lkt{overflow-wrap:anywhere}
 .m-lka{display:flex;flex-wrap:wrap;gap:6px}
+
+/* «Оновити за глосарієм» */
+.ts-b,.ts-a{display:block;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;margin-top:2px}
+.ts-b{color:var(--mute)}
+.ts-b del{background:rgba(247,84,100,.22);text-decoration:line-through;border-radius:3px;padding:0 2px}
+.ts-a ins{background:rgba(95,184,101,.25);text-decoration:none;border-radius:3px;padding:0 2px}
+.ts-conf.high{color:var(--ok)}.ts-conf.medium,.ts-conf.low{color:var(--warn)}

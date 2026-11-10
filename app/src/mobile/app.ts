@@ -1,6 +1,7 @@
 import { HINT_GLYPH, HINT_LABEL, KIND_LABEL, explainCodes, sceneTitle, stepScene, byHintOrder, commentId, historyRows, openThreads, restoreNote, sourceTermHits, targetHasTerm, threadsOf, batchTitle, batchUndoLabel, undoReport, setIgnored, canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, describePage, DEFAULT_LINE_LIMIT, DEFAULT_WRAP, MV_WINDOW, autoLineLimit, flowText, isMessageUnit, linesShown, measureOf, pixelBudget, unitWord, usesPixels, widthOf, wrapMessage, wrapOf } from '../core';
-import type { LinkMode, LinkState, WrapSettings } from '../core';
+import type { LinkMode, LinkState, TermChange, TermProposal, TermSync, WrapSettings } from '../core';
 import { pxMeasure } from '../ui/measure';
+import { CONF_LABEL, flagsText, markHtml } from '../ui/termsync-html';
 import type { Comment, DiffSeg, Entry, GameFile } from '../core';
 import { artifactDb, describeClaude, loadClaudeConfig, saveClaudeConfig } from '../ui/claude';
 import { describeGithub, githubApi, githubConfigured, loadGithubConfig, saveGithubConfig } from '../ui/github';
@@ -29,7 +30,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const TEXTY = 'textarea, input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=range]):not([type=file])';
   let sheet = false; let sheetTab: 'terms' | 'tm' | 'cm' | 'hist' | 'dict' | null = null; let gk: 'Тлумачення' | 'Синоніми' = 'Тлумачення';
   let busy = '';
-  type Sub = 'scene' | 'find' | 'speakers' | 'settings' | 'wrap' | 'consistency' | 'glossary' | 'autofill' | 'sendlog' | 'search';
+  type Sub = 'scene' | 'find' | 'speakers' | 'settings' | 'wrap' | 'consistency' | 'termsync' | 'glossary' | 'autofill' | 'sendlog' | 'search';
   let sub: Sub | null = null;
   let scope: 'file' | 'all' | 'group' = 'file';
   /** The group whose rows the Rows screen shows (scope «group»), and the group whose less common actions are open. */
@@ -53,6 +54,9 @@ export async function start(root: HTMLElement): Promise<void> {
   const af = { off: new Set<string>() };
   /** The links screen: one cluster to review (opened from the card under the translation), or null for the list of all. */
   const lk: { scope: { file: string; key: string } | null; off: Set<string> } = { scope: null, off: new Set() };
+  /** The tool «Оновити за глосарієм»: the change of a term, the rows found for it and what the translator ticked. */
+  const ts: { change: TermChange | null; res: TermSync | null; pending: number; on: Map<string, boolean>; pick: Map<string, number[]>; shown: number; term: string; old: string } = { change: null, res: null, pending: 0, on: new Map(), pick: new Map(), shown: 40, term: '', old: '' };
+  const tsId = (p: TermProposal): string => `${p.file}\u0001${p.key}`;
   const fileOf = (f: string): string => store.view(f)?.label ?? f.replace(/\.json$/, '');
   const sp = { q: '', draft: new Map<string, string>() };
   let upd: UpdateCheck | null = null;
@@ -154,7 +158,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t === 'files') return s || fq.trim() ? '•' : '';
     return s ? '•' : '';
   }
-  const SUB_TITLE: Record<Sub, string> = { scene: 'Сцена', find: 'Знайти й замінити', speakers: 'Хто говорить', settings: 'Налаштування', wrap: 'Перенесення рядків', consistency: 'Зв’язані рядки', glossary: 'Глосарій', autofill: 'Автозаповнення', sendlog: 'Активність', search: 'Пошук скрізь' };
+  const SUB_TITLE: Record<Sub, string> = { scene: 'Сцена', find: 'Знайти й замінити', speakers: 'Хто говорить', settings: 'Налаштування', wrap: 'Перенесення рядків', consistency: 'Зв’язані рядки', termsync: 'Оновити за глосарієм', glossary: 'Глосарій', autofill: 'Автозаповнення', sendlog: 'Активність', search: 'Пошук скрізь' };
 
   /* ---------- widgets ---------- */
   let wTimer = 0;
@@ -174,7 +178,7 @@ export async function start(root: HTMLElement): Promise<void> {
 
   /* ---------- chrome ---------- */
   /** The tools (find and replace, speakers, activity, glossary, autofill, consistency, settings): one menu pinned to the top bar of every screen. */
-  const TOOLS: [Sub, string, string][] = [['find', 'Знайти й замінити', 'sync'], ['speakers', 'Хто говорить', 'rows'], ['sendlog', 'Активність', 'send'], ['search', 'Пошук скрізь', 'search'], ['glossary', 'Глосарій', 'book'], ['autofill', 'Автозаповнення', 'edit'], ['consistency', 'Зв’язані рядки', 'check'], ['wrap', 'Перенесення рядків', 'rows'], ['settings', 'Налаштування', 'more']];
+  const TOOLS: [Sub, string, string][] = [['find', 'Знайти й замінити', 'sync'], ['speakers', 'Хто говорить', 'rows'], ['sendlog', 'Активність', 'send'], ['search', 'Пошук скрізь', 'search'], ['glossary', 'Глосарій', 'book'], ['autofill', 'Автозаповнення', 'edit'], ['consistency', 'Зв’язані рядки', 'check'], ['wrap', 'Перенесення рядків', 'rows'], ['termsync', 'Оновити за глосарієм', 'book'], ['settings', 'Налаштування', 'more']];
   function toolsBtn(): string {
     if (sub || !store.hasGame) return '';
     return `<button class="m-hdr ${menu ? 'on' : ''}" data-menu aria-pressed="${menu}" aria-label="Інструменти" aria-expanded="${menu}">${icon('down')}<span class="m-hdr-t">Інструменти</span></button>`;
@@ -458,7 +462,8 @@ export async function start(root: HTMLElement): Promise<void> {
   function screenGlossary(): string {
     const q = gl.q.trim().toLowerCase();
     const list = store.saved.terms.filter(t => !q || (t.en + ' ' + t.uk).toLowerCase().includes(q)).sort((x, y) => x.en.localeCompare(y.en, 'en')).slice(0, 80);
-    return `<div class="m-more"><section class="m-card"><h3>${gl.edit ? 'Змінити термін' : 'Новий термін'}</h3>
+    const banner = ts.pending && ts.change ? `<section class="m-card"><b>Знайдено ${plural(ts.pending, ['рядок', 'рядки', 'рядків'])} зі старою формою «${esc(ts.change.old[0] ?? '')}»</b><button class="m-primary wide" data-tsopen>Переглянути</button><button class="m-mini ghost" data-tsdismiss>Закрити</button></section>` : '';
+    return `<div class="m-more">${banner}<section class="m-card"><h3>${gl.edit ? 'Змінити термін' : 'Новий термін'}</h3>
       <label class="m-lbl" for="g-en">Оригінал</label><input id="g-en" class="m-input" value="${esc(gl.en)}" autocomplete="off" autocapitalize="none">
       <label class="m-lbl" for="g-uk">Переклад</label><input id="g-uk" class="m-input" value="${esc(gl.uk)}" autocomplete="off">
       <label class="m-lbl" for="g-alt">Інші дозволені переклади (через кому)</label><input id="g-alt" class="m-input" value="${esc(gl.alt)}" autocomplete="off">
@@ -494,6 +499,29 @@ export async function start(root: HTMLElement): Promise<void> {
   }
 
   const LINK_LABEL: Record<LinkState, string> = { main: 'еталон', same: 'такий самий', empty: 'без перекладу', differs: 'інший', edited: 'змінено пізніше', unlinked: 'відв’язано', draft: 'чернетка' };
+  /** The tool «Оновити за глосарієм»: a form (term and its old rendering), then the rows to update. */
+  function screenTermSync(): string {
+    const res = ts.res, change = ts.change;
+    if (!res || !change) {
+      const terms = [...store.saved.terms].sort((a, b) => a.en.localeCompare(b.en, 'en')), last = store.lastTermChange;
+      if (!terms.length) return '<div class="m-more"><p class="m-none">У глосарії ще немає термінів</p></div>';
+      const cur = terms.find(x => x.en === ts.term) ?? terms.find(x => x.en.toLowerCase() === last?.en.toLowerCase()) ?? terms[0]!;
+      const old = ts.old || (last && last.en.toLowerCase() === cur.en.toLowerCase() ? last.old[0] ?? '' : '');
+      return `<div class="m-more"><section class="m-card"><h3>Оновити за глосарієм</h3><p class="m-hint">Оберіть термін і напишіть, яким був його переклад раніше (наприклад «меч»). Знайдуться всі рядки зі старою формою в будь-якому відмінку, і ви побачите, чим їх замінити.</p>
+        <label class="m-lbl" for="ts-term">Термін</label><select id="ts-term" class="m-input">${terms.map(x => `<option value="${esc(x.en)}" ${x === cur ? 'selected' : ''}>${esc(x.en)} → ${esc(x.uk)}</option>`).join('')}</select>
+        <label class="m-lbl" for="ts-old">Старий переклад</label><input id="ts-old" class="m-input" value="${esc(old)}" autocomplete="off">
+        <button class="m-primary wide" data-tsfind>Знайти</button></section></div>`;
+    }
+    const n = [...ts.on.values()].filter(Boolean).length, sure = res.proposals.filter(p => p.tick).length;
+    const rows = res.proposals.slice(0, ts.shown).map((p, i) => {
+      const ch = ts.pick.get(tsId(p)) ?? [], why = p.conf.level === 'high' ? '' : flagsText(p.conf.flags);
+      const alts = p.spans.map((sp, si) => (sp.alts.length ? `<select class="m-input" data-tsalt="${i}|${si}" aria-label="Інша форма"><option value="-1" ${(ch[si] ?? -1) < 0 ? 'selected' : ''}>${esc(sp.text)}</option>${sp.alts.map((a, ai) => `<option value="${ai}" ${ch[si] === ai ? 'selected' : ''}>${esc(a.text)}</option>`).join('')}</select>` : '')).join('');
+      return `<label class="m-check m-opt"><input type="checkbox" data-tspick="${i}" ${ts.on.get(tsId(p)) ? 'checked' : ''}><span>${esc(fileOf(p.file))} · <b class="ts-conf ${p.conf.level}">${CONF_LABEL[p.conf.level]}</b>${why ? ` · ${esc(why)}` : ''}${p.status === 'appr' ? ' · вичитано' : p.status === 'done' ? ' · надіслано' : ''}<span class="ts-b">${markHtml(p, 'old')}</span><span class="ts-a">${markHtml(p, 'new', ch)}</span>${alts}</span></label>`;
+    }).join('');
+    return `<div class="m-more"><section class="m-card"><h3>${esc(change.old.join(', '))} → ${esc(change.next)}</h3><p class="m-hint">Позначені лише впевнені заміни, де в оригіналі є цей термін; решту перевірте самі. Статус рядків не змінюється, дію можна скасувати.</p><small class="m-hint">Знайдено ${res.total}${res.truncated ? `, перші ${res.proposals.length}` : ''}. Вибрано ${n}; впевнених ${sure}.</small></section>
+      ${rows}${ts.shown < res.proposals.length ? '<button class="m-secondary wide" data-tsmore>Показати ще</button>' : ''}
+      <button class="m-primary wide" data-tsgo ${n ? '' : 'disabled'}>Оновити вибрані</button><button class="m-mini ghost" data-tsback>Назад</button></div>`;
+  }
   /** The tool «Зв’язані рядки»: rows with the same original that do not agree (or one cluster, from the card in the editor). */
   function screenConsistency(): string {
     if (lk.scope) return screenLinkRows(lk.scope);
@@ -785,9 +813,9 @@ export async function start(root: HTMLElement): Promise<void> {
     if (menu) {
       wrap.dataset.open = '';
       const badge: Partial<Record<Sub, number>> = { autofill: store.autofill().length, consistency: store.linkTodo(), sendlog: store.sends().length + store.autos().length + store.journal().length };
-      const short: Partial<Record<Sub, string>> = { find: 'Заміна', search: 'Пошук', autofill: 'Авто', speakers: 'Мовці', wrap: 'Перенос' };
+      const short: Partial<Record<Sub, string>> = { find: 'Заміна', search: 'Пошук', autofill: 'Авто', speakers: 'Мовці', wrap: 'Перенос', termsync: 'За глосарієм' };
       const item = (k: Sub): string => { const [, l, ic] = TOOLS.find(t => t[0] === k)!; return `<button class="m-mi" data-sub="${k}">${icon(ic)}<span>${short[k] ?? l}</span>${badge[k] ? `<i>${badge[k]! > 99 ? '99+' : badge[k]}</i>` : ''}</button>`; };
-      wrap.innerHTML = `<div class="m-scrim" data-close></div><nav class="m-menu" aria-label="Інструменти"><span class="m-grab" aria-hidden="true"></span><div class="m-mgrid">${(['find', 'search', 'autofill', 'consistency', 'speakers', 'glossary', 'wrap', 'sendlog'] as Sub[]).map(item).join('')}</div>
+      wrap.innerHTML = `<div class="m-scrim" data-close></div><nav class="m-menu" aria-label="Інструменти"><span class="m-grab" aria-hidden="true"></span><div class="m-mgrid">${(['find', 'search', 'autofill', 'consistency', 'speakers', 'glossary', 'wrap', 'termsync', 'sendlog'] as Sub[]).map(item).join('')}</div>
         <div class="m-msep"></div><button class="m-mi wide" data-sub="settings">${icon('more')}<span>Налаштування</span></button></nav>`;
       return;
     }
@@ -839,7 +867,7 @@ export async function start(root: HTMLElement): Promise<void> {
     }
     const entered = vk !== viewKey;
     if (entered) { viewKey = vk; main.classList.add('enter'); }
-    main.innerHTML = sub ? ({ scene: screenScene, find: screenFind, speakers: screenSpeakers, settings: screenSettings, wrap: screenWrap, consistency: screenConsistency, glossary: screenGlossary, autofill: screenAutofill, sendlog: screenSendLog, search: screenSearch }[sub])() : tab === 'files' ? screenFiles() : tab === 'rows' ? screenRows() : tab === 'edit' ? screenEdit() : screenMore();
+    main.innerHTML = sub ? ({ scene: screenScene, find: screenFind, speakers: screenSpeakers, settings: screenSettings, wrap: screenWrap, consistency: screenConsistency, termsync: screenTermSync, glossary: screenGlossary, autofill: screenAutofill, sendlog: screenSendLog, search: screenSearch }[sub])() : tab === 'files' ? screenFiles() : tab === 'rows' ? screenRows() : tab === 'edit' ? screenEdit() : screenMore();
     renderSheet();
     // a field that was removed by this redraw cannot report that it lost the focus
     if (!document.activeElement?.matches(TEXTY)) $('m-app').classList.remove('kb');
@@ -998,6 +1026,25 @@ export async function start(root: HTMLElement): Promise<void> {
     if ((x = q('[data-scstep]'))) { stepSceneBy(Number(x.dataset.scstep) as 1 | -1); return; }
     if (q('[data-dofind]')) { fr.matches = store.find({ find: fr.find, replace: fr.replace, caseSensitive: fr.cs, wholeWord: fr.word }); if (!fr.find) say('Вкажіть, що шукати', true); else if (!fr.matches.length) say('Нічого не знайдено'); render(); return; }
     if (q('[data-doreplace]')) { const r = store.replaceAll(fr.matches); fr.matches = []; say(`Замінено в рядках: ${r.n}`, false, r.batch); buzz(14); render(); return; }
+    if (q('[data-tsopen]')) { if (ts.change) { ts.res = store.planTermSync(ts.change); ts.on = new Map(ts.res.proposals.map(p => [tsId(p), p.tick])); ts.pick = new Map(); ts.shown = 40; ts.pending = 0; sub = 'termsync'; sheet = false; menu = false; render(); $('m-main').scrollTop = 0; } return; }
+    if (q('[data-tsdismiss]')) { ts.pending = 0; render(); return; }
+    if (q('[data-tsfind]')) {
+      const en = $<HTMLSelectElement>('ts-term').value, old = $<HTMLInputElement>('ts-old').value.trim(), term = store.saved.terms.find(y => y.en === en);
+      ts.term = en; ts.old = old;
+      if (!term || !old) { say('Вкажіть, яким був старий переклад', true); return; }
+      if (old.toLowerCase() === term.uk.trim().toLowerCase()) { say('Старий і новий переклад однакові', true); return; }
+      const change = { en, old: [old], next: term.uk.trim() }, res = store.planTermSync(change);
+      if (!res.total) { say(`Рядків зі старою формою «${old}» не знайдено`); return; }
+      ts.change = change; ts.res = res; ts.on = new Map(res.proposals.map(p => [tsId(p), p.tick])); ts.pick = new Map(); ts.shown = 40; render(); $('m-main').scrollTop = 0; return;
+    }
+    if (q('[data-tsmore]')) { ts.shown += 40; const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
+    if (q('[data-tsback]')) { ts.res = null; ts.change = null; render(); return; }
+    if (q('[data-tsgo]')) {
+      const res = ts.res; if (!res) return;
+      const r = store.applyTermSync(res.proposals.filter(p => ts.on.get(tsId(p))).map(p => ({ proposal: p, choice: ts.pick.get(tsId(p)) ?? [] })));
+      say(r.n ? `Оновлено за глосарієм: ${plural(r.n, ['рядок', 'рядки', 'рядків'])}` : 'Нічого оновлювати: рядки вже змінено', !r.n, r.batch); buzz(14);
+      ts.res = null; ts.change = null; ts.pending = 0; sub = 'glossary'; render(); return;
+    }
     if ((x = q('[data-lkkeep]'))) { const [ci, vi] = x.dataset.lkkeep!.split('|').map(Number); const c = store.linkClusters(60).clusters[ci!]; const v = c?.variants[vi!]; if (c && v) { const f = c.view.rows[0]!; const r = store.keepVariant(f.file, f.key, v.rows[0]!); say(r.n ? `Узгоджено рядків: ${r.n}` : 'Головний переклад обрано', false, r.batch); buzz(14); } render(); return; }
     if ((x = q('[data-lkfill]'))) { const c = store.linkClusters(60).clusters[Number(x.dataset.lkfill)]; if (c) { const f = c.view.rows[0]!; const r = store.fillLinked(f.file, f.key); say(`Заповнено рядків: ${r.n}`, false, r.batch); buzz(14); } render(); return; }
     if ((x = q('[data-lkopen]'))) { const c = store.current; const row = c && store.linkView(c.file, c.unit.key)?.rows[Number(x.dataset.lkopen)]; if (row) { store.open(row.file, row.key); render(); $('m-main').scrollTop = 0; } return; }
@@ -1132,7 +1179,10 @@ export async function start(root: HTMLElement): Promise<void> {
     if (q('[data-gsave]')) {
       const v = (id: string): string => $<HTMLInputElement>(id).value;
       if (!store.saveTerm(v('g-en'), v('g-uk'), v('g-alt'), $<HTMLInputElement>('g-qa').checked)) { say('Заповніть оригінал і переклад', true); return; }
-      say(gl.edit ? 'Термін змінено' : 'Термін додано'); buzz(10); Object.assign(gl, { en: '', uk: '', alt: '', qa: true, edit: false }); render(); return;
+      say(gl.edit ? 'Термін змінено' : 'Термін додано'); buzz(10); Object.assign(gl, { en: '', uk: '', alt: '', qa: true, edit: false });
+      const ch = store.lastTermChange, r = ch ? store.planTermSync(ch, 1) : null;
+      if (ch && r?.total) { ts.change = ch; ts.pending = r.total; ts.res = null; say(`Знайдено ${plural(r.total, ['рядок', 'рядки', 'рядків'])} зі старою формою «${ch.old[0] ?? ''}»`); }
+      render(); return;
     }
     if (q('[data-gcancel]')) { Object.assign(gl, { en: '', uk: '', alt: '', qa: true, edit: false }); render(); return; }
     if ((x = q('[data-gedit]'))) { const t = store.saved.terms.find(y => y.en === x!.dataset.gedit); if (t) { Object.assign(gl, { en: t.en, uk: t.uk, alt: (t.alt ?? []).join(', '), qa: t.qa !== false, edit: true }); render(); $('m-main').scrollTop = 0; } return; }
@@ -1212,6 +1262,7 @@ export async function start(root: HTMLElement): Promise<void> {
     else if (t.id === 'sp-q') { sp.q = (t as HTMLInputElement).value; const keep = (t as HTMLInputElement).selectionStart ?? 0; render(); const qi = document.getElementById('sp-q') as HTMLInputElement; qi.focus(); qi.setSelectionRange(keep, keep); }
     else if (t.classList.contains('m-spin')) sp.draft.set((t as HTMLInputElement).dataset.k!, (t as HTMLInputElement).value);
     else if (t.id === 's-tol') { const n = Number((t as HTMLInputElement).value); if (n >= 5 && n <= 100) { store.saved.settings.tolerancePct = n; store.saved.settingsAt = Date.now(); store.persist(); } }
+    else if (t.id === 'ts-old') ts.old = (t as HTMLInputElement).value;
     else if (t.id === 'w-ex') { wp.text = (t as HTMLTextAreaElement).value; wrapPreview(); }
     else if (t.id.startsWith('w-')) applyWrapForm(false);
     else if (t.id === 's-who') { store.saved.settings.who = (t as HTMLInputElement).value.trim() || 'Ви'; store.saved.settingsAt = Date.now(); store.persist(); }
@@ -1225,6 +1276,9 @@ export async function start(root: HTMLElement): Promise<void> {
   root.addEventListener('change', e => {
     const t = e.target as HTMLElement;
     if (t.id === 'gh-auto') { const cfg = loadGithubConfig(); cfg.everyMin = (t as HTMLInputElement).checked ? 5 : 0; saveGithubConfig(cfg); say(cfg.everyMin ? 'Автосинхронізація ввімкнена' : 'Автосинхронізацію вимкнено'); if (cfg.everyMin) void autoSync('on'); return; }
+    if ((t as HTMLInputElement).dataset?.tspick !== undefined) { const p = ts.res?.proposals[Number((t as HTMLInputElement).dataset.tspick)]; if (p) { ts.on.set(tsId(p), (t as HTMLInputElement).checked); const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; } return; }
+    if ((t as HTMLSelectElement).dataset?.tsalt !== undefined) { const [i, si] = (t as HTMLSelectElement).dataset.tsalt!.split('|').map(Number); const p = ts.res?.proposals[i!]; if (p) { const cur = ts.pick.get(tsId(p)) ?? []; cur[si!] = Number((t as HTMLSelectElement).value); ts.pick.set(tsId(p), cur); const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; } return; }
+    if (t.id === 'ts-term') { ts.term = (t as HTMLSelectElement).value; ts.old = ''; render(); return; }
     if ((t as HTMLInputElement).dataset?.lkpick !== undefined) { const sc = lk.scope, plan = sc && store.linkPlan(sc.file, sc.key), r = plan && [...plan.fills, ...plan.updates, ...plan.edited][Number((t as HTMLInputElement).dataset.lkpick)]; if (r) { if ((t as HTMLInputElement).checked) lk.off.delete(r.ref); else lk.off.add(r.ref); const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; } return; }
     if (t.id === 'scn-real') { scn.real = (t as HTMLInputElement).checked; const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
     if (t.id === 'f-word') fr.word = (t as HTMLInputElement).checked;

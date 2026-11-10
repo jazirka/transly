@@ -1,5 +1,5 @@
-import { GROUP_COLORS, LinkIndex, afterSend, clearMain, linkChanges, linkModeOf, linkView, planLinkSync, relinkRow, reviewClusters, setMain, unlinkRow, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines, approveEntry, sendBack, threadsOf, rowsOfGroup, flowText, wrapMessage, wrapOf } from '../core';
-import type { LinkRowView, QaOptions, WrapPlan } from '../core';
+import { GROUP_COLORS, proposeTermSync, termChange, termChanges, LinkIndex, afterSend, clearMain, linkChanges, linkModeOf, linkView, planLinkSync, relinkRow, reviewClusters, setMain, unlinkRow, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines, approveEntry, sendBack, threadsOf, rowsOfGroup, flowText, wrapMessage, wrapOf } from '../core';
+import type { LinkRowView, QaOptions, TermChange, TermProposal, TermSync, WrapPlan } from '../core';
 import { pxMeasure } from '../ui/measure';
 import type { BatchKind, Group, Entry, GlossaryTerm, RowChange, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
 import { IdbStore } from '../ui/idb';
@@ -375,10 +375,28 @@ export class Store {
   }
   /* ---------- glossary ---------- */
   /** Add a term, or change the one with the same original word. Returns false when a field is empty. */
+  /** What the last change of a term means for the rows (see `termChange`); null when nothing has to be replaced. */
+  lastTermChange: TermChange | null = null;
   saveTerm(en: string, uk: string, alt: string, qa: boolean): boolean {
-    const known = this.saved.terms.some(x => x.en.toLowerCase() === en.trim().toLowerCase());
-    if (saveTerm(this.saved, { en, uk, alt, qa }, Date.now(), known ? en : undefined) === null) return false;
+    const key = en.trim().toLowerCase();
+    const was = this.saved.terms.find(x => x.en.trim().toLowerCase() === key);
+    // a copy of the term as it was: after the change its old rendering is looked for in the translations
+    const prev = was ? { en: was.en, uk: was.uk, alt: [...(was.alt ?? [])] } : undefined;
+    const r = saveTerm(this.saved, { en, uk, alt, qa }, Date.now(), was ? en : undefined);
+    if (r === null) return false;
+    const now = this.saved.terms.find(x => x.en.trim().toLowerCase() === key);
+    this.lastTermChange = r === 'changed' && now ? termChange(prev, { en: now.en, uk: now.uk, alt: now.alt }) : null;
     this.tmCache = null; this.persist(); this.emit(); return true;
+  }
+  /** The rows that hold the old rendering of a term, with what to put in their place. */
+  planTermSync(change: TermChange, limit = 2000): TermSync { return proposeTermSync(this.views, this.saved, change, { limit }); }
+  /** Write the chosen replacements as one action of the journal; the rows keep their status. */
+  applyTermSync(picks: { proposal: TermProposal; choice?: number[] }[]): { n: number; batch?: string } {
+    const changes = termChanges(picks, this.saved, Date.now());
+    if (!changes.length) return { n: 0 };
+    const batch = this.commit(changes, 'term');
+    this.tmCache = null; this.persist(); this.emit();
+    return { n: changes.length, batch };
   }
   removeTerm(en: string): void {
     removeTerm(this.saved, en, Date.now());

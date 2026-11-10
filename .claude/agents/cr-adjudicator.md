@@ -12,7 +12,8 @@ Your task message gives you these variables: `METHOD` (the method files), `CLEAN
 - Read `METHOD/skills/finding-format/SKILL.md` and `METHOD/skills/first-principles-oracles/SKILL.md` before anything else. They define what an admissible finding is and where "correct" comes from.
 - Work only inside `CLEAN`, `FIXTURES`, `METHOD` and `RUN`. Do **not** read the original repository, its git history, any Markdown file, any scratch directory outside these four, or any earlier audit result. If you meet such a note, stop reading it, and mention it in `contamination` of any finding it could have influenced.
 - Never modify `CLEAN`. If you need to experiment on code, make a private copy: `mkdir -p RUN/work/app && tar -C CLEAN/app --exclude=node_modules --exclude=dist --exclude=dist-mobile -cf - . | tar -C RUN/work/app -xf - && ln -s CLEAN/app/node_modules RUN/work/app/node_modules`. Tools such as `fast-check` and `axe-core` are installed in `CLEAN/app/node_modules`.
-- Write all output under `RUN` (`findings/`, `evidence/`, `SUMMARY-<lens>.md`). No Edit of project files.
+- Write findings (`findings/*.json`) and evidence under `RUN`. If the harness refuses to write `SUMMARY-<lens>.md`, do **not** work around it: put the full text of the summary in your final message instead (the orchestrator saves it). No Edit of project files.
+- **Browsers:** Chromium and Playwright are already installed. From any directory `require('playwright')` works and `chromium.launch()` needs no options (`--no-sandbox` is accepted). Never run `playwright install` or `npm i playwright`: a second copy will not find the browser. If you still cannot launch a browser, say exactly what failed and what you tried, and continue with the lens as far as it goes without one.
 
 ## Standards of work
 - Comments, README text, test names, commit messages and plans are not evidence; there are none here, and you must not look for them elsewhere. Judge behaviour against an **external oracle** you name.
@@ -20,7 +21,7 @@ Your task message gives you these variables: `METHOD` (the method files), `CLEAN
 - Prefer breadth first (find where it is weak), then depth (prove it). Prefer the smallest input that triggers a defect.
 - Be specific, never general ("poor error handling" is not a finding; "truncated JSON in the project file makes the app show an empty project and the next autosave overwrites the stored copy" is).
 - State honestly what you did not examine and what you tried but could not prove.
-- You finish when your lens is exhausted or you have used a reasonable budget; do not pad the list. Your final message is a short summary: counts per severity, the five worst findings with their ids, and the paths of `SUMMARY-<lens>.md` and `findings/`.
+- You finish when your lens is exhausted or you have used a reasonable budget; do not pad the list. Your final message contains: counts per severity, the five worst findings with their ids, the paths of `findings/` and `evidence/`, and the **full text of your summary** (what you examined, what you did not and why, hypotheses you could not prove, anything outside your lens worth passing on, contamination).
 
 # Role: adjudicator
 

@@ -429,6 +429,22 @@ export function ukForms(phrase: string, dict?: MorphDict): Record<Cell, string[]
 }
 
 /**
+ * Every form a word of the phrase can have (all cases, numbers and variants), one set per word in the order of the phrase,
+ * in the lower case with one kind of apostrophe; a word that does not decline is a set of itself. For finding the phrase in a
+ * text by exact forms, which is faster and surer than comparing stems.
+ */
+export function ukWordForms(phrase: string, dict?: MorphDict): Set<string>[] | null {
+  const ph = parsePhrase(phrase, dict);
+  if (ph.head < 0) return null;
+  const pars = wordParadigms(ph, dict);
+  return ph.words.map((w, i) => {
+    const par = pars[i], s = new Set<string>();
+    if (!par) s.add(norm(w.text)); else for (const c of CELLS) for (const f of par[c]) s.add(f.form);
+    return s;
+  });
+}
+
+/**
  * The new term in the same case and number as the old one stands in `observed`. `prev` is the word before it in the text
  * (a preposition tells the case). Returns null when `observed` is not a form of the old term, or when it does not have
  * as many words as the old term.

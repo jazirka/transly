@@ -18,6 +18,8 @@ export * from './github';
 export * from './dbsync';
 export * from './duplicates';
 export * from './links';
+export * from './ukmorph';
+export * from './termsync';
 export * from './termtable';
 export * from './reference';
 export * from './speakers';

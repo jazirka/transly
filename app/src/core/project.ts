@@ -7,6 +7,7 @@ import { extract } from './engine';
 import type { ExtractOptions } from './rpgmaker';
 import { merge } from './merge';
 import type { Entry, GameFile, Translations, Unit } from './model';
+import type { WrapSettings } from './wrapconfig';
 
 /** On-disk / on-wire shape of a project's translator data. Game files are never stored here. */
 export interface SavedProject {
@@ -75,6 +76,8 @@ export interface ProjectSettings {
   pluginsAsked: boolean;
   /** Longest line of a translated message, in characters; 0 = follow the longest line of the original. */
   lineLimit: number;
+  /** Line wrapping (the tool «Перенесення рядків»); missing in older projects, read it with `wrapOf`. */
+  wrap?: Partial<WrapSettings>;
 }
 
 export const DEFAULT_SETTINGS: ProjectSettings = { tolerancePct: 25, blockErrors: true, who: 'Ви', propagate: true, pluginCommands: [], pluginsAsked: false, lineLimit: 0 };

@@ -1,5 +1,5 @@
-import { GROUP_COLORS, proposeTermSync, termChange, termChanges, LinkIndex, afterSend, clearMain, linkChanges, linkModeOf, linkView, planLinkSync, relinkRow, reviewClusters, setMain, unlinkRow, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines, approveEntry, sendBack, threadsOf, rowsOfGroup, flowText, wrapMessage, wrapOf } from '../core';
-import type { LinkRowView, QaOptions, TermChange, TermProposal, TermSync, WrapPlan } from '../core';
+import { adviceCount, check, fixRule, hasAdvice, qaOf, ruleStats, GROUP_COLORS, proposeTermSync, termChange, termChanges, LinkIndex, afterSend, clearMain, linkChanges, linkModeOf, linkView, planLinkSync, relinkRow, reviewClusters, setMain, unlinkRow, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines, approveEntry, sendBack, threadsOf, rowsOfGroup, flowText, wrapMessage, wrapOf } from '../core';
+import type { Issue, QaSettings, RuleStat, LinkRowView, QaOptions, TermChange, TermProposal, TermSync, WrapPlan } from '../core';
 import { pxMeasure } from '../ui/measure';
 import type { BatchKind, Group, Entry, GlossaryTerm, RowChange, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
 import { IdbStore } from '../ui/idb';
@@ -8,7 +8,7 @@ import { IdbStore } from '../ui/idb';
  * The phone app's own model: what is loaded, what is open and what the rows list shows. It talks to the shared core
  * (formats, QA, merging, glossary, sync) and to the browser's storage, and knows nothing about the desktop UI.
  */
-export type Filter = 'all' | 'new' | 'draft' | 'done' | 'appr' | 'qa' | 'cm';
+export type Filter = 'all' | 'new' | 'draft' | 'done' | 'appr' | 'qa' | 'adv' | 'cm';
 export type Sort = 'order' | 'new' | 'qa' | 'long';
 export type Shown = Status | 'qa';
 
@@ -25,7 +25,7 @@ export function skippedText(r: Pick<BulkResult, 'skipped' | 'why'>): string {
   return ` · пропущено: ${r.skipped}${parts.length ? ` (${parts.join('; ')})` : ''}`;
 }
 
-export const FILTERS: [Filter, string][] = [['all', 'Усі'], ['new', 'Без перекладу'], ['draft', 'Чернетки'], ['done', 'Надіслані'], ['appr', 'Вичитано'], ['qa', 'Помилки'], ['cm', 'З коментарями']];
+export const FILTERS: [Filter, string][] = [['all', 'Усі'], ['new', 'Без перекладу'], ['draft', 'Чернетки'], ['done', 'Надіслані'], ['appr', 'Вичитано'], ['qa', 'Помилки'], ['adv', 'З порадами'], ['cm', 'З коментарями']];
 export const STATUS_LABEL: Record<Shown, string> = { new: 'без перекладу', draft: 'чернетка', done: 'надіслано', appr: 'вичитано', qa: 'є помилка QA' };
 const natural = (a: string, b: string): number => a.localeCompare(b, 'en', { numeric: true });
 
@@ -87,7 +87,7 @@ export class Store {
 
   /** What the project says about wrapping messages (the tool «Перенесення рядків»), with the width resolved. */
   wrapPlan(): WrapPlan { const w = wrapOf(this.saved.settings); return { settings: w, limit: this.lineLimit(), disabled: this.saved.settings.lineLimit < 0, ...(w.unit === 'px' ? { measure: pxMeasure(w.px.font) } : {}) }; }
-  qaOpts(): QaOptions { return { tolerancePct: this.saved.settings.tolerancePct, terms: this.saved.terms, lineLimit: this.lineLimit(), wrap: this.wrapPlan() }; }
+  qaOpts(): QaOptions { return { tolerancePct: this.saved.settings.tolerancePct, terms: this.saved.terms, lineLimit: this.lineLimit(), wrap: this.wrapPlan(), rules: qaOf(this.saved.settings) }; }
   private autoLim: { views: FileView[]; n: number } | null = null;
   /** The automatic limit scans every file: it is computed once per set of files, not once per row. */
   lineLimit(): number {
@@ -96,6 +96,29 @@ export class Store {
     return this.autoLim.n;
   }
   issues(u: Unit, e: Entry | undefined): ReturnType<typeof activeIssues> { return e && e.target ? activeIssues(u, e, this.qaOpts()) : []; }
+  /** The remarks of a row the translator has set aside, so they can be brought back. */
+  ignored(u: Unit, e: Entry | undefined): Issue[] { return e?.target && e.ign?.length ? check(u, e.target, this.qaOpts()).filter(i => e.ign!.includes(i.key)) : []; }
+  /** The rows of the open file that have an advice (the counter of the rows list and the filter «З порадами»). */
+  adviceCount(): number { const v = this.view(); return v ? adviceCount([v], this.saved, this.qaOpts()) : 0; }
+  /** What each rule of form found in the open file. */
+  ruleStats(): RuleStat[] { const v = this.view(); return v ? ruleStats(v, this.saved, this.qaOpts()) : []; }
+  /** Mend one rule over the open file as one action of the journal. */
+  fixRule(id: string): { n: number; batch?: string } {
+    const v = this.view(); if (!v) return { n: 0 };
+    const changes = fixRule([v], this.saved, id, this.qaOpts(), Date.now());
+    if (!changes.length) return { n: 0 };
+    const batch = this.commit(changes, 'fix');
+    this.tmCache = null; this.persist(); this.emit();
+    return { n: changes.length, batch };
+  }
+  /** Keep the choices about the QA rules in the project (an empty choice is not stored). */
+  setQa(q: QaSettings): void {
+    const keep = q.keep?.length ? q.keep : undefined, apos = q.apostrophe && q.apostrophe !== 'any' ? q.apostrophe : undefined;
+    const out: QaSettings = { ...(q.rules ? { rules: q.rules } : {}), ...(keep ? { keep } : {}), ...(apos ? { apostrophe: apos } : {}) };
+    if (Object.keys(out).length) this.saved.settings.qa = out; else delete this.saved.settings.qa;
+    this.saved.settingsAt = Date.now();
+    this.persist(); this.emit();
+  }
   shown(u: Unit, e: Entry | undefined): Shown { const st = e?.status ?? 'new'; return st !== 'new' && this.issues(u, e).some(i => i.severity === 'bad') ? 'qa' : st; }
   terms(u: Unit): ReturnType<typeof termsIn<SavedProject['terms'][number]>> { return termsIn(u.source, this.saved.terms); }
   tm(): TmIndex {
@@ -131,9 +154,11 @@ export class Store {
     const v = this.view(); if (!v) return [];
     const ents = this.saved.files[v.name] ?? {};
     const q = this.q.trim().toLowerCase();
+    const opts = this.filter === 'adv' ? this.qaOpts() : undefined;
     let list = v.units.filter(u => {
       const e = ents[u.key];
       if (this.filter === 'cm') { if (!threadsOf(e?.comments).length) return false; }
+      else if (this.filter === 'adv') { if (!hasAdvice(u, e, opts!)) return false; }
       else if (this.filter !== 'all') {
         const st = this.shown(u, e);
         if (this.filter === 'qa' ? st !== 'qa' : (e?.status ?? 'new') !== this.filter) return false;

@@ -1,5 +1,6 @@
 import { HINT_GLYPH, HINT_LABEL, KIND_LABEL, explainCodes, sceneTitle, stepScene, byHintOrder, commentId, historyRows, openThreads, restoreNote, sourceTermHits, targetHasTerm, threadsOf, batchTitle, batchUndoLabel, undoReport, setIgnored, canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, describePage, DEFAULT_LINE_LIMIT, DEFAULT_WRAP, MV_WINDOW, autoLineLimit, flowText, isMessageUnit, linesShown, measureOf, pixelBudget, unitWord, usesPixels, widthOf, wrapMessage, wrapOf } from '../core';
-import type { LinkMode, LinkState, TermChange, TermProposal, TermSync, WrapSettings } from '../core';
+import { APOSTROPHES, QA_RULES, keepFromText, keepToText, qaOf, withRuleLevel } from '../core';
+import type { Issue, LinkMode, LinkState, QaSettings, RuleSeverity, TermChange, TermProposal, TermSync, WrapSettings } from '../core';
 import { pxMeasure } from '../ui/measure';
 import { CONF_LABEL, flagsText, markHtml } from '../ui/termsync-html';
 import type { Comment, DiffSeg, Entry, GameFile } from '../core';
@@ -30,7 +31,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const TEXTY = 'textarea, input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=range]):not([type=file])';
   let sheet = false; let sheetTab: 'terms' | 'tm' | 'cm' | 'hist' | 'dict' | null = null; let gk: 'Тлумачення' | 'Синоніми' = 'Тлумачення';
   let busy = '';
-  type Sub = 'scene' | 'find' | 'speakers' | 'settings' | 'wrap' | 'consistency' | 'termsync' | 'glossary' | 'autofill' | 'sendlog' | 'search';
+  type Sub = 'scene' | 'find' | 'speakers' | 'settings' | 'wrap' | 'consistency' | 'termsync' | 'glossary' | 'autofill' | 'sendlog' | 'search' | 'qarules';
   let sub: Sub | null = null;
   let scope: 'file' | 'all' | 'group' = 'file';
   /** The group whose rows the Rows screen shows (scope «group»), and the group whose less common actions are open. */
@@ -158,7 +159,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t === 'files') return s || fq.trim() ? '•' : '';
     return s ? '•' : '';
   }
-  const SUB_TITLE: Record<Sub, string> = { scene: 'Сцена', find: 'Знайти й замінити', speakers: 'Хто говорить', settings: 'Налаштування', wrap: 'Перенесення рядків', consistency: 'Зв’язані рядки', termsync: 'Оновити за глосарієм', glossary: 'Глосарій', autofill: 'Автозаповнення', sendlog: 'Активність', search: 'Пошук скрізь' };
+  const SUB_TITLE: Record<Sub, string> = { scene: 'Сцена', find: 'Знайти й замінити', speakers: 'Хто говорить', settings: 'Налаштування', wrap: 'Перенесення рядків', consistency: 'Зв’язані рядки', termsync: 'Оновити за глосарієм', glossary: 'Глосарій', autofill: 'Автозаповнення', sendlog: 'Активність', search: 'Пошук скрізь', qarules: 'Правила QA' };
 
   /* ---------- widgets ---------- */
   let wTimer = 0;
@@ -178,7 +179,7 @@ export async function start(root: HTMLElement): Promise<void> {
 
   /* ---------- chrome ---------- */
   /** The tools (find and replace, speakers, activity, glossary, autofill, consistency, settings): one menu pinned to the top bar of every screen. */
-  const TOOLS: [Sub, string, string][] = [['find', 'Знайти й замінити', 'sync'], ['speakers', 'Хто говорить', 'rows'], ['sendlog', 'Активність', 'send'], ['search', 'Пошук скрізь', 'search'], ['glossary', 'Глосарій', 'book'], ['autofill', 'Автозаповнення', 'edit'], ['consistency', 'Зв’язані рядки', 'check'], ['wrap', 'Перенесення рядків', 'rows'], ['termsync', 'Оновити за глосарієм', 'book'], ['settings', 'Налаштування', 'more']];
+  const TOOLS: [Sub, string, string][] = [['find', 'Знайти й замінити', 'sync'], ['speakers', 'Хто говорить', 'rows'], ['sendlog', 'Активність', 'send'], ['search', 'Пошук скрізь', 'search'], ['glossary', 'Глосарій', 'book'], ['autofill', 'Автозаповнення', 'edit'], ['consistency', 'Зв’язані рядки', 'check'], ['wrap', 'Перенесення рядків', 'rows'], ['qarules', 'Правила QA', 'check'], ['termsync', 'Оновити за глосарієм', 'book'], ['settings', 'Налаштування', 'more']];
   function toolsBtn(): string {
     if (sub || !store.hasGame) return '';
     return `<button class="m-hdr ${menu ? 'on' : ''}" data-menu aria-pressed="${menu}" aria-label="Інструменти" aria-expanded="${menu}">${icon('down')}<span class="m-hdr-t">Інструменти</span></button>`;
@@ -196,7 +197,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const title = tab === 'files' ? 'Файли гри' : tab === 'rows' ? (gName ? `Група «${gName}»` : store.view()?.label ?? store.file ?? 'Рядки') : tab === 'edit' ? (store.file ?? 'Переклад') : 'Ще';
     let where = '';
     if (tab === 'edit' && !sub && store.current) { const list = store.rows(), pos = list.findIndex(x => x.key === store.current!.unit.key); if (pos >= 0) where = `Рядок ${pos + 1} з ${list.length} · `; }
-    else if (tab === 'rows' && !sub && scope === 'file' && store.view()) where = `${store.rows().length} з ${store.view()!.units.length} · `;
+    else if (tab === 'rows' && !sub && scope === 'file' && store.view()) { const adv = store.adviceCount(); where = `${store.rows().length} з ${store.view()!.units.length} · ${adv ? `поради: ${adv} · ` : ''}`; }
     else if (tab === 'rows' && !sub && scope === 'group' && gscope) where = `${plural(store.groupRowList(gscope).length, ['рядок', 'рядки', 'рядків'])} · `;
     const subline = tab === 'more' || !store.hasGame || sub ? '' : `${where}${pct}% · ${store.saveOk ? 'збережено' : 'не збережено!'}`;
     $('m-bar').innerHTML = `${sub ? '<button class="m-back" data-subback aria-label="Назад">' + icon('prev') + '</button>' : ''}<div class="m-title"><b>${esc(sub ? SUB_TITLE[sub] : title)}</b>${subline ? `<small class="${store.saveOk ? '' : 'bad'}">${esc(subline)}</small>` : ''}</div>${busy || updBusy ? `<span class="m-busy" role="status"><i class="m-spin"></i>${esc(busy || 'Перевіряю…')}</span>` : ''}${helpBtn()}${toolsBtn()}`;
@@ -564,6 +565,23 @@ export async function start(root: HTMLElement): Promise<void> {
   /** The tool «Перенесення рядків»: the same choices as on the computer, applied as they change. */
   const WRAP_SAMPLE = 'Мандрівник дістався перекладацького містечка наприкінці осені, і там на нього чекав старий друг, якого він не бачив багато років.';
   const wp = { text: '', face: false };
+  /** The tool «Правила QA»: the level of each rule of form, what it found in the open file, and one-tap mending. */
+  function screenQaRules(): string {
+    const q = qaOf(store.saved.settings), has = !!store.view(), stats = new Map(store.ruleStats().map(r => [r.id, r]));
+    const lv: [RuleSeverity, string][] = [['off', 'Вимкнено'], ['warn', 'Порада'], ['bad', 'Помилка']];
+    const apos: Record<string, string> = { any: 'Приймати всі правильні', '’': 'Лише ’', 'ʼ': 'Лише ʼ', "'": "Лише ' з клавіатури" };
+    return `<div class="m-more"><p class="m-hint">Правила дивляться на форму тексту. «Порада» нічого не блокує, а «Помилка» не дає надіслати рядок, доки його не виправлено. ${has ? `Лічильники: у файлі «${esc(store.view()!.label ?? store.file ?? '')}».` : 'Відкрийте файл, щоб побачити лічильники.'}</p>
+      ${QA_RULES.map(r => {
+        const lvl = q.sev[r.id] ?? r.def, st = stats.get(r.id), n = st?.rows ?? 0, fix = st?.fixable ?? 0;
+        return `<section class="m-card"><h3>${esc(r.title)}</h3><p class="m-hint">${esc(r.explain)}</p>
+          <label class="m-lbl" for="qr-l-${r.id}">Рівень</label><select id="qr-l-${r.id}" class="m-input" data-lvl="${r.id}">${lv.map(([v, l]) => `<option value="${v}" ${v === lvl ? 'selected' : ''}>${l}${v === r.def ? ' (типово)' : ''}</option>`).join('')}</select>
+          ${has ? `<p class="m-hint" role="status">${n ? `Знайдено в ${plural(n, ['рядку', 'рядках', 'рядках'])}` : 'У файлі нічого не знайдено'}</p>` : ''}
+          ${fix ? `<button class="m-secondary" data-fixall="${r.id}">Виправити в файлі (${fix})</button>` : ''}</section>`;
+      }).join('')}
+      <section class="m-card"><h3>Латинські слова, які можна лишати</h3><label class="m-lbl" for="qr-keep">По одному слову на рядок. Слова з оригіналу, HP, MP, NPC, одиниці виміру й римські цифри дозволені завжди.</label>
+        <textarea id="qr-keep" class="m-textarea sm" rows="3" spellcheck="false" autocomplete="off">${esc(keepToText(store.saved.settings.qa?.keep))}</textarea>
+        <label class="m-lbl" for="qr-apos">Апостроф у проєкті</label><select id="qr-apos" class="m-input">${APOSTROPHES.map(a => `<option value="${esc(a)}" ${q.apostrophe === a ? 'selected' : ''}>${esc(apos[a] ?? a)}</option>`).join('')}</select></section></div>`;
+  }
   function screenWrap(): string {
     const st = store.saved.settings, w = wrapOf(st), auto = autoLineLimit(store.views), px = w.unit === 'px';
     if (!wp.text) { const c = store.current; wp.text = c && isMessageUnit(c.unit) ? flowText(c.entry?.target ?? '') : ''; if (!wp.text) wp.text = WRAP_SAMPLE; }
@@ -677,7 +695,11 @@ export async function start(root: HTMLElement): Promise<void> {
 
   function issuesHtml(): string {
     const c = store.current; if (!c) return '';
-    return byHintOrder(store.issues(c.unit, c.entry)).map(i => `<div class="m-issue ${i.severity}"><div class="m-issue-t"><span class="sd ${i.severity === 'bad' ? 'sd-qa' : 'sd-draft'}"></span><span class="m-kind k-${i.cat}"><span aria-hidden="true">${HINT_GLYPH[i.cat]}</span> ${HINT_LABEL[i.cat]}</span><span>${esc(i.message)}</span></div><div class="m-issue-a">${i.codes?.length ? `<button class="m-mini" data-ins="${esc(i.codes.join(''))}">Вставити</button>` : ''}${i.key === 'wrap' ? '<button class="m-mini" data-wrap>Перенести</button>' : ''}<button class="m-mini ghost" data-ign="${i.key}">Ігнорувати</button></div></div>`).join('');
+    const sd = (i: Issue): string => `<span class="sd ${i.severity === 'bad' ? 'sd-qa' : 'sd-draft'}"></span>`;
+    // a rule of form explains itself under its remark; the older remarks are short enough
+    const live = byHintOrder(store.issues(c.unit, c.entry)).map(i => `<div class="m-issue ${i.severity}"><div class="m-issue-t">${sd(i)}<span class="m-kind k-${i.cat}"><span aria-hidden="true">${HINT_GLYPH[i.cat]}</span> ${HINT_LABEL[i.cat]}</span><span>${esc(i.message)}${i.detail && i.key.includes('-') ? `<small class="m-issue-d">${esc(i.detail)}</small>` : ''}</span></div><div class="m-issue-a">${i.codes?.length ? `<button class="m-mini" data-ins="${esc(i.codes.join(''))}">Вставити</button>` : ''}${i.key === 'wrap' ? '<button class="m-mini" data-wrap>Перенести</button>' : ''}${i.fix && !i.codes?.length && i.key !== 'wrap' ? `<button class="m-mini" data-fix="${esc(i.key)}">${esc(i.fix.label)}</button>` : ''}<button class="m-mini ghost" data-ign="${esc(i.key)}">Ігнорувати</button></div></div>`).join('');
+    const set = store.ignored(c.unit, c.entry).map(i => `<div class="m-issue muted"><div class="m-issue-t"><span class="sd sd-draft"></span><span>${esc(i.message)} <em class="m-tagi">проігноровано</em></span></div><div class="m-issue-a"><button class="m-mini ghost" data-unign="${esc(i.key)}">Повернути</button></div></div>`).join('');
+    return live + set;
   }
 
   /** The original with its glossary terms as words that can be tapped: a wavy line when the translation lacks the term. */
@@ -816,7 +838,7 @@ export async function start(root: HTMLElement): Promise<void> {
       const short: Partial<Record<Sub, string>> = { find: 'Заміна', search: 'Пошук', autofill: 'Авто', speakers: 'Мовці', wrap: 'Перенос', termsync: 'За глосарієм' };
       const item = (k: Sub): string => { const [, l, ic] = TOOLS.find(t => t[0] === k)!; return `<button class="m-mi" data-sub="${k}">${icon(ic)}<span>${short[k] ?? l}</span>${badge[k] ? `<i>${badge[k]! > 99 ? '99+' : badge[k]}</i>` : ''}</button>`; };
       wrap.innerHTML = `<div class="m-scrim" data-close></div><nav class="m-menu" aria-label="Інструменти"><span class="m-grab" aria-hidden="true"></span><div class="m-mgrid">${(['find', 'search', 'autofill', 'consistency', 'speakers', 'glossary', 'wrap', 'termsync', 'sendlog'] as Sub[]).map(item).join('')}</div>
-        <div class="m-msep"></div><button class="m-mi wide" data-sub="settings">${icon('more')}<span>Налаштування</span></button></nav>`;
+        <div class="m-msep"></div><button class="m-mi wide" data-sub="qarules">${icon('check')}<span>Правила QA</span></button><button class="m-mi wide" data-sub="settings">${icon('more')}<span>Налаштування</span></button></nav>`;
       return;
     }
     const c = store.current;
@@ -867,7 +889,7 @@ export async function start(root: HTMLElement): Promise<void> {
     }
     const entered = vk !== viewKey;
     if (entered) { viewKey = vk; main.classList.add('enter'); }
-    main.innerHTML = sub ? ({ scene: screenScene, find: screenFind, speakers: screenSpeakers, settings: screenSettings, wrap: screenWrap, consistency: screenConsistency, termsync: screenTermSync, glossary: screenGlossary, autofill: screenAutofill, sendlog: screenSendLog, search: screenSearch }[sub])() : tab === 'files' ? screenFiles() : tab === 'rows' ? screenRows() : tab === 'edit' ? screenEdit() : screenMore();
+    main.innerHTML = sub ? ({ scene: screenScene, find: screenFind, speakers: screenSpeakers, settings: screenSettings, wrap: screenWrap, consistency: screenConsistency, termsync: screenTermSync, glossary: screenGlossary, autofill: screenAutofill, sendlog: screenSendLog, search: screenSearch, qarules: screenQaRules }[sub])() : tab === 'files' ? screenFiles() : tab === 'rows' ? screenRows() : tab === 'edit' ? screenEdit() : screenMore();
     renderSheet();
     // a field that was removed by this redraw cannot report that it lost the focus
     if (!document.activeElement?.matches(TEXTY)) $('m-app').classList.remove('kb');
@@ -1175,6 +1197,13 @@ export async function start(root: HTMLElement): Promise<void> {
     }
     if ((x = q('[data-ins]'))) { insert(x.dataset.ins ?? ''); return; }
     if (q('[data-wrap]')) { const r = store.wrap(); if (r) { say('Рядки перенесено за шириною вікна', false, r.batch); render(); } else say('Рядки вже вміщаються'); return; }
+    if ((x = q('[data-fix]'))) {
+      const c = store.current, iss = c && store.issues(c.unit, c.entry).find(i => i.key === x!.dataset.fix);
+      if (iss?.fix) { const t = $('m-tr') as HTMLTextAreaElement; t.value = iss.fix.text; t.dispatchEvent(new Event('input', { bubbles: true })); say('Виправлено'); }
+      return;
+    }
+    if ((x = q('[data-unign]'))) { store.mutate((_f, _u, en) => setIgnored(en as NonNullable<typeof en>, x!.dataset.unign!, false, Date.now())); refreshMeta(); return; }
+    if ((x = q('[data-fixall]'))) { const r = store.fixRule(x.dataset.fixall!); say(r.n ? `Виправлено рядків: ${r.n}` : 'Нічого виправляти: рядки вже без цієї помилки', false, r.batch); render(); return; }
     if ((x = q('[data-ign]'))) { store.mutate((_f, _u, en) => setIgnored(en as NonNullable<typeof en>, x!.dataset.ign!, true, Date.now())); refreshMeta(); return; }
     if (q('[data-gsave]')) {
       const v = (id: string): string => $<HTMLInputElement>(id).value;
@@ -1280,6 +1309,9 @@ export async function start(root: HTMLElement): Promise<void> {
     if ((t as HTMLSelectElement).dataset?.tsalt !== undefined) { const [i, si] = (t as HTMLSelectElement).dataset.tsalt!.split('|').map(Number); const p = ts.res?.proposals[i!]; if (p) { const cur = ts.pick.get(tsId(p)) ?? []; cur[si!] = Number((t as HTMLSelectElement).value); ts.pick.set(tsId(p), cur); const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; } return; }
     if (t.id === 'ts-term') { ts.term = (t as HTMLSelectElement).value; ts.old = ''; render(); return; }
     if ((t as HTMLInputElement).dataset?.lkpick !== undefined) { const sc = lk.scope, plan = sc && store.linkPlan(sc.file, sc.key), r = plan && [...plan.fills, ...plan.updates, ...plan.edited][Number((t as HTMLInputElement).dataset.lkpick)]; if (r) { if ((t as HTMLInputElement).checked) lk.off.delete(r.ref); else lk.off.add(r.ref); const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; } return; }
+    if ((t as HTMLSelectElement).dataset?.lvl) { store.setQa(withRuleLevel(store.saved.settings.qa, (t as HTMLSelectElement).dataset.lvl!, (t as HTMLSelectElement).value as RuleSeverity)); const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
+    if (t.id === 'qr-apos') { store.setQa({ ...(store.saved.settings.qa ?? {}), apostrophe: (t as HTMLSelectElement).value as QaSettings['apostrophe'] }); return; }
+    if (t.id === 'qr-keep') { store.setQa({ ...(store.saved.settings.qa ?? {}), keep: keepFromText((t as HTMLTextAreaElement).value) }); return; }
     if (t.id === 'scn-real') { scn.real = (t as HTMLInputElement).checked; const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
     if (t.id === 'f-word') fr.word = (t as HTMLInputElement).checked;
     else if (t.id === 'f-case') fr.cs = (t as HTMLInputElement).checked;

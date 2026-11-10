@@ -595,3 +595,8 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .ts-b del{background:rgba(247,84,100,.22);text-decoration:line-through;border-radius:3px;padding:0 2px}
 .ts-a ins{background:rgba(95,184,101,.25);text-decoration:none;border-radius:3px;padding:0 2px}
 .ts-conf.high{color:var(--ok)}.ts-conf.medium,.ts-conf.low{color:var(--warn)}
+
+/* Правила QA: the explanation under a remark, the remarks the translator set aside */
+.m-issue-d{display:block;margin-top:4px;color:var(--mute);font-size:12px;line-height:1.35}
+.m-issue.muted{background:transparent;border-color:var(--line,#3a3f4a);opacity:.75}
+.m-tagi{font-style:normal;font-size:12px;color:var(--mute);margin-left:4px}

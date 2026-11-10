@@ -11,7 +11,7 @@ import { HISTORY_LIMIT } from './workflow';
 export type Prev = NonNullable<HistoryItem['prev']>;
 
 /** What a bulk action is. The kind is the part of the batch id before the colon. */
-export type BatchKind = 'send' | 'approve' | 'scene' | 'words' | 'twin' | 'replace' | 'unify' | 'memory' | 'wrap' | 'clear' | 'copy' | 'back' | 'link' | 'term' | 'undo' | 'redo';
+export type BatchKind = 'send' | 'approve' | 'scene' | 'words' | 'twin' | 'replace' | 'unify' | 'memory' | 'wrap' | 'clear' | 'copy' | 'back' | 'link' | 'term' | 'fix' | 'undo' | 'redo';
 
 /** The history text and the feed title of each kind of action. */
 export const BATCH_INFO: Record<BatchKind, { what: string; title: (n: string) => string }> = {
@@ -29,6 +29,7 @@ export const BATCH_INFO: Record<BatchKind, { what: string; title: (n: string) =>
   back: { what: 'повернуто на доопрацювання', title: n => `Повернуто на доопрацювання: ${n}` },
   link: { what: 'синхронізовано зі зв’язаним рядком', title: n => `Синхронізовано зв’язані переклади: ${n}` },
   term: { what: 'змінено термін', title: n => `Змінено переклад терміна: ${n}` },
+  fix: { what: 'виправлено за правилом', title: n => `Виправлено за правилом: ${n}` },
   undo: { what: 'скасовано', title: n => `Скасовано дію: ${n}` },
   redo: { what: 'повторено', title: n => `Повторено дію: ${n}` },
 };

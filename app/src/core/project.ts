@@ -10,6 +10,7 @@ import type { ExtractOptions } from './rpgmaker';
 import { merge } from './merge';
 import type { Entry, GameFile, Translations, Unit } from './model';
 import type { WrapSettings } from './wrapconfig';
+import type { QaSettings } from './qaconfig';
 
 /** On-disk / on-wire shape of a project's translator data. Game files are never stored here. */
 export interface SavedProject {
@@ -84,6 +85,8 @@ export interface ProjectSettings {
   wrap?: Partial<WrapSettings>;
   /** What happens to rows with the same original when one is sent; missing in older projects, read it with `linkModeOf`. */
   linkMode?: LinkMode;
+  /** The rules about the form of the text (letters, spaces, apostrophes); missing in older projects, read it with `qaOf`. */
+  qa?: QaSettings;
 }
 
 export const DEFAULT_SETTINGS: ProjectSettings = { tolerancePct: 25, blockErrors: true, who: 'Ви', propagate: true, pluginCommands: [], pluginsAsked: false, lineLimit: 0 };

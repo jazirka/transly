@@ -2,6 +2,8 @@ import { displayLength, missingCodes } from './controlCodes';
 import { candidateTerms, hasTermIn, prepareText, targetHasTerm, termsStamp } from './glossary';
 import { isMessageUnit, limitFor, linesShown, maxLineWidth, planSig, tooWide, unitWord, wrapLines, wrapMessage } from './wrap';
 import type { WrapPlan } from './wrap';
+import { runRules } from './qarules';
+import type { QaRules } from './qarules';
 import type { Entry, Unit } from './model';
 
 export type Severity = 'bad' | 'warn';
@@ -33,6 +35,8 @@ export interface QaOptions {
   lineLimit?: number;
   /** The project's line wrapping: when it is given, the width rule follows its mode, unit and width, and the number of lines is watched. */
   wrap?: WrapPlan;
+  /** The rules about the form of the text (letters, spaces, apostrophes, damaged codes), resolved from the project settings. Without it only the five checks above run. */
+  rules?: QaRules;
 }
 
 export const DEFAULT_QA: QaOptions = { tolerancePct: 25, terms: [] };
@@ -93,6 +97,7 @@ export function check(unit: UnitLike, target: string, opts: QaOptions = DEFAULT_
       out.push({ key: 'term', severity: 'warn', cat: 'term', message: `Термін «${t.en}» має бути «${[t.uk, ...(t.alt ?? [])].join('» або «')}» за глосарієм` });
     }
   }
+  if (opts.rules) out.push(...runRules(unit.source, target, opts.rules));
   return out;
 }
 
@@ -104,7 +109,7 @@ export function check(unit: UnitLike, target: string, opts: QaOptions = DEFAULT_
 const memo = new WeakMap<Entry, { sig: string; source: string; kind?: string; face?: string; issues: Issue[] }>();
 
 /** Everything `check` depends on besides the row and its original, as one short text. */
-const optsSig = (o: QaOptions): string => `${o.tolerancePct}|${o.lineLimit ?? 0}|${planSig(o.wrap)}|${termsStamp(o.terms)}`;
+const optsSig = (o: QaOptions): string => `${o.tolerancePct}|${o.lineLimit ?? 0}|${planSig(o.wrap)}|${termsStamp(o.terms)}|${o.rules?.sig ?? ''}`;
 
 /** Issues of a row (before the translator's ignores). */
 function issuesOf(unit: UnitLike, entry: Entry, opts: QaOptions): Issue[] {

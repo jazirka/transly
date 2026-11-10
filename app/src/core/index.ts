@@ -1,6 +1,10 @@
 export * from './model';
 export * from './controlCodes';
 export * from './qa';
+export * from './qarules';
+export * from './qaconfig';
+export * from './qacodes';
+export * from './qaadvice';
 export * from './engine';
 export { canonicalRpgMakerName, isRpgMakerFile, hasText } from './rpgmaker';
 export * from './merge';

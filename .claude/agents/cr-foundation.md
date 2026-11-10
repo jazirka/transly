@@ -37,4 +37,6 @@ Question: is the structure sound enough that the next ten changes will not silen
 7. **Dead and duplicate code.** From knip/jscpd and reading: dead branches, flags that are never set, options never read, near-copies of the same function. Only report ones that create a real risk (divergence), not tidiness.
 8. **Time and randomness.** Uses of `Date.now()`/`Math.random()` in logic that should be deterministic; clock-skew consequences.
 
+9. **Cache inventory (mandatory).** Enumerate every memoisation in the code (`grep` for `WeakMap`, `new Map` used as a cache, `memo`, `sig`, `signature`, `stamp`, `cache`, `last…` objects compared by identity, key strings built by concatenation). For each, write a table row: what the computation reads versus what the key/invalidation encodes. Every input that is read but not in the key is a hypothesis: change only that input and show the stale result with a script. Include caches in the QA, matching, wrapping, memory (translation memory), linking and rendering layers; do not stop at the first few.
+
 Severity: maintainability for structure; upgrade to functional/data-loss only with a demonstrated failing scenario. Write `findings/found-NN.json`.

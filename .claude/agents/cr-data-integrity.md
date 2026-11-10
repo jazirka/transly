@@ -38,4 +38,6 @@ Question: can a user lose, corrupt or mis-attach their work? Find the modules th
 8. Row identity: translate rows, then change the source (insert a row at the top, delete one, duplicate one) and re-import: does any translation attach to the wrong row silently?
 9. Black-box confirmation: reproduce the worst findings through the UI with a persistent browser profile (`METHOD/skills/blind-persona-run/drive.mjs`) so a user-visible symptom exists.
 
+10. **Lifecycle persistence (mandatory).** Type text into a row and, within 50 ms, trigger each of: `page.reload()`, `page.close()` (with and without `runBeforeUnload`), navigation away, switching the tab to hidden (`visibilitychange`/`pagehide`, e.g. via a second tab and `bringToFront`), killing the context. Compare what is stored with what was typed. Also list every lifecycle event the code registers a save for versus the events a browser/WebView can deliver on desktop and phone; any missing event is a hypothesis to demonstrate.
+
 Severity: silent loss or mis-attachment of user work is **data-loss**. Write `findings/data-NN.json`.

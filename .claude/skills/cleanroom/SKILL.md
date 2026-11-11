@@ -12,7 +12,7 @@ Why: an auditor who reads the authors' comments, README, plan or tests inherits 
 node .claude/skills/cleanroom/make-cleanroom.mjs <repo-root> <audit>/cleanroom
 node .claude/skills/cleanroom/make-fixtures.mjs <audit>/fixtures
 ```
-`make-cleanroom.mjs` takes the **committed** tree (no history), keeps `app/` and `.github/`, deletes all Markdown, mock-ups, tests and README/CHANGELOG-like files, and blanks every comment while keeping every line and column (so `path:line` in a finding is true in the original too). It writes `<audit>/cleanroom-report.json`.
+`make-cleanroom.mjs` takes the **committed** tree (no history), keeps `app/` and `.github/`, deletes all Markdown, mock-ups, tests and README/CHANGELOG-like files, and blanks every comment while keeping every line and column (so `path:line` in a finding is true in the original too). It writes `<audit>/<out-dir-name>-report.json` (so a second copy, e.g. the one that keeps tests, does not overwrite the first report).
 
 It then **proves** the cleaning and exits non-zero otherwise:
 - re-parses every TS/JS file and counts remaining comment tokens (must be 0),

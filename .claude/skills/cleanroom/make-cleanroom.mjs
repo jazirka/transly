@@ -158,6 +158,6 @@ for (let i = needles.length - 1; i > 0; i--) { const j = Math.floor(Math.random(
 const sample = needles.slice(0, 600).map(s => s.slice(0, 40));
 const survivors = sample.filter(s => corpus.some(t => t.includes(s)));
 const report = { out, removedFiles: stats.removedFiles.length, markdownLeft: textFiles.filter(p => /\.md$/i.test(p)).length, commentsRemoved: stats.comments, byType: stats.stripped, tsCommentTokensLeft: tsLeft, sampledNeedles: sample.length, needlesStillPresent: survivors.length, survivors: survivors.slice(0, 15) };
-fs.writeFileSync(path.join(out, '..', 'cleanroom-report.json'), JSON.stringify(report, null, 2));
+fs.writeFileSync(path.join(out, '..', path.basename(out) + '-report.json'), JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));
 if (tsLeft > 0 || report.markdownLeft > 0) { console.error('CLEANROOM NOT CLEAN'); process.exit(1); }

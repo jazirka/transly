@@ -15,7 +15,8 @@ node .claude/skills/cleanroom/make-fixtures.mjs <audit>/fixtures
 `make-cleanroom.mjs` takes the **committed** tree (no history), keeps `app/` and `.github/`, deletes all Markdown, mock-ups, tests and README/CHANGELOG-like files, and blanks every comment while keeping every line and column (so `path:line` in a finding is true in the original too). It writes `<audit>/<out-dir-name>-report.json` (so a second copy, e.g. the one that keeps tests, does not overwrite the first report).
 
 It then **proves** the cleaning and exits non-zero otherwise:
-- re-parses every TS/JS file and counts remaining comment tokens (must be 0),
+- re-parses every TS/JS file, and every inline `<script>` of an HTML file, and counts remaining comment tokens (must be 0),
+- checks that no Rust `#[cfg(test)]` module is left (unit tests inside source files are notes too; they stay only with `--keep-tests`),
 - takes a random sample of up to 600 of the original comments (≥ 35 chars) and searches the clean room for them (should find none; investigate any hit — it may be the same phrase in a string).
 
 ## Then

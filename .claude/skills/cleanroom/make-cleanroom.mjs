@@ -112,6 +112,34 @@ function stripJsonDescriptions(text) {
   } catch { return { text, found: [] }; }
 }
 
+/** Inline `<script>` and `<style>` bodies of an HTML file carry comments too. */
+function stripInlineHtml(text) {
+  const found = [];
+  let res = text.replace(/(<script\b[^>]*>)([\s\S]*?)(<\/script>)/gi, (m, a, body, c) => { if (!body.trim()) return m; const r = stripTs(body, 'inline.js'); found.push(...r.found); return a + r.text + c; });
+  res = res.replace(/(<style\b[^>]*>)([\s\S]*?)(<\/style>)/gi, (m, a, body, c) => { const r = stripRegexComments(body, /\/\*[\s\S]*?\*\//g); found.push(...r.found); return a + r.text + c; });
+  return { text: res, found };
+}
+const inlineScripts = text => [...text.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)].map(m => m[1]).filter(b => b.trim());
+/** Rust keeps its unit tests inside the source file (`#[cfg(test)] mod tests { … }`): they state intent, so they go with the other tests. */
+function stripRustTests(text) {
+  const found = []; let res = text; const re = /#\[cfg\(test\)\]\s*(?:pub\s+)?mod\s+\w+\s*\{/g; let m;
+  while ((m = re.exec(res))) {
+    let i = m.index + m[0].length, depth = 1; const n = res.length;
+    while (i < n && depth > 0) {
+      const c = res[i];
+      if (c === '"') { i++; while (i < n && res[i] !== '"') { if (res[i] === '\\') i++; i++; } i++; continue; }
+      if (c === 'r' && !/[A-Za-z0-9_]/.test(res[i - 1] ?? '')) { const rm = /^r(#*)"/.exec(res.slice(i, i + 12)); if (rm) { const close = '"' + rm[1]; const j = res.indexOf(close, i + rm[0].length); i = j < 0 ? n : j + close.length; continue; } }
+      if (c === "'") { const cm = /^'(\\.[^']*|[^\\'\n])'/.exec(res.slice(i, i + 12)); if (cm) { i += cm[0].length; continue; } }
+      if (c === '{') depth++; else if (c === '}') depth--;
+      i++;
+    }
+    found.push(res.slice(m.index, i));
+    res = res.slice(0, m.index) + blank(res.slice(m.index, i)) + res.slice(i);
+    re.lastIndex = i;
+  }
+  return { text: res, found };
+}
+
 /* ---------- walk ---------- */
 const skipDirs = new Set(['node_modules', 'target', 'dist', 'dist-mobile', 'dist-single', 'build', '.gradle']);
 const list = [];
@@ -131,10 +159,10 @@ for (const p of list) {
   let r = null;
   if (/\.(tsx?|mts|cts|m?js|cjs)$/.test(p)) r = stripTs(fs.readFileSync(p, 'utf8'), p);
   else if (ext === '.css') r = stripRegexComments(fs.readFileSync(p, 'utf8'), /\/\*[\s\S]*?\*\//g);
-  else if (ext === '.rs') r = stripCLike(fs.readFileSync(p, 'utf8'), { rust: true });
+  else if (ext === '.rs') { r = stripCLike(fs.readFileSync(p, 'utf8'), { rust: true }); if (!keepTests) { const t = stripRustTests(r.text); r = { text: t.text, found: [...r.found, ...t.found] }; } }
   else if (ext === '.java' || ext === '.kt') r = stripCLike(fs.readFileSync(p, 'utf8'));
   else if (ext === '.gradle' || ext === '.kts') r = stripCLike(fs.readFileSync(p, 'utf8'), { singleStrings: true });
-  else if (ext === '.xml' || ext === '.html' || ext === '.svg') r = stripRegexComments(fs.readFileSync(p, 'utf8'), /<!--[\s\S]*?-->/g);
+  else if (ext === '.xml' || ext === '.html' || ext === '.svg') { r = stripRegexComments(fs.readFileSync(p, 'utf8'), /<!--[\s\S]*?-->/g); if (ext === '.html') { const h = stripInlineHtml(r.text); r = { text: h.text, found: [...r.found, ...h.found] }; } }
   else if (/\.(ya?ml|toml|properties)$/.test(p) || base === '.gitignore') r = stripHash(fs.readFileSync(p, 'utf8'));
   else if (ext === '.json' && /(capabilities|package\.json|tauri\.conf)/.test(rel)) r = stripJsonDescriptions(fs.readFileSync(p, 'utf8'));
   if (!r) continue;
@@ -151,13 +179,15 @@ const textFiles = list.filter(p => fs.existsSync(p)).filter(p => /\.(tsx?|mts|m?
 const corpus = textFiles.map(p => fs.readFileSync(p, 'utf8'));
 let tsLeft = 0;
 for (const p of textFiles.filter(p => /\.(tsx?|mts|m?js|cjs)$/.test(p))) tsLeft += commentCountTs(fs.readFileSync(p, 'utf8'), p);
+for (const p of textFiles.filter(p => /\.html$/.test(p))) for (const body of inlineScripts(fs.readFileSync(p, 'utf8'))) tsLeft += commentCountTs(body, 'inline.js');
+const rustTestsLeft = keepTests ? 0 : textFiles.filter(p => /\.rs$/.test(p)).filter(p => /#\[cfg\(test\)\]/.test(fs.readFileSync(p, 'utf8'))).length;
 const needles = originals
   .map(c => c.replace(/^\s*(\/\/+!?|\/\*+!?|#|<!--)\s?/, '').replace(/(\*\/|-->)\s*$/, '').split('\n').map(l => l.replace(/^\s*\*+\s?/, '').trim()).filter(l => l.length >= 35)[0])
   .filter(Boolean);
 for (let i = needles.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [needles[i], needles[j]] = [needles[j], needles[i]]; }
 const sample = needles.slice(0, 600).map(s => s.slice(0, 40));
 const survivors = sample.filter(s => corpus.some(t => t.includes(s)));
-const report = { out, removedFiles: stats.removedFiles.length, markdownLeft: textFiles.filter(p => /\.md$/i.test(p)).length, commentsRemoved: stats.comments, byType: stats.stripped, tsCommentTokensLeft: tsLeft, sampledNeedles: sample.length, needlesStillPresent: survivors.length, survivors: survivors.slice(0, 15) };
+const report = { out, removedFiles: stats.removedFiles.length, markdownLeft: textFiles.filter(p => /\.md$/i.test(p)).length, commentsRemoved: stats.comments, byType: stats.stripped, tsCommentTokensLeft: tsLeft, rustTestModulesLeft: rustTestsLeft, sampledNeedles: sample.length, needlesStillPresent: survivors.length, survivors: survivors.slice(0, 15) };
 fs.writeFileSync(path.join(out, '..', path.basename(out) + '-report.json'), JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));
-if (tsLeft > 0 || report.markdownLeft > 0) { console.error('CLEANROOM NOT CLEAN'); process.exit(1); }
+if (tsLeft > 0 || rustTestsLeft > 0 || report.markdownLeft > 0) { console.error('CLEANROOM NOT CLEAN'); process.exit(1); }

@@ -27,6 +27,24 @@ function pickComment(a: Comment, b: Comment): Comment {
   return resFrom.res ? { ...rest, res: resFrom.res } : rest;
 }
 
+const STATUS_RANK: Record<string, number> = { new: 0, draft: 1, done: 2, appr: 3 };
+
+/**
+ * The version of a row that wins. The later `mt` wins; when both were changed in the same millisecond the answer must not
+ * depend on which copy is `a` (two devices merging each other's file would otherwise keep different texts for good):
+ * the further status, then the greater text, then the other translation fields decide, the same on both devices.
+ */
+function newerOf(a: Entry, b: Entry): Entry {
+  if (a.mt !== b.mt) return b.mt > a.mt ? b : a;
+  const ra = STATUS_RANK[a.status] ?? 0, rb = STATUS_RANK[b.status] ?? 0;
+  if (ra !== rb) return rb > ra ? b : a;
+  if (a.target !== b.target) return b.target > a.target ? b : a;
+  // Only the fields that belong to the translation itself: comments, history and ignored warnings are merged separately, and
+  // looking at them here would make the choice depend on what earlier merges had already combined (not associative).
+  const ka = JSON.stringify([a.src ?? '', a.orig ?? '', a.returned ? 1 : 0]), kb = JSON.stringify([b.src ?? '', b.orig ?? '', b.returned ? 1 : 0]);
+  return kb > ka ? b : a;
+}
+
 const sameHistory = (h: HistoryItem): string => `${h.at}\u0001${h.who}\u0001${h.what}\u0001${h.text}`;
 
 /**
@@ -35,7 +53,7 @@ const sameHistory = (h: HistoryItem): string => `${h.at}\u0001${h.who}\u0001${h.
  * translation and nothing here may be lost to a newer edit on the other side.
  */
 export function mergeEntry(a: Entry, b: Entry): Entry {
-  const win = b.mt > a.mt ? b : a;
+  const win = newerOf(a, b);
   const out: Entry = { ...win };
   const comments = unionBy(a.comments, b.comments, commentId, pickComment);
   if (comments) out.comments = comments === a.comments || comments === b.comments ? comments : [...comments].sort((x, y) => x.at - y.at);

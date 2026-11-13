@@ -1,5 +1,5 @@
 import { HINT_GLYPH, HINT_LABEL, KIND_LABEL, explainCodes, sceneTitle, stepScene, byHintOrder, commentId, historyRows, openThreads, restoreNote, sourceTermHits, targetHasTerm, threadsOf, batchTitle, batchUndoLabel, undoReport, setIgnored, canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, describePage, DEFAULT_LINE_LIMIT, DEFAULT_WRAP, MV_WINDOW, autoLineLimit, flowText, isMessageUnit, linesShown, measureOf, pixelBudget, unitWord, usesPixels, widthOf, wrapMessage, wrapOf } from '../core';
-import { APOSTROPHES, QA_RULES, groupColor, keepFromText, keepToText, qaOf, withRuleLevel } from '../core';
+import { APOSTROPHES, QA_RULES, adoptSynced, groupColor, keepFromText, keepToText, qaOf, withRuleLevel } from '../core';
 import type { Issue, LinkMode, LinkState, QaSettings, RuleSeverity, TermChange, TermProposal, TermSync, WrapSettings } from '../core';
 import { pxMeasure } from '../ui/measure';
 import { CONF_LABEL, flagsText, markHtml } from '../ui/termsync-html';
@@ -7,6 +7,7 @@ import type { Comment, DiffSeg, Entry, GameFile } from '../core';
 import { artifactDb, describeClaude, loadClaudeConfig, saveClaudeConfig } from '../ui/claude';
 import { describeGithub, githubApi, githubConfigured, loadGithubConfig, saveGithubConfig } from '../ui/github';
 import { esc, plural } from '../ui/dom';
+import { showRecovery } from '../ui/recovery';
 import { gameHtml } from '../ui/gamehtml';
 import { markupTerms } from '../ui/markup';
 import { androidBridge, publishWidget } from '../ui/android';
@@ -24,7 +25,8 @@ const TAB_LABEL: Record<Tab, string> = { files: 'Файли', rows: 'Рядки'
 const SHAPE: Record<Shown, string> = { new: 'sd-new', draft: 'sd-draft', done: 'sd-done', appr: 'sd-appr', qa: 'sd-qa' };
 
 export async function start(root: HTMLElement): Promise<void> {
-  const store = await Store.open();
+  const store = await Store.open((f, keep) => showRecovery(root, f, keep));
+  store.onForeignNotice = () => say('Знайдено правки з іншої вкладки: їх злито з вашими');
   let tab: Tab = store.hasGame ? (store.key ? 'edit' : 'rows') : 'files';
   let menu = false;
   /** Fields the keyboard opens for: only these switch the app into keyboard mode (a checkbox does not). */
@@ -974,7 +976,7 @@ export async function start(root: HTMLElement): Promise<void> {
     try {
       await store.flush();
       const rep = await githubSync(githubApi(cfg), cfg, cfg.state, store.saved, { since: cfg.last });
-      store.saved = rep.project; cfg.last = Date.now(); cfg.state = rep.state; saveGithubConfig(cfg); store.adopt();
+      store.saved = adoptSynced(store.saved, rep.project); cfg.last = Date.now(); cfg.state = rep.state; saveGithubConfig(cfg); store.adopt();
       say(describeGithub(rep));
     } catch (e) { say(e instanceof Error ? e.message : 'Не вдалося синхронізувати', true); }
     finally { busy = ''; render(); }
@@ -989,7 +991,7 @@ export async function start(root: HTMLElement): Promise<void> {
     try {
       await store.flush();
       const rep = await githubSync(githubApi(cfg), cfg, cfg.state, store.saved, { since: cfg.last });
-      store.saved = rep.project; cfg.last = Date.now(); cfg.state = rep.state; saveGithubConfig(cfg); store.adopt();
+      store.saved = adoptSynced(store.saved, rep.project); cfg.last = Date.now(); cfg.state = rep.state; saveGithubConfig(cfg); store.adopt();
       autoFails = 0;
       if (rep.pulled || rep.conflicts) { say(describeGithub(rep)); if (!$('m-app').classList.contains('kb')) render(); }
     } catch (e) { if (autoFails++ === 0) say('Автосинхронізація не вдалася: ' + (e instanceof Error ? e.message : 'помилка'), true); }
@@ -1009,7 +1011,7 @@ export async function start(root: HTMLElement): Promise<void> {
       await store.flush();
       const cfg = loadClaudeConfig();
       const rep = await claudeSync(db, cfg.holder, cfg.state, store.saved, { since: cfg.last });
-      store.saved = rep.project; cfg.last = Date.now(); cfg.state = rep.state; saveClaudeConfig(cfg); store.adopt();
+      store.saved = adoptSynced(store.saved, rep.project); cfg.last = Date.now(); cfg.state = rep.state; saveClaudeConfig(cfg); store.adopt();
       say(describeClaude(rep));
     } catch (e) { say(e instanceof Error ? e.message : 'Не вдалося синхронізувати', true); }
     finally { busy = ''; render(); }

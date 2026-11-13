@@ -17,16 +17,16 @@ describe('files from older builds', () => {
 
   it('fields of a newer build are carried along untouched, also through a merge', () => {
     const raw = JSON.parse(serialize(emptyProject('T'))) as Record<string, unknown>;
-    raw.groups = { g1: { name: 'Вступ', mt: 10 } };
+    raw.futureRecord = { g1: { name: 'Вступ', mt: 10 } };
     raw.futureThing = [1, 2, 3];
     const p = deserialize(JSON.stringify(raw));
-    expect((JSON.parse(serialize(p)) as Record<string, unknown>).groups).toEqual({ g1: { name: 'Вступ', mt: 10 } });
+    expect((JSON.parse(serialize(p)) as Record<string, unknown>).futureRecord).toEqual({ g1: { name: 'Вступ', mt: 10 } });
     const other = emptyProject('T');
     const m = mergeProjects(other, p).project as unknown as Record<string, unknown>;
-    expect(m.groups).toEqual({ g1: { name: 'Вступ', mt: 10 } });
+    expect(m.futureRecord).toEqual({ g1: { name: 'Вступ', mt: 10 } });
     expect(m.futureThing).toEqual([1, 2, 3]);
     const m2 = mergeProjects(p, other).project as unknown as Record<string, unknown>;
-    expect(m2.groups).toEqual({ g1: { name: 'Вступ', mt: 10 } });
+    expect(m2.futureRecord).toEqual({ g1: { name: 'Вступ', mt: 10 } });
   });
 
   it('records of items with a time merge item by item, and a reset drops the older ones', () => {

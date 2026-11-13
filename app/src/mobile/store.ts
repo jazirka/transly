@@ -1,8 +1,8 @@
-import { adviceCount, check, fixRule, hasAdvice, knownStatus, qaOf, ruleStats, GROUP_COLORS, proposeTermSync, termChange, termChanges, LinkIndex, afterSend, clearMain, linkChanges, linkModeOf, linkView, planLinkSync, relinkRow, reviewClusters, setMain, unlinkRow, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines, approveEntry, sendBack, threadsOf, rowsOfGroup, flowText, wrapMessage, wrapOf } from '../core';
+import { adoptSynced, adviceCount, check, fixRule, hasAdvice, knownStatus, qaOf, ruleStats, GROUP_COLORS, proposeTermSync, termChange, termChanges, LinkIndex, afterSend, clearMain, linkChanges, linkModeOf, linkView, planLinkSync, relinkRow, reviewClusters, setMain, unlinkRow, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines, approveEntry, sendBack, threadsOf, rowsOfGroup, flowText, wrapMessage, wrapOf } from '../core';
 import type { Issue, QaSettings, RuleStat, LinkRowView, QaOptions, TermChange, TermProposal, TermSync, WrapPlan } from '../core';
 import { pxMeasure } from '../ui/measure';
 import type { BatchKind, Group, Entry, GlossaryTerm, RowChange, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
-import { IdbStore } from '../ui/idb';
+import { IdbStore, LoadFailure } from '../ui/idb';
 
 /**
  * The phone app's own model: what is loaded, what is open and what the rows list shows. It talks to the shared core
@@ -50,18 +50,29 @@ export class Store {
   private linkCache: { views: FileView[]; idx: LinkIndex } | null = null;
   private linkTodoCache: number | null = null;
 
+  /** Told when work from another tab was merged into this one, so the screen can say so. */
+  onForeignNotice: (() => void) | null = null;
   private constructor(private idb: IdbStore, saved: SavedProject) {
     this.saved = saved;
     this.autosave = new Autosave(idb, 400, ok => { this.saveOk = ok; if (ok) this.savedAt = Date.now(); this.emit(); });
+    // another tab wrote to the same stored project and the save merged its work in: take it over (no redraw: the translator may be typing)
+    idb.onForeign = merged => { this.saved = adoptSynced(this.saved, merged); this.tmCache = null; this.persist(); this.onForeignNotice?.(); };
     this.views = viewsFromSnapshot(saved);
     try { const at = JSON.parse(localStorage.getItem('transly-m-pos') ?? 'null') as { file?: string; key?: string } | null; if (at?.file && this.view(at.file)) { this.file = at.file; this.key = at.key ?? null; } } catch { /* first run */ }
     if (!this.file && this.views[0]) this.file = this.views[0].name;
   }
 
-  static async open(): Promise<Store> {
+  /** `onFailure` is shown when the stored project cannot be read; it resolves when the translator has chosen to start an empty one. */
+  static async open(onFailure: (failure: LoadFailure, keepAndStartEmpty: () => Promise<void>) => Promise<void>): Promise<Store> {
     const idb = new IdbStore('default');
     let saved: SavedProject;
-    try { saved = (await idb.load()) ?? emptyProject('Новий проєкт'); } catch { saved = emptyProject('Новий проєкт'); }
+    try { saved = (await idb.load()) ?? emptyProject('Новий проєкт'); }
+    catch (e) {
+      // never replace an unreadable stored project silently: the next autosave would overwrite it
+      if (!(e instanceof LoadFailure)) throw e;
+      await onFailure(e, () => idb.releaseAfterBackup(e.raw));
+      saved = emptyProject('Новий проєкт');
+    }
     return new Store(idb, saved);
   }
 

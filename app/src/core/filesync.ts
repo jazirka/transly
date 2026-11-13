@@ -132,7 +132,7 @@ export async function syncFiles(remote: RemoteFiles, cfg: FilesOptions, state: F
       const manifestBytes = blobs.get(pj);
       // Without a changed project.json the remote has nothing new but per-file work: merge it onto our own manifest.
       const manifest: Json = manifestBytes ? asObj(JSON.parse(dec.decode(manifestBytes))) : (() => { const { files: _f, snapshot: _s, reference: _r, ...m } = project; return m as Json; })();
-      const theirs = deserialize(JSON.stringify({ ...manifest, files }));
+      const theirs = deserialize(JSON.stringify({ ...manifest, files }), Date.now());
       if (manifestBytes) remoteRev = theirs.assetsRev ?? 0;
       const myRev = project.assetsRev ?? 0;
       let remoteProject = theirs;

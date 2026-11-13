@@ -1,4 +1,4 @@
-import { EMPTY_GITHUB_STATE, githubSync } from '../core';
+import { EMPTY_GITHUB_STATE, adoptSynced, githubSync } from '../core';
 import type { GithubApi, GithubReport, GithubSettings, GithubState } from '../core';
 import type { Ctx } from './state';
 
@@ -50,7 +50,8 @@ export function githubApi(cfg: GithubConfig, fetchFn: typeof fetch = fetch): Git
 export async function runGithubSync(ctx: Ctx, cfg: GithubConfig, adopt: () => void): Promise<GithubReport> {
   await ctx.autosave.flush();
   const report = await githubSync(githubApi(cfg), cfg, cfg.state, ctx.s.saved, { since: cfg.last });
-  ctx.s.saved = report.project;
+  // edits typed while the request was running must survive: merge the result into what is in memory now
+  ctx.s.saved = adoptSynced(ctx.s.saved, report.project);
   cfg.last = Date.now();
   cfg.state = report.state;
   saveGithubConfig(cfg);

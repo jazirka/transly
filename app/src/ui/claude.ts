@@ -1,4 +1,4 @@
-import { EMPTY_CLAUDE_STATE, claudeSync } from '../core';
+import { EMPTY_CLAUDE_STATE, adoptSynced, claudeSync } from '../core';
 import type { ClaudeReport, ClaudeState, DbLike } from '../core';
 import type { Ctx } from './state';
 
@@ -44,7 +44,8 @@ export async function runClaudeSync(ctx: Ctx, cfg: ClaudeConfig, adopt: () => vo
   if (!db) throw new Error('Спільна база доступна лише у вбудованому артефакті Claude');
   await ctx.autosave.flush();
   const report = await claudeSync(db, cfg.holder, cfg.state, ctx.s.saved, { since: cfg.last });
-  ctx.s.saved = report.project;
+  // edits typed while the request was running must survive: merge the result into what is in memory now
+  ctx.s.saved = adoptSynced(ctx.s.saved, report.project);
   cfg.last = Date.now();
   cfg.state = report.state;
   saveClaudeConfig(cfg);

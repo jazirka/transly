@@ -58,3 +58,5 @@ export * from './undostack';
 export * from './sceneindex';
 export * from './termmatch';
 export * from './groups';
+export * from './validate';
+export * from './session';

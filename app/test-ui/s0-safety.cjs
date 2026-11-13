@@ -64,7 +64,7 @@ async function fresh(browser, url, viewport, extra = {}) {
     const tol = await page.evaluate(() => document.querySelector('#st-tol')?.getAttribute('value') ?? 'no #st-tol');
     check('desktop: no script from settings.who / tolerancePct / status ran', pwned === 0, 'pwned=' + pwned);
     check('desktop: settings.who shown as plain text', who.startsWith('"><img'), who.slice(0, 40));
-    check('desktop: tolerancePct stays one attribute value', tol.startsWith('1"><img'), tol.slice(0, 30));
+    check('desktop: tolerancePct stays one attribute value (a wrong type is replaced by the default)', tol === '25' || tol.startsWith('1"><img'), tol.slice(0, 30));
     check('desktop: group colour from the project made no request to another server', log.leaks.length === 0, log.leaks.join(','));
     check('desktop: no page errors with a foreign status', log.errors.length === 0, log.errors.join(' | '));
     check('desktop: the CSP tag is present', await page.evaluate(() => !!document.querySelector('meta[http-equiv="Content-Security-Policy"]')) || process.env.NO_CSP_EXPECTED === '1');

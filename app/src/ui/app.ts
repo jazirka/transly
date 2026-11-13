@@ -1,4 +1,4 @@
-import { Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, qaOf, termsStamp } from '../core';
+import { Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, qaOf, termsStamp, adoptSynced } from '../core';
 import type { QaOptions, WrapPlan } from '../core';
 import { pxMeasure } from './measure';
 import { openWrapTool } from './wrap-dialog';
@@ -23,7 +23,8 @@ import type { PlaceTarget } from './groups-panel';
 import { GLOSSARY_HTML, editTerm, glossaryClick, renderGlossaryPanel, showTerm, wireGlossary } from './glossary-panel';
 import { pickGameFolder, readFiles, reopenHandle } from './folder';
 import type { DirHandle, PickedFile } from './folder';
-import { IdbStore, loadHandle, saveHandle } from './idb';
+import { IdbStore, LoadFailure, loadHandle, saveHandle } from './idb';
+import { showRecovery } from './recovery';
 import { openImport } from './import-dialog';
 
 import { autoCheck } from './updates';
@@ -175,7 +176,12 @@ export async function start(root: HTMLElement): Promise<void> {
   setProject('default');
   let saved: SavedProject;
   try { saved = (await store.load()) ?? emptyProject('Новий проєкт'); }
-  catch { saved = emptyProject('Новий проєкт'); }
+  catch (e) {
+    // An unreadable stored project must never be replaced silently (the next autosave would overwrite it).
+    if (!(e instanceof LoadFailure)) throw e;
+    await showRecovery(root, e, () => store.releaseAfterBackup(e.raw));
+    saved = emptyProject('Новий проєкт');
+  }
   const mq = matchMedia('(max-width: 760px)');
   /** A window too narrow for three columns: the right panel is folded by itself and, when opened, lies over the centre. */
   const narrow = matchMedia('(min-width: 761px) and (max-width: 1180px)');
@@ -193,6 +199,14 @@ export async function start(root: HTMLElement): Promise<void> {
   const desktopDir = (): string | null => (isDesktop() ? rememberedGameDir() : null);
   try { lastHandle = (await loadHandle('default')) as typeof lastHandle; } catch { lastHandle = null; }
   const autosave = new Autosave(store, 400, ok => { s.saveOk = ok; if (ok) s.savedAt = Date.now(); renderStatus(); });
+  // Another tab or window wrote to the same stored project: the save merged its work in; take it over without redrawing
+  // (the translator may be typing), the screen shows it the next time it is drawn.
+  store.onForeign = merged => {
+    s.saved = adoptSynced(s.saved, merged); s.who = s.saved.settings.who; tmCache = null;
+    unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u]));
+    autosave.queue(s.saved);
+    toast('Знайдено правки з іншої вкладки: їх злито з вашими');
+  };
   let tmCache: ReturnType<typeof buildTm> | null = null;
   /** The wrap mode the memory was built for: it decides how rows are compared, so a change of the setting needs a rebuild. */
   let tmFlow = false;

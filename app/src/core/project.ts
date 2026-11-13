@@ -8,6 +8,7 @@ import type { LinkItem, LinkMode } from './links';
 import { extract } from './engine';
 import type { ExtractOptions } from './rpgmaker';
 import { merge } from './merge';
+import { clampClock, repairProject } from './validate';
 import type { Entry, GameFile, Translations, Unit } from './model';
 import type { WrapSettings } from './wrapconfig';
 import type { QaSettings } from './qaconfig';
@@ -157,15 +158,24 @@ export function looksLikeProject(text: string): boolean {
   return text.includes('"sourceLang"') && text.includes('"targetLang"') && text.includes('"resetEpoch"') && text.includes('"files"');
 }
 
-/** Parse and validate; throws a readable error for unusable input instead of loading garbage. */
-export function deserialize(text: string): SavedProject {
+/** A project read from text, and what had to be repaired in it (empty when it was fine). */
+export interface Deserialized { project: SavedProject; notes: string[] }
+
+/**
+ * Parse, validate and repair; throws a readable error for unusable input instead of loading garbage. Wrong types inside are
+ * fixed or dropped (see `repairProject`). With `now`, time stamps from the future are pulled back to it (see `clampClock`):
+ * pass it for anything that comes from outside this device's own memory.
+ */
+export function deserializeChecked(text: string, now?: number): Deserialized {
   let raw: unknown;
   try { raw = JSON.parse(text); } catch { throw new Error('Файл проєкту пошкоджено: це не JSON'); }
-  if (typeof raw !== 'object' || raw === null) throw new Error('Файл проєкту пошкоджено');
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) throw new Error('Файл проєкту пошкоджено');
   const o = raw as Partial<SavedProject>;
   if (o.version !== 1) throw new Error(`Непідтримувана версія проєкту: ${String(o.version)}`);
-  if (typeof o.name !== 'string' || typeof o.files !== 'object' || o.files === null) throw new Error('Файл проєкту пошкоджено');
-  return {
+  if (typeof o.name !== 'string' || typeof o.files !== 'object' || o.files === null || Array.isArray(o.files)) throw new Error('Файл проєкту пошкоджено');
+  const notes = repairProject(raw as Record<string, unknown>);
+  if (now !== undefined) { const n = clampClock(raw as Record<string, unknown>, now); if (n) notes.push(`часових міток із майбутнього (годинник пристрою поспішає): ${n}`); }
+  const project: SavedProject = {
     ...extrasOf(o),
     version: 1, name: o.name, sourceLang: o.sourceLang ?? 'en', targetLang: o.targetLang ?? 'uk',
     resetEpoch: o.resetEpoch ?? 0, files: o.files, memory: o.memory ?? [], terms: o.terms ?? [],
@@ -183,7 +193,11 @@ export function deserialize(text: string): SavedProject {
     ...(o.members ? { members: o.members } : {}),
     ...(o.links ? { links: o.links } : {}),
   };
+  return { project, notes };
 }
+
+/** `deserializeChecked` without the notes. */
+export const deserialize = (text: string, now?: number): SavedProject => deserializeChecked(text, now).project;
 
 /** What a row keeps after a reset at `epoch`: nothing when it is older, and only the newer comments and history when it is not. */
 function liveEntry(e: Entry, epoch: number): Entry | null {
@@ -222,6 +236,9 @@ export interface ProjectMerge {
   olderPeer: boolean;
 }
 
+/** The later of two stamped values; on equal stamps the greater serialized form, so that the answer does not depend on the order. */
+const laterOf = <T extends { mt: number }>(x: T, y: T): T => (y.mt !== x.mt ? (y.mt > x.mt ? y : x) : (JSON.stringify(y) > JSON.stringify(x) ? y : x));
+
 /** Merge two copies of the same project (e.g. PC and phone). Entries from before the newest reset are dropped. */
 export function mergeProjects(a: SavedProject, b: SavedProject, since = 0): ProjectMerge {
   const epoch = Math.max(a.resetEpoch, b.resetEpoch);
@@ -240,11 +257,12 @@ export function mergeProjects(a: SavedProject, b: SavedProject, since = 0): Proj
   }
   const union = <T extends { mt: number }>(x: T[], y: T[], id: (v: T) => string): T[] => {
     const m = new Map<string, T>();
-    for (const v of [...x, ...y]) { const k = id(v); const o = m.get(k); if (!o || v.mt > o.mt) m.set(k, v); }
+    for (const v of [...x, ...y]) { const k = id(v); const o = m.get(k); if (!o || laterOf(o, v) === v) m.set(k, v); }
     return [...m.values()].filter(v => v.mt > epoch);
   };
-  const newer = a.resetEpoch >= b.resetEpoch ? a : b;
-  const settingsFrom = (b.settingsAt ?? 0) > (a.settingsAt ?? 0) ? b : a;
+  const ident = (p: SavedProject): string => `${p.name}\u0001${p.sourceLang}\u0001${p.targetLang}`;
+  const newer = a.resetEpoch !== b.resetEpoch ? (a.resetEpoch > b.resetEpoch ? a : b) : (ident(b) > ident(a) ? b : a);
+  const settingsFrom = (b.settingsAt ?? 0) !== (a.settingsAt ?? 0) ? ((b.settingsAt ?? 0) > (a.settingsAt ?? 0) ? b : a) : (JSON.stringify(b.settings) > JSON.stringify(a.settings) ? b : a);
   const settingsAt = Math.max(a.settingsAt ?? 0, b.settingsAt ?? 0);
   // Snapshot and reference describe the game, not the translator's work: the side with the newer revision wins,
   // and when only one side carries them (a lite copy from sync) they are kept.
@@ -253,7 +271,7 @@ export function mergeProjects(a: SavedProject, b: SavedProject, since = 0): Proj
   const reference = owner.reference ?? a.reference ?? b.reference;
   const assetsRev = Math.max(a.assetsRev ?? 0, b.assetsRev ?? 0);
   const speakers: Record<string, { name: string; mt: number }> = {};
-  for (const src of [a.speakers ?? {}, b.speakers ?? {}]) for (const [k, v] of Object.entries(src)) if (v.mt > epoch && (!speakers[k] || v.mt > speakers[k]!.mt)) speakers[k] = v;
+  for (const src of [a.speakers ?? {}, b.speakers ?? {}]) for (const [k, v] of Object.entries(src)) if (v.mt > epoch && (!speakers[k] || laterOf(speakers[k]!, v) === v)) speakers[k] = v;
   const deleted: Record<string, number> = {};
   for (const src of [a.deletedTerms ?? {}, b.deletedTerms ?? {}]) for (const [k, t] of Object.entries(src)) if (t > epoch && t > (deleted[k] ?? 0)) deleted[k] = t;
   const terms = union(a.terms, b.terms, v => v.en.toLowerCase()).filter(t => (deleted[t.en.toLowerCase()] ?? 0) < t.mt);

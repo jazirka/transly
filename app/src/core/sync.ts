@@ -41,7 +41,7 @@ export async function syncOnce(t: Transport, keys: SyncKeys, local: SavedProject
     let etag: string | null = null;
     let theirRev = 0;
     if (remote) {
-      const theirs = deserialize(await open(keys, remote.bytes));
+      const theirs = deserialize(await open(keys, remote.bytes), Date.now());
       theirRev = theirs.assetsRev ?? 0;
       const m = mergeProjects(project, theirs, since);
       conflicts += m.conflicts.length;
@@ -54,7 +54,7 @@ export async function syncOnce(t: Transport, keys: SyncKeys, local: SavedProject
       // Another device has newer game assets: fetch them.
       const snap = await t.get(keys.room, 'snap');
       if (snap) {
-        const a = deserialize(await open(keys, snap.bytes));
+        const a = deserialize(await open(keys, snap.bytes), Date.now());
         project = { ...project, ...(a.snapshot ? { snapshot: a.snapshot } : {}), ...(a.reference ? { reference: a.reference } : {}), assetsRev: theirRev };
         gotSnapshot = true;
       }

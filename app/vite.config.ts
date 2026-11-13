@@ -43,7 +43,7 @@ const csp = (): Plugin => ({
 });
 
 export default defineConfig(({ mode }) => ({
-  define: { __BUILD_ID__: JSON.stringify(process.env.GITHUB_SHA ?? 'dev') },
+  define: { __BUILD_ID__: JSON.stringify(process.env.GITHUB_SHA ?? 'dev'), __BUILD_TIME__: JSON.stringify(process.env.GITHUB_SHA ? new Date().toISOString() : '') },
   plugins: [entry(mode === 'mobile'), csp()],
   build: { outDir: mode === 'mobile' ? 'dist-mobile' : 'dist' },
 }));

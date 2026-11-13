@@ -14,6 +14,52 @@ use tauri_plugin_dialog::DialogExt;
 #[derive(Default)]
 struct Roots(Mutex<Vec<PathBuf>>);
 
+/// The folders the user has picked in a native dialog, in this or an earlier session. The list is kept by the app in its
+/// own data folder and is written only by `pick_dir` / `pick_exe`: a page (or a stored string) cannot add to it, so
+/// `allow_again` can bring back a folder that was really chosen, and nothing else.
+struct Picked {
+    file: Option<PathBuf>,
+    list: Mutex<Vec<PathBuf>>,
+}
+
+impl Picked {
+    fn open(file: PathBuf) -> Self {
+        let list = fs::read_to_string(&file)
+            .ok()
+            .and_then(|t| serde_json::from_str::<Vec<String>>(&t).ok())
+            .unwrap_or_default()
+            .into_iter()
+            .map(PathBuf::from)
+            .collect();
+        Picked { file: Some(file), list: Mutex::new(list) }
+    }
+
+    /// A list that is not kept anywhere (tests).
+    #[cfg(test)]
+    fn memory() -> Self {
+        Picked { file: None, list: Mutex::new(Vec::new()) }
+    }
+
+    fn add(&self, p: &Path) {
+        let Ok(c) = p.canonicalize() else { return };
+        let mut v = self.list.lock().unwrap();
+        if !v.contains(&c) {
+            v.push(c);
+            if let Some(f) = &self.file {
+                let names: Vec<String> = v.iter().map(|x| x.to_string_lossy().to_string()).collect();
+                if let Some(dir) = f.parent() {
+                    let _ = fs::create_dir_all(dir);
+                }
+                let _ = fs::write(f, serde_json::to_string(&names).unwrap_or_default());
+            }
+        }
+    }
+
+    fn has(&self, p: &Path) -> bool {
+        p.canonicalize().is_ok_and(|c| self.list.lock().unwrap().contains(&c))
+    }
+}
+
 impl Roots {
     fn allow(&self, p: &Path) {
         if let Ok(c) = p.canonicalize() {
@@ -69,6 +115,7 @@ struct OutFile {
 
 fn walk(dir: &Path, depth: u8, out: &mut Vec<JsonFile>) {
     let Ok(rd) = fs::read_dir(dir) else { return };
+    let written = read_written(dir);
     for e in rd.flatten() {
         let p = e.path();
         let name = e.file_name().to_string_lossy().to_string();
@@ -77,7 +124,7 @@ fn walk(dir: &Path, depth: u8, out: &mut Vec<JsonFile>) {
                 walk(&p, depth + 1, out);
             }
         } else if name.ends_with(".json") {
-            let orig = original_of(dir, &name);
+            let orig = original_of(dir, &name, &written);
             out.push(JsonFile { name, path: p.to_string_lossy().to_string(), orig });
         }
     }
@@ -85,7 +132,8 @@ fn walk(dir: &Path, depth: u8, out: &mut Vec<JsonFile>) {
 
 /// A file name that cannot escape the folder it is written to.
 fn safe_name(n: &str) -> Result<&str, String> {
-    if n.is_empty() || n.contains('/') || n.contains('\\') || n == "." || n == ".." {
+    let odd = |c: char| c.is_control() || matches!(c, ':' | '<' | '>' | '"' | '|' | '?' | '*');
+    if n.is_empty() || n.contains('/') || n.contains('\\') || n == "." || n == ".." || n.chars().any(odd) || n.ends_with('.') || n.ends_with(' ') {
         Err(format!("Недопустима назва файлу: {n}"))
     } else {
         Ok(n)
@@ -100,9 +148,54 @@ fn alt_dir(data: &Path) -> Option<PathBuf> {
     Some(data.with_file_name("data1")).filter(|a| a.is_dir())
 }
 
-/// Where the untouched original of `name` can be read: the app's backup first, else the game's spare `data1`.
-fn original_of(dir: &Path, name: &str) -> Option<String> {
+/// A small fingerprint (FNV-1a) of what the app last wrote into a file: it tells the app's own output from a file that
+/// somebody else has changed since (a game update puts a new original where the translation was).
+fn fingerprint(bytes: &[u8]) -> u64 {
+    let mut h: u64 = 0xcbf29ce484222325;
+    for b in bytes {
+        h ^= *b as u64;
+        h = h.wrapping_mul(0x100000001b3);
+    }
+    h
+}
+
+/// `<data>.transly-written`: one line per file the app wrote, `name<TAB>fingerprint`. Kept next to the backup folder, never inside it.
+fn written_file(data: &Path) -> PathBuf {
+    let mut name = data.file_name().map(|n| n.to_os_string()).unwrap_or_default();
+    name.push(".transly-written");
+    data.with_file_name(name)
+}
+
+fn read_written(data: &Path) -> std::collections::HashMap<String, u64> {
+    let Ok(text) = fs::read_to_string(written_file(data)) else { return Default::default() };
+    text.lines().filter_map(|l| l.split_once('\t')).filter_map(|(n, h)| Some((n.to_string(), h.parse().ok()?))).collect()
+}
+
+fn save_written(data: &Path, m: &std::collections::HashMap<String, u64>) {
+    let mut lines: Vec<String> = m.iter().map(|(n, h)| format!("{n}\t{h}")).collect();
+    lines.sort();
+    let _ = fs::write(written_file(data), lines.join("\n"));
+}
+
+/// True when the file in the game folder is not what the app wrote last: somebody (a game update) changed it, so it is a new original.
+fn changed_outside(written: &std::collections::HashMap<String, u64>, name: &str, live: &[u8]) -> bool {
+    written.get(name).is_some_and(|h| *h != fingerprint(live))
+}
+
+/// The folder where the previous original of a file goes when a game update replaces it.
+fn previous_dir(data: &Path) -> PathBuf {
+    let mut name = data.file_name().map(|n| n.to_os_string()).unwrap_or_default();
+    name.push(".transly-prev");
+    data.with_file_name(name)
+}
+
+/// Where the untouched original of `name` can be read: the app's backup first, else the game's spare `data1`. A file that was
+/// changed since the app wrote it (a game update) is itself the newest original: then nothing is returned and the file is read.
+fn original_of(dir: &Path, name: &str, written: &std::collections::HashMap<String, u64>) -> Option<String> {
     dir.parent()?;
+    if fs::read(dir.join(name)).is_ok_and(|live| changed_outside(written, name, &live)) {
+        return None;
+    }
     let backup = backup_dir(dir).join(name);
     let spare = alt_dir(dir).map(|a| a.join(name));
     [Some(backup), spare].into_iter().flatten().find(|b| b.is_file()).map(|b| b.to_string_lossy().to_string())
@@ -115,32 +208,43 @@ fn backup_dir(data: &Path) -> PathBuf {
 }
 
 #[tauri::command]
-async fn pick_dir(app: AppHandle, roots: State<'_, Roots>) -> Result<Option<String>, String> {
+async fn pick_dir(app: AppHandle, roots: State<'_, Roots>, picked: State<'_, Picked>) -> Result<Option<String>, String> {
     let Some(p) = app.dialog().file().blocking_pick_folder() else { return Ok(None) };
     let path = p.into_path().map_err(|e| e.to_string())?;
     roots.allow(&path);
+    picked.add(&path);
     Ok(Some(path.to_string_lossy().to_string()))
 }
 
 #[tauri::command]
-async fn pick_exe(app: AppHandle, roots: State<'_, Roots>) -> Result<Option<String>, String> {
+async fn pick_exe(app: AppHandle, roots: State<'_, Roots>, picked: State<'_, Picked>) -> Result<Option<String>, String> {
     let Some(p) = app.dialog().file().blocking_pick_file() else { return Ok(None) };
     let path = p.into_path().map_err(|e| e.to_string())?;
     if let Some(parent) = path.parent() {
         roots.allow(parent);
+        picked.add(parent);
     }
     Ok(Some(path.to_string_lossy().to_string()))
 }
 
-/// Re-enable a folder or file chosen in an earlier session (the app remembers the path, the user chose it).
-#[tauri::command]
-fn allow_again(roots: State<'_, Roots>, path: String) -> Result<(), String> {
-    let p = PathBuf::from(&path);
+/// Re-enable a folder (or the folder of a program) that the user picked in a dialog in an earlier session. A path the user
+/// never picked is refused, however it got here: the app does not take a remembered string for a permission.
+fn allow_picked(roots: &Roots, picked: &Picked, path: &str) -> Result<(), String> {
+    let p = PathBuf::from(path);
     if !p.exists() {
         return Err("Шлях більше не існує".into());
     }
-    roots.allow(if p.is_dir() { &p } else { p.parent().unwrap_or(&p) });
+    let dir = if p.is_dir() { p.as_path() } else { p.parent().unwrap_or(&p) };
+    if !picked.has(dir) {
+        return Err("Цю папку не обирали в діалозі: оберіть її знову".into());
+    }
+    roots.allow(dir);
     Ok(())
+}
+
+#[tauri::command]
+fn allow_again(roots: State<'_, Roots>, picked: State<'_, Picked>, path: String) -> Result<(), String> {
+    allow_picked(&roots, &picked, &path)
 }
 
 #[tauri::command]
@@ -151,10 +255,15 @@ fn list_json(roots: State<'_, Roots>, dir: String) -> Result<Vec<JsonFile>, Stri
     Ok(out)
 }
 
+fn read_text_checked(roots: &Roots, path: &str) -> Result<String, String> {
+    let p = roots.check_read(path)?;
+    // a file saved with a byte-order mark would not parse as JSON; the browser's own reader drops it too
+    fs::read_to_string(p).map(|t| t.strip_prefix('\u{feff}').map(str::to_string).unwrap_or(t)).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn read_text(roots: State<'_, Roots>, path: String) -> Result<String, String> {
-    let p = roots.check_read(&path)?;
-    fs::read_to_string(p).map_err(|e| e.to_string())
+    read_text_checked(&roots, &path)
 }
 
 /// Picture from the game folder (`img/...`, also under `www/` for MV), as raw bytes. Only inside the picked folder.
@@ -178,22 +287,63 @@ fn read_image(roots: State<'_, Roots>, game: String, rel: String) -> Result<taur
     fs::read(p).map(tauri::ipc::Response::new).map_err(|e| e.to_string())
 }
 
-/// Write translated files into `dir`, keeping a one-time copy of every original next to it.
+/// Write translated files into `dir`, keeping a copy of every original next to it. Everything is written to temporary files
+/// first and only then put in place, so a failure while writing leaves the game exactly as it was. The copy of the original
+/// is taken the first time, and again when the game itself changed the file since the app wrote it (an update of the game:
+/// then the old copy is kept in `<data>.transly-prev`).
 fn apply_files(dir: &Path, files: &[OutFile]) -> Result<usize, String> {
     let backup = backup_dir(dir);
     fs::create_dir_all(&backup).map_err(|e| e.to_string())?;
-    let mut n = 0;
+    let mut written = read_written(dir);
+    let mut staged: Vec<(String, PathBuf, PathBuf, u64)> = Vec::new();
+    let undo = |staged: &[(String, PathBuf, PathBuf, u64)]| {
+        for (_, tmp, _, _) in staged {
+            let _ = fs::remove_file(tmp);
+        }
+    };
     for f in files {
-        let name = safe_name(&f.name)?;
+        let name = match safe_name(&f.name) {
+            Ok(n) => n,
+            Err(e) => { undo(&staged); return Err(e); }
+        };
         let target = dir.join(name);
         let saved = backup.join(name);
-        if target.exists() && !saved.exists() {
-            fs::copy(&target, &saved).map_err(|e| e.to_string())?;
+        if target.is_file() {
+            let step = (|| -> Result<(), String> {
+                let live = fs::read(&target).map_err(|e| e.to_string())?;
+                if !saved.exists() {
+                    fs::copy(&target, &saved).map_err(|e| e.to_string())?;
+                } else if changed_outside(&written, name, &live) {
+                    let prev = previous_dir(dir);
+                    fs::create_dir_all(&prev).map_err(|e| e.to_string())?;
+                    fs::copy(&saved, prev.join(name)).map_err(|e| e.to_string())?;
+                    fs::write(&saved, &live).map_err(|e| e.to_string())?;
+                }
+                Ok(())
+            })();
+            if let Err(e) = step { undo(&staged); return Err(e); }
         }
-        fs::write(&target, &f.content).map_err(|e| e.to_string())?;
-        n += 1;
+        let tmp = dir.join(format!("{name}.transly-tmp"));
+        if let Err(e) = fs::write(&tmp, &f.content) {
+            let _ = fs::remove_file(&tmp);
+            undo(&staged);
+            return Err(e.to_string());
+        }
+        staged.push((name.to_string(), tmp, target, fingerprint(f.content.as_bytes())));
     }
-    Ok(n)
+    let total = staged.len();
+    let mut done = 0;
+    for (name, tmp, target, fp) in &staged {
+        if let Err(e) = fs::rename(tmp, target) {
+            undo(&staged[done..]);
+            save_written(dir, &written);
+            return Err(format!("Записано {done} із {total} файлів, далі збій: {e}"));
+        }
+        written.insert(name.clone(), *fp);
+        done += 1;
+    }
+    save_written(dir, &written);
+    Ok(done)
 }
 
 fn restore_files(dir: &Path) -> Result<usize, String> {
@@ -202,10 +352,13 @@ fn restore_files(dir: &Path) -> Result<usize, String> {
         return Err("Резервної копії оригіналів немає".into());
     }
     let mut n = 0;
+    let mut written = read_written(dir);
     for e in fs::read_dir(&backup).map_err(|e| e.to_string())?.flatten() {
         fs::copy(e.path(), dir.join(e.file_name())).map_err(|e| e.to_string())?;
+        written.remove(&e.file_name().to_string_lossy().to_string());
         n += 1;
     }
+    save_written(dir, &written);
     Ok(n)
 }
 
@@ -308,8 +461,20 @@ fn restore_jump(roots: State<'_, Roots>, data_dir: String) -> Result<bool, Strin
 /// Updates are fetched from this host only, and only as a release asset: the UI cannot make the app download or run
 /// anything else.
 fn allowed_update(url: &str, name: &str) -> Result<(), String> {
+    allowed_update_from(url, name, option_env!("TRANSLY_UPDATE_REPO"))
+}
+
+/// `repo` is the repository this build was made in (the CI sets it): updates are taken from there and from nowhere else, so a
+/// page cannot send the app to another repository. A local build has none and keeps the general rule.
+fn allowed_update_from(url: &str, name: &str, repo: Option<&str>) -> Result<(), String> {
     if !url.starts_with("https://api.github.com/repos/") || !url.contains("/releases/assets/") || url.contains("..") {
         return Err("Оновлення можна брати лише з релізу GitHub".into());
+    }
+    if let Some(repo) = repo.filter(|r| !r.is_empty()) {
+        let want = format!("https://api.github.com/repos/{}/releases/assets/", repo.to_lowercase());
+        if !url.to_lowercase().starts_with(&want) {
+            return Err("Оновлення можна брати лише з репозиторію, з якого зібрано цей застосунок".into());
+        }
     }
     let n = safe_name(name)?.to_lowercase();
     if !(n.ends_with(".exe") || n.ends_with(".msi")) {
@@ -322,7 +487,23 @@ fn allowed_update(url: &str, name: &str) -> Result<(), String> {
 /// must not receive the token, so the redirect is followed by hand.
 fn download_asset(url: &str, token: &str, dest: &Path) -> Result<u64, String> {
     use std::io::Read;
-    let agent = ureq::AgentBuilder::new().redirects(0).user_agent("transly").build();
+    let agent = ureq::AgentBuilder::new()
+        .redirects(0)
+        .user_agent("transly")
+        .timeout_connect(std::time::Duration::from_secs(30))
+        .timeout_read(std::time::Duration::from_secs(60))
+        .build();
+    // what GitHub says about the file (size, sha-256): the download is checked against it
+    let meta: Option<serde_json::Value> = agent
+        .get(url)
+        .set("Authorization", &format!("Bearer {token}"))
+        .set("Accept", "application/vnd.github+json")
+        .call()
+        .ok()
+        .and_then(|r| r.into_string().ok())
+        .and_then(|t| serde_json::from_str(&t).ok());
+    let want_size = meta.as_ref().and_then(|m| m.get("size")).and_then(|v| v.as_u64());
+    let want_sum = meta.as_ref().and_then(|m| m.get("digest")).and_then(|v| v.as_str()).and_then(|d| d.strip_prefix("sha256:")).map(|d| d.to_lowercase());
     let status_err = |c: u16| match c {
         401 => "токен недійсний або прострочений".to_string(),
         403 | 404 => "немає доступу до релізу (токен має мати право читати вміст репозиторію)".to_string(),
@@ -348,10 +529,39 @@ fn download_asset(url: &str, token: &str, dest: &Path) -> Result<u64, String> {
     };
     let mut out = fs::File::create(dest).map_err(|e| e.to_string())?;
     let n = std::io::copy(&mut resp.into_reader().take(400 * 1024 * 1024), &mut out).map_err(|e| e.to_string())?;
+    drop(out);
+    let bad = |why: &str| {
+        let _ = fs::remove_file(dest);
+        Err(why.to_string())
+    };
     if n == 0 {
-        return Err("Порожній файл оновлення".into());
+        return bad("Порожній файл оновлення");
+    }
+    if want_size.is_some_and(|s| s != n) {
+        return bad("Файл оновлення завантажився не повністю: розмір не збігається з тим, що вказав GitHub");
+    }
+    if let Some(sum) = want_sum {
+        if sha256_hex(dest)? != sum {
+            return bad("Контрольна сума файлу оновлення не збігається з тією, що вказав GitHub");
+        }
     }
     Ok(n)
+}
+
+fn sha256_hex(path: &Path) -> Result<String, String> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+    let mut f = fs::File::open(path).map_err(|e| e.to_string())?;
+    let mut h = Sha256::new();
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        let k = f.read(&mut buf).map_err(|e| e.to_string())?;
+        if k == 0 {
+            break;
+        }
+        h.update(&buf[..k]);
+    }
+    Ok(h.finalize().iter().map(|b| format!("{b:02x}")).collect())
 }
 
 /// Download the Windows installer of a new version, start it and close the app so it can be replaced.
@@ -414,6 +624,12 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Roots::default())
+        .setup(|app| {
+            use tauri::Manager;
+            let file = app.path().app_data_dir().map(|d| d.join("picked-folders.json")).unwrap_or_else(|_| std::env::temp_dir().join("transly-picked-folders.json"));
+            app.manage(Picked::open(file));
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![pick_dir, pick_exe, allow_again, list_json, read_text, read_image, apply_data, restore_data, apply_jump, restore_jump, install_update, launch, open_url])
         .run(tauri::generate_context!())
         .expect("error while running Transly");
@@ -431,6 +647,111 @@ mod tests {
         assert!(safe_name("a\\b.json").is_err());
         assert!(safe_name("..").is_err());
         assert!(safe_name("").is_err());
+        // a drive prefix would take the file out of the folder on Windows, a colon names an alternate stream
+        assert!(safe_name("D:evil.json").is_err());
+        assert!(safe_name("Map001.json:stream").is_err());
+        assert!(safe_name("a|b.json").is_err());
+        assert!(safe_name("trailing.").is_err());
+        assert!(safe_name("with space ").is_err());
+    }
+
+    #[test]
+    fn updates_are_taken_only_from_the_repository_the_build_came_from() {
+        let ok = "https://api.github.com/repos/Jazirka/Transly/releases/assets/123";
+        assert!(allowed_update_from(ok, "Transly_setup.exe", Some("jazirka/transly")).is_ok());
+        assert!(allowed_update_from("https://api.github.com/repos/evil/transly/releases/assets/1", "x.exe", Some("jazirka/transly")).is_err());
+        assert!(allowed_update_from("https://api.github.com/repos/jazirka/transly-evil/releases/assets/1", "x.exe", Some("jazirka/transly")).is_err());
+        // a local build keeps the general rule
+        assert!(allowed_update_from("https://api.github.com/repos/evil/transly/releases/assets/1", "x.exe", None).is_ok());
+        assert!(allowed_update_from(ok, "x.zip", Some("jazirka/transly")).is_err());
+    }
+
+    #[test]
+    fn a_byte_order_mark_is_dropped_when_a_file_is_read() {
+        let tmp = std::env::temp_dir().join("transly-test-bom");
+        let _ = fs::remove_dir_all(&tmp);
+        fs::create_dir_all(&tmp).unwrap();
+        let f = tmp.join("A.json");
+        fs::write(&f, "\u{feff}{\"a\":1}").unwrap();
+        let roots = Roots::default();
+        roots.allow(&tmp);
+        let text = fs::read_to_string(roots.check_read(f.to_str().unwrap()).unwrap()).unwrap();
+        assert!(text.starts_with('\u{feff}'));
+        assert_eq!(read_text_checked(&roots, f.to_str().unwrap()).unwrap(), "{\"a\":1}");
+    }
+
+    #[test]
+    fn sha256_of_a_known_string() {
+        let tmp = std::env::temp_dir().join("transly-test-sha");
+        let _ = fs::remove_dir_all(&tmp);
+        fs::create_dir_all(&tmp).unwrap();
+        let f = tmp.join("abc.bin");
+        fs::write(&f, b"abc").unwrap();
+        assert_eq!(sha256_hex(&f).unwrap(), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+    }
+
+    #[test]
+    fn a_folder_nobody_picked_is_not_brought_back() {
+        let tmp = std::env::temp_dir().join("transly-test-picked");
+        let _ = fs::remove_dir_all(&tmp);
+        let game = tmp.join("game");
+        let other = tmp.join("other");
+        fs::create_dir_all(&game).unwrap();
+        fs::create_dir_all(&other).unwrap();
+        let picked = Picked::open(tmp.join("picked.json"));
+        picked.add(&game);
+        // a later session reads the list from the app's own file
+        let roots = Roots::default();
+        let later = Picked::open(tmp.join("picked.json"));
+        assert!(allow_picked(&roots, &later, game.to_str().unwrap()).is_ok());
+        assert!(roots.check(game.join("x.json").to_str().unwrap()).is_ok());
+        let fresh = Roots::default();
+        assert!(allow_picked(&fresh, &later, other.to_str().unwrap()).is_err());
+        assert!(fresh.check(other.join("x.json").to_str().unwrap()).is_err());
+        // a parent of a picked folder is not picked either
+        assert!(allow_picked(&fresh, &later, tmp.to_str().unwrap()).is_err());
+        // the program's folder counts when the program was picked
+        let exe = game.join("game.exe");
+        fs::write(&exe, b"x").unwrap();
+        assert!(allow_picked(&fresh, &later, exe.to_str().unwrap()).is_ok());
+        assert!(!Picked::memory().has(&game));
+    }
+
+    #[test]
+    fn a_failed_write_leaves_the_game_as_it_was_and_an_update_refreshes_the_backup() {
+        let base = std::env::temp_dir().join("transly-test-apply-update");
+        let _ = fs::remove_dir_all(&base);
+        let data = base.join("data");
+        fs::create_dir_all(&data).unwrap();
+        fs::write(data.join("A.json"), "\"orig A v1\"").unwrap();
+        fs::write(data.join("B.json"), "\"orig B v1\"").unwrap();
+        let out = |n: &str, c: &str| OutFile { name: n.into(), content: c.into() };
+        // the second file cannot be staged (its temporary name is taken by a folder): nothing of the game changes
+        fs::create_dir_all(data.join("B.json.transly-tmp")).unwrap();
+        assert!(apply_files(&data, &[out("A.json", "\"uk A\""), out("B.json", "\"uk B\"")]).is_err());
+        assert_eq!(fs::read_to_string(data.join("A.json")).unwrap(), "\"orig A v1\"");
+        assert_eq!(fs::read_to_string(data.join("B.json")).unwrap(), "\"orig B v1\"");
+        assert!(!data.join("A.json.transly-tmp").exists());
+        fs::remove_dir_all(data.join("B.json.transly-tmp")).unwrap();
+        // a normal apply keeps the originals
+        assert_eq!(apply_files(&data, &[out("A.json", "\"uk A\""), out("B.json", "\"uk B\"")]).unwrap(), 2);
+        assert_eq!(fs::read_to_string(data.join("A.json")).unwrap(), "\"uk A\"");
+        let written = read_written(&data);
+        assert_eq!(fs::read_to_string(original_of(&data, "A.json", &written).unwrap()).unwrap(), "\"orig A v1\"");
+        // the publisher updates the game: the file is a new original, and it is what the list offers as the original
+        fs::write(data.join("A.json"), "\"orig A v2\"").unwrap();
+        assert!(original_of(&data, "A.json", &written).is_none());
+        // applying again takes the new original as the backup (the old one is kept aside), and a restore gives v2 back
+        assert_eq!(apply_files(&data, &[out("A.json", "\"uk A 2\"")]).unwrap(), 1);
+        assert_eq!(fs::read_to_string(backup_dir(&data).join("A.json")).unwrap(), "\"orig A v2\"");
+        assert_eq!(fs::read_to_string(previous_dir(&data).join("A.json")).unwrap(), "\"orig A v1\"");
+        assert_eq!(restore_files(&data).unwrap(), 2);
+        assert_eq!(fs::read_to_string(data.join("A.json")).unwrap(), "\"orig A v2\"");
+        assert_eq!(fs::read_to_string(data.join("B.json")).unwrap(), "\"orig B v1\"");
+        // an unchanged translated file is not mistaken for an update
+        assert_eq!(apply_files(&data, &[out("B.json", "\"uk B\"")]).unwrap(), 1);
+        assert_eq!(apply_files(&data, &[out("B.json", "\"uk B again\"")]).unwrap(), 1);
+        assert_eq!(fs::read_to_string(backup_dir(&data).join("B.json")).unwrap(), "\"orig B v1\"");
     }
 
     #[test]
@@ -510,12 +831,12 @@ mod tests {
         fs::write(data.join("A.json"), "\"Тулуб\"").unwrap();
         fs::write(data.join("B.json"), "\"b\"").unwrap();
         fs::write(spare.join("A.json"), "\"Body\"").unwrap();
-        assert_eq!(fs::read_to_string(original_of(&data, "A.json").unwrap()).unwrap(), "\"Body\"");
-        assert!(original_of(&data, "B.json").is_none());
+        assert_eq!(fs::read_to_string(original_of(&data, "A.json", &Default::default()).unwrap()).unwrap(), "\"Body\"");
+        assert!(original_of(&data, "B.json", &Default::default()).is_none());
         let backup = backup_dir(&data);
         fs::create_dir_all(&backup).unwrap();
         fs::write(backup.join("A.json"), "\"Backup\"").unwrap();
-        assert_eq!(fs::read_to_string(original_of(&data, "A.json").unwrap()).unwrap(), "\"Backup\"");
+        assert_eq!(fs::read_to_string(original_of(&data, "A.json", &Default::default()).unwrap()).unwrap(), "\"Backup\"");
         let roots = Roots::default();
         roots.allow(&data);
         assert!(roots.check_read(spare.join("A.json").to_str().unwrap()).is_ok());

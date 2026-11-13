@@ -18,8 +18,9 @@ on:
       - 'app/src/**'
       - '.github/workflows/android.yml'
 
+# The build job runs third-party code (npm, gradle): it gets a read-only token. Only the release job can write.
 permissions:
-  contents: write # only used to publish the release below
+  contents: read
 
 jobs:
   apk:
@@ -27,6 +28,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
@@ -86,12 +89,23 @@ jobs:
           path: transly.apk
           if-no-files-found: error
 
+  release:
+    needs: apk
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.release }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: transly-apk
+          path: out
       - name: Publish as a release
-        if: github.event_name == 'workflow_dispatch' && inputs.release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete android-latest --yes --cleanup-tag || true
-          gh release create android-latest transly.apk --prerelease --target "$GITHUB_SHA" \
+          ls -la out
+          gh release delete android-latest --yes --cleanup-tag --repo "$GITHUB_REPOSITORY" || true
+          gh release create android-latest out/transly.apk --repo "$GITHUB_REPOSITORY" --prerelease --target "$GITHUB_SHA" \
             --title "Transly for Android" \
             --notes "Build of commit $GITHUB_SHA, signed with the debug key. Install by hand: allow installs from your browser or file manager."

@@ -12,8 +12,10 @@ on:
         type: boolean
         default: false
 
+# The build job reads the repository and runs third-party code (npm, cargo build scripts): it gets a read-only token.
+# Only the release job, which runs no project code, can write.
 permissions:
-  contents: write # only used to publish the release below
+  contents: read
 
 jobs:
   build:
@@ -25,6 +27,8 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
@@ -41,6 +45,9 @@ jobs:
       - name: Test and build the installer
         working-directory: app
         shell: bash
+        env:
+          # the installer takes updates only from this repository (see allowed_update in src-tauri/src/lib.rs)
+          TRANSLY_UPDATE_REPO: ${{ github.repository }}
         run: |
           npm ci
           npm test
@@ -63,6 +70,8 @@ jobs:
     needs: build
     if: ${{ !cancelled() && inputs.release }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:

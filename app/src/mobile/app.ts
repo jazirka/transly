@@ -7,6 +7,7 @@ import type { Comment, DiffSeg, Entry, GameFile } from '../core';
 import { artifactDb, describeClaude, loadClaudeConfig, saveClaudeConfig } from '../ui/claude';
 import { describeGithub, githubApi, githubConfigured, loadGithubConfig, saveGithubConfig } from '../ui/github';
 import { esc, plural } from '../ui/dom';
+import { saveFile } from '../ui/save';
 import { showRecovery } from '../ui/recovery';
 import { gameHtml } from '../ui/gamehtml';
 import { markupTerms } from '../ui/markup';
@@ -1280,10 +1281,15 @@ export async function start(root: HTMLElement): Promise<void> {
     if (q('[data-ghsync]')) { void syncGithub(); return; }
     if (q('[data-clsync]')) { void syncClaude(); return; }
     if (q('[data-export]')) {
-      // the file carries the mark of its own making (a copy of the project now exists outside the browser)
-      stamp(store.saved, 'copy', 'файл', Date.now()); store.persist();
-      const blob = new Blob([JSON.stringify(store.saved)], { type: 'application/json' });
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${store.saved.name || 'transly'}.transly.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+      // The file carries the mark of its own making; when the save is cancelled or fails the mark is taken back.
+      // In the Android app a blob link cannot download, so the file goes through `saveFile` (the app writes it into Downloads).
+      const was = store.saved.stamps?.copy;
+      stamp(store.saved, 'copy', 'файл', Date.now());
+      const name = `${store.saved.name.replace(/[^\p{L}\p{N}_-]+/gu, '_') || 'transly'}.transly.json`;
+      void saveFile(name, JSON.stringify(store.saved), 'application/json').then(ok => {
+        if (ok) { store.persist(); say('Проєкт збережено у файл'); } else if (was) store.saved.stamps!.copy = was; else delete store.saved.stamps?.copy;
+        render();
+      });
       return;
     }
   });

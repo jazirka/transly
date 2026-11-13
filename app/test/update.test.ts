@@ -32,6 +32,12 @@ describe('updates', () => {
     expect(updateAvailable('dev', 'def456')).toBe(false);
     expect(updateAvailable('abc123', '')).toBe(false);
   });
+  it('does not offer an older release, even from another commit (a re-run of an old build)', () => {
+    expect(updateAvailable('abc123', 'def456', '2026-10-01T00:00:00Z', '2026-11-01T00:00:00Z')).toBe(false);
+    expect(updateAvailable('abc123', 'def456', '2026-12-01T00:00:00Z', '2026-11-01T00:00:00Z')).toBe(true);
+    expect(updateAvailable('abc123', 'def456', '', '2026-11-01T00:00:00Z')).toBe(true);   // no time to compare: the commit decides
+    expect(updateAvailable('abc123', 'def456', '2026-12-01T00:00:00Z', '')).toBe(true);
+  });
   it('knows the platform and the tag its installers live under', () => {
     expect(platformOf(true, false, 'Android')).toBe('android');
     expect(platformOf(false, true, 'Mozilla/5.0 (Windows NT 10.0)')).toBe('windows');

@@ -47,7 +47,7 @@ export async function checkForUpdate(cfg: UpdateConfig, fetchFn: typeof fetch = 
   if (!r.ok) throw new Error(`GitHub: помилка ${r.status}`);
   const release = parseRelease(await r.json());
   if (!release) throw new Error('GitHub надіслав незрозумілу відповідь');
-  return { platform, release, asset: pickAsset(platform, release.assets), newer: updateAvailable(__BUILD_ID__, release.sha), page: `https://github.com/${cfg.repo.trim()}/releases/tag/${tag}` };
+  return { platform, release, asset: pickAsset(platform, release.assets), newer: updateAvailable(__BUILD_ID__, release.sha, release.published, __BUILD_TIME__), page: `https://github.com/${cfg.repo.trim()}/releases/tag/${tag}` };
 }
 
 /** Hand the installer to the app: Android downloads it and opens the system installer, Windows runs it and closes. */

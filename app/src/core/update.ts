@@ -34,5 +34,12 @@ export function pickAsset(platform: Platform, assets: ReleaseAsset[]): ReleaseAs
   }
 }
 
-/** A release is newer when it was built from another commit. A local ("dev") build never asks. */
-export const updateAvailable = (buildId: string, releaseSha: string): boolean => buildId !== 'dev' && !!releaseSha && !releaseSha.startsWith(buildId) && !buildId.startsWith(releaseSha);
+/**
+ * A release is newer when it was built from another commit AND published after this build was made (a re-run of an older build
+ * must not offer a downgrade). A local ("dev") build never asks. Times are optional: without them only the commit is compared.
+ */
+export function updateAvailable(buildId: string, releaseSha: string, releasePublished = '', builtAt = ''): boolean {
+  if (buildId === 'dev' || !releaseSha || releaseSha.startsWith(buildId) || buildId.startsWith(releaseSha)) return false;
+  const rel = Date.parse(releasePublished), mine = Date.parse(builtAt);
+  return !(Number.isFinite(rel) && Number.isFinite(mine) && rel <= mine);
+}

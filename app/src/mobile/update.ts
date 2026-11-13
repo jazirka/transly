@@ -27,7 +27,7 @@ export async function checkUpdate(cfg: UpdateCfg): Promise<UpdateCheck> {
   if (!r.ok) throw new Error(`GitHub: помилка ${r.status}`);
   const release = parseRelease(await r.json());
   if (!release) throw new Error('GitHub надіслав незрозумілу відповідь');
-  return { release, asset: pickAsset('android', release.assets), newer: updateAvailable(__BUILD_ID__, release.sha), page: `https://github.com/${cfg.repo.trim()}/releases/tag/${tag}` };
+  return { release, asset: pickAsset('android', release.assets), newer: updateAvailable(__BUILD_ID__, release.sha, release.published, __BUILD_TIME__), page: `https://github.com/${cfg.repo.trim()}/releases/tag/${tag}` };
 }
 
 /** Android downloads the file itself (with the token, without leaking it to the redirect target) and opens the installer. */

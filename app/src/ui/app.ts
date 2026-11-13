@@ -485,7 +485,9 @@ export async function start(root: HTMLElement): Promise<void> {
     const had = box.contains(document.activeElement) ? (document.activeElement as HTMLElement) : null;
     const hadId = had ? { file: had.dataset.file, dir: had.dataset.dir } : null;
     $('#tree-act').innerHTML = s.views.length > 1 ? `<button class="btn" data-act="group-all" title="Усі рядки всіх файлів в одній таблиці">Усі файли разом</button>${s.picked.size ? `<button class="btn p" data-act="group-picked">Відкрити вибрані (${s.picked.size})</button><button class="btn" id="tree-grp" aria-haspopup="menu" title="Додати вибрані файли до групи">У групу ▾</button><button class="btn" data-act="group-clear" title="Зняти позначки">✕</button>` : '<span class="hint">Ctrl+клік: вибрати кілька файлів</span>'}` : '';
-    if (!s.views.length) { box.innerHTML = '<div class="msg-empty">Папку гри ще не відкрито</div>'; return; }
+    // a tree with nothing in it is no tree: the message stands alone until there are files
+    if (!s.views.length) { box.removeAttribute('role'); box.innerHTML = '<div class="msg-empty">Папку гри ще не відкрито</div>'; return; }
+    box.setAttribute('role', 'tree');
     let skip: number | null = null;
     const q = fileQ.trim().toLowerCase();
     let nodes = treeNodes();
@@ -538,6 +540,7 @@ export async function start(root: HTMLElement): Promise<void> {
   function renderFilterButtons(): void {
     const set = (id: string, on: boolean, label: string, clear: string): void => {
       const b = $(id);
+      b.setAttribute('aria-haspopup', 'true'); if (!b.hasAttribute('aria-expanded')) b.setAttribute('aria-expanded', 'false');
       b.classList.toggle('on', on);
       b.innerHTML = `${esc(label)} ▾${on ? `<span class="x" data-clear="${clear}" title="Скинути" role="button" tabindex="0" aria-label="Скинути фільтр">✕</span>` : ''}`;
     };
@@ -561,7 +564,7 @@ export async function start(root: HTMLElement): Promise<void> {
       <div class="st" role="gridcell"><span class="sd ${st}${autoDraft(st, e) ? ' auto' : ''}" title="${STATUS_LABEL[st]}${autoDraft(st, e) ? ' (заповнено застосунком, ще не переглянуто)' : ''}"${st === 'qa' ? ` data-hc="qa" data-hk="${esc(u.key)}"` : ''}></span><span class="vh">${STATUS_LABEL[st]}${autoDraft(st, e) ? ', авто' : ''}</span>${adv ? '<span class="adv" title="Є порада QA: відкрийте рядок, щоб побачити" data-hc="qa" data-hk="' + esc(u.key) + '"></span><span class="vh">Є порада</span>' : ''}</div>
       <div role="gridcell"><span class="key" title="${esc(u.key)}">${esc(shortKey(u.key))}</span>${cmIcon(e)}</div>
       <div class="who" role="gridcell">${esc(ctx.speaker(u))}</div>
-      <div class="src" role="gridcell">${markup(flow(u.source), hits)}<span class="skey" aria-hidden="true">${esc(shortKey(u.key))}</span></div>
+      <div class="src" role="gridcell" lang="en">${markup(flow(u.source), hits)}<span class="skey" aria-hidden="true">${esc(shortKey(u.key))}</span></div>
       <div class="tr ${e?.target ? '' : 'empty'}" role="gridcell" title="Клікніть, щоб писати прямо тут">${e?.target ? markup(flow(e.target)) : '—'}</div>
       <div class="len ${lenCls(u, e)}" role="gridcell" title="Символів у перекладі / в оригіналі">${len}</div></div>`;
   }
@@ -575,7 +578,7 @@ export async function start(root: HTMLElement): Promise<void> {
 
   const siHtml = (u: Unit, n: number): string => {
     const e = entryOf(u), st = shownStatus(ctx, u, e);
-    return `<div class="si ${u.key === s.cur ? 'sel' : ''}" data-key="${esc(u.key)}" role="button" tabindex="0"><span class="sd ${st}${autoDraft(st, e) ? ' auto' : ''}" title="${STATUS_LABEL[st]}${autoDraft(st, e) ? ' (заповнено застосунком, ще не переглянуто)' : ''}"></span><div><div class="a"><span>${n}</span><b>${esc(ctx.speaker(u) || KIND_LABEL[u.kind])}</b><span>${esc(shortKey(u.key))}</span>${cmIcon(e)}</div><div class="s">${esc(flow(u.source))}</div><div class="t">${e?.target ? esc(flow(e.target)) : '—'}</div></div></div>`;
+    return `<div class="si ${u.key === s.cur ? 'sel' : ''}" data-key="${esc(u.key)}" role="button" tabindex="0"><span class="sd ${st}${autoDraft(st, e) ? ' auto' : ''}" title="${STATUS_LABEL[st]}${autoDraft(st, e) ? ' (заповнено застосунком, ще не переглянуто)' : ''}"></span><div><div class="a"><span>${n}</span><b>${esc(ctx.speaker(u) || KIND_LABEL[u.kind])}</b><span>${esc(shortKey(u.key))}</span>${cmIcon(e)}</div><div class="s" lang="en">${esc(flow(u.source))}</div><div class="t">${e?.target ? esc(flow(e.target)) : '—'}</div></div></div>`;
   };
   const emptyHtml = '<div class="empty-state"><b>Нічого не знайдено</b><span>Немає рядків за поточним пошуком і статусом.</span><button class="btn" data-reset>Скинути фільтри</button></div>';
 
@@ -648,7 +651,15 @@ export async function start(root: HTMLElement): Promise<void> {
     s.cur = key;
     document.querySelectorAll<HTMLElement>('#grid .gr[tabindex="0"]').forEach(r => { r.tabIndex = -1; r.setAttribute('aria-selected', 'false'); });
     if (row) { row.classList.add('sel'); row.tabIndex = 0; row.setAttribute('aria-selected', 'true'); }
+    else ensureGridStop();
     renderStatus(); renderSidePanel(ctx);
+  }
+  /** The table is one stop of the Tab key: when no row is selected the first one is that stop, so the keyboard can get into the table at all. */
+  function ensureGridStop(): void {
+    const grid = document.getElementById('grid');
+    if (!grid || grid.querySelector('.gr[tabindex="0"]')) return;
+    const first = grid.querySelector<HTMLElement>('.gr[data-key]');
+    if (first) first.tabIndex = 0;
   }
 
   function renderTable(): void {
@@ -670,6 +681,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (list.length) mountRows('grid', grid, grid.parentElement!, h, ids, i => rowHtml(list[i]!, idx.get(list[i]!.key)!), s.current ?? '', 56);
     else grid.innerHTML = h + `<div class="empty-wrap" role="row"><div role="gridcell">${emptyHtml}</div></div>`;
     renderBulk(ids);
+    ensureGridStop();
     const cur = s.cur ? idx.get(s.cur) : undefined;
     $('#crumbs').innerHTML = `${s.current !== GROUP && s.current?.includes('/') ? `<span>${esc(s.current.split('/').slice(0, -1).join('/'))}</span>›` : ''}<span>${esc(currentLabel())}</span>${cur && s.cur ? `›<b>${esc(ctx.unit(s.cur)?.context ?? '')}</b>` : ''}<span class="r">${cur ? `рядок ${cur} з ${v.units.length}` : plural(v.units.length, ['рядок', 'рядки', 'рядків'])}${list.length !== v.units.length ? ` · показано ${list.length}` : ''}</span>`;
   }
@@ -1077,7 +1089,11 @@ export async function start(root: HTMLElement): Promise<void> {
     rememberOpener(btn); pop.hidden = false; btn.setAttribute('aria-expanded', 'true'); focusFirst(pop);
   }
   /** Hide a popover; the focus that was inside it goes back to the control that opened it. */
-  const hidePop = (pop: HTMLElement): void => { const had = pop.contains(document.activeElement); pop.hidden = true; if (had) restoreOpener(); };
+  const hidePop = (pop: HTMLElement): void => {
+    const had = pop.contains(document.activeElement); pop.hidden = true;
+    if (pop.dataset.for) document.getElementById(pop.dataset.for)?.setAttribute('aria-expanded', 'false');
+    if (had) restoreOpener();
+  };
   const closeProjMenu = (): void => { hidePop($('#projpop')); $('#proj-btn').setAttribute('aria-expanded', 'false'); };
   const closeCfgMenu = (): void => { hidePop($('#cfgpop')); $('#cfg-btn').setAttribute('aria-expanded', 'false'); };
   const runCfgNow = (k: RunCfg): void => {
@@ -1123,7 +1139,8 @@ export async function start(root: HTMLElement): Promise<void> {
     const p = fpop();
     if (!p.hidden && p.dataset.for === btn.id) { hidePop(p); return; }
     rememberOpener(btn);
-    p.innerHTML = html; p.dataset.for = btn.id; p.hidden = false;
+    if (p.dataset.for) document.getElementById(p.dataset.for)?.setAttribute('aria-expanded', 'false');
+    p.innerHTML = html; p.dataset.for = btn.id; p.hidden = false; btn.setAttribute('aria-expanded', 'true');
     const r = btn.getBoundingClientRect();
     p.style.left = Math.min(r.left, innerWidth - p.offsetWidth - 8) + 'px';
     p.style.top = r.bottom + 4 + 'px';
@@ -1564,10 +1581,10 @@ export async function start(root: HTMLElement): Promise<void> {
       if (s.phone && row && row.dataset.key) { ctx.select(row.dataset.key, 'edit'); return; }
       // A click on a translation cell selects its row and starts writing right there.
       if (row && t.closest('.gr .tr') && !t.closest('textarea')) {
-        if (row.dataset.key !== s.cur) { document.querySelector('.gr.sel')?.classList.remove('sel'); row.classList.add('sel'); s.cur = row.dataset.key ?? null; renderStatus(); renderSidePanel(ctx); }
+        if (row.dataset.key !== s.cur) selectRowLight(row.dataset.key!);
         startInline(row.dataset.key!); return;
       }
-      if (row && row.dataset.key !== s.cur && !t.closest('textarea')) { document.querySelector('.gr.sel')?.classList.remove('sel'); row.classList.add('sel'); s.cur = row.dataset.key ?? null; renderStatus(); renderSidePanel(ctx); }
+      if (row && row.dataset.key !== s.cur && !t.closest('textarea')) selectRowLight(row.dataset.key!);
     }
   });
 
@@ -1680,6 +1697,8 @@ export async function start(root: HTMLElement): Promise<void> {
     }
     const tree = t.closest<HTMLElement>('#tree-list');
     if (tree && treeKeys(e, tree)) return;
+    // A span or a div with role="button" is not a native button: Enter and Space press it, as they would a <button>.
+    if ((e.key === 'Enter' || e.key === ' ') && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey && t.matches('[role="button"][tabindex]:not(button):not(a)')) { e.preventDefault(); t.click(); return; }
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') { e.preventDefault(); openSearch(); return; }
     // Ctrl+Z / Ctrl+Shift+Z (Ctrl+Y) outside the text fields walk the bulk actions back and forth; in a field the field's own undo keeps working.
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !t.closest('input,textarea,select,[contenteditable="true"]')) {

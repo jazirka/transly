@@ -426,7 +426,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const val = (k: string): string => sp.draft.get(k) ?? store.saved.speakers?.[k]?.name ?? '';
     return `<div class="m-more"><p class="m-hint">У грі на RPG Maker MV імен мовців немає. Підказують обличчя персонажа, подія чи позначка розробників: назвіть кожен варіант один раз, і ім'я отримають усі репліки з ним.</p>
       <label class="m-search">${icon('search')}<input id="sp-q" type="search" placeholder="Обличчя, подія або текст" value="${esc(sp.q)}" autocomplete="off"></label>
-      ${list.slice(0, 60).map(c => `<div class="m-sp"><small>${{ hdr: 'Напис у тексті', face: 'Обличчя', note: 'Позначка', event: 'Подія' }[c.kind]} · ${c.count}</small><b>${esc(c.label)}</b><span class="m-hint">${esc(c.sample)}</span><input class="m-input m-spin" data-k="${esc(c.key)}" value="${esc(val(c.key))}" placeholder="Хто це?" autocomplete="off"></div>`).join('') || '<p class="m-none">Нічого не знайдено</p>'}
+      ${list.slice(0, 60).map(c => `<div class="m-sp"><small>${{ hdr: 'Напис у тексті', face: 'Обличчя', note: 'Позначка', event: 'Подія' }[c.kind]} · ${c.count}</small><b>${esc(c.label)}</b><span class="m-hint">${esc(c.sample)}</span><input class="m-input m-spk" data-k="${esc(c.key)}" value="${esc(val(c.key))}" placeholder="Хто це?" autocomplete="off"></div>`).join('') || '<p class="m-none">Нічого не знайдено</p>'}
       <button class="m-primary wide" data-spsave>Зберегти імена</button></div>`;
   }
 
@@ -719,7 +719,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const terms = store.terms(u);
     return `<div class="m-edit" id="m-edit">
       <div class="m-ctx">${isAutoFilled(e) ? '<span class="m-tag" title="Заповнено застосунком і ще не переглянуто: це чернетка">авто</span>' : ''}<span class="m-tag">${esc(KIND_LABEL[u.kind])}</span>${store.speaker(u) ? `<span class="m-tag who">${esc(store.speaker(u))}</span>` : ''}${v?.label ? `<span class="m-tag">${esc(v.label)}</span>` : ''}<span class="m-status"><span class="sd ${SHAPE[st]}"></span>${stateLabel(st, e)}</span></div>
-      <section class="m-card"><h3>Оригінал</h3><div class="m-source" id="m-source">${sourceHtml(u.source, terms, e?.target ?? '')}</div>${store.refs(c.file, u.key).map(r => `<div class="m-ref"><small>Довідка · ${esc(r.lang.toUpperCase())}</small>${esc(r.text)}</div>`).join('')}${(() => { const w = store.usageOf(c.file, u.key); return w.length ? `<div class="m-ref"><small>Де видається</small>${w.map(esc).join('<br>')}</div>` : ''; })()}</section>
+      <section class="m-card"><h3>Оригінал</h3><div class="m-source" id="m-source" lang="en">${sourceHtml(u.source, terms, e?.target ?? '')}</div>${store.refs(c.file, u.key).map(r => `<div class="m-ref"><small>Довідка · ${esc(r.lang.toUpperCase())}</small>${esc(r.text)}</div>`).join('')}${(() => { const w = store.usageOf(c.file, u.key); return w.length ? `<div class="m-ref"><small>Де видається</small>${w.map(esc).join('<br>')}</div>` : ''; })()}</section>
       <section class="m-card m-tr-card"><h3>Переклад<span class="m-count" id="m-count"></span></h3>
         <textarea id="m-tr" class="m-textarea" spellcheck="false" autocapitalize="sentences" placeholder="Напишіть переклад…" aria-label="Переклад">${esc(e?.target ?? '')}</textarea>
         <div id="m-issues" class="m-issues">${issuesHtml()}</div>
@@ -1307,7 +1307,7 @@ export async function start(root: HTMLElement): Promise<void> {
     else if (t.id === 'f-rep') fr.replace = (t as HTMLInputElement).value;
     else if (t.id === 'scn-tr') { const v = store.view(); if (v && scn.picked) { store.writeAtQuiet(v.name, scn.picked, (t as HTMLTextAreaElement).value); clearTimeout(scnTimer); scnTimer = window.setTimeout(() => { const el = document.getElementById('scn-tr') as HTMLTextAreaElement | null; if (!el || sub !== 'scene') return; const keep = el.selectionStart; const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; const e2 = document.getElementById('scn-tr') as HTMLTextAreaElement | null; if (e2) { e2.focus(); e2.setSelectionRange(keep, keep); } }, 500); } }
     else if (t.id === 'sp-q') { sp.q = (t as HTMLInputElement).value; const keep = (t as HTMLInputElement).selectionStart ?? 0; render(); const qi = document.getElementById('sp-q') as HTMLInputElement; qi.focus(); qi.setSelectionRange(keep, keep); }
-    else if (t.classList.contains('m-spin')) sp.draft.set((t as HTMLInputElement).dataset.k!, (t as HTMLInputElement).value);
+    else if (t.classList.contains('m-spk')) sp.draft.set((t as HTMLInputElement).dataset.k!, (t as HTMLInputElement).value);
     else if (t.id === 's-tol') { const n = Number((t as HTMLInputElement).value); if (n >= 5 && n <= 100) { store.saved.settings.tolerancePct = n; store.saved.settingsAt = Date.now(); store.persist(); } }
     else if (t.id === 'ts-old') ts.old = (t as HTMLInputElement).value;
     else if (t.id === 'w-ex') { wp.text = (t as HTMLTextAreaElement).value; wrapPreview(); }

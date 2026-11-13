@@ -53,7 +53,7 @@ export const sceneIdOf = (ctx: Ctx, key: string | null): string | null => {
 function cardHtml(ctx: Ctx, u: Unit, n: number): string {
   return `<article class="sv-card" data-key="${esc(u.key)}">
     <div class="sv-top"><span class="sd" aria-hidden="true"></span><b class="sv-who"></b><span class="sv-k">${esc(KIND_LABEL[u.kind] ?? u.kind)}</span><span class="sv-n">${n}</span><span class="grow"></span><span class="sv-cnt" aria-hidden="true"></span><button class="sv-ok" type="button" data-sv="send" title="Надіслати й перейти далі (Ctrl+Enter)" aria-label="Надіслати рядок ${n}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M14 2L7 9M14 2l-4.5 12L7 9 2 6.5z"/></svg></button></div>
-    <div class="srcbox sv-src"></div>
+    <div class="srcbox sv-src" lang="en"></div>
     <textarea class="tr-in sv-in" rows="1" data-key="${esc(u.key)}" spellcheck="false" aria-label="Переклад рядка ${n}" placeholder="Переклад"></textarea>
     <div class="qa-under sv-qa"></div>
   </article>`;

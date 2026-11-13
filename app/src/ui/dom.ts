@@ -23,7 +23,13 @@ export function toast(text: string, opts: { sticky?: boolean; action?: { label: 
   let host = document.getElementById('toasts');
   if (!host) { host = el('div', 'toasts'); host.id = 'toasts'; host.setAttribute('role', 'status'); document.body.appendChild(host); }
   host.querySelectorAll('.toast.err').forEach(x => x.remove());
-  const leave = (n: HTMLElement): void => { window.clearTimeout(Number(n.dataset.timer)); n.classList.add('out'); setTimeout(() => n.remove(), 220); };
+  const leave = (n: HTMLElement): void => {
+    window.clearTimeout(Number(n.dataset.timer)); n.classList.add('out');
+    // the keyboard user who was on the message goes back to where they were, not to the top of the page
+    if (n.contains(document.activeElement)) { const back = toastReturn.get(n); if (back?.isConnected) back.focus({ preventScroll: true }); }
+    setTimeout(() => n.remove(), 220);
+  };
+  host.setAttribute('role', opts.sticky || host.querySelector('.toast.err') ? 'alert' : 'status');
   const life = opts.action ? 7000 : 3500;
   if (!opts.sticky && !opts.action) {
     const same = [...host.querySelectorAll<HTMLElement>('.toast:not(.err):not(.out)')].find(x => x.dataset.text === text);
@@ -46,7 +52,6 @@ export function toast(text: string, opts: { sticky?: boolean; action?: { label: 
     t.appendChild(b);
   }
   if (opts.sticky) {
-    host.setAttribute('role', 'alert');
     const x = el('button'); x.type = 'button'; x.textContent = '✕'; x.setAttribute('aria-label', 'Закрити повідомлення');
     x.addEventListener('click', () => leave(t));
     t.appendChild(x);
@@ -55,8 +60,18 @@ export function toast(text: string, opts: { sticky?: boolean; action?: { label: 
   // Two at most: the oldest goes.
   const live = [...host.querySelectorAll<HTMLElement>('.toast:not(.err):not(.out)')];
   while (live.length > 2) leave(live.shift()!);
-  if (!opts.sticky) t.dataset.timer = String(window.setTimeout(() => leave(t), life));
+  if (!opts.sticky) {
+    t.dataset.timer = String(window.setTimeout(() => leave(t), life));
+    // A message that is being read (the pointer is on it or the keyboard is in it) does not go away under the reader.
+    const hold = (): void => window.clearTimeout(Number(t.dataset.timer));
+    const resume = (): void => { if (!t.matches(':hover, :focus-within')) t.dataset.timer = String(window.setTimeout(() => leave(t), life)); };
+    t.addEventListener('mouseenter', hold); t.addEventListener('mouseleave', resume);
+    t.addEventListener('focusin', e => { const from = (e as FocusEvent).relatedTarget; if (from instanceof HTMLElement && !t.contains(from)) toastReturn.set(t, from); hold(); });
+    t.addEventListener('focusout', () => setTimeout(resume, 0));
+  }
 }
+/** Where the focus came from when it went into a message. */
+const toastReturn = new WeakMap<HTMLElement, HTMLElement>();
 
 /** Ukrainian plural: plural(5, ['рядок','рядки','рядків']) -> «5 рядків». */
 export { plural } from '../core/plural';

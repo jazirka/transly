@@ -40,7 +40,7 @@ const I = {
 export const FOCUS_HTML = `<div class="fc"><div class="fc-in"><div class="te-links" id="te-links"></div>
   <div class="fhd"><span class="k" id="f-key"></span><span class="fchips" id="f-chips"></span><span class="st-pill" id="f-state"></span></div>
   <div class="offlist" id="f-off" hidden><span>Цей рядок не входить у поточний фільтр або пошук.</span><button data-reset>Показати всі рядки</button></div>
-  <div><div class="lbl">Оригінал · EN</div><div class="srcbox" id="f-src"></div><div class="pics" id="f-pics" hidden></div></div>
+  <div><div class="lbl">Оригінал · EN</div><div class="srcbox" id="f-src" lang="en"></div><div class="pics" id="f-pics" hidden></div></div>
   <div id="f-refbox" hidden></div>
   <div class="trblock">
     <div class="lbl"><span id="f-trlbl">Переклад · UK</span></div>

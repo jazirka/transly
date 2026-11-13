@@ -63,3 +63,4 @@ export * from './session';
 export * from './plan';
 export * from './progress';
 export * from './queue';
+export * from './followups';

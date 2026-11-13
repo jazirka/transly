@@ -114,6 +114,8 @@ export interface Ctx {
   select(key: string, mode?: Mode): void;
   /** Show some rows of the game in one table (a group of the translator's when `gid` is given: the table then follows it when rows are moved). */
   openRows(title: string, rows: RowRef[], gid?: string): void;
+  /** Open a tool of the menu from a place that is not the menu (a remark leads to the tool that deals with it). */
+  tool(name: 'wrap'): void;
   /** The groups or what is in them changed: the lists, the marks and an open group table are redrawn. */
   groupsChanged(): void;
   /** The group a row is in, or null. */

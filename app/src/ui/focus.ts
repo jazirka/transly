@@ -351,7 +351,8 @@ export function focusClick(ctx: Ctx, t: HTMLElement): boolean {
 /** The buttons of a remark (fix, ignore, bring back): they sit under the editor and in the panel, so they work in the table too. */
 export function qaClick(ctx: Ctx, t: HTMLElement): boolean {
   const { s } = ctx;
-  const ign = t.closest<HTMLElement>('[data-ign]'), un = t.closest<HTMLElement>('[data-unign]'), fix = t.closest<HTMLElement>('[data-fix]');
+  const ign = t.closest<HTMLElement>('[data-ign]'), un = t.closest<HTMLElement>('[data-unign]'), fix = t.closest<HTMLElement>('[data-fix]'), tool = t.closest<HTMLElement>('[data-tool]');
+  if (tool) { ctx.tool('wrap'); return true; }
   if (!ign && !un && !fix) return false;
   // In the scene the remark belongs to the card it stands in, not to the row that happened to be open.
   const own = t.closest<HTMLElement>('.sv-card')?.dataset.key;

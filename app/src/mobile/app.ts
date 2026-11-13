@@ -1,5 +1,5 @@
 import { HINT_GLYPH, HINT_LABEL, KIND_LABEL, explainCodes, sceneTitle, stepScene, byHintOrder, commentId, historyRows, openThreads, restoreNote, sourceTermHits, targetHasTerm, threadsOf, batchTitle, batchUndoLabel, undoReport, setIgnored, canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, describePage, DEFAULT_LINE_LIMIT, DEFAULT_WRAP, MV_WINDOW, autoLineLimit, flowText, isMessageUnit, linesShown, measureOf, pixelBudget, unitWord, usesPixels, widthOf, wrapMessage, wrapOf } from '../core';
-import { APOSTROPHES, QA_RULES, QUEUE_LABEL, adoptSynced, groupColor, isAutoFilled, pct as pctOf, keepFromText, keepToText, qaOf, withRuleLevel } from '../core';
+import { APOSTROPHES, QA_RULES, QUEUE_LABEL, rowsWithTerm, termRowsNote, adoptSynced, groupColor, isAutoFilled, pct as pctOf, keepFromText, keepToText, qaOf, withRuleLevel } from '../core';
 import type { Issue, LinkMode, LinkState, QaSettings, RuleSeverity, TermChange, TermProposal, TermSync, WrapSettings } from '../core';
 import { pxMeasure } from '../ui/measure';
 import { CONF_LABEL, flagsText, markHtml } from '../ui/termsync-html';
@@ -670,7 +670,7 @@ export async function start(root: HTMLElement): Promise<void> {
     return `<div class="m-more"><section class="m-card"><label class="m-lbl" for="s-tol">Допуск довжини перекладу відносно оригіналу, %</label><input id="s-tol" class="m-input" type="number" min="5" max="100" step="5" value="${esc(String(st.tolerancePct))}">
       <button class="m-secondary wide" data-sub="wrap">${icon('rows')}<span>Перенесення рядків…</span></button>
       <label class="m-check"><input type="checkbox" id="s-block" ${st.blockErrors ? 'checked' : ''}> Не надсилати рядок із помилкою QA</label>
-      <label class="m-lbl" for="s-link">Рядки з однаковим оригіналом (зв’язані)</label><select id="s-link" class="m-input"><option value="ask" ${store.linkMode() === 'ask' ? 'selected' : ''}>питати, коли переклад різниться (рекомендовано)</option><option value="auto" ${store.linkMode() === 'auto' ? 'selected' : ''}>оновлювати самі</option><option value="off" ${store.linkMode() === 'off' ? 'selected' : ''}>не зв’язувати</option></select>
+      <label class="m-lbl" for="s-link">Автозаповнення однакових рядків після «Надіслати»</label><select id="s-link" class="m-input"><option value="ask" ${store.linkMode() === 'ask' ? 'selected' : ''}>заповнювати порожні чернетками, про різні питати (рекомендовано)</option><option value="auto" ${store.linkMode() === 'auto' ? 'selected' : ''}>заповнювати порожні й самому оновлювати різні (вичитані не чіпає)</option><option value="off" ${store.linkMode() === 'off' ? 'selected' : ''}>не заповнювати</option></select>
       <label class="m-lbl" for="s-who">Ваше ім’я в коментарях та історії</label><input id="s-who" class="m-input" value="${esc(String(st.who))}" maxlength="40" autocomplete="off"></section>
       <section class="m-card"><h3>Довідкові мови</h3><p class="m-hint">Копія тієї ж гри іншою мовою: її рядки показуються під оригіналом як підказка.</p>
         ${store.refLangs().map(l => `<div class="m-var"><span>${esc(l.toUpperCase())}</span><small></small><button class="m-mini ghost" data-refdel="${esc(l)}">Прибрати</button></div>`).join('')}
@@ -1222,7 +1222,9 @@ export async function start(root: HTMLElement): Promise<void> {
     if (q('[data-gsave]')) {
       const v = (id: string): string => $<HTMLInputElement>(id).value;
       if (!store.saveTerm(v('g-en'), v('g-uk'), v('g-alt'), $<HTMLInputElement>('g-qa').checked)) { say('Заповніть оригінал і переклад', true); return; }
-      say(gl.edit ? 'Термін змінено' : 'Термін додано'); buzz(10); Object.assign(gl, { en: '', uk: '', alt: '', qa: true, edit: false });
+      const termNow = store.saved.terms.find(y => y.en.trim().toLowerCase() === v('g-en').trim().toLowerCase());
+      const rowsNote = !gl.edit && termNow ? termRowsNote(termNow.en, rowsWithTerm(store.views, store.saved, termNow)) : '';
+      say(gl.edit ? 'Термін змінено' : 'Термін додано'); if (rowsNote) say(rowsNote); buzz(10); Object.assign(gl, { en: '', uk: '', alt: '', qa: true, edit: false });
       const ch = store.lastTermChange, r = ch ? store.planTermSync(ch, 1) : null;
       if (ch && r?.total) { ts.change = ch; ts.pending = r.total; ts.res = null; say(`Знайдено ${plural(r.total, ['рядок', 'рядки', 'рядків'])} зі старою формою «${ch.old[0] ?? ''}»`); }
       render(); return;

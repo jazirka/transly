@@ -302,6 +302,7 @@ export async function start(root: HTMLElement): Promise<void> {
     render: () => renderAll(),
     open: (file, key) => openRow(file, key),
     openRows: (title, rows, gid) => openRows(title, rows, gid),
+    tool: () => openWrapTool(ctx, { wrapFile }),
     openFile: file => { openFile(file); renderAll(); },
     groupsChanged: () => groupsChanged(),
     groupOf: (file, key) => { const g = groupIndex(); const id = g.idx.groupOf(file, key); return id ? g.byId.get(id) ?? null : null; },

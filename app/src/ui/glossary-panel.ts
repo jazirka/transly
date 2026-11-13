@@ -1,4 +1,4 @@
-import { joinAlts, removeTerm, saveTerm, termChange } from '../core';
+import { joinAlts, removeTerm, rowsWithTerm, saveTerm, termChange, termRowsNote } from '../core';
 import type { GlossaryTerm } from '../core';
 import { $, esc, plural, toast } from './dom';
 import { offerTermSync } from './termsync-dialog';
@@ -130,6 +130,13 @@ export function wireGlossary(ctx: Ctx): void {
     editing = null;
     ctx.persist(); ctx.invalidateTm(); ctx.render();
     toast(r === 'added' ? `Термін «${en}» додано` : `Термін «${en}» змінено`);
+    if (r === 'added') {
+      // Where the new word already stands in the originals: what was translated without it, and what is still to be translated.
+      const term = ctx.s.saved.terms.find(x => norm(x.en) === norm(en));
+      const rows = term ? rowsWithTerm(ctx.s.views, ctx.s.saved, term) : null;
+      const note = rows ? termRowsNote(en, rows) : '';
+      if (rows && note) toast(note, rows.lacking.length ? { action: { label: 'Показати', run: () => ctx.openRows(`Рядки з «${en}»`, [...rows.lacking, ...rows.waiting]) } } : {});
+    }
     if (r === 'changed') {
       const now = ctx.s.saved.terms.find(x => norm(x.en) === norm(en));
       const change = now ? termChange(prev, { en: now.en, uk: now.uk, alt: now.alt }) : null;

@@ -34,6 +34,12 @@ const check = (name, ok, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ') 
   const stop2 = await page.evaluate(() => [...document.querySelectorAll('#grid .gr[tabindex="0"]')].map(r => r.dataset.key));
   check('after a click the clicked row is that stop', stop2.length === 1 && stop2[0] === 'b', JSON.stringify(stop2));
 
+  // a11y-21: Space ticks the focused row for the bulk bar
+  await page.locator('#grid .gr[data-key="c"]').focus(); await page.keyboard.press(' '); await sleep(300);
+  check('Space on a focused row ticks it', await page.evaluate(() => document.querySelector('#grid .gr[data-key="c"]').classList.contains('chk')));
+  await page.keyboard.press(' '); await sleep(300);
+  check('and unticks it again', await page.evaluate(() => !document.querySelector('#grid .gr[data-key="c"]').classList.contains('chk')));
+
   // a11y-02: Enter on a span with role=button presses it
   await page.locator('#sb-sync').focus(); await page.keyboard.press('Enter'); await sleep(600);
   check('Enter on a role=button span (the sync item of the status bar) acts as a click', await page.locator('dialog[open]').count() > 0);

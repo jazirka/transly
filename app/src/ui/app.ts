@@ -1698,6 +1698,8 @@ export async function start(root: HTMLElement): Promise<void> {
     }
     const tree = t.closest<HTMLElement>('#tree-list');
     if (tree && treeKeys(e, tree)) return;
+    // Space on a focused table row ticks it for the bulk bar (the tick box is shown while the row has the focus)
+    if (e.key === ' ' && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey && s.mode === 'table' && t.classList.contains('gr')) { e.preventDefault(); t.querySelector<HTMLInputElement>('.rc')?.click(); return; }
     // A span or a div with role="button" is not a native button: Enter and Space press it, as they would a <button>.
     if ((e.key === 'Enter' || e.key === ' ') && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey && t.matches('[role="button"][tabindex]:not(button):not(a)')) { e.preventDefault(); t.click(); return; }
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') { e.preventDefault(); openSearch(); return; }

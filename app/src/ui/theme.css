@@ -460,8 +460,8 @@ td .term{color:#d9c3ee}
 .gr .ln{justify-content:center;padding:6px 0;gap:0}
 .gr .ln .num{display:block}
 .gr .ln .rc{display:none;width:15px;height:15px;margin-top:1px}
-.gr:hover .ln .num,.gr.chk .ln .num,.grid.has-sel .ln .num{display:none}
-.gr:hover .ln .rc,.gr.chk .ln .rc,.grid.has-sel .ln .rc{display:block}
+.gr:hover .ln .num,.gr.chk .ln .num,.grid.has-sel .ln .num,.gr:focus-visible .ln .num{display:none}
+.gr:hover .ln .rc,.gr.chk .ln .rc,.grid.has-sel .ln .rc,.gr:focus-visible .ln .rc{display:block}
 .gr .ln{cursor:pointer}
 .gr:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .cmi{width:13px;height:13px;stroke:var(--mute);fill:none;stroke-width:1.4;vertical-align:-2px;margin-left:6px;flex:none}

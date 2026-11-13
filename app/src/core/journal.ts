@@ -48,8 +48,10 @@ export const kindOfBatch = (id: string): string => id.slice(0, Math.max(0, id.in
  * `after` is the new state (made from `before`); `batch` ties the record to a bulk action.
  */
 export function recordChange(before: Entry | undefined, after: Entry, what: string, text: string, who: string, now: number, batch?: string): Entry {
-  const rec: HistoryItem = { at: now, who, what, text, prev: prevOf(before), ...(batch ? { batch } : {}) };
-  return { ...after, history: [...(after.history ?? before?.history ?? []), rec].slice(-HISTORY_LIMIT) };
+  // a device whose clock is behind the row's last edit still makes a newer one (and the record is dated with it, so the row counts as untouched)
+  const mt = before && after.mt < before.mt ? before.mt + 1 : after.mt;
+  const rec: HistoryItem = { at: Math.max(now, mt), who, what, text, prev: prevOf(before), ...(batch ? { batch } : {}) };
+  return { ...after, mt, history: [...(after.history ?? before?.history ?? []), rec].slice(-HISTORY_LIMIT) };
 }
 
 export interface JournalItem { file: string; key: string; source: string; target: string; at: number }

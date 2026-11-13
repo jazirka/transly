@@ -1,6 +1,7 @@
 import { activeIssues, DEFAULT_QA } from './qa';
 import type { QaOptions } from './qa';
 import { isMessageUnit, wrapMessage } from './wrap';
+import { nextMt } from './model';
 import type { Comment, Entry, Unit } from './model';
 
 /** Which pass the user is working in. */
@@ -42,7 +43,7 @@ export function edit(prev: Entry | undefined, unit: Unit, text: string, stage: S
   const e = { ...(prev ?? blank()) };
   e.target = text;
   e.src = unit.source;
-  e.mt = now;
+  e.mt = nextMt(prev?.mt, now);
   if (!text) { e.status = 'new'; e.returned = false; return e; }
   // In the translate pass any finished state drops back to draft; in review only a brand new row becomes a draft.
   if (stage === 'translate') { if (e.status === 'new' || e.status === 'done' || e.status === 'appr') e.status = 'draft'; }
@@ -73,7 +74,7 @@ export function submit(prev: Entry | undefined, unit: Unit, stage: Stage, now: n
     const errors = activeIssues(unit, prev, opts.qa).filter(i => i.severity === 'bad');
     if (errors.length) return { ok: false, reason: 'Є помилка QA: ' + errors.map(i => i.message).join('; ') };
   }
-  const e = { ...prev, mt: now, src: unit.source };
+  const e = { ...prev, mt: nextMt(prev.mt, now), src: unit.source };
   if (stage === 'translate') { e.status = 'done'; e.orig = e.target; e.returned = false; }
   else e.status = 'appr';
   return { ok: true, entry: e };
@@ -96,7 +97,7 @@ export function approveEntry(prev: Entry | undefined, unit: Unit, now: number, o
 
 /** Reviewer sends a unit back to the translator. */
 export function sendBack(prev: Entry, now: number): Entry {
-  return { ...prev, status: 'draft', returned: true, mt: now };
+  return { ...prev, status: 'draft', returned: true, mt: nextMt(prev.mt, now) };
 }
 
 /** True when the game's original text changed after this translation was written. */
@@ -113,7 +114,7 @@ export function reconcile(units: Unit[], entries: Record<string, Entry>, now: nu
     const e = entries[u.key];
     if (!sourceChanged(e, u) || !e) continue;
     changed.push(u.key);
-    if (e.status === 'done' || e.status === 'appr') entries[u.key] = { ...e, status: 'draft', mt: now };
+    if (e.status === 'done' || e.status === 'appr') entries[u.key] = { ...e, status: 'draft', mt: nextMt(e.mt, now) };
   }
   return changed;
 }

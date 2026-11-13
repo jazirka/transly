@@ -98,3 +98,10 @@ export interface GameFile {
   /** Raw text of non-JSON formats (.po, .csv, .rpy). */
   text?: string;
 }
+
+/**
+ * The time stamp of a new edit of a row that already has one. An edit is always newer than what it replaces, even when this
+ * device's clock is behind the one that wrote the earlier edit (otherwise the merge would take the older edit and the
+ * translator's newer text would vanish at the next sync).
+ */
+export const nextMt = (prev: number | undefined, now: number): number => (prev !== undefined && prev >= now ? prev + 1 : now);

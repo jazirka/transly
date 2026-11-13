@@ -2,6 +2,7 @@ import { displayLength, missingCodes } from './controlCodes';
 import { candidateTerms, hasTermIn, prepareText, targetHasTerm, termsStamp } from './glossary';
 import { isMessageUnit, limitFor, linesShown, maxLineWidth, planSig, tooWide, unitWord, wrapLines, wrapMessage } from './wrap';
 import type { WrapPlan } from './wrap';
+import { plural } from './plural';
 import { runRules } from './qarules';
 import type { QaRules } from './qarules';
 import type { Entry, Unit } from './model';
@@ -68,7 +69,7 @@ function wrapIssues(unit: UnitLike, target: string, plan: WrapPlan): Issue[] {
   if (unit.kind === 'dialogue' && max > 0) {
     // «At build» and «in the text»: the lines the game will really show; «off»: the lines as written.
     const n = linesShown(plan, unit, target);
-    if (n > max) out.push({ key: 'lines', severity: 'warn', cat: 'style', message: `У повідомленні ${n} рядків, а вікно показує ${max}: гра покаже його на кількох сторінках` });
+    if (n > max) out.push({ key: 'lines', severity: 'warn', cat: 'style', message: `У повідомленні ${plural(n, ['рядок', 'рядки', 'рядків'])}, а вікно показує ${max}: гра покаже його на кількох сторінках` });
   }
   return out;
 }

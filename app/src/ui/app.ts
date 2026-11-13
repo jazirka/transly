@@ -667,7 +667,7 @@ export async function start(root: HTMLElement): Promise<void> {
     else grid.innerHTML = h + `<div class="empty-wrap" role="row"><div role="gridcell">${emptyHtml}</div></div>`;
     renderBulk(ids);
     const cur = s.cur ? idx.get(s.cur) : undefined;
-    $('#crumbs').innerHTML = `${s.current !== GROUP && s.current?.includes('/') ? `<span>${esc(s.current.split('/').slice(0, -1).join('/'))}</span>›` : ''}<span>${esc(currentLabel())}</span>${cur && s.cur ? `›<b>${esc(ctx.unit(s.cur)?.context ?? '')}</b>` : ''}<span class="r">${cur ? `рядок ${cur} з ${v.units.length}` : `${v.units.length} рядків`}${list.length !== v.units.length ? ` · показано ${list.length}` : ''}</span>`;
+    $('#crumbs').innerHTML = `${s.current !== GROUP && s.current?.includes('/') ? `<span>${esc(s.current.split('/').slice(0, -1).join('/'))}</span>›` : ''}<span>${esc(currentLabel())}</span>${cur && s.cur ? `›<b>${esc(ctx.unit(s.cur)?.context ?? '')}</b>` : ''}<span class="r">${cur ? `рядок ${cur} з ${v.units.length}` : plural(v.units.length, ['рядок', 'рядки', 'рядків'])}${list.length !== v.units.length ? ` · показано ${list.length}` : ''}</span>`;
   }
 
   function renderTop(): void {
@@ -691,7 +691,7 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#sb-sync').hidden = false; $('#sb-sync').textContent = copy.text; $('#sb-sync').className = copy.warn ? 'bad' : '';
     $('#sb-sync').title = copy.warn ? 'Проєкт зберігається лише в цьому браузері. Збережіть копію у файл («Налаштування → Застосунок») або синхронізуйте' : 'Остання копія проєкту поза браузером (файл або синхронізація)';
     $('#sb-build').hidden = !built;
-    $('#sb-build').textContent = built ? `Збірка: ${ago(built.mt, Date.now())}${built.n !== undefined ? ` · ${built.n} рядків` : ''}` : '';
+    $('#sb-build').textContent = built ? `Збірка: ${ago(built.mt, Date.now())}${built.n !== undefined ? ` · ${plural(built.n, ['рядок', 'рядки', 'рядків'])}` : ''}` : '';
     renderRunCfg();
     setUnavailable($('#cfg-btn'), !s.views.length, 'Спершу відкрийте гру', 'Що запускає кнопка ▶');
     setUnavailable($('#run-btn'), !s.views.length, 'Спершу відкрийте гру', `Запустити «${CFG[runCfg].name}» (F5)`);
@@ -1173,27 +1173,41 @@ export async function start(root: HTMLElement): Promise<void> {
   function sdRender(): void {
     const q = ($('#sd-in') as HTMLInputElement).value.trim().toLowerCase();
     const files: SdItem[] = [], rows: SdItem[] = [], terms: SdItem[] = [];
+    /** How many results each group really has, when more than it shows (the group header then says «показано 8 з 37»). */
+    const total: Record<string, number> = {};
+    const CAP = 999;
     const fileItem = (name: string): SdItem => ({ t: 'file', file: name, kind: 'Файли', title: fileTitle(name), sub: name.includes('/') ? name : undefined });
     if (!q) {
       const first = [...new Set([...s.open, ...s.views.map(v => v.name)])].filter(n => s.views.some(v => v.name === n));
       first.slice(0, 8).forEach(n => files.push(fileItem(n)));
     } else {
-      for (const v of s.views) if (`${v.name} ${v.label ?? ''}`.toLowerCase().includes(q) && files.length < 5) files.push(fileItem(v.name));
+      let nFiles = 0;
+      for (const v of s.views) if (`${v.name} ${v.label ?? ''}`.toLowerCase().includes(q)) { nFiles++; if (files.length < 5) files.push(fileItem(v.name)); }
+      total['Файли'] = nFiles;
+      let nRows = 0;
       outer: for (const v of s.views) {
         const ents = s.saved.files[v.name] ?? {};
         for (const u of v.units) {
           const e = ents[u.key];
           if (!(u.source + ' ' + flowText(e?.target ?? '') + ' ' + u.key).toLowerCase().includes(q)) continue;
-          rows.push({ t: 'row', file: v.name, key: u.key, kind: 'Рядки', title: u.source.replace(/\s+/g, ' ').slice(0, 90), sub: e?.target ? e.target.replace(/\s+/g, ' ').slice(0, 90) : '', where: `${fileTitle(v.name)} · ${shortKey(u.key)}`, status: shownStatus(ctx, u, e) });
-          if (rows.length >= 8) break outer;
+          nRows++;
+          if (rows.length < 8) rows.push({ t: 'row', file: v.name, key: u.key, kind: 'Рядки', title: u.source.replace(/\s+/g, ' ').slice(0, 90), sub: e?.target ? e.target.replace(/\s+/g, ' ').slice(0, 90) : '', where: `${fileTitle(v.name)} · ${shortKey(u.key)}`, status: shownStatus(ctx, u, e) });
+          else if (nRows >= CAP) break outer;
         }
       }
-      s.saved.terms.filter(t => (t.en + ' ' + t.uk).toLowerCase().includes(q)).slice(0, 4).forEach(t => terms.push({ t: 'term', term: t.en, kind: 'Терміни', title: t.en, sub: t.uk }));
+      total['Рядки'] = nRows;
+      const hitTerms = s.saved.terms.filter(t => (t.en + ' ' + t.uk).toLowerCase().includes(q));
+      total['Терміни'] = hitTerms.length;
+      hitTerms.slice(0, 4).forEach(t => terms.push({ t: 'term', term: t.en, kind: 'Терміни', title: t.en, sub: t.uk }));
     }
     sdItems = [...files, ...rows, ...terms]; sdSel = 0;
     let html = '', last = '';
     sdItems.forEach((x, i) => {
-      if (x.kind !== last) { last = x.kind; html += `<div class="sd-h" role="presentation">${x.kind}</div>`; }
+      if (x.kind !== last) {
+        last = x.kind;
+        const all = total[x.kind] ?? 0, shown = sdItems.filter(y => y.kind === x.kind).length;
+        html += `<div class="sd-h" role="presentation">${x.kind}${all > shown ? ` · показано ${shown} з ${all >= CAP ? `${CAP}+` : all}` : ''}</div>`;
+      }
       const dot = x.status ? `<i class="sd ${x.status}" title="${STATUS_LABEL[x.status as keyof typeof STATUS_LABEL] ?? ''}" aria-hidden="true"></i>` : '';
       html += `<div class="sd-it ${i === 0 ? 'on' : ''}" data-sd="${i}" role="option" aria-selected="${i === 0}">${dot}<span class="sd-b"><span class="sd-t">${esc(x.title)}</span>${x.sub ? `<span class="sd-s">${esc(x.sub)}</span>` : ''}${x.where ? `<span class="sd-w">${esc(x.where)}</span>` : ''}</span></div>`;
     });

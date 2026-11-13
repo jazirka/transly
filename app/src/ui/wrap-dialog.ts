@@ -46,7 +46,7 @@ export function openWrapTool(ctx: Ctx, actions: { wrapFile: () => void }): void 
       ${radio('wp-keep', 'long', 'Зберігати, переносити лише задовгі повідомлення <b>(рекомендовано)</b>', 'Охайно розбитий текст не чіпається.', w0.keep === 'long')}
       ${radio('wp-keep', 'reflow', 'Збирати текст заново завжди', 'Старі розриви ігноруються.', w0.keep === 'reflow')}</fieldset>
     <div class="grid"><label for="wp-max">Попереджати, коли рядків у повідомленні більше, ніж</label><input id="wp-max" type="number" min="0" max="12" value="${w0.maxLines}"></div>
-    <p class="hint">Вікно показує ${w0.maxLines || 4} рядки; довше повідомлення гра покаже на кількох сторінках. Нічого не обрізається, це лише попередження. 0 вимикає його.</p>
+    <p class="hint">Вікно показує ${plural(w0.maxLines || 4, ['рядок', 'рядки', 'рядків'])}; довше повідомлення гра покаже на кількох сторінках. Нічого не обрізається, це лише попередження. 0 вимикає його.</p>
     <p class="sum err" id="wp-err" role="alert" hidden></p>
     <fieldset class="wp-fs"><legend>Приклад</legend>
       <label for="wp-ex" class="hint">Текст для перевірки</label><textarea id="wp-ex" rows="3">${esc(curText || SAMPLE)}</textarea>
@@ -153,7 +153,7 @@ export function openWrapTool(ctx: Ctx, actions: { wrapFile: () => void }): void 
       if (wrapMessage(plan, u, t).over.length) stuck++;
     }
     const where = `У файлі «${ctx.fileTitle(v.name)}» (${plural(total, ['переклад повідомлення', 'переклади повідомлень', 'перекладів повідомлень'])})`;
-    $('#wp-check', dlg).textContent = !total ? `${where}: немає чого перевіряти.` : `${where}: ширші за вікно ${wide}${plan.settings.mode === 'build' && wide ? ' (гра перенесе їх сама)' : ''}; понад ${plan.settings.maxLines || '—'} рядків ${many}; слово не вміщається ${stuck}.`;
+    $('#wp-check', dlg).textContent = !total ? `${where}: немає чого перевіряти.` : `${where}: ширші за вікно ${wide}${plan.settings.mode === 'build' && wide ? ' (гра перенесе їх сама)' : ''}; понад ${plan.settings.maxLines ? plural(plan.settings.maxLines, ['рядок', 'рядки', 'рядків']) : '—'}: ${many}; слово не вміщається ${stuck}.`;
   });
   $('#wp-file', dlg).addEventListener('click', () => { if (err) { toast(err); return; } dlg.close(); actions.wrapFile(); });
   layout();

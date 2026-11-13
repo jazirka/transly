@@ -616,7 +616,7 @@ export async function start(root: HTMLElement): Promise<void> {
         ${radio('w-keep', 'long', 'Зберігати, переносити лише задовгі (рекомендовано)', 'Охайно розбитий текст не чіпається.', w.keep === 'long')}
         ${radio('w-keep', 'reflow', 'Збирати текст заново завжди', 'Старі розриви ігноруються.', w.keep === 'reflow')}
         <label class="m-lbl" for="w-max">Радити, коли рядків у повідомленні більше, ніж (0 вимикає)</label><input id="w-max" class="m-input" type="number" inputmode="numeric" min="0" max="12" value="${w.maxLines}">
-        <p class="m-hint">Вікно показує ${w.maxLines || 4} рядки; довше повідомлення гра покаже на кількох сторінках. Нічого не обрізається.</p></section>
+        <p class="m-hint">Вікно показує ${plural(w.maxLines || 4, ['рядок', 'рядки', 'рядків'])}; довше повідомлення гра покаже на кількох сторінках. Нічого не обрізається.</p></section>
       <p class="m-err" id="w-err" role="alert" hidden></p>
       <section class="m-card"><h3>Приклад</h3>
         <label class="m-lbl" for="w-ex">Текст для перевірки</label><textarea id="w-ex" class="m-textarea sm" rows="3" spellcheck="false">${esc(wp.text)}</textarea>
@@ -921,7 +921,7 @@ export async function start(root: HTMLElement): Promise<void> {
         const lines = (mode === 'build' ? wrapMessage(plan, c.unit, t).text : t).split('\n');
         if (px) pv.style.removeProperty('--lim'); else pv.style.setProperty('--lim', String(width));
         const n = linesShown(plan, c.unit, t);
-        pv.innerHTML = `<small>${mode === 'build' ? `Так гра покаже: до ${width} ${px ? 'px' : 'зн.'} у рядку` : `Вікно гри: ${width} ${px ? 'px' : 'зн.'} у рядку`}${max > 0 && n > max ? ` · ${n} рядків, вікно показує ${max}: гра покаже на кількох сторінках` : ''}</small><div class="m-prevbox">${lines.map(l => { const over = Math.round(measure(l)) - width; return `<div class="${over > 0 ? 'over' : ''}">${esc(l) || '&nbsp;'}${over > 0 ? `<em>+${over}</em>` : ''}</div>`; }).join('')}</div>`;
+        pv.innerHTML = `<small>${mode === 'build' ? `Так гра покаже: до ${width} ${px ? 'px' : 'зн.'} у рядку` : `Вікно гри: ${width} ${px ? 'px' : 'зн.'} у рядку`}${max > 0 && n > max ? ` · ${plural(n, ['рядок', 'рядки', 'рядків'])}, вікно показує ${max}: гра покаже на кількох сторінках` : ''}</small><div class="m-prevbox">${lines.map(l => { const over = Math.round(measure(l)) - width; return `<div class="${over > 0 ? 'over' : ''}">${esc(l) || '&nbsp;'}${over > 0 ? `<em>+${over}</em>` : ''}</div>`; }).join('')}</div>`;
       }
     }
     const box = document.getElementById('m-issues'); if (box) box.innerHTML = issuesHtml();

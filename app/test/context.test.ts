@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildUsage, describePage, emptyProject, explainCodes, extract, findReplace, inconsistencies, sysNamesOf, usageKey } from '../src/core';
+import { buildUsage, describePage, emptyProject, explainCodes, extract, findReplace, sysNamesOf, usageKey } from '../src/core';
 import type { Entry, FileView, GameFile, Unit } from '../src/core';
 
 const cmd = (code: number, parameters: unknown[], indent = 0) => ({ code, indent, parameters });
@@ -47,11 +47,3 @@ describe('find and replace', () => {
   });
 });
 
-describe('consistency', () => {
-  it('lists originals translated in more than one way, commonest first', () => {
-    const r = inconsistencies(views, saved);
-    expect(r).toHaveLength(1);
-    expect(r[0]!.source).toBe('Sword');
-    expect(r[0]!.variants.map(v => [v.target, v.where.length])).toEqual([['Меч', 2], ['Клинок', 1]]);
-  });
-});

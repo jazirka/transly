@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DupIndex, autoBatches, batchTitle, batchUndoLabel, commitRows, edit, emptyProject, journalBatches, kindOfBatch, newBatch, propagate, recordChange, sendBatches, submit, undoJournal, undoReport } from '../src/core';
+import { autoBatches, batchTitle, batchUndoLabel, commitRows, edit, emptyProject, journalBatches, kindOfBatch, newBatch, recordChange, sendBatches, submit, undoJournal, undoReport } from '../src/core';
 import type { Entry, FileView, SavedProject, Unit } from '../src/core';
 
 const u = (key: string, source: string): Unit => ({ key, source, speaker: '', kind: 'dialogue', context: 'c' });
@@ -75,10 +75,8 @@ describe('journal', () => {
 
   it('copies to identical rows form one action, and the older lists do not show journal rows again', () => {
     const saved = fresh();
-    const dups = new DupIndex(views);
-    const sent = (saved.files['A.json']!['1'] = { target: 'Раз', status: 'done', mt: 10 });
-    const id = newBatch('twin', 10);
-    expect(propagate(saved, dups, 'A.json', views[0]!.units[0]!, sent, 'translate', 10, 'Я', id)).toBe(1);
+    saved.files['A.json']!['1'] = { target: 'Раз', status: 'done', mt: 10 };
+    const id = commitRows(f => (saved.files[f] ??= {}), [{ file: 'B.json', key: '1', next: { target: 'Раз', status: 'done', mt: 10, src: 'One' }, text: 'Раз' }], 'twin', 'Я', 10);
     expect(saved.files['B.json']!['1']).toMatchObject({ target: 'Раз', status: 'done' });
     expect(saved.files['B.json']!['1']!.history!.at(-1)).toMatchObject({ batch: id, prev: { target: '', status: 'new' } });
     expect(journalBatches(views, saved)[0]).toMatchObject({ id, kind: 'twin' });

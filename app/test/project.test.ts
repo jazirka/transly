@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Autosave, DupIndex, MemoryStore, deserialize, edit, emptyProject, mergeProjects, propagate, reconcile, serialize, sendBack, statsOf, submit } from '../src/core';
+import { Autosave, MemoryStore, deserialize, edit, emptyProject, mergeProjects, reconcile, serialize, sendBack, statsOf, submit } from '../src/core';
 import type { Entry, FileView, SavedProject, Unit } from '../src/core';
 
 const unit = (source = 'Where are you going?', key = 'k1'): Unit => ({ key, source, speaker: '', kind: 'dialogue', context: 'x' });
@@ -109,38 +109,6 @@ describe('storage', () => {
     expect(saves).toEqual(['2']);
     expect(status).toEqual([false, true]);
     vi.useRealTimers();
-  });
-});
-
-describe('duplicates', () => {
-  const u = (key: string, source: string): Unit => ({ key, source, speaker: '', kind: 'dialogue', context: 'c' });
-  const views: FileView[] = [
-    { name: 'A.json', units: [u('1', 'Yes'), u('2', 'No')] },
-    { name: 'B.json', units: [u('9', 'Yes'), u('8', 'Yes')] },
-  ];
-  const idx = new DupIndex(views);
-  const sent = (t: string): Entry => ({ target: t, status: 'done', mt: 1 });
-
-  it('finds identical originals across files', () => {
-    expect(idx.others('A.json', '1')).toEqual([{ file: 'B.json', key: '9' }, { file: 'B.json', key: '8' }]);
-    expect(idx.others('A.json', '2')).toEqual([]);
-    expect(idx.others('Nope.json', 'x')).toEqual([]);
-  });
-
-  it('translate: fills only empty duplicates and never overwrites existing translations', () => {
-    const saved: SavedProject = { ...emptyProject('t'), files: { 'B.json': { '8': { target: 'Своє', status: 'draft', mt: 1 } } } };
-    const n = propagate(saved, idx, 'A.json', views[0]!.units[0]!, sent('Так'), 'translate', 5, 'Я');
-    expect(n).toBe(1);
-    expect(saved.files['B.json']!['9']).toMatchObject({ target: 'Так', status: 'done', src: 'Yes' });
-    expect(saved.files['B.json']!['8']!.target).toBe('Своє');
-  });
-
-  it('review: approves duplicates waiting with the same text, leaves different text alone', () => {
-    const saved: SavedProject = { ...emptyProject('t'), files: { 'B.json': { '9': sent('Так'), '8': sent('Ага') } } };
-    const n = propagate(saved, idx, 'A.json', views[0]!.units[0]!, { ...sent('Так'), status: 'appr' }, 'review', 5, 'Я');
-    expect(n).toBe(1);
-    expect(saved.files['B.json']!['9']!.status).toBe('appr');
-    expect(saved.files['B.json']!['8']!.status).toBe('done');
   });
 });
 

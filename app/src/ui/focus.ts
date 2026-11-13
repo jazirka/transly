@@ -287,20 +287,20 @@ export function send(ctx: Ctx): void {
   const r = submit(ents[u.key], u, 'translate', Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: ctx.qaOpts() });
   if (!r.ok) { if (s.mode === 'scene') sceneBlocked(ctx, u.key, r.reason); else toast(r.reason, { sticky: true }); return; }
   const now = Date.now();
-  ents[u.key] = recordChange(ents[u.key], r.entry, 'надіслано', r.entry.target, s.who, now);
+  // A send is an action of the journal like any other: Ctrl+Z and the «Скасувати» of the message take it back.
+  const sendBatch = ctx.commit([{ file: s.current, key: u.key, next: r.entry, text: r.entry.target }], 'send');
   // What happens to the rows with the same original depends on the project's mode (see `links.ts`): the empty ones are filled
   // at once as one action with its «Скасувати», the ones that differ are offered for a look (or updated, in the automatic mode).
   const real = realOf(ctx, u);
   const sync = afterSend(s.saved, ctx.links(), linkModeOf(s.saved.settings), real.file, real.key, now);
   const batch = sync.changes.length ? ctx.commit(sync.changes, 'link') : undefined;
-  s.sess.n++;
   ctx.persist(); ctx.invalidateTm();
   const look = (): void => openLinkRows(ctx, real.file, real.key);
   const differ = `Зв’язаних рядків відрізняється: ${sync.pending}`;
   const text = 'Надіслано' + (batch ? `. Також у ${plural(sync.changes.length, ['однаковому рядку', 'однакових рядках', 'однакових рядках'])}` : '');
   if (batch) { undoToast(ctx, text, batch); if (sync.pending) toast(differ, { action: { label: 'Переглянути', run: look } }); }
   else if (sync.pending) toast(`${text}. ${differ}`, { action: { label: 'Переглянути', run: look } });
-  else toast(text);
+  else undoToast(ctx, text, sendBatch);
   const list = ctx.visible();
   const i = list.findIndex(x => x.key === u.key);
   const next = list[i + 1] ?? list[i];
@@ -316,7 +316,7 @@ export function focusClick(ctx: Ctx, t: HTMLElement): boolean {
   const ents = ctx.entries(s.current);
   const ta = $('#i-tr') as HTMLTextAreaElement;
   const tm = t.closest<HTMLElement>('[data-tm]');
-  if (tm) { const m = tmMatch(Number(tm.dataset.tm)); if (m) setText(ctx, u, m.t, `підставлено з пам’яті (${m.score}%)`); return true; }
+  if (tm) { const m = tmMatch(Number(tm.dataset.tm)); if (m) setText(ctx, u, m.t, `підставлено з пам’яті (${m.score}%)`, 'memory'); return true; }
   const go = t.closest<HTMLElement>('[data-goto]');
   if (go) { ctx.select(go.dataset.goto!); return true; }
   if (t.closest('#b-clear')) {
@@ -327,12 +327,12 @@ export function focusClick(ctx: Ctx, t: HTMLElement): boolean {
     const plan = ctx.wrapPlan();
     if (plan.disabled) { toast('Ширину рядка вимкнено в «Перенесення рядків»'); return true; }
     const r = wrapMessage(plan, u, ta.value);
-    if (!r.changed) toast('Рядки вже вміщаються'); else setText(ctx, u, r.text, 'перенесено рядки');
+    if (!r.changed) toast('Рядки вже вміщаються'); else setText(ctx, u, r.text, 'перенесено рядки', 'wrap');
     return true;
   }
   if (t.closest('#b-save')) { send(ctx); return true; }
   const ins = t.closest<HTMLElement>('[data-ins]');
-  if (ins) { setText(ctx, u, ta.value + (ins.dataset.ins ?? ''), 'додано керівні коди'); return true; }
+  if (ins) { setText(ctx, u, ta.value + (ins.dataset.ins ?? ''), 'додано керівні коди', 'fix'); return true; }
   return false;
 }
 
@@ -353,7 +353,7 @@ export function qaClick(ctx: Ctx, t: HTMLElement): boolean {
     return true;
   }
   const issue = activeIssues(u, { ...(e ?? { mt: 0, status: 'new' as const }), target: e?.target ?? '' }, ctx.qaOpts()).find(i => i.key === fix!.dataset.fix);
-  if (issue?.fix) setText(ctx, u, issue.fix.text, `виправлено: ${issue.fix.label}`);
+  if (issue?.fix) setText(ctx, u, issue.fix.text, `виправлено: ${issue.fix.label}`, 'fix');
   return true;
 }
 

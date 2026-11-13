@@ -173,6 +173,7 @@ export const batchUndoLabel = (b: JournalBatch): string => (b.kind === 'undo' ? 
 export function undoReport(r: UndoResult): string {
   const n = rows(r.done);
   const again = r.kind === 'undo';
-  const head = again ? `Повторено: ${n}` : `Скасовано: ${n}`;
+  const what = (BATCH_INFO as Record<string, { what: string } | undefined>)[r.kind]?.what;
+  const head = again ? `Повторено: ${n}` : `Скасовано${what ? ` «${what}»` : ''}: ${n}`;
   return r.skipped ? `${head}. Ще ${rows(r.skipped)} змінено після дії, їх не чіпав` : head;
 }

@@ -49,7 +49,7 @@ describe('journal', () => {
     saved.files['A.json']!['3'] = edit(saved.files['A.json']!['3'], views[0]!.units[2]!, 'Три!', 'translate', 150);
     const r = undoJournal(saved, id, 'Я', 200);
     expect(r).toMatchObject({ done: 2, skipped: 1, kind: 'send' });
-    expect(undoReport(r)).toBe('Скасовано: 2 рядки. Ще 1 рядок змінено після дії, їх не чіпав');
+    expect(undoReport(r)).toBe('Скасовано «надіслано»: 2 рядки. Ще 1 рядок змінено після дії, їх не чіпав');
     expect(saved.files['A.json']!['1']).toMatchObject({ status: 'draft', target: 'Раз', mt: 200 });
     expect(saved.files['A.json']!['3']!.target).toBe('Три!');
     // the undo is an action itself: it is listed and can be repeated
@@ -107,5 +107,22 @@ describe('journal', () => {
     saved.files['A.json']!['2'] = { ...saved.files['A.json']!['2']!, mt: 99 };
     expect(sendBatches(views, saved).filter(x => !x.guessed)).toEqual([]);
     expect(saved.files['A.json']!['1']!.target).toBe('Раз, раз');
+  });
+});
+
+describe('a single send is an action of the journal', () => {
+  it('commitRows with kind send can be listed and taken back like a bulk action', () => {
+    const p = emptyProject('P');
+    const entries = (_f: string): Record<string, Entry> => (p.files['M.json'] ??= {});
+    p.files['M.json'] = { a: { target: 'text', status: 'draft', mt: 1 } };
+    const views = [{ name: 'M.json', units: [{ key: 'a', source: 'src', speaker: '', kind: 'dialogue', context: '' } as never] }];
+    const next = { ...p.files['M.json']!.a!, status: 'done' as const, mt: 5 };
+    const id = commitRows(entries, [{ file: 'M.json', key: 'a', next, text: 'text' }], 'send', 'Ви', 5);
+    expect(journalBatches(views, p).map(b => b.id)).toEqual([id]);
+    expect(p.files['M.json']!.a!.status).toBe('done');
+    const r = undoJournal(p, id, 'Ви', 9);
+    expect(r.done).toBe(1);
+    expect(p.files['M.json']!.a!.status).toBe('draft');
+    expect(undoReport(r)).toBe('Скасовано «надіслано»: 1 рядок');
   });
 });

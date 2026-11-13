@@ -1383,7 +1383,7 @@ export async function start(root: HTMLElement): Promise<void> {
         if (next) { reveal('grid', next.key); selectRowLight(next.key); }
         startInline(next?.key ?? key);
       }
-      else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); ta.removeEventListener('blur', finish); const ents = ctx.entries(s.current!); ents[key] = edit(ents[key], u, ta.value, 'translate', Date.now()); const r = submit(ents[key], u, 'translate', Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: qaOpts() }); if (r.ok) { ents[key] = note(r.entry, 'надіслано', r.entry.target, s.who, Date.now()); toast('Надіслано'); } else toast(r.reason, { sticky: true }); s.sess.n++; ctx.persist(); ctx.invalidateTm(); renderAll(); }
+      else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); ta.removeEventListener('blur', finish); const ents = ctx.entries(s.current!); ents[key] = edit(ents[key], u, ta.value, 'translate', Date.now()); const r = submit(ents[key], u, 'translate', Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: qaOpts() }); if (r.ok) { undoToast(ctx, 'Надіслано', ctx.commit([{ file: s.current!, key, next: r.entry, text: r.entry.target }], 'send')); } else toast(r.reason, { sticky: true }); ctx.persist(); ctx.invalidateTm(); renderAll(); }
     });
   }
 

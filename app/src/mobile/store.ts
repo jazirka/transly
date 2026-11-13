@@ -1,5 +1,5 @@
-import { isAutoFilled, adoptSynced, applyPlan, planMessage, planOf, reconcileChanges, rowState, nextIn, positionOf, queueRows, adviceCount, check, fixRule, hasAdvice, knownStatus, qaOf, ruleStats, GROUP_COLORS, proposeTermSync, termChange, termChanges, LinkIndex, afterSend, clearMain, linkChanges, linkModeOf, linkView, planLinkSync, relinkRow, reviewClusters, setMain, unlinkRow, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, TmIndex, findReplace, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines, approveEntry, sendBack, threadsOf, rowsOfGroup, flowText, wrapMessage, wrapOf } from '../core';
-import type { Protect, QueueKind, Issue, QaSettings, RuleStat, LinkRowView, QaOptions, TermChange, TermProposal, TermSync, WrapPlan } from '../core';
+import { isAutoFilled, planIngest, ingestQuiet, adoptSynced, applyPlan, planMessage, planOf, reconcileChanges, rowState, nextIn, positionOf, queueRows, adviceCount, check, fixRule, hasAdvice, knownStatus, qaOf, ruleStats, GROUP_COLORS, proposeTermSync, termChange, termChanges, LinkIndex, afterSend, clearMain, linkChanges, linkModeOf, linkView, planLinkSync, relinkRow, reviewClusters, setMain, unlinkRow, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, TmIndex, findReplace, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines, approveEntry, sendBack, threadsOf, rowsOfGroup, flowText, wrapMessage, wrapOf } from '../core';
+import type { IngestReport, Protect, QueueKind, Issue, QaSettings, RuleStat, LinkRowView, QaOptions, TermChange, TermProposal, TermSync, WrapPlan } from '../core';
 import { pxMeasure } from '../ui/measure';
 import type { BatchKind, Group, Entry, GlossaryTerm, RowChange, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
 import { IdbStore, LoadFailure } from '../ui/idb';
@@ -52,6 +52,8 @@ export class Store {
 
   /** What the last reading of the game files did to rows whose original changed (for the message that follows). */
   lastReconcile: { batch: string; demoted: number } | null = null;
+  /** What lining the new version of the game up with the old one did (for the message that follows). */
+  lastIngest: { batch: string | undefined; report: IngestReport } | null = null;
   /** Told when work from another tab was merged into this one, so the screen can say so. */
   onForeignNotice: (() => void) | null = null;
   private constructor(private idb: IdbStore, saved: SavedProject) {
@@ -576,6 +578,9 @@ export class Store {
     this.views = [...this.views.filter(v => !names.has(v.name)), ...kept].sort((a, b) => natural(a.name, b.name));
     this.saved.labels = labelsOf(this.views);
     this.saved.sysNames = sysNamesOf(game) ?? this.saved.sysNames;
+    // a new version of the game is lined up with the old one by the text of the originals, so a line put in does not shift the translations
+    const ing = planIngest(this.saved.snapshot, kept, this.saved.files, Date.now());
+    this.lastIngest = ingestQuiet(ing.report) ? null : { batch: ing.changes.length ? this.commit(ing.changes, 'rekey') : undefined, report: ing.report };
     const snap = snapshotOf(this.views);
     if (JSON.stringify(snap) !== JSON.stringify(this.saved.snapshot ?? null)) { this.saved.assetsRev = Date.now(); this.saved.snapshot = snap; }
     // rows whose original changed: the sent and proofread ones go back to drafts as one action of the journal (visible, can be taken back)

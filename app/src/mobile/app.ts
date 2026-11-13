@@ -1,5 +1,5 @@
 import { autoNote, HINT_GLYPH, HINT_LABEL, KIND_LABEL, explainCodes, sceneTitle, stepScene, byHintOrder, commentId, historyRows, openThreads, restoreNote, sourceTermHits, targetHasTerm, threadsOf, batchTitle, batchUndoLabel, undoReport, setIgnored, canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, describePage, DEFAULT_LINE_LIMIT, DEFAULT_WRAP, MV_WINDOW, autoLineLimit, flowText, isMessageUnit, linesShown, measureOf, pixelBudget, unitWord, usesPixels, widthOf, wrapMessage, wrapOf } from '../core';
-import { APOSTROPHES, QA_RULES, QUEUE_LABEL, copyLine, stamp, rowsWithTerm, termRowsNote, adoptSynced, groupColor, isAutoFilled, pct as pctOf, keepFromText, keepToText, qaOf, withRuleLevel } from '../core';
+import { APOSTROPHES, QA_RULES, ingestNote, QUEUE_LABEL, copyLine, stamp, rowsWithTerm, termRowsNote, adoptSynced, groupColor, isAutoFilled, pct as pctOf, keepFromText, keepToText, qaOf, withRuleLevel } from '../core';
 import type { Issue, LinkMode, LinkState, QaSettings, RuleSeverity, TermChange, TermProposal, TermSync, WrapSettings } from '../core';
 import { pxMeasure } from '../ui/measure';
 import { CONF_LABEL, flagsText, markHtml } from '../ui/termsync-html';
@@ -946,9 +946,9 @@ export async function start(root: HTMLElement): Promise<void> {
       }
       let reset = 0;
       if (game.length) reset = store.ingest(game);
-      const parts = [projects ? `проєкт злито${conflicts ? ` (конфліктів: ${conflicts})` : ''}` : '', game.length ? `файлів гри: ${game.length}` : '', reset ? `оригінал змінився в ${reset} рядках${store.lastReconcile ? `, у чернетки повернуто ${store.lastReconcile.demoted}` : ''}` : ''].filter(Boolean);
+      const parts = [projects ? `проєкт злито${conflicts ? ` (конфліктів: ${conflicts})` : ''}` : '', game.length ? `файлів гри: ${game.length}` : '', game.length && store.lastIngest ? ingestNote(store.lastIngest.report) : '', reset ? `оригінал змінився в ${reset} рядках${store.lastReconcile ? `, у чернетки повернуто ${store.lastReconcile.demoted}` : ''}` : ''].filter(Boolean);
       if (unknown.length) say(`Не впізнав: ${unknown.slice(0, 3).join(', ')}${unknown.length > 3 ? '…' : ''}`, true);
-      if (parts.length) say(parts.join(' · '), false, store.lastReconcile?.batch);
+      if (parts.length) say(parts.join(' · '), false, store.lastIngest?.batch ?? store.lastReconcile?.batch);
       if (store.hasGame) go(store.key ? 'edit' : 'files'); else render();
     } catch (e) { say(`Не вдалося прочитати: ${e instanceof Error ? e.message : 'помилка'}`, true); }
     finally { busy = ''; renderChrome(); }

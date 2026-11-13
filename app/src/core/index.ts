@@ -59,6 +59,7 @@ export * from './groups';
 export * from './validate';
 export * from './session';
 export * from './plan';
+export * from './ingest';
 export * from './progress';
 export * from './queue';
 export * from './followups';

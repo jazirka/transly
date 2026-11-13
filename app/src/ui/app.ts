@@ -1,5 +1,5 @@
-import { isAutoFilled, autoNote, Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, qaOf, termsStamp, adoptSynced, applyPlan, planOf, reconcileChanges, pct, progressOf, rowState, sumProgress, QUEUE_LABEL, nextIn, positionOf, queueRows, ago, copyLine, stamp, stampOf } from '../core';
-import type { QaOptions, QueueKind, WrapPlan } from '../core';
+import { isAutoFilled, autoNote, planIngest, ingestQuiet, ingestNote, Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, qaOf, termsStamp, adoptSynced, applyPlan, planOf, reconcileChanges, pct, progressOf, rowState, sumProgress, QUEUE_LABEL, nextIn, positionOf, queueRows, ago, copyLine, stamp, stampOf } from '../core';
+import type { IngestReport, QaOptions, QueueKind, WrapPlan } from '../core';
 import { pxMeasure } from './measure';
 import { openWrapTool } from './wrap-dialog';
 import { openQaRules } from './qarules-dialog';
@@ -35,6 +35,7 @@ import { openLinkTool } from './links-dialog';
 import { openTermSyncTool } from './termsync-dialog';
 import { openPluginTexts } from './plugins-dialog';
 import { openActivity, openAutofill } from './activity-dialog';
+import { openIngestReport } from './ingest-dialog';
 import { markup } from './markup';
 import { openSettings } from './settings';
 import type { SettingsTab } from './settings';
@@ -685,7 +686,7 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#pg-a').style.width = total ? `${(100 * A) / total}%` : '0';
     $('#pg-b').style.width = total ? `${(100 * D) / total}%` : '0';
     $('#pg-c').style.width = total ? `${(100 * W) / total}%` : '0';
-    $('#pg-txt').textContent = total ? `Перекладено ${pct(prog.translated, total)}% (${prog.translated.toLocaleString('uk-UA')} з ${total.toLocaleString('uk-UA')}) · вичитано ${pct(A, total)}%` : 'Папку гри не відкрито';
+    $('#pg-txt').textContent = total ? `Перекладено ${pct(prog.translated, total)}% (${prog.translated.toLocaleString('uk-UA')} з ${total.toLocaleString('uk-UA')}) · надіслано ${pct(prog.sent + prog.approved, total)}% · вичитано ${pct(A, total)}%` : 'Папку гри не відкрито';
     $('#pg').setAttribute('aria-valuenow', String(pct(prog.translated, total)));
     $('#pg').setAttribute('aria-valuetext', $('#pg-txt').textContent ?? '');
     $('#pg').title = total ? `Вичитано ${pct(A, total)}% · Надіслано, ще не вичитано ${pct(D, total)}% · Чернетки ${pct(W, total)}% · Без перекладу ${pct(prog.untranslated, total)}%` : '';
@@ -885,19 +886,21 @@ export async function start(root: HTMLElement): Promise<void> {
     if (quiet) showLoad(null);
     if (opts.stale?.()) return;
     const reset = ingest(files, keep);
+    const ingested = lastIngest;
     dataDir = isDesktop() ? dataDirOf(picked) : null;
     if (!s.views.length) { s.current = null; renderAll(); toast('У цих файлах немає тексту для перекладу'); return; }
     if (failed.length) toast(`Не вдалося прочитати файлів: ${failed.length}`);
     const fromBackup = picked.filter(f => f.fromBackup).length;
     const translated = sumProgress(s.views.map(v => progressOf(v.units, s.saved.files[v.name] ?? {}))).translated;
-    if (isDesktop() && !fromBackup && translated >= 10 && reset / translated >= 0.2) {
+    const heavy = isDesktop() && !fromBackup && translated >= 10 && reset / translated >= 0.2;
+    if (ingested && !heavy) toast(`Нова версія гри: ${ingestNote(ingested.report)}`, { action: { label: 'Показати', run: () => openIngestReport(ctx, ingested.report, ingested.batch) } });
+    if (heavy) {
       // Many originals changed at once and there is no backup to read them from: most likely the folder already holds the translation.
       toast('Оригінали в папці гри змінилися майже скрізь, а резервної копії немає: схоже, там уже лежить переклад. Натисніть «Збірка (файл)» → «Повернути оригінали», потім відкрийте папку знову', { sticky: true });
     } else if (reset) {
       const back = lastReconcile ? `: ${plural(lastReconcile.demoted, ['рядок', 'рядки', 'рядків'])} повернуто в чернетки` : '';
       undoToast(ctx, `Оригінал змінився в ${plural(reset, ['рядку', 'рядках', 'рядках'])}${back}`, lastReconcile?.batch);
-    }
-    else if (fromBackup) toast('Оригінали прочитано з резервної копії гри (data.transly-orig)');
+    } else if (fromBackup) toast('Оригінали прочитано з резервної копії гри (data.transly-orig)');
     s.open = s.open.filter(n => s.views.some(v => v.name === n));
     if (quiet && s.current && s.current !== GROUP && s.views.some(v => v.name === s.current)) unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u]));
     else { openFile(s.current && s.views.some(v => v.name === s.current) ? s.current : s.views[0]!.name); restoreUi(); }
@@ -923,16 +926,22 @@ export async function start(root: HTMLElement): Promise<void> {
     tmCache = null;
     s.saved.labels = labelsOf(s.views);
     s.saved.sysNames = sysNamesOf(game) ?? s.saved.sysNames;
+    // The translations are keyed by the position of a line in its file: a new version of the game is lined up with the old one by the
+    // text of the originals first, so a line put in (or taken out) does not push the translations onto their neighbours.
+    const now = Date.now();
+    const ing = planIngest(s.saved.snapshot, fresh, s.saved.files, now);
+    lastIngest = ingestQuiet(ing.report) ? null : { batch: ing.changes.length ? ctx.commit(ing.changes, 'rekey') : undefined, report: ing.report };
     const snap = snapshotOf(s.views);
     if (JSON.stringify(snap) !== JSON.stringify(s.saved.snapshot ?? null)) { s.saved.assetsRev = Date.now(); s.saved.snapshot = snap; }
     // Rows whose original changed: the sent and proofread ones go back to drafts as one action of the journal, so it is visible and can be taken back.
-    const now = Date.now();
     const rec = reconcileChanges(s.views, s.saved.files, now);
     lastReconcile = rec.changes.length ? { batch: ctx.commit(rec.changes, 'reconcile'), demoted: rec.changes.length } : null;
     return rec.changed;
   }
   /** What the last reading of the game files did to rows whose original changed (for the message that follows). */
   let lastReconcile: { batch: string; demoted: number } | null = null;
+  /** What lining the new version of the game up with the old one did (for the message that follows). */
+  let lastIngest: { batch: string | undefined; report: IngestReport } | null = null;
 
   /** Switch which plugin commands count as text; the rows appear in the files they belong to. */
   function setPluginCommands(names: string[]): void {

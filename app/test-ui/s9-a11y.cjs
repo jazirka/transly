@@ -2,6 +2,7 @@
 //   PC_URL=http://localhost:4285/ node test-ui/s9-a11y.cjs
 const { chromium } = require('playwright');
 const PC = process.env.PC_URL || 'http://localhost:4285/';
+const PHONE = process.env.PHONE_URL || 'http://localhost:4284/';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const project = () => ({
   version: 1, name: 'P', sourceLang: 'en', targetLang: 'uk', resetEpoch: 0, files: {}, memory: [], terms: [],
@@ -54,6 +55,27 @@ const check = (name, ok, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ') 
   await page.emulateMedia({ forcedColors: 'active' }); await sleep(300);
   const bg = await page.evaluate(() => { const d = document.querySelector('#grid .gr .sd.draft, #grid .gr .sd.done'); return d ? getComputedStyle(d).backgroundColor : 'none'; });
   check('in forced colours the status dots keep their fill', bg !== 'none' && bg !== 'rgba(0, 0, 0, 0)', bg);
+
+  // a11y-14 (phone): the sheet takes the focus when it opens and gives it back when it closes
+  {
+    const pctx = await browser.newContext({ viewport: { width: 412, height: 915 }, hasTouch: true, isMobile: true });
+    const pp = await pctx.newPage(), perrors = [];
+    pp.on('pageerror', e => perrors.push(String(e.message)));
+    await pp.goto(PHONE); await sleep(800);
+    await pp.evaluate(put, { text: JSON.stringify(rest), snapshot });
+    await pp.reload(); await sleep(1500);
+    await pp.locator('.m-row').first().click(); await sleep(700);
+    const opener = pp.getByRole('button', { name: /Підказки/ }).first();
+    await opener.focus(); await opener.click(); await sleep(700);
+    const inSheet = await pp.evaluate(() => !!document.activeElement && !!document.activeElement.closest('.m-sheet'));
+    check('phone: the hints sheet takes the focus when it opens', inSheet, await pp.evaluate(() => document.activeElement && document.activeElement.outerHTML.slice(0, 80)));
+    check('phone: the sheet says it is modal', await pp.evaluate(() => document.querySelector('.m-sheet')?.getAttribute('aria-modal') === 'true'));
+    await pp.locator('.m-scrim').first().click({ position: { x: 5, y: 5 } }); await sleep(700);
+    const back = await pp.evaluate(() => document.activeElement && (document.activeElement.getAttribute('aria-label') || document.activeElement.textContent || '').trim().slice(0, 30));
+    check('phone: closing it returns the focus to the button that opened it', /Підказки/.test(back || ''), String(back));
+    check('phone: no page errors', perrors.length === 0, perrors.join(' | '));
+    await pctx.close();
+  }
   check('no page errors', errors.length === 0, errors.join(' | '));
   await browser.close();
   console.log(failed ? `\n${failed} check(s) failed` : '\nall checks passed');

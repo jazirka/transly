@@ -176,7 +176,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
   <div class="kh kh2">Позначки рядків</div>
   <div class="kr kr-l"><span><i class="sd new"></i>без перекладу</span><span><i class="sd draft"></i>чернетка</span><span><i class="sd done"></i>надіслано</span><span><i class="sd appr"></i>вичитано</span><span><i class="sd qa"></i>є помилка QA</span></div>
 </div>
-<div class="sd-wrap" id="sd" hidden><div class="sd-box" role="dialog" aria-modal="true" aria-label="Пошук скрізь"><input id="sd-in" placeholder="Рядки, файли, терміни…" aria-label="Пошук скрізь" autocomplete="off"><div id="sd-res" role="listbox" aria-label="Результати"></div><div class="sd-foot">↑↓ вибір · Enter відкрити · Esc закрити</div></div></div>
+<div class="sd-wrap" id="sd" hidden><div class="sd-box" role="dialog" aria-modal="true" aria-label="Пошук скрізь"><input id="sd-in" placeholder="Рядки, файли, терміни…" aria-label="Пошук скрізь" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="sd-res" aria-expanded="true" aria-activedescendant=""><div id="sd-res" role="listbox" aria-label="Результати"></div><div class="sd-foot">↑↓ вибір · Enter відкрити · Esc закрити</div></div></div>
 ${WINDOW_CONTROLS_HTML}`;
 
 export async function start(root: HTMLElement): Promise<void> {
@@ -1238,9 +1238,10 @@ export async function start(root: HTMLElement): Promise<void> {
         html += `<div class="sd-h" role="presentation">${x.kind}${all > shown ? ` · показано ${shown} з ${all >= CAP ? `${CAP}+` : all}` : ''}</div>`;
       }
       const dot = x.status ? `<i class="sd ${x.status}" title="${STATUS_LABEL[x.status as keyof typeof STATUS_LABEL] ?? ''}" aria-hidden="true"></i>` : '';
-      html += `<div class="sd-it ${i === 0 ? 'on' : ''}" data-sd="${i}" role="option" aria-selected="${i === 0}">${dot}<span class="sd-b"><span class="sd-t">${esc(x.title)}</span>${x.sub ? `<span class="sd-s">${esc(x.sub)}</span>` : ''}${x.where ? `<span class="sd-w">${esc(x.where)}</span>` : ''}</span></div>`;
+      html += `<div class="sd-it ${i === 0 ? 'on' : ''}" id="sd-opt-${i}" data-sd="${i}" role="option" aria-selected="${i === 0}">${dot}<span class="sd-b"><span class="sd-t">${esc(x.title)}</span>${x.sub ? `<span class="sd-s">${esc(x.sub)}</span>` : ''}${x.where ? `<span class="sd-w">${esc(x.where)}</span>` : ''}</span></div>`;
     });
-    $('#sd-res').innerHTML = html || '<div class="sd-empty">Нічого не знайдено</div>';
+    $('#sd-res').innerHTML = html || '<div class="sd-empty" role="status">Нічого не знайдено</div>';
+    $('#sd-in').setAttribute('aria-activedescendant', sdItems.length ? 'sd-opt-0' : '');
   }
   function sdGo(i: number): void {
     const it = sdItems[i];
@@ -1656,7 +1657,7 @@ export async function start(root: HTMLElement): Promise<void> {
   $('#sd-in').addEventListener('input', sdRender);
   $('#sd-in').addEventListener('keydown', e => {
     const k = (e as KeyboardEvent).key;
-    if (k === 'ArrowDown' || k === 'ArrowUp') { e.preventDefault(); sdSel = (sdSel + (k === 'ArrowDown' ? 1 : -1) + sdItems.length) % Math.max(1, sdItems.length); document.querySelectorAll('.sd-it').forEach((x, i) => { x.classList.toggle('on', i === sdSel); x.setAttribute('aria-selected', String(i === sdSel)); }); }
+    if (k === 'ArrowDown' || k === 'ArrowUp') { e.preventDefault(); sdSel = (sdSel + (k === 'ArrowDown' ? 1 : -1) + sdItems.length) % Math.max(1, sdItems.length); document.querySelectorAll('.sd-it').forEach((x, i) => { x.classList.toggle('on', i === sdSel); x.setAttribute('aria-selected', String(i === sdSel)); if (i === sdSel) { $('#sd-in').setAttribute('aria-activedescendant', x.id); x.scrollIntoView({ block: 'nearest' }); } }); }
     else if (k === 'Enter') { e.preventDefault(); sdGo(sdSel); }
   });
 

@@ -836,8 +836,17 @@ export async function start(root: HTMLElement): Promise<void> {
   }
   const fmtTime = (t: number): string => new Date(t).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   /** Side panel under the top bar: one topic at a time (glossary, memory, comments, history); the top-bar button that opened it closes it. */
+  /** The control that opened the sheet or the menu, and whether the focus has been moved into them yet (a keyboard or switch user must land inside, and come back). */
+  let sheetOpenerSel = '', sheetFocused = false;
   function renderSheet(): void {
     const wrap = $('m-sheet'); wrap.hidden = !sheet && !menu;
+    if (!sheet && !menu) {
+      // the top bar is drawn again when the sheet closes, so the opener is found again by what it is, not kept as an element
+      if (sheetFocused) { sheetFocused = false; const sel = sheetOpenerSel; sheetOpenerSel = ''; if (sel) setTimeout(() => document.querySelector<HTMLElement>(sel)?.focus({ preventScroll: true }), 0); }
+    } else if (!sheetFocused) {
+      const a = document.activeElement;
+      sheetOpenerSel = a instanceof HTMLElement ? (a.hasAttribute('data-sheet') ? '[data-sheet]' : a.hasAttribute('data-menu') ? '[data-menu]' : '') : sheetOpenerSel;
+    }
     if (menu) {
       wrap.dataset.open = '';
       const badge: Partial<Record<Sub, number>> = { autofill: store.autofill().length + store.linkTodo(), sendlog: store.sends().length + store.autos().length + store.journal().length };
@@ -845,11 +854,13 @@ export async function start(root: HTMLElement): Promise<void> {
       const item = (k: Sub): string => { const [, l, ic] = TOOLS.find(t => t[0] === k)!; return `<button class="m-mi" data-sub="${k}">${icon(ic)}<span>${short[k] ?? l}</span>${badge[k] ? `<i>${badge[k]! > 99 ? '99+' : badge[k]}</i>` : ''}</button>`; };
       wrap.innerHTML = `<div class="m-scrim" data-close></div><nav class="m-menu" aria-label="Інструменти"><span class="m-grab" aria-hidden="true"></span><div class="m-mgrid">${(['find', 'search', 'autofill', 'speakers', 'glossary', 'wrap', 'termsync', 'sendlog'] as Sub[]).map(item).join('')}</div>
         <div class="m-msep"></div><button class="m-mi wide" data-sub="qarules">${icon('check')}<span>Правила QA</span></button><button class="m-mi wide" data-sub="settings">${icon('more')}<span>Налаштування</span></button></nav>`;
+      if (!sheetFocused) { sheetFocused = true; wrap.querySelector<HTMLElement>('.m-mi')?.focus({ preventScroll: true }); }
       return;
     }
     const c = store.current;
     if (!sheet || !c) { wrap.innerHTML = ''; delete wrap.dataset.open; return; }
     const fresh = wrap.dataset.open !== '1'; wrap.dataset.open = '1';
+    const onTab = !!wrap.querySelector('.m-stabs')?.contains(document.activeElement);   // the tab strip is drawn again: the focus must not fall out of it
     const terms = store.terms(c.unit), tm = store.suggestions(c.unit, c.entry), hist = historyRows(c.entry?.history, c.entry?.target ?? '').slice(0, 20);
     const counts = { terms: terms.length, tm: tm.length, cm: openThreads(c.entry), hist: hist.length, dict: 0 };
     const tabs: ['terms' | 'tm' | 'cm' | 'hist' | 'dict', string][] = [['terms', 'Глосарій'], ['tm', 'Пам’ять'], ['cm', 'Коментарі'], ['hist', 'Історія']];
@@ -861,12 +872,13 @@ export async function start(root: HTMLElement): Promise<void> {
       : cur === 'tm' ? (tm.length ? tm.map((m, i) => `<button class="m-hit" data-tm="${i}"><b class="m-score">${m.score}%</b><span>${esc(m.t)}</span></button>`).join('') : '<p class="m-none">Схожих перекладів немає</p>')
       : cur === 'cm' ? threadsHtml(c.entry)
       : historyHtml(hist);
-    wrap.innerHTML = `<div class="m-scrim ${fresh ? 'in' : ''}" data-close></div><aside class="m-sheet ${fresh ? 'in' : ''} ${cur === 'cm' ? 'tall' : ''}" role="dialog" aria-label="Допомога до рядка">
+    wrap.innerHTML = `<div class="m-scrim ${fresh ? 'in' : ''}" data-close></div><aside class="m-sheet ${fresh ? 'in' : ''} ${cur === 'cm' ? 'tall' : ''}" role="dialog" aria-modal="true" aria-label="Допомога до рядка">
       <span class="m-grab" aria-hidden="true"></span>
       <div class="m-stabs" role="tablist">${tabs.map(([k, l]) => `<button role="tab" data-stab="${k}" aria-selected="${k === cur}" class="${k === cur ? 'on' : ''}">${l}${counts[k] ? `<i>${counts[k]}</i>` : ''}</button>`).join('')}<span class="m-stab-ind" id="m-stab-ind"></span></div>
       <div class="m-spanel ${dir}" id="m-spanel">${panel}</div>
       ${cur === 'cm' ? `<form class="m-composer" data-cmform><textarea id="m-cm" rows="2" maxlength="400" placeholder="Написати коментар…" aria-label="Новий коментар"></textarea><button type="submit" class="m-send" aria-label="Надіслати коментар" disabled>${icon('send')}</button></form>` : ''}
     </aside>`;
+    if (!sheetFocused || onTab) { sheetFocused = true; wrap.querySelector<HTMLElement>('.m-stabs button.on')?.focus({ preventScroll: true }); }
     const sp = document.getElementById('m-spanel'); if (sp && cur === 'cm') sp.scrollTop = sp.scrollHeight;
     const on = wrap.querySelector<HTMLElement>('.m-stabs button.on'), ind = document.getElementById('m-stab-ind');
     if (on && ind) {

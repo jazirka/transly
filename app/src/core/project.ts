@@ -9,6 +9,7 @@ import { extract } from './engine';
 import type { ExtractOptions } from './rpgmaker';
 import { merge } from './merge';
 import { clampClock, repairProject } from './validate';
+import { progressOf } from './progress';
 import type { Entry, GameFile, Translations, Unit } from './model';
 import type { WrapSettings } from './wrapconfig';
 import type { QaSettings } from './qaconfig';
@@ -124,16 +125,10 @@ export const labelsOf = (views: FileView[]): Record<string, string> => Object.fr
 
 export interface FileStats { total: number; translated: number; done: number; approved: number }
 
+/** The counts of a file's rows (`done` = sent and not proofread yet). The definitions are in `progress.ts`. */
 export function statsOf(units: Unit[], entries: Translations): FileStats {
-  const s: FileStats = { total: units.length, translated: 0, done: 0, approved: 0 };
-  for (const u of units) {
-    const e = entries[u.key];
-    if (!e || !e.target) continue;
-    s.translated++;
-    if (e.status === 'done') s.done++;
-    if (e.status === 'appr') s.approved++;
-  }
-  return s;
+  const p = progressOf(units, entries);
+  return { total: p.total, translated: p.translated, done: p.sent, approved: p.approved };
 }
 
 /** Views from a stored snapshot, so the project opens without the game folder. */

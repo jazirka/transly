@@ -1,5 +1,5 @@
 import { HINT_GLYPH, HINT_LABEL, KIND_LABEL, explainCodes, sceneTitle, stepScene, byHintOrder, commentId, historyRows, openThreads, restoreNote, sourceTermHits, targetHasTerm, threadsOf, batchTitle, batchUndoLabel, undoReport, setIgnored, canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, describePage, DEFAULT_LINE_LIMIT, DEFAULT_WRAP, MV_WINDOW, autoLineLimit, flowText, isMessageUnit, linesShown, measureOf, pixelBudget, unitWord, usesPixels, widthOf, wrapMessage, wrapOf } from '../core';
-import { APOSTROPHES, QA_RULES, adoptSynced, groupColor, isAutoFilled, keepFromText, keepToText, qaOf, withRuleLevel } from '../core';
+import { APOSTROPHES, QA_RULES, QUEUE_LABEL, adoptSynced, groupColor, isAutoFilled, pct as pctOf, keepFromText, keepToText, qaOf, withRuleLevel } from '../core';
 import type { Issue, LinkMode, LinkState, QaSettings, RuleSeverity, TermChange, TermProposal, TermSync, WrapSettings } from '../core';
 import { pxMeasure } from '../ui/measure';
 import { CONF_LABEL, flagsText, markHtml } from '../ui/termsync-html';
@@ -194,7 +194,7 @@ export async function start(root: HTMLElement): Promise<void> {
   }
   function renderChrome(): void {
     const tot = store.totals();
-    const pct = tot.total ? Math.floor((100 * tot.translated) / tot.total) : 0;
+    const pct = pctOf(tot.translated, tot.total);
     const gName = scope === 'group' && gscope ? store.groupsList().find(x => x.id === gscope)?.name : undefined;
     const title = tab === 'files' ? 'Файли гри' : tab === 'rows' ? (gName ? `Група «${gName}»` : store.view()?.label ?? store.file ?? 'Рядки') : tab === 'edit' ? (store.file ?? 'Переклад') : 'Ще';
     let where = '';
@@ -210,7 +210,7 @@ export async function start(root: HTMLElement): Promise<void> {
   }
 
   /* ---------- screens ---------- */
-  function bar(done: number, total: number): string { const p = total ? Math.round((100 * done) / total) : 0; return `<span class="m-meter" aria-hidden="true"><i style="width:${p}%"></i></span>`; }
+  function bar(done: number, total: number): string { const p = pctOf(done, total); return `<span class="m-meter" aria-hidden="true"><i style="width:${p}%"></i></span>`; }
 
   function screenFiles(): string {
     if (!store.hasGame) return `<div class="m-empty"><h2>Файлів ще немає</h2><p>Оберіть файли гри (RPG Maker .json, .po, .csv, .rpy) або збережений проєкт.</p><button class="m-primary" data-pick>${icon('folder')}<span>Обрати файли…</span></button><button class="m-secondary" data-go="more">Інші способи: проєкт, синхронізація</button></div>`;
@@ -224,7 +224,7 @@ export async function start(root: HTMLElement): Promise<void> {
     return `<div class="m-gmenu" role="menu" aria-label="У групу">${store.groupsList().map(g => `<button class="m-gm ${now.size === 1 && now.has(g.id) ? 'on' : ''}" role="menuitem" data-fplace="${esc(g.id)}"><i class="m-gdot" style="background:${groupColor(g)}"></i>${esc(g.name)}</button>`).join('')}${[...now].some(x => x) ? '<button class="m-gm" role="menuitem" data-fplace="">Прибрати з групи</button>' : ''}<form class="m-gnew" data-fnewform><input id="fg-new" placeholder="Нова група" aria-label="Назва нової групи" maxlength="60" autocomplete="off"><button class="m-mini" type="submit">＋</button></form></div>`;
   }
   const fileItem = (v: FileViewLike): string => {
-    const st = store.stats(v.name), pc = st.total ? Math.round((100 * st.translated) / st.total) : 0;
+    const st = store.stats(v.name), pc = pctOf(st.translated, st.total);
     const g = store.fileGroup(v.name);
     const attr = fsel ? `data-fpick="${esc(v.name)}" aria-pressed="${fpicked.has(v.name)}"` : `data-file="${esc(v.name)}"`;
     return `<li><button class="m-item ${v.name === store.file && !fsel ? 'cur' : ''} ${fsel && fpicked.has(v.name) ? 'picked' : ''}" ${attr}><span class="m-ico">${/^Map\d+\.json$/.test(v.name) ? 'MAP' : '{ }'}</span><span class="m-item-t"><b>${g ? `<i class="m-gdot" style="background:${groupColor(g)}" aria-label="Група: ${esc(g.name)}"></i>` : ''}${esc(v.label ?? v.name.replace(/\.json$/, ''))}</b><small>${esc(v.label ? v.name.replace(/\.json$/, '') : plural(st.total, ['рядок', 'рядки', 'рядків']))}</small>${bar(st.translated, st.total)}</span><span class="m-item-n">${pc}%</span></button></li>`;
@@ -242,7 +242,7 @@ export async function start(root: HTMLElement): Promise<void> {
       const acts = open ? (grename === g.id
         ? `<form class="m-grename" data-grsave="${esc(g.id)}"><input id="gr-ren" value="${esc(g.name)}" aria-label="Нова назва групи" maxlength="60" autocomplete="off"><button class="m-mini" type="submit">Гаразд</button></form>`
         : `<div class="m-gacts"><button class="m-mini" data-grows="${esc(g.id)}" ${all.length ? '' : 'disabled'}>Рядки</button><button class="m-mini" data-gsend="${esc(g.id)}" ${all.length ? '' : 'disabled'}>Надіслати</button><button class="m-mini ${gmore === g.id ? 'on' : ''}" data-gmore="${esc(g.id)}" aria-expanded="${gmore === g.id}" aria-label="Інші дії групи">⋯</button>${gmore === g.id ? `<button class="m-mini" data-grename="${esc(g.id)}">Назва</button><button class="m-mini" data-gcolor="${esc(g.id)}">Колір</button><button class="m-mini danger" data-gdel="${esc(g.id)}">${gdel === g.id ? 'Справді видалити?' : 'Видалити'}</button>` : ''}</div>`) : '';
-      return `<div class="m-grp"><button class="m-cat-h m-grp-h" data-gfold="${esc(g.id)}" aria-expanded="${open}"><span class="m-cat-c">${icon('down')}</span><i class="m-gdot" style="background:${groupColor(g)}"></i><b>${esc(g.name)}</b><small>${all.length} · ${t.all ? Math.round((100 * t.tr) / t.all) : 0}%</small></button>${open ? `${acts}${files.length ? `<ul class="m-list">${files.map(fileItem).join('')}</ul>` : '<p class="m-none">Файлів немає: «Вибрати файли», потім «У групу»</p>'}` : ''}</div>`;
+      return `<div class="m-grp"><button class="m-cat-h m-grp-h" data-gfold="${esc(g.id)}" aria-expanded="${open}"><span class="m-cat-c">${icon('down')}</span><i class="m-gdot" style="background:${groupColor(g)}"></i><b>${esc(g.name)}</b><small>${all.length} · ${pctOf(t.tr, t.all)}%</small></button>${open ? `${acts}${files.length ? `<ul class="m-list">${files.map(fileItem).join('')}</ul>` : '<p class="m-none">Файлів немає: «Вибрати файли», потім «У групу»</p>'}` : ''}</div>`;
     }).join('')}</section>`;
   }
   /** The files whose name or title contains the search words. */
@@ -260,7 +260,7 @@ export async function start(root: HTMLElement): Promise<void> {
     return g + [...groups].map(([k, vs]) => {
       const open = !!q || !collapsedCats.has(k);
       const t = vs.reduce((n, v) => { const st = store.stats(v.name); return { tr: n.tr + st.translated, all: n.all + st.total }; }, { tr: 0, all: 0 });
-      return `<section class="m-cat ${open ? 'open' : ''}"><button class="m-cat-h" data-cat="${esc(k)}" aria-expanded="${open}"><span class="m-cat-c">${icon('down')}</span><b>${esc(k)}</b><small>${vs.length} · ${t.all ? Math.round((100 * t.tr) / t.all) : 0}%</small></button>${open ? `<ul class="m-list">${vs.map(item).join('')}</ul>` : ''}</section>`;
+      return `<section class="m-cat ${open ? 'open' : ''}"><button class="m-cat-h" data-cat="${esc(k)}" aria-expanded="${open}"><span class="m-cat-c">${icon('down')}</span><b>${esc(k)}</b><small>${vs.length} · ${pctOf(t.tr, t.all)}%</small></button>${open ? `<ul class="m-list">${vs.map(item).join('')}</ul>` : ''}</section>`;
     }).join('');
   }
 
@@ -727,12 +727,12 @@ export async function start(root: HTMLElement): Promise<void> {
       <div id="m-prev" class="m-prev"></div>
       ${linksCard(c)}
     </div>
-    <div class="m-actions" id="m-actions"><div class="m-act2"><button class="m-mini" data-sub="scene">${icon('rows')} Сцена</button>${c.entry?.status === 'appr' ? '' : `<button class="m-mini" data-approve>${icon('check')} Вичитати</button>`}${c.entry?.status === 'done' || c.entry?.status === 'appr' ? `<button class="m-mini" data-rework title="Повернути на доопрацювання">${icon('undo')} Повернути</button>` : ''}<button class="m-mini danger" data-clear>Очистити</button></div><div class="m-act1"><button class="m-ic" data-step="-1" aria-label="Попередній рядок" ${store.neighbour(-1) ? '' : 'disabled'}>${icon('prev')}</button><button class="m-ic" data-step="1" aria-label="Наступний рядок" ${store.neighbour(1) ? '' : 'disabled'}>${icon('next')}</button><button class="m-primary" data-send>${icon('send')}<span>Надіслати</span></button></div></div>`;
+    <div class="m-actions" id="m-actions"><div class="m-act2"><button class="m-mini" data-sub="scene">${icon('rows')} Сцена</button>${c.entry?.status === 'appr' ? '' : `<button class="m-mini" data-approve>${icon('check')} Вичитати</button>`}${c.entry?.status === 'done' || c.entry?.status === 'appr' ? `<button class="m-mini" data-rework title="Повернути на доопрацювання">${icon('undo')} Повернути</button>` : ''}<button class="m-mini danger" data-clear>Очистити</button></div><div class="m-act1"><button class="m-ic" data-step="-1" aria-label="Попередній рядок" ${store.neighbour(-1) ? '' : 'disabled'}>${icon('prev')}</button><button class="m-ic" data-step="1" aria-label="Наступний рядок" ${store.neighbour(1) ? '' : 'disabled'}>${icon('next')}</button><button class="m-ic" data-queue aria-label="Наступний рядок без перекладу в проєкті" title="Наступний рядок без перекладу в проєкті">${icon('down')}</button><button class="m-primary" data-send>${icon('send')}<span>Надіслати</span></button></div></div>`;
   }
 
   function screenMore(): string {
     const gh = loadGithubConfig(), tot = store.totals();
-    const pct = tot.total ? Math.floor((100 * tot.translated) / tot.total) : 0;
+    const pct = pctOf(tot.translated, tot.total);
     return `<div class="m-more">
       ${store.hasGame ? `<section class="m-card"><h3>Прогрес</h3><div class="m-big">${pct}%</div>${bar(tot.translated, tot.total)}<p class="m-hint">Перекладено ${tot.translated} з ${tot.total} · надіслано ${tot.done} · вичитано ${tot.approved}</p></section>` : ''}
       <section class="m-card"><h3>Відкрити</h3><p class="m-hint">На телефоні проєкт береться з комп’ютера або з GitHub. Можна також відкрити файли гри чи файл проєкту (<code>.transly.json</code>).</p>
@@ -1177,11 +1177,19 @@ export async function start(root: HTMLElement): Promise<void> {
     }
     if ((termShown || codeShown) && !q('#m-tcard')) { termShown = null; codeShown = null; renderTermCard(); }
     if (q('[data-send]')) {
+      // the row to go on with is chosen before the send (with the filter «Чернетки» the sent row leaves the list)
+      const nextBefore = store.neighbour(1);
       const r = store.send();
       if (r.why) { say(/^Є помилка QA/.test(r.why) ? 'Є помилка QA: виправте її під полем' : r.why, true); buzz(30); document.getElementById('m-issues')?.scrollIntoView({ block: 'nearest' }); return; }
       buzz(14);
-      const next = store.neighbour(1);
+      const next = nextBefore;
       if (next) { store.select(next.key); saySent(r, 'Надіслано'); render(); $('m-main').scrollTop = 0; } else { saySent(r, 'Це був останній рядок у списку'); render(); }
+      return;
+    }
+    if (q('[data-queue]')) {
+      const r = store.nextQueue('untranslated', 1);
+      say(r ? `${QUEUE_LABEL.untranslated.title}: ${r.place} з ${r.total}` : QUEUE_LABEL.untranslated.empty, !r);
+      if (r) { render(); $('m-main').scrollTop = 0; }
       return;
     }
     if (q('[data-copy]')) { const c = store.current; if (c) { ($('m-tr') as HTMLTextAreaElement).value = c.unit.source; store.write(c.unit.source); refreshMeta(); autosize(); } return; }

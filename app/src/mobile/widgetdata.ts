@@ -1,4 +1,4 @@
-import { isAutoNote } from '../core';
+import { isAutoNote, pct, rowState } from '../core';
 import type { FileView, SavedProject } from '../core';
 
 /** One row as the home-screen widgets show it: where it is, its original and its translation (shortened). */
@@ -48,7 +48,7 @@ export function buildWidget(views: FileView[], saved: SavedProject, cur: { file:
       const row = (): WRow => ({ file: v.name, key: u.key, s: clip(u.source, 140), t: clip(target, 140), st: e?.status ?? 'new' });
       out.total++;
       if (target) tr++;
-      if (e?.status === 'appr') out.approved++; else if (e?.status === 'done') out.done++; else if (e?.status === 'draft') out.draft++;
+      { const st = rowState(e); if (st === 'approved') out.approved++; else if (st === 'sent') out.done++; else if (st === 'draft') out.draft++; }
       const last = e?.history?.at(-1);
       const mode: keyof WidgetPayload['queue'] | null = !target ? (u.kind !== 'name' && u.kind !== 'term' ? 'new' : null)
         : last && isAutoNote(last.what) ? 'auto' : e?.status === 'draft' ? 'draft' : e?.status === 'done' ? 'waiting' : null;
@@ -64,9 +64,9 @@ export function buildWidget(views: FileView[], saved: SavedProject, cur: { file:
   out.today = out.days[6]!; out.week = out.days.reduce((a, b) => a + b, 0);
   let i = out.today > 0 ? 6 : 5;
   while (i >= 0 && out.days[i]! > 0) { out.streak++; i--; }
-  out.files = perFile.sort((a, b) => b.total - a.total).slice(0, 5).map(f => ({ n: f.n.slice(0, 18), p: f.total ? Math.round((100 * f.tr) / f.total) : 0 }));
+  out.files = perFile.sort((a, b) => b.total - a.total).slice(0, 5).map(f => ({ n: f.n.slice(0, 18), p: pct(f.tr, f.total) }));
   const cf = perFile.find(f => f.id === cur?.file);
-  if (cf) { out.curName = cf.n; out.curP = cf.total ? Math.round((100 * cf.tr) / cf.total) : 0; }
+  if (cf) { out.curName = cf.n; out.curP = pct(cf.tr, cf.total); }
   if (cur) {
     const v = views.find(x => x.name === cur.file), idx = v ? v.units.findIndex(u => u.key === cur.key) : -1;
     if (v && idx >= 0) { const u = v.units[idx]!, e = saved.files[v.name]?.[u.key]; out.cur = { file: v.name, key: u.key, s: clip(u.source, 200), t: clip(e?.target ?? '', 200), st: e?.status ?? 'new', pos: idx + 1, of: v.units.length }; }

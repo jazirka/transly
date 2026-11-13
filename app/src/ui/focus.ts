@@ -309,12 +309,13 @@ export function send(ctx: Ctx): void {
   const ents = ctx.entries(s.current);
   const r = submit(ents[u.key], u, 'translate', Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: ctx.qaOpts() });
   if (!r.ok) { if (s.mode === 'scene') sceneBlocked(ctx, u.key, r.reason); else toast(r.reason, { sticky: true }); return; }
+  // The row to go on with is chosen BEFORE the send: with the filter «Чернетки» the sent row drops out of the list, and
+  // choosing afterwards would jump back to the top of the list instead of the row that follows.
+  const before = ctx.visible(), at = before.findIndex(x => x.key === u.key);
+  const next = before[at + 1] ?? before[at];
   // A send is an action of the journal like any other: Ctrl+Z and the «Скасувати» of the message take it back.
   const sendBatch = ctx.commit([{ file: s.current, key: u.key, next: r.entry, text: r.entry.target }], 'send');
   afterSendFollowUp(ctx, u, sendBatch, Date.now());
-  const list = ctx.visible();
-  const i = list.findIndex(x => x.key === u.key);
-  const next = list[i + 1] ?? list[i];
   if (next && next.key !== u.key) ctx.select(next.key); else ctx.render();
 }
 

@@ -1,4 +1,4 @@
-import { GROUP_COLORS, GroupIndex, groupColor, createGroup, deleteGroup, findOrphans, groupRows, liveGroups, placeFile, recolorGroup, renameGroup, rowsProgress, submit } from '../core';
+import { GROUP_COLORS, GroupIndex, groupColor, pct, createGroup, deleteGroup, findOrphans, groupRows, liveGroups, placeFile, recolorGroup, renameGroup, rowsProgress, submit } from '../core';
 import type { Group, RowChange, RowRef } from '../core';
 import { $, esc, plural, toast } from './dom';
 import { openFindReplace } from './tools-dialogs';
@@ -56,7 +56,7 @@ function filesByGroup(ctx: Ctx): Map<string, string[]> {
 
 function progressBit(ctx: Ctx, rows: RowRef[]): string {
   const p = rowsProgress(rows, f => ctx.entries(f));
-  const pc = p.total ? Math.round((100 * Math.max(p.translated, p.approved)) / p.total) : 0;
+  const pc = pct(p.translated, p.total);
   return `<span class="grp-n" title="Перекладено ${p.translated} із ${plural(p.total, ['рядка', 'рядків', 'рядків'])}, вичитано ${p.approved}">${p.translated}/${p.total}</span><span class="mini" aria-hidden="true"><i class="${p.total && p.approved === p.total ? 'f' : ''}" style="width:${pc}%"></i></span>`;
 }
 

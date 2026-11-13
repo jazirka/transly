@@ -1,5 +1,5 @@
-import { Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, qaOf, termsStamp, adoptSynced, applyPlan, planOf, reconcileChanges } from '../core';
-import type { QaOptions, WrapPlan } from '../core';
+import { Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, qaOf, termsStamp, adoptSynced, applyPlan, planOf, reconcileChanges, pct, progressOf, rowState, sumProgress, QUEUE_LABEL, nextIn, positionOf, queueRows } from '../core';
+import type { QaOptions, QueueKind, WrapPlan } from '../core';
 import { pxMeasure } from './measure';
 import { openWrapTool } from './wrap-dialog';
 import { openQaRules } from './qarules-dialog';
@@ -13,6 +13,8 @@ import { $, el, esc, plural, toast } from './dom';
 import { focusFirst, menuKeys, rememberOpener, restoreOpener, roveTree, setUnavailable, treeKeys } from './keynav';
 import { FOCUS_HTML, SIDE_HTML, qaClick, focusClick, focusInput, insertText, renderFocus, renderSidePanel, afterSendFollowUp, send, sideClick, step } from './focus';
 import { wireDiscuss } from './discuss';
+import { realOf } from './hintcards';
+import { approveOpenRow } from './rowpanel';
 import { wireTermCard } from './termcard';
 import { wireLinks } from './links';
 import { SCENE_HTML, focusCard, hasScenes, renderSceneView, sceneClick, sceneFocus, sceneIdOf, sceneInput } from './scene-view';
@@ -143,7 +145,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
   </div>
   <nav class="bnav" id="bnav" aria-label="Розділи"><button data-bn="files" aria-label="Файли"><svg viewBox="0 0 16 16"><path d="M2.5 4.5v8h11v-6.5h-6l-1.5-1.5z"/></svg><span>Файли</span></button><button data-bn="rows" aria-label="Рядки"><svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h10"/></svg><span>Рядки</span></button><button data-bn="edit" aria-label="Редактор"><svg viewBox="0 0 16 16"><path d="M3 13l.7-3L11 2.7a1.4 1.4 0 0 1 2 2L5.7 12z"/></svg><span>Редактор</span></button><button data-bn="help" aria-label="Вказівки"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M6.3 6.3a1.8 1.8 0 1 1 2.6 1.6c-.6.3-.9.7-.9 1.4M8 11.6v.1"/></svg><span>Вказівки</span></button><button data-bn="more" aria-label="Ще"><svg viewBox="0 0 16 16"><circle cx="3.5" cy="8" r="1" fill="currentColor"/><circle cx="8" cy="8" r="1" fill="currentColor"/><circle cx="12.5" cy="8" r="1" fill="currentColor"/></svg><span>Ще</span></button></nav>
   <footer class="status">
-    <span class="ok" id="sb-save"></span><span id="sb-load" class="busy" role="status" hidden></span><span id="sb-fmt"></span><span id="sb-qa"></span><span id="sb-adv" class="sbtn" role="button" tabindex="0" title="Показати рядки з порадами" hidden></span><span id="st-sel"></span>
+    <span class="ok" id="sb-save"></span><span id="sb-load" class="busy" role="status" hidden></span><span id="sb-fmt"></span><span id="sb-qa" class="sbtn" role="button" tabindex="0" title="Перейти до наступної помилки QA у проєкті (F8)"></span><span id="sb-adv" class="sbtn" role="button" tabindex="0" title="Показати рядки з порадами" hidden></span><span id="st-sel"></span>
     <span id="sb-sync" class="sbtn" role="button" tabindex="0" title="Налаштування синхронізації"></span><span id="sb-build" class="sbtn" role="button" tabindex="0" title="Зібрати (F5)"></span>
     <div class="r"><span id="sb-file"></span><span id="sb-sess"></span></div>
   </footer>
@@ -158,6 +160,9 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
   <div class="kr"><span>Наступний / попередній рядок</span><kbd>↓</kbd><kbd>↑</kbd></div>
   <div class="kr"><span>У редагуванні: наступний / попередній у списку</span><kbd>Alt</kbd><kbd>↓</kbd></div>
   <div class="kr"><span>Надіслати й далі</span><kbd>Ctrl</kbd><kbd>Enter</kbd></div>
+  <div class="kr"><span>Вичитати й перейти до наступного на вичитку</span><kbd>Ctrl</kbd><kbd>⇧</kbd><kbd>Enter</kbd></div>
+  <div class="kr"><span>Наступний / попередній рядок без перекладу (по всьому проєкту)</span><kbd>Alt</kbd><kbd>⇧</kbd><kbd>↓</kbd></div>
+  <div class="kr"><span>Наступна / попередня помилка QA (по всьому проєкту)</span><kbd>F8</kbd><kbd>⇧</kbd><kbd>F8</kbd></div>
   <div class="kr"><span>Скасувати / повернути останню масову дію (поза полем вводу)</span><kbd>Ctrl</kbd><kbd>Z</kbd><kbd>Ctrl</kbd><kbd>⇧</kbd><kbd>Z</kbd></div>
   <div class="kr"><span>Змінити переклад у комірці таблиці</span><kbd>F2</kbd><kbd>2× клік</kbd></div>
   <div class="kr"><span>У комірці: зберегти й до наступного рядка</span><kbd>Enter</kbd><kbd>Tab</kbd></div>
@@ -356,7 +361,7 @@ export async function start(root: HTMLElement): Promise<void> {
   };
   const matchesStatus = (u: Unit, e: Entry | undefined, f: Filter, opts?: QaOptions): boolean => {
     switch (f) {
-      case 'new': return (e?.status ?? 'new') === 'new';
+      case 'new': return rowState(e) === 'untranslated';
       case 'draft': return e?.status === 'draft';
       case 'done': return e?.status === 'done';
       case 'appr': return e?.status === 'appr';
@@ -499,10 +504,10 @@ export async function start(root: HTMLElement): Promise<void> {
       }
       const v = s.views.find(x => x.name === n.name)!;
       const st = statsOf(v.units, s.saved.files[v.name] ?? {});
-      const pc = Math.round(100 * st.approved / st.total);
+      const pc = pct(st.translated, st.total), pcA = pct(st.approved, st.total), full = st.total > 0 && st.approved === st.total;
       const [ic, lab] = fileIcon(n.name);
       const cur = n.name === s.current;
-      return `<div class="node ${cur ? 'cur' : ''} ${s.picked.has(n.name) ? 'pick' : ''} ${!pc && !st.translated ? 'idle' : ''}" style="--d:${n.d}" data-file="${esc(n.name)}" draggable="true" role="treeitem" tabindex="-1" aria-level="${n.d + 1}" aria-selected="${cur}" title="${cur ? 'Відкрито · ' : ''}${v.label ? esc(v.label) + ' · ' : ''}Вичитано ${pc}% · перекладено ${Math.round(100 * st.translated / st.total)}%"><span class="chev"></span><span class="ic ${ic}">${lab}</span><span class="nm">${fileGroupDot(n.name)}${v.label ? `${esc(v.label)}<span class="lc">${esc(n.label.replace(/\.json$/, ''))}</span>` : esc(n.label)}</span><span class="mini"><i class="${pc === 100 ? 'f' : ''}" style="width:${Math.max(pc, Math.round(100 * st.translated / st.total))}%"></i></span><span class="pc ${pc === 100 ? 'full' : ''}">${pc}%</span></div>`;
+      return `<div class="node ${cur ? 'cur' : ''} ${s.picked.has(n.name) ? 'pick' : ''} ${!st.translated ? 'idle' : ''}" style="--d:${n.d}" data-file="${esc(n.name)}" draggable="true" role="treeitem" tabindex="-1" aria-level="${n.d + 1}" aria-selected="${cur}" title="${cur ? 'Відкрито · ' : ''}${v.label ? esc(v.label) + ' · ' : ''}Перекладено ${pc}% · вичитано ${pcA}%"><span class="chev"></span><span class="ic ${ic}">${lab}</span><span class="nm">${fileGroupDot(n.name)}${v.label ? `${esc(v.label)}<span class="lc">${esc(n.label.replace(/\.json$/, ''))}</span>` : esc(n.label)}</span><span class="mini"><i class="${full ? 'f' : ''}" style="width:${pc}%"></i></span><span class="pc ${full ? 'full' : ''}">${pc}%</span></div>`;
     }).join('');
     // One tab stop for the whole tree; the node that had the focus keeps it after the redraw.
     const mine = hadId ? [...box.querySelectorAll<HTMLElement>('.node')].find(n => hadId.file ? n.dataset.file === hadId.file : n.dataset.dir === hadId.dir) : undefined;
@@ -667,22 +672,19 @@ export async function start(root: HTMLElement): Promise<void> {
   function renderTop(): void {
     $('#proj-name').textContent = s.saved.name;
     $('#proj-av').textContent = (Array.from(s.saved.name.trim())[0] ?? 'T').toUpperCase();
-    let total = 0, A = 0, D = 0, W = 0;
-    for (const v of s.views) {
-      total += v.units.length;
-      const ents = s.saved.files[v.name] ?? {};
-      for (const u of v.units) { const e = ents[u.key]; if (!e || !e.target) continue; if (e.status === 'appr') A++; else if (e.status === 'done') D++; else if (e.status === 'draft') W++; }
-    }
+    // the four states of a row (see core/progress.ts): without text, draft, sent (not proofread yet), proofread
+    const prog = sumProgress(s.views.map(v => progressOf(v.units, s.saved.files[v.name] ?? {})));
+    const total = prog.total, A = prog.approved, D = prog.sent, W = prog.draft;
     const cur = ctx.view();
     const nextU = cur && cur.name !== GROUP ? cur.units.find(u => !s.saved.files[cur.name]?.[u.key]?.target && u.kind !== 'name' && u.kind !== 'term') : undefined;
     publishWidget({ name: s.saved.name, file: s.current === GROUP ? '' : s.current ?? '', total, approved: A, done: D, draft: W, ...(cur && nextU ? { next: { file: cur.name, key: nextU.key, text: nextU.source.replace(/\s+/g, ' ').slice(0, 160) } } : {}) });
     $('#pg-a').style.width = total ? `${(100 * A) / total}%` : '0';
     $('#pg-b').style.width = total ? `${(100 * D) / total}%` : '0';
     $('#pg-c').style.width = total ? `${(100 * W) / total}%` : '0';
-    $('#pg-txt').textContent = total ? `Перекладено ${Math.floor((100 * (A + D + W)) / total)}% (${(A + D + W).toLocaleString('uk-UA')} з ${total.toLocaleString('uk-UA')}) · вичитано ${Math.floor((100 * A) / total)}%` : 'Папку гри не відкрито';
-    $('#pg').setAttribute('aria-valuenow', String(total ? Math.floor((100 * (A + D + W)) / total) : 0));
+    $('#pg-txt').textContent = total ? `Перекладено ${pct(prog.translated, total)}% (${prog.translated.toLocaleString('uk-UA')} з ${total.toLocaleString('uk-UA')}) · вичитано ${pct(A, total)}%` : 'Папку гри не відкрито';
+    $('#pg').setAttribute('aria-valuenow', String(pct(prog.translated, total)));
     $('#pg').setAttribute('aria-valuetext', $('#pg-txt').textContent ?? '');
-    $('#pg').title = total ? `Вичитано ${Math.round((100 * A) / total)}% · Надіслано ${Math.round((100 * D) / total)}% · Чернетки ${Math.round((100 * W) / total)}% · Решта без перекладу` : '';
+    $('#pg').title = total ? `Вичитано ${pct(A, total)}% · Надіслано, ще не вичитано ${pct(D, total)}% · Чернетки ${pct(W, total)}% · Без перекладу ${pct(prog.untranslated, total)}%` : '';
     const sy = loadSyncConfig();
     const lastSync = Math.max(sy.last, loadGithubConfig().last, loadClaudeConfig().last);
     $('#sb-sync').hidden = !lastSync; $('#sb-build').hidden = !s.lastBuild;
@@ -712,7 +714,7 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#st-sel').textContent = u && v ? `Рядок ${v.units.indexOf(u) + 1} · ${STATUS_LABEL[shownStatus(ctx, u, entryOf(u))]}` : '';
     if (v) {
       const st = statsOf(v.units, ents);
-      $('#sb-file').textContent = `${s.current === GROUP ? 'Група' : 'Файл'}: ${st.approved} / ${st.total} вичитано · ${st.done} надіслано`;
+      $('#sb-file').textContent = `${s.current === GROUP ? 'Група' : 'Файл'}: ${st.approved} / ${st.total} вичитано · ${st.done} чекають вичитки`;
     } else $('#sb-file').textContent = '';
     const mins = Math.max(0, Math.round((Date.now() - s.sess.t0) / 60000));
     $('#sb-sess').textContent = `Сесія: ${s.sess.n} змін · ${mins} хв`;
@@ -882,8 +884,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!s.views.length) { s.current = null; renderAll(); toast('У цих файлах немає тексту для перекладу'); return; }
     if (failed.length) toast(`Не вдалося прочитати файлів: ${failed.length}`);
     const fromBackup = picked.filter(f => f.fromBackup).length;
-    let translated = 0;
-    for (const v of s.views) for (const u of v.units) if (s.saved.files[v.name]?.[u.key]?.target) translated++;
+    const translated = sumProgress(s.views.map(v => progressOf(v.units, s.saved.files[v.name] ?? {}))).translated;
     if (isDesktop() && !fromBackup && translated >= 10 && reset / translated >= 0.2) {
       // Many originals changed at once and there is no backup to read them from: most likely the folder already holds the translation.
       toast('Оригінали в папці гри змінилися майже скрізь, а резервної копії немає: схоже, там уже лежить переклад. Натисніть «Збірка (файл)» → «Повернути оригінали», потім відкрийте папку знову', { sticky: true });
@@ -1212,7 +1213,7 @@ export async function start(root: HTMLElement): Promise<void> {
   /** The menu bar of the desktop: what is already a button of the title bar (the modes, the shortcuts) is not repeated here. */
   const MENUS: Record<string, MenuItem[]> = {
     'Файл': [{ t: 'Відкрити папку гри…', fn: () => void openFolder() }, { t: 'Відкрити файли або вставити JSON…', fn: openImportDlg }, '-', { t: 'Зібрати…', fn: doBuild }, { t: 'Запустити вибране', fn: runSelected, sc: 'F5' }, '-', { t: 'Налаштування…', fn: () => openSettingsDlg() }],
-    'Перехід': [{ t: 'Наступний рядок без перекладу', fn: () => jump('new', 1) }, { t: 'Наступна помилка QA', fn: () => jump('qa', 1) }, { t: 'Наступна порада', fn: () => jump('adv', 1) }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: 'Ctrl+K' }],
+    'Перехід': [{ t: 'Наступний рядок без перекладу', fn: () => jump('untranslated', 1), sc: 'Alt+⇧+↓' }, { t: 'Наступна помилка QA', fn: () => jump('error', 1), sc: 'F8' }, { t: 'Наступна порада', fn: () => jump('advice', 1) }, { t: 'Наступний на вичитку', fn: () => jump('unreviewed', 1) }, { t: 'Наступний зі зміненим оригіналом', fn: () => jump('sourceChanged', 1) }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: 'Ctrl+K' }],
     'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Оновити за глосарієм…', fn: () => openTermSyncTool(ctx) }, { t: 'Автозаповнення…', fn: () => openAutofill(ctx, () => openLinkTool(ctx)) }, { t: 'Активність…', fn: () => openActivity(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенесення рядків…', fn: () => openWrapTool(ctx, { wrapFile }) }, { t: 'Правила QA…', fn: () => openQaRules(ctx) }],
   };
   /** The phone has no title bar: its «Ще» list is the same menus plus what the title bar offers on the desktop. */
@@ -1243,23 +1244,22 @@ export async function start(root: HTMLElement): Promise<void> {
     const left = changePlan.skipped.length ? `. Вичитаних пропущено: ${changePlan.skipped.length}` : '';
     if (n) undoToast(ctx, `Перенесено рядки: ${plural(n, ['репліка', 'репліки', 'реплік'])}${left}`, batch); else toast(changePlan.skipped.length ? `Задовгі лише вичитані рядки (${changePlan.skipped.length}): їх не чіпав` : 'Задовгих рядків у файлі немає');
   }
-  function jump(kind: 'new' | 'qa' | 'adv', dir: 1 | -1): void {
-    const v = ctx.view();
-    if (!v) return;
-    const ents = ctx.entries(v.name);
-    const opts = kind === 'adv' ? qaOpts() : undefined;
-    const n = v.units.length;
-    const start = Math.max(0, v.units.findIndex(u => u.key === s.cur));
-    for (let k = 1; k <= n; k++) {
-      const u = v.units[((start + dir * k) % n + n) % n]!;
-      const e = ents[u.key];
-      if (kind === 'new' ? (e?.status ?? 'new') === 'new' : kind === 'adv' ? hasAdvice(u, e, opts!) : shownStatus(ctx, u, e) === 'qa') {
-        s.filter = 'all'; s.q = ''; s.speaker = null; s.lenFilter = 'all';
-        ctx.select(u.key, s.mode === 'table' ? undefined : s.mode);
-        return;
-      }
-    }
-    toast(kind === 'new' ? 'Рядків без перекладу немає' : kind === 'adv' ? 'Порад немає' : 'Помилок QA немає');
+  /**
+   * Go to the next (dir 1) or previous (dir -1) row of a queue in the WHOLE project (see core/queue.ts), going round at the
+   * ends. The row opens in the mode you are in; the file is opened when the row is in another one.
+   */
+  function jump(kind: QueueKind, dir: 1 | -1): void {
+    const rows = queueRows(s.views, s.saved, kind, qaOpts());
+    const cu = s.cur ? ctx.unit(s.cur) : undefined;
+    const from = cu ? realOf(ctx, cu) : null;
+    const hit = nextIn(rows, positionOf(s.views, from), dir);
+    if (!hit) { toast(QUEUE_LABEL[kind].empty); return; }
+    const { file, key } = hit.row;
+    if (file !== s.current) openFile(file);
+    s.filter = 'all'; s.q = ''; s.speaker = null; s.lenFilter = 'all';
+    const target = s.current === GROUP ? `${file}${SEP}${key}` : key;
+    ctx.select(ctx.unit(target) ? target : key, s.mode === 'table' ? undefined : s.mode);
+    toast(`${QUEUE_LABEL[kind].title}: ${hit.place} з ${rows.length}`);
   }
   function toggleKeys(): void {
     const k = $('#keypop');
@@ -1433,6 +1433,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (cfgItem) { runCfg = cfgItem.dataset.cfg as RunCfg; try { localStorage.setItem('transly.runcfg', runCfg); } catch { /* private mode */ } closeCfgMenu(); renderRunCfg(); return; }
     if (t.closest('#run-btn')) { runSelected(); return; }
     if (t.closest('#sb-adv')) { s.filter = 'adv'; renderAll(); return; }
+    if (t.closest('#sb-qa')) { jump('error', 1); return; }
     if (t.closest('#sb-build')) { doBuild(); return; }
     if (t.closest('#sb-sync')) { openSettingsDlg('Синхронізація'); return; }
     if (t.closest('#lp-search,#mt-search')) { openSearch(); return; }
@@ -1666,6 +1667,15 @@ export async function start(root: HTMLElement): Promise<void> {
     }
     lastShift = 0;
     if (e.key === 'F5') { e.preventDefault(); runSelected(); return; }
+    // The next row that waits for you, in the whole project: an error (F8), a row without text (Alt+Shift+↓/↑), and «proofread and on» (Ctrl+Shift+Enter).
+    if (e.key === 'F8') { e.preventDefault(); jump('error', e.shiftKey ? -1 : 1); return; }
+    if (e.altKey && e.shiftKey && !e.ctrlKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); jump('untranslated', e.key === 'ArrowDown' ? 1 : -1); return; }
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && e.shiftKey) {
+      e.preventDefault();
+      const ur = s.cur ? ctx.unit(s.cur) : undefined;
+      if (ur && s.current && approveOpenRow(ctx, ur)) jump('unreviewed', 1);
+      return;
+    }
     if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && s.mode !== 'table') { e.preventDefault(); step(ctx, e.key === 'ArrowDown' ? 1 : -1); return; }
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && t.id === 'i-tr') { e.preventDefault(); send(ctx); return; }
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && t.classList.contains('sv-in')) { e.preventDefault(); s.cur = t.dataset.key ?? s.cur; send(ctx); return; }

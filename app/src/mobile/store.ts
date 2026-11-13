@@ -1,5 +1,5 @@
-import { adoptSynced, applyPlan, planMessage, planOf, reconcileChanges, adviceCount, check, fixRule, hasAdvice, knownStatus, qaOf, ruleStats, GROUP_COLORS, proposeTermSync, termChange, termChanges, LinkIndex, afterSend, clearMain, linkChanges, linkModeOf, linkView, planLinkSync, relinkRow, reviewClusters, setMain, unlinkRow, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines, approveEntry, sendBack, threadsOf, rowsOfGroup, flowText, wrapMessage, wrapOf } from '../core';
-import type { Issue, QaSettings, RuleStat, LinkRowView, QaOptions, TermChange, TermProposal, TermSync, WrapPlan } from '../core';
+import { adoptSynced, applyPlan, planMessage, planOf, reconcileChanges, rowState, nextIn, positionOf, queueRows, adviceCount, check, fixRule, hasAdvice, knownStatus, qaOf, ruleStats, GROUP_COLORS, proposeTermSync, termChange, termChanges, LinkIndex, afterSend, clearMain, linkChanges, linkModeOf, linkView, planLinkSync, relinkRow, reviewClusters, setMain, unlinkRow, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines, approveEntry, sendBack, threadsOf, rowsOfGroup, flowText, wrapMessage, wrapOf } from '../core';
+import type { QueueKind, Issue, QaSettings, RuleStat, LinkRowView, QaOptions, TermChange, TermProposal, TermSync, WrapPlan } from '../core';
 import { pxMeasure } from '../ui/measure';
 import type { BatchKind, Group, Entry, GlossaryTerm, RowChange, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
 import { IdbStore, LoadFailure } from '../ui/idb';
@@ -179,7 +179,7 @@ export class Store {
       else if (this.filter === 'adv') { if (!hasAdvice(u, e, opts!)) return false; }
       else if (this.filter !== 'all') {
         const st = this.shown(u, e);
-        if (this.filter === 'qa' ? st !== 'qa' : (e?.status ?? 'new') !== this.filter) return false;
+        if (this.filter === 'qa' ? st !== 'qa' : this.filter === 'new' ? rowState(e) !== 'untranslated' : (e?.status ?? 'new') !== this.filter) return false;
       }
       return !q || (u.source + ' ' + flowText(e?.target ?? '') + ' ' + u.key + ' ' + this.speaker(u)).toLowerCase().includes(q);
     });
@@ -198,6 +198,17 @@ export class Store {
   private lastRows(): Record<string, string> { try { return JSON.parse(localStorage.getItem('transly-m-rows') ?? '{}') as Record<string, string>; } catch { return {}; } }
   private lastRow(file: string): string | null { const k = this.lastRows()[file]; return k && this.unit(file, k) ? k : null; }
   select(key: string): void { this.key = key; this.remember(); this.emit(); }
+  /**
+   * Go to the next (or previous) row of a queue in the WHOLE project (see core/queue.ts), from the open row, going round at
+   * the ends; the file is opened when the row is in another one. Returns where it went (the place in the queue) or nothing.
+   */
+  nextQueue(kind: QueueKind, dir: 1 | -1 = 1): { place: number; total: number } | null {
+    const rows = queueRows(this.views, this.saved, kind, this.qaOpts());
+    const hit = nextIn(rows, positionOf(this.views, this.file && this.key ? { file: this.file, key: this.key } : null), dir);
+    if (!hit) return null;
+    this.open(hit.row.file, hit.row.key);
+    return { place: hit.place, total: rows.length };
+  }
   private remember(): void {
     try {
       localStorage.setItem('transly-m-pos', JSON.stringify({ file: this.file, key: this.key }));

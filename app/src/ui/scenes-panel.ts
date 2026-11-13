@@ -1,4 +1,4 @@
-import { sceneTitle, statsOf } from '../core';
+import { pct, sceneTitle, statsOf } from '../core';
 import type { SceneInfo } from '../core';
 import { $, esc, plural } from './dom';
 import { scenesOf } from './scenecache';
@@ -25,7 +25,7 @@ const norm = (s: string): string => s.trim().toLowerCase();
 
 function item(ctx: Ctx, file: string, sc: SceneInfo, current: boolean): string {
   const st = statsOf(sc.units, ctx.entries(file));
-  const pc = Math.round((100 * Math.max(st.translated, st.approved)) / st.total);
+  const pc = pct(st.translated, st.total);
   const state = st.approved === st.total ? 'appr' : st.translated === st.total ? 'done' : st.translated ? 'draft' : 'new';
   return `<button class="sc-item ${current ? 'cur' : ''}" type="button" data-scene="${esc(sc.id)}" ${current ? 'aria-current="true"' : ''} title="${esc(sceneTitle(sc))}: перекладено ${st.translated} із ${st.total}, вичитано ${st.approved}">
     <span class="sd ${state}" aria-hidden="true"></span>

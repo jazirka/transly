@@ -112,17 +112,19 @@ export function renderRowPanel(ctx: Ctx, u: Unit | undefined, e: Entry | undefin
 }
 
 /** Approve the open row (a draft is sent first, so the history says both). */
-function approve(ctx: Ctx, u: Unit): void {
+export function approveOpenRow(ctx: Ctx, u: Unit): boolean {
   const { s } = ctx, file = s.current!, ents = ctx.entries(file), cur = ents[u.key];
-  if (!cur?.target.trim()) { toast('Переклад порожній'); return; }
+  if (!cur?.target.trim()) { toast('Переклад порожній'); return false; }
   const opts = { blockErrors: s.saved.settings.blockErrors, qa: ctx.qaOpts() };
   const now = Date.now();
   const r2 = approveEntry(cur, u, now, opts);
-  if (!r2.ok) { toast(r2.reason, { sticky: true }); return; }
+  if (!r2.ok) { toast(r2.reason, { sticky: true }); return false; }
   const batch = ctx.commit([{ file, key: u.key, next: r2.entry, text: r2.entry.target }], 'approve', 'вичитано');
   ctx.persist(); ctx.invalidateTm(); ctx.render();
   undoToast(ctx, 'Вичитано', batch);
+  return true;
 }
+const approve = (ctx: Ctx, u: Unit): void => { approveOpenRow(ctx, u); };
 
 /** Clicks in the panel's own parts. `setText` writes a text into the row as one change (see `focus.ts`). */
 export function rowPanelClick(ctx: Ctx, t: HTMLElement, setText: (u: Unit, text: string, what: string, kind?: BatchKind) => string | undefined): boolean {

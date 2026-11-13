@@ -3,6 +3,7 @@ import type { FileView } from './project';
 import { sceneKey } from './scene';
 import { buildSceneIndex } from './sceneindex';
 import { speakerOf } from './speakers';
+import { countRow, emptyProgress } from './progress';
 import type { SpeakerMap } from './speakers';
 
 /**
@@ -242,14 +243,9 @@ export interface RowsProgress { total: number; translated: number; done: number;
 
 /** How far a set of rows has got (as `statsOf` does for a file). */
 export function rowsProgress(rows: RowRef[], entriesOf: (file: string) => Translations): RowsProgress {
-  const s: RowsProgress = { total: rows.length, translated: 0, done: 0, approved: 0 };
-  for (const r of rows) {
-    const e = entriesOf(r.file)[r.key];
-    if (!e || !e.target) continue;
-    s.translated++;
-    if (e.status === 'done') s.done++;
-    if (e.status === 'appr') s.approved++;
-  }
+  const p = emptyProgress();
+  for (const r of rows) countRow(p, entriesOf(r.file)[r.key]);
+  const s: RowsProgress = { total: p.total, translated: p.translated, done: p.sent, approved: p.approved };
   return s;
 }
 

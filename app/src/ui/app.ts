@@ -1,4 +1,4 @@
-import { Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, qaOf, termsStamp, adoptSynced, applyPlan, planOf } from '../core';
+import { Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, qaOf, termsStamp, adoptSynced, applyPlan, planOf, reconcileChanges } from '../core';
 import type { QaOptions, WrapPlan } from '../core';
 import { pxMeasure } from './measure';
 import { openWrapTool } from './wrap-dialog';
@@ -11,7 +11,7 @@ import { classifyFolder, folderBanner, folderLine } from './folder-service';
 import type { FolderState } from './folder-service';
 import { $, el, esc, plural, toast } from './dom';
 import { focusFirst, menuKeys, rememberOpener, restoreOpener, roveTree, setUnavailable, treeKeys } from './keynav';
-import { FOCUS_HTML, SIDE_HTML, qaClick, focusClick, focusInput, insertText, renderFocus, renderSidePanel, send, sideClick, step } from './focus';
+import { FOCUS_HTML, SIDE_HTML, qaClick, focusClick, focusInput, insertText, renderFocus, renderSidePanel, afterSendFollowUp, send, sideClick, step } from './focus';
 import { wireDiscuss } from './discuss';
 import { wireTermCard } from './termcard';
 import { wireLinks } from './links';
@@ -887,7 +887,10 @@ export async function start(root: HTMLElement): Promise<void> {
     if (isDesktop() && !fromBackup && translated >= 10 && reset / translated >= 0.2) {
       // Many originals changed at once and there is no backup to read them from: most likely the folder already holds the translation.
       toast('Оригінали в папці гри змінилися майже скрізь, а резервної копії немає: схоже, там уже лежить переклад. Натисніть «Збірка (файл)» → «Повернути оригінали», потім відкрийте папку знову', { sticky: true });
-    } else if (reset) toast(`Оригінал змінився в ${plural(reset, ['рядку', 'рядках', 'рядках'])}: їх повернуто в чернетки`);
+    } else if (reset) {
+      const back = lastReconcile ? `: ${plural(lastReconcile.demoted, ['рядок', 'рядки', 'рядків'])} повернуто в чернетки` : '';
+      undoToast(ctx, `Оригінал змінився в ${plural(reset, ['рядку', 'рядках', 'рядках'])}${back}`, lastReconcile?.batch);
+    }
     else if (fromBackup) toast('Оригінали прочитано з резервної копії гри (data.transly-orig)');
     s.open = s.open.filter(n => s.views.some(v => v.name === n));
     if (quiet && s.current && s.current !== GROUP && s.views.some(v => v.name === s.current)) unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u]));
@@ -916,10 +919,14 @@ export async function start(root: HTMLElement): Promise<void> {
     s.saved.sysNames = sysNamesOf(game) ?? s.saved.sysNames;
     const snap = snapshotOf(s.views);
     if (JSON.stringify(snap) !== JSON.stringify(s.saved.snapshot ?? null)) { s.saved.assetsRev = Date.now(); s.saved.snapshot = snap; }
-    let changed = 0;
-    for (const v of s.views) { const ents = s.saved.files[v.name]; if (ents) changed += reconcile(v.units, ents, Date.now()).length; }
-    return changed;
+    // Rows whose original changed: the sent and proofread ones go back to drafts as one action of the journal, so it is visible and can be taken back.
+    const now = Date.now();
+    const rec = reconcileChanges(s.views, s.saved.files, now);
+    lastReconcile = rec.changes.length ? { batch: ctx.commit(rec.changes, 'reconcile'), demoted: rec.changes.length } : null;
+    return rec.changed;
   }
+  /** What the last reading of the game files did to rows whose original changed (for the message that follows). */
+  let lastReconcile: { batch: string; demoted: number } | null = null;
 
   /** Switch which plugin commands count as text; the rows appear in the files they belong to. */
   function setPluginCommands(names: string[]): void {
@@ -1206,7 +1213,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const MENUS: Record<string, MenuItem[]> = {
     'Файл': [{ t: 'Відкрити папку гри…', fn: () => void openFolder() }, { t: 'Відкрити файли або вставити JSON…', fn: openImportDlg }, '-', { t: 'Зібрати…', fn: doBuild }, { t: 'Запустити вибране', fn: runSelected, sc: 'F5' }, '-', { t: 'Налаштування…', fn: () => openSettingsDlg() }],
     'Перехід': [{ t: 'Наступний рядок без перекладу', fn: () => jump('new', 1) }, { t: 'Наступна помилка QA', fn: () => jump('qa', 1) }, { t: 'Наступна порада', fn: () => jump('adv', 1) }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: 'Ctrl+K' }],
-    'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Зв’язані рядки…', fn: () => openLinkTool(ctx) }, { t: 'Оновити за глосарієм…', fn: () => openTermSyncTool(ctx) }, { t: 'Автозаповнення за словами…', fn: () => openAutofill(ctx) }, { t: 'Активність…', fn: () => openActivity(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенесення рядків…', fn: () => openWrapTool(ctx, { wrapFile }) }, { t: 'Правила QA…', fn: () => openQaRules(ctx) }],
+    'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Оновити за глосарієм…', fn: () => openTermSyncTool(ctx) }, { t: 'Автозаповнення…', fn: () => openAutofill(ctx, () => openLinkTool(ctx)) }, { t: 'Активність…', fn: () => openActivity(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенесення рядків…', fn: () => openWrapTool(ctx, { wrapFile }) }, { t: 'Правила QA…', fn: () => openQaRules(ctx) }],
   };
   /** The phone has no title bar: its «Ще» list is the same menus plus what the title bar offers on the desktop. */
   const PHONE_MENUS: Record<string, MenuItem[]> = {
@@ -1386,7 +1393,7 @@ export async function start(root: HTMLElement): Promise<void> {
         if (next) { reveal('grid', next.key); selectRowLight(next.key); }
         startInline(next?.key ?? key);
       }
-      else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); ta.removeEventListener('blur', finish); const ents = ctx.entries(s.current!); ents[key] = edit(ents[key], u, ta.value, 'translate', Date.now()); const r = submit(ents[key], u, 'translate', Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: qaOpts() }); if (r.ok) { undoToast(ctx, 'Надіслано', ctx.commit([{ file: s.current!, key, next: r.entry, text: r.entry.target }], 'send')); } else toast(r.reason, { sticky: true }); ctx.persist(); ctx.invalidateTm(); renderAll(); }
+      else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); ta.removeEventListener('blur', finish); const ents = ctx.entries(s.current!); ents[key] = edit(ents[key], u, ta.value, 'translate', Date.now()); const r = submit(ents[key], u, 'translate', Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: qaOpts() }); if (r.ok) { afterSendFollowUp(ctx, u, ctx.commit([{ file: s.current!, key, next: r.entry, text: r.entry.target }], 'send'), Date.now()); } else toast(r.reason, { sticky: true }); ctx.persist(); ctx.invalidateTm(); renderAll(); }
     });
   }
 

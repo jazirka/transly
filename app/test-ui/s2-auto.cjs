@@ -40,7 +40,22 @@ const check = (name, ok, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ') 
   const chip = await page.locator('.cc', { hasText: /^авто$/ }).count();
   check('the row shows the «авто» mark', chip > 0, 'chips: ' + chip);
   check('no page errors', errors.length === 0, errors.join(' | '));
-  await ctx.close(); await browser.close();
+  await ctx.close();
+
+  // the same from the table: Ctrl+Enter in a cell also fills in the equal original (it used to do so only in the editing view)
+  {
+    const c2 = await browser.newContext({ viewport: { width: 1400, height: 900 } });
+    const p2 = await c2.newPage();
+    await p2.goto(PC); await sleep(800);
+    await p2.evaluate(put, { text: JSON.stringify(rest), snapshot });
+    await p2.reload(); await sleep(1500);
+    await p2.locator('.gr .tr').nth(0).click(); await p2.keyboard.type('Вітаю'); await p2.keyboard.press('Control+Enter'); await sleep(1500);
+    const f2 = (await p2.evaluate(stored)).files['Map001.json'];
+    check('table Ctrl+Enter: the sent row is sent', f2.a?.status === 'done');
+    check('table Ctrl+Enter: the equal original is filled in as a draft', f2.b?.target === 'Вітаю' && f2.b?.status === 'draft', JSON.stringify(f2.b));
+    await c2.close();
+  }
+  await browser.close();
   console.log(failed ? `\n${failed} check(s) failed` : '\nall checks passed');
   process.exit(failed ? 1 : 0);
 })();

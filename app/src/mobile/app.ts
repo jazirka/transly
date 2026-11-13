@@ -486,7 +486,10 @@ export async function start(root: HTMLElement): Promise<void> {
   function screenAutofill(): string {
     const list = store.autofill(), shown = list.slice(0, 80), on = list.filter(p => !af.off.has(p.file + '|' + p.key));
     const allOn = on.length === list.length;
-    return `<div class="m-more m-afwrap"><p class="m-hint">Знаю слів: ${store.wordCount()} · рядків для автозаповнення: ${list.length}</p>
+    const twins = store.linkTodo();
+    return `<div class="m-more m-afwrap"><p class="m-hint">Застосунок заповнює порожні рядки сам, але завжди чернетками з позначкою «авто»; їх можна скасувати в «Активності».</p>
+      <button class="m-secondary wide" data-sub="consistency">${icon('sync')}<span>Однакові оригінали${twins ? `: ${twins}` : ': усе узгоджено'}</span></button>
+      <p class="m-hint">За словами. Знаю слів: ${store.wordCount()} · рядків для автозаповнення: ${list.length}</p>
       ${shown.map(p => { const k = p.file + '|' + p.key, sel = !af.off.has(k); return `<div class="m-af ${sel ? 'sel' : ''}" role="checkbox" aria-checked="${sel}" data-aflp="${esc(k)}" data-afk="${esc(k)}"><span class="m-edge" aria-hidden="true"></span><span class="m-af-t"><small>${esc(store.view(p.file)?.label ?? p.file)}</small><b>${esc(p.source)}</b><i>→ ${esc(p.target)}</i></span></div>`; }).join('') || '<p class="m-none">Немає рядків, які можна скласти зі знайомих слів</p>'}
       ${list.length > 80 ? `<p class="m-hint">Показано 80 із ${list.length}: після запису решта з’явиться тут.</p>` : ''}
       ${almostHtml()}</div>
@@ -837,10 +840,10 @@ export async function start(root: HTMLElement): Promise<void> {
     const wrap = $('m-sheet'); wrap.hidden = !sheet && !menu;
     if (menu) {
       wrap.dataset.open = '';
-      const badge: Partial<Record<Sub, number>> = { autofill: store.autofill().length, consistency: store.linkTodo(), sendlog: store.sends().length + store.autos().length + store.journal().length };
-      const short: Partial<Record<Sub, string>> = { find: 'Заміна', search: 'Пошук', autofill: 'Авто', speakers: 'Мовці', wrap: 'Перенос', termsync: 'За глосарієм' };
+      const badge: Partial<Record<Sub, number>> = { autofill: store.autofill().length + store.linkTodo(), sendlog: store.sends().length + store.autos().length + store.journal().length };
+      const short: Partial<Record<Sub, string>> = { find: 'Заміна', search: 'Пошук', autofill: 'Автозаповнення', speakers: 'Мовці', wrap: 'Перенос', termsync: 'За глосарієм' };
       const item = (k: Sub): string => { const [, l, ic] = TOOLS.find(t => t[0] === k)!; return `<button class="m-mi" data-sub="${k}">${icon(ic)}<span>${short[k] ?? l}</span>${badge[k] ? `<i>${badge[k]! > 99 ? '99+' : badge[k]}</i>` : ''}</button>`; };
-      wrap.innerHTML = `<div class="m-scrim" data-close></div><nav class="m-menu" aria-label="Інструменти"><span class="m-grab" aria-hidden="true"></span><div class="m-mgrid">${(['find', 'search', 'autofill', 'consistency', 'speakers', 'glossary', 'wrap', 'termsync', 'sendlog'] as Sub[]).map(item).join('')}</div>
+      wrap.innerHTML = `<div class="m-scrim" data-close></div><nav class="m-menu" aria-label="Інструменти"><span class="m-grab" aria-hidden="true"></span><div class="m-mgrid">${(['find', 'search', 'autofill', 'speakers', 'glossary', 'wrap', 'termsync', 'sendlog'] as Sub[]).map(item).join('')}</div>
         <div class="m-msep"></div><button class="m-mi wide" data-sub="qarules">${icon('check')}<span>Правила QA</span></button><button class="m-mi wide" data-sub="settings">${icon('more')}<span>Налаштування</span></button></nav>`;
       return;
     }
@@ -943,9 +946,9 @@ export async function start(root: HTMLElement): Promise<void> {
       }
       let reset = 0;
       if (game.length) reset = store.ingest(game);
-      const parts = [projects ? `проєкт злито${conflicts ? ` (конфліктів: ${conflicts})` : ''}` : '', game.length ? `файлів гри: ${game.length}` : '', reset ? `оригінал змінився в ${reset} рядках` : ''].filter(Boolean);
+      const parts = [projects ? `проєкт злито${conflicts ? ` (конфліктів: ${conflicts})` : ''}` : '', game.length ? `файлів гри: ${game.length}` : '', reset ? `оригінал змінився в ${reset} рядках${store.lastReconcile ? `, у чернетки повернуто ${store.lastReconcile.demoted}` : ''}` : ''].filter(Boolean);
       if (unknown.length) say(`Не впізнав: ${unknown.slice(0, 3).join(', ')}${unknown.length > 3 ? '…' : ''}`, true);
-      if (parts.length) say(parts.join(' · '));
+      if (parts.length) say(parts.join(' · '), false, store.lastReconcile?.batch);
       if (store.hasGame) go(store.key ? 'edit' : 'files'); else render();
     } catch (e) { say(`Не вдалося прочитати: ${e instanceof Error ? e.message : 'помилка'}`, true); }
     finally { busy = ''; renderChrome(); }

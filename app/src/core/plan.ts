@@ -2,6 +2,8 @@ import type { Entry } from './model';
 import type { BatchKind, RowChange } from './journal';
 import { BATCH_INFO } from './journal';
 import { rows } from './plural';
+import { sourceChanged } from './workflow';
+import type { Unit } from './model';
 
 /**
  * A plan of changes: what a tool is about to do to rows, worked out and looked at BEFORE anything is written. Every tool that
@@ -63,4 +65,25 @@ export function planMessage(plan: ChangePlan, applied: number): string {
   const head = BATCH_INFO[plan.kind].title(rows(applied));
   const note = planNote(plan);
   return note ? `${head}. ${note}` : head;
+}
+
+/**
+ * After the game files were read again: translated rows whose original changed. `changed` counts all of them (the row also
+ * shows a remark); `changes` are the ones that were sent or proofread and go back to drafts, so that they cannot slip into a build
+ * unnoticed. Nothing is written here: the caller applies `changes` as one action of the journal («reconcile»), which can be taken back.
+ */
+export function reconcileChanges(views: { name: string; units: Unit[] }[], files: Record<string, Record<string, Entry>>, now: number): { changes: RowChange[]; changed: number } {
+  const changes: RowChange[] = [];
+  let changed = 0;
+  for (const v of views) {
+    const ents = files[v.name];
+    if (!ents) continue;
+    for (const u of v.units) {
+      const e = ents[u.key];
+      if (!e || !sourceChanged(e, u)) continue;
+      changed++;
+      if (e.status === 'done' || e.status === 'appr') changes.push({ file: v.name, key: u.key, next: { ...e, status: 'draft', mt: now }, text: e.target });
+    }
+  }
+  return { changes, changed };
 }

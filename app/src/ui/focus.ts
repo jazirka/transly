@@ -277,18 +277,13 @@ export function step(ctx: Ctx, dir: 1 | -1): void {
   ctx.select(next.key);
 }
 
-/** Send the open row and move on to the next one. */
-export function send(ctx: Ctx): void {
+/**
+ * What follows a send of the row `u` (already written as the action `sendBatch`): the rows with the same original are
+ * filled in as drafts marked «авто» (see `links.ts` for the project's mode), and the message says what happened, with «Скасувати».
+ * Used by the editing view and by Ctrl+Enter in the table.
+ */
+export function afterSendFollowUp(ctx: Ctx, u: Unit, sendBatch: string, now: number): void {
   const { s } = ctx;
-  buzz(12);
-  const u = s.cur ? ctx.unit(s.cur) : undefined;
-  if (!u || !s.current) return;
-  const ents = ctx.entries(s.current);
-  const r = submit(ents[u.key], u, 'translate', Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: ctx.qaOpts() });
-  if (!r.ok) { if (s.mode === 'scene') sceneBlocked(ctx, u.key, r.reason); else toast(r.reason, { sticky: true }); return; }
-  const now = Date.now();
-  // A send is an action of the journal like any other: Ctrl+Z and the «Скасувати» of the message take it back.
-  const sendBatch = ctx.commit([{ file: s.current, key: u.key, next: r.entry, text: r.entry.target }], 'send');
   // What happens to the rows with the same original depends on the project's mode (see `links.ts`): the empty ones are filled
   // at once as one action with its «Скасувати», the ones that differ are offered for a look (or updated, in the automatic mode).
   const real = realOf(ctx, u);
@@ -303,6 +298,20 @@ export function send(ctx: Ctx): void {
   if (batch) { undoToast(ctx, text, batch); if (sync.pending) toast(differ, { action: { label: 'Переглянути', run: look } }); }
   else if (sync.pending) toast(`${text}. ${differ}`, { action: { label: 'Переглянути', run: look } });
   else undoToast(ctx, text, sendBatch);
+}
+
+/** Send the open row and move on to the next one. */
+export function send(ctx: Ctx): void {
+  const { s } = ctx;
+  buzz(12);
+  const u = s.cur ? ctx.unit(s.cur) : undefined;
+  if (!u || !s.current) return;
+  const ents = ctx.entries(s.current);
+  const r = submit(ents[u.key], u, 'translate', Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: ctx.qaOpts() });
+  if (!r.ok) { if (s.mode === 'scene') sceneBlocked(ctx, u.key, r.reason); else toast(r.reason, { sticky: true }); return; }
+  // A send is an action of the journal like any other: Ctrl+Z and the «Скасувати» of the message take it back.
+  const sendBatch = ctx.commit([{ file: s.current, key: u.key, next: r.entry, text: r.entry.target }], 'send');
+  afterSendFollowUp(ctx, u, sendBatch, Date.now());
   const list = ctx.visible();
   const i = list.findIndex(x => x.key === u.key);
   const next = list[i + 1] ?? list[i];

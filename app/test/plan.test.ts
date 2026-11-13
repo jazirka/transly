@@ -55,3 +55,27 @@ describe('change plan', () => {
     expect(planMessage(plan, plan.changes.length)).toBe('Знайдено й замінено: 1 рядок. Вичитаних пропущено: 1');
   });
 });
+
+describe('reconcile as an action', () => {
+  it('sent and proofread rows with a changed original go back to drafts as one action that can be taken back; the count includes drafts', async () => {
+    const { reconcileChanges, undoJournal, commitRows, journalBatches } = await import('../src/core');
+    const p = emptyProject('P');
+    const u = (key: string, source: string) => ({ key, source, speaker: '', kind: 'dialogue' as const, context: '' });
+    p.files['M.json'] = {
+      a: { target: 'т1', status: 'appr', mt: 1, src: 'old A' },
+      b: { target: 'т2', status: 'done', mt: 1, src: 'old B' },
+      c: { target: 'т3', status: 'draft', mt: 1, src: 'old C' },
+      d: { target: 'т4', status: 'done', mt: 1, src: 'same' },
+    };
+    const views = [{ name: 'M.json', units: [u('a', 'new A'), u('b', 'new B'), u('c', 'new C'), u('d', 'same')] }];
+    const r = reconcileChanges(views, p.files, 50);
+    expect(r.changed).toBe(3);                                   // a, b, c changed their original
+    expect(r.changes.map(c => c.key)).toEqual(['a', 'b']);       // only the sent and proofread ones fall back
+    const entries = (f: string) => (p.files[f] ??= {});
+    const id = commitRows(entries, r.changes, 'reconcile', 'Ви', 50);
+    expect(p.files['M.json']!.a!.status).toBe('draft');
+    expect(journalBatches(views as never, p).map(b => b.kind)).toEqual(['reconcile']);
+    expect(undoJournal(p, id, 'Ви', 60).done).toBe(2);
+    expect(p.files['M.json']!.a!.status).toBe('appr');
+  });
+});

@@ -1,4 +1,4 @@
-import { adoptSynced, applyPlan, planMessage, planOf, adviceCount, check, fixRule, hasAdvice, knownStatus, qaOf, ruleStats, GROUP_COLORS, proposeTermSync, termChange, termChanges, LinkIndex, afterSend, clearMain, linkChanges, linkModeOf, linkView, planLinkSync, relinkRow, reviewClusters, setMain, unlinkRow, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines, approveEntry, sendBack, threadsOf, rowsOfGroup, flowText, wrapMessage, wrapOf } from '../core';
+import { adoptSynced, applyPlan, planMessage, planOf, reconcileChanges, adviceCount, check, fixRule, hasAdvice, knownStatus, qaOf, ruleStats, GROUP_COLORS, proposeTermSync, termChange, termChanges, LinkIndex, afterSend, clearMain, linkChanges, linkModeOf, linkView, planLinkSync, relinkRow, reviewClusters, setMain, unlinkRow, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines, approveEntry, sendBack, threadsOf, rowsOfGroup, flowText, wrapMessage, wrapOf } from '../core';
 import type { Issue, QaSettings, RuleStat, LinkRowView, QaOptions, TermChange, TermProposal, TermSync, WrapPlan } from '../core';
 import { pxMeasure } from '../ui/measure';
 import type { BatchKind, Group, Entry, GlossaryTerm, RowChange, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
@@ -50,6 +50,8 @@ export class Store {
   private linkCache: { views: FileView[]; idx: LinkIndex } | null = null;
   private linkTodoCache: number | null = null;
 
+  /** What the last reading of the game files did to rows whose original changed (for the message that follows). */
+  lastReconcile: { batch: string; demoted: number } | null = null;
   /** Told when work from another tab was merged into this one, so the screen can say so. */
   onForeignNotice: (() => void) | null = null;
   private constructor(private idb: IdbStore, saved: SavedProject) {
@@ -563,8 +565,10 @@ export class Store {
     this.saved.sysNames = sysNamesOf(game) ?? this.saved.sysNames;
     const snap = snapshotOf(this.views);
     if (JSON.stringify(snap) !== JSON.stringify(this.saved.snapshot ?? null)) { this.saved.assetsRev = Date.now(); this.saved.snapshot = snap; }
-    let changed = 0;
-    for (const v of this.views) { const ents = this.saved.files[v.name]; if (ents) changed += reconcile(v.units, ents, Date.now()).length; }
+    // rows whose original changed: the sent and proofread ones go back to drafts as one action of the journal (visible, can be taken back)
+    const rec = reconcileChanges(this.views, this.saved.files, Date.now());
+    this.lastReconcile = rec.changes.length ? { batch: this.commit(rec.changes, 'reconcile'), demoted: rec.changes.length } : null;
+    const changed = rec.changed;
     this.tmCache = null;
     if (!this.file || !this.view(this.file)) this.file = this.views[0]?.name ?? null;
     this.persist(); this.emit();

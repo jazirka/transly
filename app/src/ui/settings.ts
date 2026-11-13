@@ -48,7 +48,7 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
       <label for="st-who">Ваше ім’я в коментарях та історії</label><input id="st-who" maxlength="40" value="${esc(String(st.who))}"></div>
     <label class="achk"><input type="checkbox" id="st-block" ${st.blockErrors ? 'checked' : ''}> Не надсилати рядок із помилкою QA</label>
     <div class="grid"><label for="st-link">Рядки з однаковим оригіналом (зв’язані)</label><select id="st-link"><option value="ask" ${linkModeOf(st) === 'ask' ? 'selected' : ''}>питати, коли переклад різниться (рекомендовано)</option><option value="auto" ${linkModeOf(st) === 'auto' ? 'selected' : ''}>оновлювати самі</option><option value="off" ${linkModeOf(st) === 'off' ? 'selected' : ''}>не зв’язувати</option></select></div>
-    <p class="hint">Порожні зв’язані рядки заповнюються одразу після надсилання (цю дію можна відмінити в повідомленні). Рядок, який ви змінили пізніше, ніколи не перезаписується без вашого вибору.</p>
+    <p class="hint">Порожні зв’язані рядки заповнюються одразу після надсилання чернетками з позначкою «авто» (цю дію можна відмінити в повідомленні). Вичитаний рядок і рядок, який ви змінили пізніше, не перезаписуються без вашого вибору.</p>
     <div class="grid"><label for="st-wrap">Перенесення рядків у повідомленнях гри</label><button class="btn" type="button" id="st-wrap">Налаштувати…</button></div>
     <div class="grid"><label for="st-qa">Правила перевірки тексту (літери, пробіли, апостроф, коди)</label><button class="btn" type="button" id="st-qa">Налаштувати…</button></div>
     <p class="hint">Коли й за якою шириною рядки розбиваються, чи переносяться слова з дефісом, коли попереджати про четвертий рядок. Довжина тексту не обмежується: застосунок лише радить.</p>

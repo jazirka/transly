@@ -1,5 +1,5 @@
 import { HINT_GLYPH, HINT_LABEL, KIND_LABEL, explainCodes, sceneTitle, stepScene, byHintOrder, commentId, historyRows, openThreads, restoreNote, sourceTermHits, targetHasTerm, threadsOf, batchTitle, batchUndoLabel, undoReport, setIgnored, canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, describePage, DEFAULT_LINE_LIMIT, DEFAULT_WRAP, MV_WINDOW, autoLineLimit, flowText, isMessageUnit, linesShown, measureOf, pixelBudget, unitWord, usesPixels, widthOf, wrapMessage, wrapOf } from '../core';
-import { APOSTROPHES, QA_RULES, adoptSynced, groupColor, keepFromText, keepToText, qaOf, withRuleLevel } from '../core';
+import { APOSTROPHES, QA_RULES, adoptSynced, groupColor, isAutoFilled, keepFromText, keepToText, qaOf, withRuleLevel } from '../core';
 import type { Issue, LinkMode, LinkState, QaSettings, RuleSeverity, TermChange, TermProposal, TermSync, WrapSettings } from '../core';
 import { pxMeasure } from '../ui/measure';
 import { CONF_LABEL, flagsText, markHtml } from '../ui/termsync-html';
@@ -110,7 +110,7 @@ export async function start(root: HTMLElement): Promise<void> {
   /** The message after a send: it can be taken back; the rows with the same original that were filled have their own «Скасувати», and the ones that differ are counted. */
   const saySent = (r: ReturnType<typeof store.send>, text: string): void => {
     const l = r.link;
-    if (l?.batch) { say(text, false, r.batch); say(`Також у ${plural(l.n, ['однаковому рядку', 'однакових рядках', 'однакових рядках'])}${l.pending ? ` · відрізняється: ${l.pending}` : ''}`, false, l.batch); }
+    if (l?.batch) { say(text, false, r.batch); say(`Автозаповнено чернетками: ${plural(l.n, ['однаковий рядок', 'однакові рядки', 'однакових рядків'])}${l.pending ? ` · відрізняється: ${l.pending}` : ''}`, false, l.batch); }
     else say(l?.pending ? `${text} · зв’язаних рядків відрізняється: ${l.pending}` : text, false, r.batch);
   };
   /** A destructive button asks twice: the first tap turns it into «Точно очистити?» for 4 seconds. */
@@ -715,7 +715,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const u = c.unit, e = c.entry, st = store.shown(u, e), v = store.view();
     const terms = store.terms(u);
     return `<div class="m-edit" id="m-edit">
-      <div class="m-ctx"><span class="m-tag">${esc(KIND_LABEL[u.kind])}</span>${store.speaker(u) ? `<span class="m-tag who">${esc(store.speaker(u))}</span>` : ''}${v?.label ? `<span class="m-tag">${esc(v.label)}</span>` : ''}<span class="m-status"><span class="sd ${SHAPE[st]}"></span>${stateLabel(st, e)}</span></div>
+      <div class="m-ctx">${isAutoFilled(e) ? '<span class="m-tag" title="Заповнено застосунком і ще не переглянуто: це чернетка">авто</span>' : ''}<span class="m-tag">${esc(KIND_LABEL[u.kind])}</span>${store.speaker(u) ? `<span class="m-tag who">${esc(store.speaker(u))}</span>` : ''}${v?.label ? `<span class="m-tag">${esc(v.label)}</span>` : ''}<span class="m-status"><span class="sd ${SHAPE[st]}"></span>${stateLabel(st, e)}</span></div>
       <section class="m-card"><h3>Оригінал</h3><div class="m-source" id="m-source">${sourceHtml(u.source, terms, e?.target ?? '')}</div>${store.refs(c.file, u.key).map(r => `<div class="m-ref"><small>Довідка · ${esc(r.lang.toUpperCase())}</small>${esc(r.text)}</div>`).join('')}${(() => { const w = store.usageOf(c.file, u.key); return w.length ? `<div class="m-ref"><small>Де видається</small>${w.map(esc).join('<br>')}</div>` : ''; })()}</section>
       <section class="m-card m-tr-card"><h3>Переклад<span class="m-count" id="m-count"></span></h3>
         <textarea id="m-tr" class="m-textarea" spellcheck="false" autocapitalize="sentences" placeholder="Напишіть переклад…" aria-label="Переклад">${esc(e?.target ?? '')}</textarea>

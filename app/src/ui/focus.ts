@@ -1,4 +1,4 @@
-import { activeIssues, afterSend, linkModeOf, sourceTermHits, targetHasTerm, targetTermHits, displayLength, edit as editFn, lengthDeviation, linesShown, openThreads, recordChange, referenceSets, setIgnored, submit, termsIn, tooWide, unitWord, wrapMessage } from '../core';
+import { activeIssues, afterSend, applyPlan, linkModeOf, planOf, sourceTermHits, targetHasTerm, targetTermHits, displayLength, edit as editFn, lengthDeviation, linesShown, openThreads, recordChange, referenceSets, setIgnored, submit, termsIn, tooWide, unitWord, wrapMessage } from '../core';
 import type { BatchKind, Entry, Unit } from '../core';
 import { $, buzz, esc, plural, toast } from './dom';
 import { discussClick, renderDiscuss } from './discuss';
@@ -293,11 +293,13 @@ export function send(ctx: Ctx): void {
   // at once as one action with its «Скасувати», the ones that differ are offered for a look (or updated, in the automatic mode).
   const real = realOf(ctx, u);
   const sync = afterSend(s.saved, ctx.links(), linkModeOf(s.saved.settings), real.file, real.key, now);
-  const batch = sync.changes.length ? ctx.commit(sync.changes, 'link') : undefined;
+  // The twins are filled in as drafts marked «авто»; a proofread twin is not touched.
+  const filled = planOf(ctx.entries, sync.changes, 'link');
+  const batch = applyPlan(ctx.commit, filled);
   ctx.persist(); ctx.invalidateTm();
   const look = (): void => openLinkRows(ctx, real.file, real.key);
   const differ = `Зв’язаних рядків відрізняється: ${sync.pending}`;
-  const text = 'Надіслано' + (batch ? `. Також у ${plural(sync.changes.length, ['однаковому рядку', 'однакових рядках', 'однакових рядках'])}` : '');
+  const text = 'Надіслано' + (batch ? `. Автозаповнено чернетками: ${plural(filled.changes.length, ['однаковий рядок', 'однакові рядки', 'однакових рядків'])}` : '');
   if (batch) { undoToast(ctx, text, batch); if (sync.pending) toast(differ, { action: { label: 'Переглянути', run: look } }); }
   else if (sync.pending) toast(`${text}. ${differ}`, { action: { label: 'Переглянути', run: look } });
   else undoToast(ctx, text, sendBatch);

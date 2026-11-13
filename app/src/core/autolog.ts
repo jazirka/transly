@@ -13,6 +13,15 @@ export interface AutoItem { file: string; key: string; source: string; target: s
 export interface AutoBatch { kind: AutoKind; at: number; items: AutoItem[] }
 
 const kindOf = (what: string): AutoKind | null => (what === AUTO_NOTE.words ? 'words' : what === AUTO_NOTE.twin ? 'twin' : null);
+/**
+ * Is the row filled in by the app and not yet looked at by the translator? Its newest history record is an automatic one
+ * (an equal original, the memory, the words) and nothing was typed in it since. Such a row is a draft marked «авто».
+ */
+export const isAutoFilled = (e: Entry | undefined): boolean => {
+  const last = e?.history?.at(-1);
+  return !!e && !!last && e.status === 'draft' && e.mt <= last.at && (isAutoNote(last.what) || last.what.startsWith('підставлено з пам’яті'));
+};
+
 export const isAutoNote = (what: string): boolean => kindOf(what) !== null || what === BATCH_INFO.link.what;
 
 /**

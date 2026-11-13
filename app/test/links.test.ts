@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LinkIndex, afterSend, clearMain, commitRows, deserialize, emptyProject, hashText, linkChanges, linkKey, linkModeOf, linkView, mergeLinkData, mergeProjects, planLinkSync, relinkRow, reviewClusters, rowRef, serialize, setMain, undoJournal, unlinkRow } from '../src/core';
+import { LinkIndex, afterSend, clearMain, commitRows, recordChange, deserialize, emptyProject, hashText, linkChanges, linkKey, linkModeOf, linkView, mergeLinkData, mergeProjects, planLinkSync, relinkRow, reviewClusters, rowRef, serialize, setMain, undoJournal, unlinkRow } from '../src/core';
 import type { Entry, FileView, SavedProject, Unit } from '../src/core';
 
 const unit = (key: string, source: string): Unit => ({ key, source, speaker: '', kind: 'dialogue', context: '' });
@@ -85,7 +85,7 @@ describe('afterSend: що робить режим', () => {
     const r = afterSend(base(), idx, 'ask', 'A.json', 'a1', NOW);
     expect(r.changes.map(c => c.key)).toEqual(['b1']);
     expect(r).toMatchObject({ filled: 1, updated: 0, pending: 1 });
-    expect(r.changes[0]!.next).toMatchObject({ target: 'Привіт', status: 'done', mt: NOW, src: 'Hello', orig: 'Привіт', returned: false });
+    expect(r.changes[0]!.next).toMatchObject({ target: 'Привіт', status: 'draft', mt: NOW, src: 'Hello', returned: false });
   });
   it('самі: заповнюються й оновлюються різні, самого рядка немає в зміні', () => {
     const r = afterSend(base(), idx, 'auto', 'A.json', 'a1', NOW);
@@ -114,7 +114,7 @@ describe('afterSend: що робить режим', () => {
     const id = commitRows(f => (s.files[f] ??= {}), r.changes, 'link', 'Ви', NOW);
     expect(s.files['B.json']!.b1!.target).toBe('Привіт');
     expect(s.files['A.json']!.a3!.target).toBe('Привіт');
-    expect(s.files['A.json']!.a3!.history!.at(-1)).toMatchObject({ batch: id, what: 'синхронізовано зі зв’язаним рядком' });
+    expect(s.files['A.json']!.a3!.history!.at(-1)).toMatchObject({ batch: id, what: 'автозаповнено з однакового рядка' });
     const u = undoJournal(s, id, 'Ви', NOW + 5);
     expect(u.done).toBe(2);
     expect(s.files['A.json']!.a3!.target).toBe('Старий');
@@ -194,5 +194,20 @@ describe('швидкодія', () => {
     expect(idx.size).toBeGreaterThan(5000);
     expect(r.total).toBeGreaterThan(0);
     expect(dt).toBeLessThan(5000);
+  });
+});
+
+describe('a row filled in from an equal original', () => {
+  it('is a draft marked as filled in by the app, until the translator types in it', async () => {
+    const { isAutoFilled } = await import('../src/core');
+    const s = project({ 'A.json': { a1: e('Привіт', 'done', 100) }, 'B.json': {} });
+    const idx = new LinkIndex(views());
+    const plan = planLinkSync(s, idx, 'A.json', 'a1');
+    const ch = linkChanges(plan!.view.reference!.target, plan!.fills, NOW);
+    const filled = recordChange(undefined, ch[0]!.next, 'автозаповнено з однакового рядка', 'Привіт', 'Ви', NOW, 'link:x');
+    expect(filled.status).toBe('draft');
+    expect(isAutoFilled(filled)).toBe(true);
+    expect(isAutoFilled({ ...filled, mt: NOW + 5 })).toBe(false);            // typed in afterwards
+    expect(isAutoFilled({ ...filled, status: 'done' })).toBe(false);          // sent by the translator
   });
 });

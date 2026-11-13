@@ -126,12 +126,17 @@ export function planLinkSync(saved: SavedProject, idx: LinkIndex, file: string, 
   return { view, fills: others.filter(r => r.state === 'empty'), updates: others.filter(r => r.state === 'differs'), edited: others.filter(r => r.state === 'edited') };
 }
 
-/** The rows as they are after they took the text of the reference; sent for review, since the text was already reviewed once. Approval is never copied. */
+/**
+ * The rows as they are after they took the text of the reference. They are DRAFTS (marked as filled in by the app, see
+ * `isAutoFilled`), not sent: the translator has not looked at them in their place, and a filled-in row must not count as
+ * work that was done. Approval is never copied.
+ */
 export function linkChanges(reference: string, rows: LinkRowView[], now: number): RowChange[] {
-  return rows.map(r => ({
-    file: r.file, key: r.key, text: reference,
-    next: { ...(r.entry ?? {}), target: reference, status: 'done', mt: now, src: r.source, orig: reference, returned: false } as Entry,
-  }));
+  return rows.map(r => {
+    const next = { ...(r.entry ?? {}), target: reference, status: 'draft', mt: now, src: r.source, returned: false } as Entry;
+    delete next.orig;
+    return { file: r.file, key: r.key, text: reference, next };
+  });
 }
 
 export interface SendSync {

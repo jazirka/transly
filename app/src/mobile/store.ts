@@ -252,9 +252,11 @@ export class Store {
     const now = Date.now();
     const batch = this.commit([{ file: c.file, key: c.unit.key, next: r.entry, text: r.entry.target }], 'send', 'надіслано');
     const sync = afterSend(this.saved, this.links(), linkModeOf(this.saved.settings), c.file, c.unit.key, now);
-    const lb = sync.changes.length ? this.commit(sync.changes, 'link') : undefined;
+    // the twins are filled in as drafts marked «авто»; a proofread twin is not touched
+    const filled = planOf(f => this.entries(f), sync.changes, 'link');
+    const lb = applyPlan((c2, k, w) => this.commit(c2, k, w), filled);
     this.tmCache = null; this.persist(); this.emit();
-    return { batch, ...(lb || sync.pending ? { link: { ...(lb ? { batch: lb } : {}), n: sync.changes.length, pending: sync.pending } } : {}) };
+    return { batch, ...(lb || sync.pending ? { link: { ...(lb ? { batch: lb } : {}), n: filled.changes.length, pending: sync.pending } } : {}) };
   }
   /** Approve the open row: a draft is sent first, so the history says both. */
   approve(): { why?: string; batch?: string } {

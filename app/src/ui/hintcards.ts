@@ -1,4 +1,4 @@
-import { HINT_GLYPH, HINT_LABEL, KIND_LABEL, activeIssues, byHintOrder, check, describePage, explainCodes, isMessageUnit, prepareText, sceneAt, sourceChanged, targetHasTerm, termRangesIn, termRangesInTarget, usageKey, usesPixels, widthOf } from '../core';
+import { HINT_GLYPH, HINT_LABEL, KIND_LABEL, isAutoFilled, activeIssues, byHintOrder, check, describePage, explainCodes, isMessageUnit, prepareText, sceneAt, sourceChanged, targetHasTerm, termRangesIn, termRangesInTarget, usageKey, usesPixels, widthOf } from '../core';
 import type { Entry, GlossaryTerm, Unit } from '../core';
 import { esc, plural } from './dom';
 import { scenesOf } from './scenecache';
@@ -219,6 +219,7 @@ export function chipsHtml(ctx: Ctx, u: Unit): string {
   const act = (which: string, t: string, title: string, warn = false): string => `<button type="button" class="cc act ${warn ? 'warn' : ''}" data-hc="ctx" data-hk="${which}" title="${esc(title)}">${esc(t)} <span aria-hidden="true">▾</span></button>`;
   // What the row is (plain words) and what can be opened (buttons); the header puts a divider before each group.
   const meta = [
+    isAutoFilled(ctx.entries(r.file)[r.key]) ? st('авто', 'Заповнено застосунком (з однакового рядка, з пам’яті чи за словами) і ще не переглянуто: це чернетка. Перегляньте й надішліть') : '',
     st(KIND_LABEL[u.kind] ?? u.kind, 'Тип рядка'),
     ctx.speaker(u) ? st(ctx.speaker(u), 'Хто говорить') : '',
     label ? st(label, 'Місцевість') : '',

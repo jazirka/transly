@@ -32,6 +32,8 @@ const get = <T>(db: IDBDatabase, store: string, key: string): Promise<T | undefi
 export class IdbStore implements ProjectStore {
   private lastSnap: SavedProject['snapshot'];
   private lastRef: SavedProject['reference'];
+  /** Whether a save has already made sure that no stale snapshot is stored for a project that has none. */
+  private snapChecked = false;
   constructor(private id: string) {}
 
   async load(): Promise<SavedProject | null> {
@@ -53,18 +55,24 @@ export class IdbStore implements ProjectStore {
     const db = await open();
     const { snapshot, reference, ...rest } = p;
     const writeSnap = snapshot !== undefined && snapshot !== this.lastSnap;
+    // A project without a snapshot (after "Скинути проєкт", or one that never had a game) must not keep the old game's
+    // snapshot in the store: the next load would bring the old game back. Deleting a missing key is free, so it is done
+    // once for a fresh page and again only after a snapshot was written or loaded.
+    const dropSnap = snapshot === undefined && (this.lastSnap !== undefined || !this.snapChecked);
     const writeRef = reference !== this.lastRef;
     try {
       await new Promise<void>((resolve, reject) => {
         const tx = db.transaction([STORE, SNAPS], 'readwrite');
         tx.objectStore(STORE).put(serialize(rest), this.id);
         if (writeSnap) tx.objectStore(SNAPS).put(snapshot, this.id);
+        else if (dropSnap) tx.objectStore(SNAPS).delete(this.id);
         if (writeRef) { if (reference) tx.objectStore(SNAPS).put(reference, `${this.id}:ref`); else tx.objectStore(SNAPS).delete(`${this.id}:ref`); }
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
         tx.onabort = () => reject(tx.error);
       });
       if (writeSnap) this.lastSnap = snapshot;
+      if (dropSnap) { this.lastSnap = undefined; this.snapChecked = true; }
       if (writeRef) this.lastRef = reference;
     } finally { db.close(); }
   }

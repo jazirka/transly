@@ -106,7 +106,7 @@ export function check(unit: UnitLike, target: string, opts: QaOptions = DEFAULT_
  * still the same object with the same original and the same settings gives the same answer. A page draws a file several
  * times (filters, tabs, status bar); this makes every draw after the first cheap.
  */
-const memo = new WeakMap<Entry, { sig: string; source: string; kind?: string; face?: string; issues: Issue[] }>();
+const memo = new WeakMap<Entry, { sig: string; source: string; key?: string; kind?: string; face?: string; issues: Issue[] }>();
 
 /** Everything `check` depends on besides the row and its original, as one short text. */
 const optsSig = (o: QaOptions): string => `${o.tolerancePct}|${o.lineLimit ?? 0}|${planSig(o.wrap)}|${termsStamp(o.terms)}|${o.rules?.sig ?? ''}`;
@@ -114,9 +114,11 @@ const optsSig = (o: QaOptions): string => `${o.tolerancePct}|${o.lineLimit ?? 0}
 /** Issues of a row (before the translator's ignores). */
 function issuesOf(unit: UnitLike, entry: Entry, opts: QaOptions): Issue[] {
   const sig = optsSig(opts), hit = memo.get(entry);
-  if (hit && hit.sig === sig && hit.source === unit.source && hit.kind === unit.kind && hit.face === unit.face) return hit.issues;
+  // The key is part of the answer: whether a row is a message (and so gets the wrap checks) is read from it, and the same
+  // Entry object is shown under a file's own key and under the "all files" key.
+  if (hit && hit.sig === sig && hit.source === unit.source && hit.key === unit.key && hit.kind === unit.kind && hit.face === unit.face) return hit.issues;
   const issues = check(unit, entry.target, opts);
-  memo.set(entry, { sig, source: unit.source, kind: unit.kind, face: unit.face, issues });
+  memo.set(entry, { sig, source: unit.source, key: unit.key, kind: unit.kind, face: unit.face, issues });
   return issues;
 }
 

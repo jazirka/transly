@@ -1,4 +1,4 @@
-import { adviceCount, check, fixRule, hasAdvice, qaOf, ruleStats, GROUP_COLORS, proposeTermSync, termChange, termChanges, LinkIndex, afterSend, clearMain, linkChanges, linkModeOf, linkView, planLinkSync, relinkRow, reviewClusters, setMain, unlinkRow, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines, approveEntry, sendBack, threadsOf, rowsOfGroup, flowText, wrapMessage, wrapOf } from '../core';
+import { adviceCount, check, fixRule, hasAdvice, knownStatus, qaOf, ruleStats, GROUP_COLORS, proposeTermSync, termChange, termChanges, LinkIndex, afterSend, clearMain, linkChanges, linkModeOf, linkView, planLinkSync, relinkRow, reviewClusters, setMain, unlinkRow, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines, approveEntry, sendBack, threadsOf, rowsOfGroup, flowText, wrapMessage, wrapOf } from '../core';
 import type { Issue, QaSettings, RuleStat, LinkRowView, QaOptions, TermChange, TermProposal, TermSync, WrapPlan } from '../core';
 import { pxMeasure } from '../ui/measure';
 import type { BatchKind, Group, Entry, GlossaryTerm, RowChange, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
@@ -46,6 +46,7 @@ export class Store {
   private autosave: Autosave;
   private listeners = new Set<() => void>();
   private tmCache: TmIndex | null = null;
+  private tmFlow = false;
   private linkCache: { views: FileView[]; idx: LinkIndex } | null = null;
   private linkTodoCache: number | null = null;
 
@@ -119,11 +120,13 @@ export class Store {
     this.saved.settingsAt = Date.now();
     this.persist(); this.emit();
   }
-  shown(u: Unit, e: Entry | undefined): Shown { const st = e?.status ?? 'new'; return st !== 'new' && this.issues(u, e).some(i => i.severity === 'bad') ? 'qa' : st; }
+  shown(u: Unit, e: Entry | undefined): Shown { const st = knownStatus(e?.status); return st !== 'new' && this.issues(u, e).some(i => i.severity === 'bad') ? 'qa' : st; }
   terms(u: Unit): ReturnType<typeof termsIn<SavedProject['terms'][number]>> { return termsIn(u.source, this.saved.terms); }
   tm(): TmIndex {
-    if (this.tmCache) return this.tmCache;
-    const tm = new TmIndex({ flow: wrapOf(this.saved.settings).mode === 'text' });
+    const flow = wrapOf(this.saved.settings).mode === 'text';
+    if (this.tmCache && this.tmFlow === flow) return this.tmCache;
+    this.tmFlow = flow;
+    const tm = new TmIndex({ flow });
     for (const v of this.views) { const ents = this.saved.files[v.name]; if (!ents) continue; for (const u of v.units) { const e = ents[u.key]; if (e?.target.trim()) tm.add({ s: u.source, t: e.target, src: v.name }); } }
     for (const m of this.saved.memory) tm.add({ s: m.s, t: m.t, src: 'Імпорт' });
     return (this.tmCache = tm);
@@ -202,7 +205,7 @@ export class Store {
   write(text: string): void {
     const c = this.current; if (!c) return;
     this.entries(c.file)[c.unit.key] = edit(c.entry, c.unit, text, this.stage, Date.now());
-    this.tmCache = null; this.persist();
+    this.tmCache = null; this.linkTodoCache = null; this.persist();
   }
   /** Put the original into the empty translations of these rows, as one action of the journal (rows that have a translation stay as they are). */
   copyMany(file: string, units: Unit[]): { n: number; batch?: string } {
@@ -222,7 +225,7 @@ export class Store {
   writeAtQuiet(file: string, key: string, text: string): void {
     const u = this.unit(file, key); if (!u) return;
     this.entries(file)[key] = edit(this.entry(file, key), u, text, this.stage, Date.now());
-    this.tmCache = null; this.persist();
+    this.tmCache = null; this.linkTodoCache = null; this.persist();
   }
   /**
    * Send the open row. Refused with a reason (`why`), or done as an action of the journal (`batch`) that can be taken back.

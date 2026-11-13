@@ -44,8 +44,8 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
       <p class="hint">Папка запам’ятовується для проєкту й відновлюється під час запуску. Якщо її перенесено чи видалено, програма покаже банер із вибором нової, а переклад і оригінали в проєкті збережуться.</p>
       <label class="achk"><input type="checkbox" id="st-sysbar" ${nativeChrome() ? 'checked' : ''}> Системний заголовок вікна</label>
       <p class="hint">Запасний варіант: якщо власного заголовка не видно або його кнопки не працюють. Застосовується одразу.</p></div>` : ''}
-    <div class="grid"><label for="st-tol">Радити, коли переклад відрізняється від оригіналу понад, %</label><input id="st-tol" type="number" min="5" max="100" step="5" value="${st.tolerancePct}">
-      <label for="st-who">Ваше ім’я в коментарях та історії</label><input id="st-who" maxlength="40" value="${st.who}"></div>
+    <div class="grid"><label for="st-tol">Радити, коли переклад відрізняється від оригіналу понад, %</label><input id="st-tol" type="number" min="5" max="100" step="5" value="${esc(String(st.tolerancePct))}">
+      <label for="st-who">Ваше ім’я в коментарях та історії</label><input id="st-who" maxlength="40" value="${esc(String(st.who))}"></div>
     <label class="achk"><input type="checkbox" id="st-block" ${st.blockErrors ? 'checked' : ''}> Не надсилати рядок із помилкою QA</label>
     <div class="grid"><label for="st-link">Рядки з однаковим оригіналом (зв’язані)</label><select id="st-link"><option value="ask" ${linkModeOf(st) === 'ask' ? 'selected' : ''}>питати, коли переклад різниться (рекомендовано)</option><option value="auto" ${linkModeOf(st) === 'auto' ? 'selected' : ''}>оновлювати самі</option><option value="off" ${linkModeOf(st) === 'off' ? 'selected' : ''}>не зв’язувати</option></select></div>
     <p class="hint">Порожні зв’язані рядки заповнюються одразу після надсилання (цю дію можна відмінити в повідомленні). Рядок, який ви змінили пізніше, ніколи не перезаписується без вашого вибору.</p>
@@ -252,10 +252,15 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
       dlg.close();
     } catch (err) { toast(err instanceof Error ? err.message : 'Не вдалося прочитати файл'); }
   });
-  let armed = false;
-  $('#st-reset', dlg).addEventListener('click', ev => {
-    // Two clicks instead of confirm(): embedded frames suppress browser dialogs.
-    if (!armed) { armed = true; (ev.currentTarget as HTMLElement).textContent = 'Так, видалити весь переклад'; return; }
+  let armed = false, armedAt = 0;
+  const resetBtn = $('#st-reset', dlg), resetIdle = resetBtn.textContent ?? '';
+  let armTimer: ReturnType<typeof setTimeout> | null = null;
+  const disarm = (): void => { armed = false; resetBtn.textContent = resetIdle; if (armTimer) { clearTimeout(armTimer); armTimer = null; } };
+  resetBtn.addEventListener('click', () => {
+    // Two clicks instead of confirm(): embedded frames suppress browser dialogs. The confirmation appears on the very same
+    // spot, so the second click of a double-click must not confirm it, and it lapses if the translator does not follow it up.
+    if (!armed) { armed = true; armedAt = Date.now(); resetBtn.textContent = 'Так, видалити весь переклад'; armTimer = setTimeout(disarm, 6000); return; }
+    if (Date.now() - armedAt < 1200) return;
     const keep = ctx.s.saved.resetEpoch;
     ctx.s.saved = { ...emptyProject(ctx.s.saved.name), resetEpoch: Math.max(keep, Date.now()) };
     ctx.invalidateTm(); onReset(); dlg.close();

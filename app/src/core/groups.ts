@@ -39,6 +39,12 @@ export interface GroupData { groups?: Record<string, Group>; members?: Record<st
 
 export const GROUP_COLORS = ['#8b72e8', '#4aa3df', '#4cc38a', '#e0a046', '#f06a78', '#c678dd', '#56b6c2', '#9aa0a6'];
 
+/**
+ * The colour a group is painted with. Only plain hex colours are drawn: a project file or a synced project is not trusted,
+ * and a colour put into a style attribute is a way to inject CSS (and make the page request another server).
+ */
+export const groupColor = (g: { color?: string } | null | undefined): string => (typeof g?.color === 'string' && /^#[0-9a-f]{3,8}$/i.test(g.color) ? g.color : GROUP_COLORS[0]!);
+
 const S = '\u0001';
 export const fileRef = (file: string): string => `f${S}${file}`;
 export const sceneRef = (file: string, scene: string): string => `s${S}${file}${S}${scene}`;

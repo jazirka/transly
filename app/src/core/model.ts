@@ -1,6 +1,9 @@
 /** Status of a translation unit. Order matters: a unit only moves forward through review. */
 export type Status = 'new' | 'draft' | 'done' | 'appr';
 
+/** A status read from stored or foreign data: anything that is not one of the four becomes 'new' (it is later put into class names and label tables). */
+export const knownStatus = (s: unknown): Status => (s === 'draft' || s === 'done' || s === 'appr' ? s : 'new');
+
 /** One translatable string extracted from a game file. */
 export interface Unit {
   /** Stable id inside the file, e.g. `events[14].pages[0].list[5]`. */

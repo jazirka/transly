@@ -1,9 +1,9 @@
-import { Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, qaOf } from '../core';
+import { Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, qaOf, termsStamp } from '../core';
 import type { QaOptions, WrapPlan } from '../core';
 import { pxMeasure } from './measure';
 import { openWrapTool } from './wrap-dialog';
 import { openQaRules } from './qarules-dialog';
-import { GroupIndex, KIND_LABEL, UndoStack, approveEntry, groupRows, liveGroups } from '../core';
+import { GroupIndex, KIND_LABEL, UndoStack, approveEntry, groupColor, groupRows, liveGroups } from '../core';
 import type { Entry, FileView, GameFile, Group, RowChange, SavedProject, Unit } from '../core';
 import { openBuild } from './build-dialog';
 import { dataDirOf, forgetGameDir, isDesktop, rememberedGameDir, reopenGameDir, reopenGameDirDesktop, setProject } from './desktop';
@@ -194,6 +194,8 @@ export async function start(root: HTMLElement): Promise<void> {
   try { lastHandle = (await loadHandle('default')) as typeof lastHandle; } catch { lastHandle = null; }
   const autosave = new Autosave(store, 400, ok => { s.saveOk = ok; if (ok) s.savedAt = Date.now(); renderStatus(); });
   let tmCache: ReturnType<typeof buildTm> | null = null;
+  /** The wrap mode the memory was built for: it decides how rows are compared, so a change of the setting needs a rebuild. */
+  let tmFlow = false;
   let tmStale = false, tmBuiltAt = 0;
   let unitMap = new Map<string, Unit>();
   let linkCache: { views: State['views']; idx: LinkIndex } | null = null;
@@ -266,7 +268,8 @@ export async function start(root: HTMLElement): Promise<void> {
     unit: key => unitMap.get(key),
     visible: () => visibleUnits(true),
     tm: () => {
-      if (!tmCache || (tmStale && Date.now() - tmBuiltAt > 1000)) { tmCache = buildTm(s); tmBuiltAt = Date.now(); tmStale = false; }
+      const flow = wrapOf(s.saved.settings).mode === 'text';
+      if (!tmCache || tmFlow !== flow || (tmStale && Date.now() - tmBuiltAt > 1000)) { tmCache = buildTm(s); tmFlow = flow; tmBuiltAt = Date.now(); tmStale = false; }
       return tmCache;
     },
     invalidateTm: () => { tmCache = null; tmStale = false; },
@@ -450,7 +453,7 @@ export async function start(root: HTMLElement): Promise<void> {
   /** The coloured dot of the group a file is in. */
   const fileGroupDot = (name: string): string => {
     const g = ctx.groupOf(name, '\u0000');
-    return g ? `<span class="gdot" style="background:${esc(g.color ?? '#8b72e8')}" role="img" aria-label="Група: ${esc(g.name)}" title="Група: ${esc(g.name)}"></span>` : '';
+    return g ? `<span class="gdot" style="background:${groupColor(g)}" role="img" aria-label="Група: ${esc(g.name)}" title="Група: ${esc(g.name)}"></span>` : '';
   };
   function renderTree(): void {
     renderGroupsBlock(ctx);
@@ -538,9 +541,11 @@ export async function start(root: HTMLElement): Promise<void> {
       <div class="tr ${e?.target ? '' : 'empty'}" role="gridcell" title="Клікніть, щоб писати прямо тут">${e?.target ? markup(flow(e.target)) : '—'}</div>
       <div class="len ${lenCls(u, e)}" role="gridcell" title="Символів у перекладі / в оригіналі">${len}</div></div>`;
   }
-  let enforcedCache: { terms: SavedProject['terms']; en: string[] } | null = null;
+  let enforcedCache: { stamp: string; en: string[] } | null = null;
   function enforced(): string[] {
-    if (!enforcedCache || enforcedCache.terms !== s.saved.terms || enforcedCache.en.length !== s.saved.terms.filter(t => t.qa !== false).length) enforcedCache = { terms: s.saved.terms, en: s.saved.terms.filter(t => t.qa !== false).map(t => t.en) };
+    // The stamp changes with the list's identity, its length and every `touchTerms` (a renamed term keeps the length).
+    const stamp = termsStamp(s.saved.terms);
+    if (!enforcedCache || enforcedCache.stamp !== stamp) enforcedCache = { stamp, en: s.saved.terms.filter(t => t.qa !== false).map(t => t.en) };
     return enforcedCache.en;
   }
 
@@ -1058,6 +1063,8 @@ export async function start(root: HTMLElement): Promise<void> {
       reset: () => {
         // The project is empty again, so the game's strings have to be read into it afresh (plugin texts are off by default).
         if (s.game.length) { ingest(s.game); unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u])); if (s.cur && !unitMap.has(s.cur)) s.cur = null; }
+        // No game folder in memory (the files on screen came from the stored snapshot): the rows stay the project's game, so keep their snapshot.
+        else if (s.views.length) s.saved.snapshot = snapshotOf(s.views);
         s.views.forEach(v => { s.saved.files[v.name] = {}; });
         renderAll(); ctx.persist();
       },

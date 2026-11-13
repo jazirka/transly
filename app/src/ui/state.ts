@@ -1,4 +1,4 @@
-import { TmIndex, activeIssues, wrapOf } from '../core';
+import { TmIndex, activeIssues, knownStatus, wrapOf } from '../core';
 import type { BatchKind, GameNameIndex, QaOptions, RowChange, Usage, WrapPlan } from '../core';
 import type { Autosave, LinkIndex, UndoStack, Entry, FileView, GameFile, Group, RowRef, SavedProject, Status, Unit } from '../core';
 
@@ -142,7 +142,7 @@ export type ShownStatus = Status | 'qa';
 
 /** Status as shown to the user: a unit with an active QA issue shows the red triangle. */
 export function shownStatus(ctx: Ctx, u: Unit, e: Entry | undefined): ShownStatus {
-  const st: Status = e?.status ?? 'new';
+  const st: Status = knownStatus(e?.status);
   // Only an error turns the mark red: advice (a length, a style) stays in the remarks under the field.
   return e && e.target && st !== 'new' && activeIssues(u, e, ctx.qaOpts()).some(i => i.severity === 'bad') ? 'qa' : st;
 }

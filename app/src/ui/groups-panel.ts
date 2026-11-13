@@ -1,4 +1,4 @@
-import { GROUP_COLORS, GroupIndex, createGroup, deleteGroup, findOrphans, groupRows, liveGroups, placeFile, recolorGroup, renameGroup, rowsProgress, submit } from '../core';
+import { GROUP_COLORS, GroupIndex, groupColor, createGroup, deleteGroup, findOrphans, groupRows, liveGroups, placeFile, recolorGroup, renameGroup, rowsProgress, submit } from '../core';
 import type { Group, RowChange, RowRef } from '../core';
 import { $, esc, plural, toast } from './dom';
 import { openFindReplace } from './tools-dialogs';
@@ -65,7 +65,7 @@ const rowsOf = (ctx: Ctx, files: string[]): RowRef[] => files.flatMap(f => (ctx.
 function groupItem(ctx: Ctx, g: Group, files: string[]): string {
   if (renaming === g.id) return `<form class="grp-ren" data-gid="${esc(g.id)}" autocomplete="off"><input id="gr-ren" value="${esc(g.name)}" aria-label="Нова назва групи" maxlength="60"><button class="btn p" type="submit">Гаразд</button></form>`;
   const open = unfolded.has(g.id);
-  const color = esc(g.color ?? '#8b72e8');
+  const color = groupColor(g);
   return `<div class="grp-item" data-gid="${esc(g.id)}">
     <button class="grp-fold" type="button" data-gfold="${esc(g.id)}" aria-expanded="${open}" aria-label="${open ? 'Згорнути' : 'Розгорнути'} групу «${esc(g.name)}»">${open ? '▾' : '▸'}</button>
     <button class="grp-open" type="button" data-gopen="${esc(g.id)}" title="Відкрити «${esc(g.name)}» однією таблицею"><span class="grp-dot" style="background:${color}" aria-hidden="true"></span><span class="grp-name">${esc(g.name)}</span><span class="grp-c" title="Файлів у групі: ${files.length}">${files.length} ф.</span>${progressBit(ctx, rowsOf(ctx, files))}</button>
@@ -98,7 +98,7 @@ export function placeMenuHtml(ctx: Ctx, target: PlaceTarget): string {
   const now = new Set(target.files.map(f => groupOfFile(idx, f) ?? ''));
   const only = now.size === 1 ? [...now][0]! : null;
   return `<div class="group">У групу · ${esc(target.label)}</div>
-    ${liveGroups(ctx.s.saved).map(g => `<button data-gm="place" data-gid="${esc(g.id)}" ${only === g.id ? 'class="on"' : ''}><span class="grp-dot" style="background:${esc(g.color ?? '#8b72e8')}" aria-hidden="true"></span>${esc(g.name)}${only === g.id ? ' <span class="hint">тут зараз</span>' : ''}</button>`).join('')}
+    ${liveGroups(ctx.s.saved).map(g => `<button data-gm="place" data-gid="${esc(g.id)}" ${only === g.id ? 'class="on"' : ''}><span class="grp-dot" style="background:${groupColor(g)}" aria-hidden="true"></span>${esc(g.name)}${only === g.id ? ' <span class="hint">тут зараз</span>' : ''}</button>`).join('')}
     ${[...now].some(x => x) ? '<button data-gm="place-none">Прибрати з групи</button>' : ''}
     <div class="msep" role="separator"></div>
     <div class="gm-new"><input id="gm-new-name" placeholder="Нова група" aria-label="Назва нової групи" maxlength="60"><button data-gm="new-place" title="Створити групу й додати туди" aria-label="Створити групу">＋</button></div>`;

@@ -1,5 +1,5 @@
 import { HINT_GLYPH, HINT_LABEL, KIND_LABEL, explainCodes, sceneTitle, stepScene, byHintOrder, commentId, historyRows, openThreads, restoreNote, sourceTermHits, targetHasTerm, threadsOf, batchTitle, batchUndoLabel, undoReport, setIgnored, canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, describePage, DEFAULT_LINE_LIMIT, DEFAULT_WRAP, MV_WINDOW, autoLineLimit, flowText, isMessageUnit, linesShown, measureOf, pixelBudget, unitWord, usesPixels, widthOf, wrapMessage, wrapOf } from '../core';
-import { APOSTROPHES, QA_RULES, keepFromText, keepToText, qaOf, withRuleLevel } from '../core';
+import { APOSTROPHES, QA_RULES, groupColor, keepFromText, keepToText, qaOf, withRuleLevel } from '../core';
 import type { Issue, LinkMode, LinkState, QaSettings, RuleSeverity, TermChange, TermProposal, TermSync, WrapSettings } from '../core';
 import { pxMeasure } from '../ui/measure';
 import { CONF_LABEL, flagsText, markHtml } from '../ui/termsync-html';
@@ -45,7 +45,7 @@ export async function start(root: HTMLElement): Promise<void> {
   let refLang = ''; let fq = '';
   const collapsedCats = new Set<string>((() => { try { return JSON.parse(localStorage.getItem('transly-m-cats') ?? '[]') as string[]; } catch { return []; } })()); let sq = '';
   let srTimer = 0; let scnTimer = 0;
-  let plPick: Set<string> | null = null; let resetArmed = false;
+  let plPick: Set<string> | null = null; let resetArmed = false; let resetArmedAt = 0;
   let selecting = false; const picked = new Set<string>();
   /** Groups of files: files ticked for "into a group", the menu, groups unfolded, the group being renamed or asked about deletion. */
   let fsel = false; const fpicked = new Set<string>(); let fmenu = false; const gopen = new Set<string>(); let grename: string | null = null; let gdel: string | null = null; let gcreating = false;
@@ -219,13 +219,13 @@ export async function start(root: HTMLElement): Promise<void> {
   function groupMenu(): string {
     const files = [...fpicked];
     const now = new Set(files.map(f => store.fileGroup(f)?.id ?? ''));
-    return `<div class="m-gmenu" role="menu" aria-label="У групу">${store.groupsList().map(g => `<button class="m-gm ${now.size === 1 && now.has(g.id) ? 'on' : ''}" role="menuitem" data-fplace="${esc(g.id)}"><i class="m-gdot" style="background:${esc(g.color ?? '#8b72e8')}"></i>${esc(g.name)}</button>`).join('')}${[...now].some(x => x) ? '<button class="m-gm" role="menuitem" data-fplace="">Прибрати з групи</button>' : ''}<form class="m-gnew" data-fnewform><input id="fg-new" placeholder="Нова група" aria-label="Назва нової групи" maxlength="60" autocomplete="off"><button class="m-mini" type="submit">＋</button></form></div>`;
+    return `<div class="m-gmenu" role="menu" aria-label="У групу">${store.groupsList().map(g => `<button class="m-gm ${now.size === 1 && now.has(g.id) ? 'on' : ''}" role="menuitem" data-fplace="${esc(g.id)}"><i class="m-gdot" style="background:${groupColor(g)}"></i>${esc(g.name)}</button>`).join('')}${[...now].some(x => x) ? '<button class="m-gm" role="menuitem" data-fplace="">Прибрати з групи</button>' : ''}<form class="m-gnew" data-fnewform><input id="fg-new" placeholder="Нова група" aria-label="Назва нової групи" maxlength="60" autocomplete="off"><button class="m-mini" type="submit">＋</button></form></div>`;
   }
   const fileItem = (v: FileViewLike): string => {
     const st = store.stats(v.name), pc = st.total ? Math.round((100 * st.translated) / st.total) : 0;
     const g = store.fileGroup(v.name);
     const attr = fsel ? `data-fpick="${esc(v.name)}" aria-pressed="${fpicked.has(v.name)}"` : `data-file="${esc(v.name)}"`;
-    return `<li><button class="m-item ${v.name === store.file && !fsel ? 'cur' : ''} ${fsel && fpicked.has(v.name) ? 'picked' : ''}" ${attr}><span class="m-ico">${/^Map\d+\.json$/.test(v.name) ? 'MAP' : '{ }'}</span><span class="m-item-t"><b>${g ? `<i class="m-gdot" style="background:${esc(g.color ?? '#8b72e8')}" aria-label="Група: ${esc(g.name)}"></i>` : ''}${esc(v.label ?? v.name.replace(/\.json$/, ''))}</b><small>${esc(v.label ? v.name.replace(/\.json$/, '') : plural(st.total, ['рядок', 'рядки', 'рядків']))}</small>${bar(st.translated, st.total)}</span><span class="m-item-n">${pc}%</span></button></li>`;
+    return `<li><button class="m-item ${v.name === store.file && !fsel ? 'cur' : ''} ${fsel && fpicked.has(v.name) ? 'picked' : ''}" ${attr}><span class="m-ico">${/^Map\d+\.json$/.test(v.name) ? 'MAP' : '{ }'}</span><span class="m-item-t"><b>${g ? `<i class="m-gdot" style="background:${groupColor(g)}" aria-label="Група: ${esc(g.name)}"></i>` : ''}${esc(v.label ?? v.name.replace(/\.json$/, ''))}</b><small>${esc(v.label ? v.name.replace(/\.json$/, '') : plural(st.total, ['рядок', 'рядки', 'рядків']))}</small>${bar(st.translated, st.total)}</span><span class="m-item-n">${pc}%</span></button></li>`;
   };
   type FileViewLike = (typeof store.views)[number];
   /** The groups, each with its files, above the automatic categories. */
@@ -240,7 +240,7 @@ export async function start(root: HTMLElement): Promise<void> {
       const acts = open ? (grename === g.id
         ? `<form class="m-grename" data-grsave="${esc(g.id)}"><input id="gr-ren" value="${esc(g.name)}" aria-label="Нова назва групи" maxlength="60" autocomplete="off"><button class="m-mini" type="submit">Гаразд</button></form>`
         : `<div class="m-gacts"><button class="m-mini" data-grows="${esc(g.id)}" ${all.length ? '' : 'disabled'}>Рядки</button><button class="m-mini" data-gsend="${esc(g.id)}" ${all.length ? '' : 'disabled'}>Надіслати</button><button class="m-mini ${gmore === g.id ? 'on' : ''}" data-gmore="${esc(g.id)}" aria-expanded="${gmore === g.id}" aria-label="Інші дії групи">⋯</button>${gmore === g.id ? `<button class="m-mini" data-grename="${esc(g.id)}">Назва</button><button class="m-mini" data-gcolor="${esc(g.id)}">Колір</button><button class="m-mini danger" data-gdel="${esc(g.id)}">${gdel === g.id ? 'Справді видалити?' : 'Видалити'}</button>` : ''}</div>`) : '';
-      return `<div class="m-grp"><button class="m-cat-h m-grp-h" data-gfold="${esc(g.id)}" aria-expanded="${open}"><span class="m-cat-c">${icon('down')}</span><i class="m-gdot" style="background:${esc(g.color ?? '#8b72e8')}"></i><b>${esc(g.name)}</b><small>${all.length} · ${t.all ? Math.round((100 * t.tr) / t.all) : 0}%</small></button>${open ? `${acts}${files.length ? `<ul class="m-list">${files.map(fileItem).join('')}</ul>` : '<p class="m-none">Файлів немає: «Вибрати файли», потім «У групу»</p>'}` : ''}</div>`;
+      return `<div class="m-grp"><button class="m-cat-h m-grp-h" data-gfold="${esc(g.id)}" aria-expanded="${open}"><span class="m-cat-c">${icon('down')}</span><i class="m-gdot" style="background:${groupColor(g)}"></i><b>${esc(g.name)}</b><small>${all.length} · ${t.all ? Math.round((100 * t.tr) / t.all) : 0}%</small></button>${open ? `${acts}${files.length ? `<ul class="m-list">${files.map(fileItem).join('')}</ul>` : '<p class="m-none">Файлів немає: «Вибрати файли», потім «У групу»</p>'}` : ''}</div>`;
     }).join('')}</section>`;
   }
   /** The files whose name or title contains the search words. */
@@ -661,11 +661,11 @@ export async function start(root: HTMLElement): Promise<void> {
 
   function screenSettings(): string {
     const st = store.saved.settings;
-    return `<div class="m-more"><section class="m-card"><label class="m-lbl" for="s-tol">Допуск довжини перекладу відносно оригіналу, %</label><input id="s-tol" class="m-input" type="number" min="5" max="100" step="5" value="${st.tolerancePct}">
+    return `<div class="m-more"><section class="m-card"><label class="m-lbl" for="s-tol">Допуск довжини перекладу відносно оригіналу, %</label><input id="s-tol" class="m-input" type="number" min="5" max="100" step="5" value="${esc(String(st.tolerancePct))}">
       <button class="m-secondary wide" data-sub="wrap">${icon('rows')}<span>Перенесення рядків…</span></button>
       <label class="m-check"><input type="checkbox" id="s-block" ${st.blockErrors ? 'checked' : ''}> Не надсилати рядок із помилкою QA</label>
       <label class="m-lbl" for="s-link">Рядки з однаковим оригіналом (зв’язані)</label><select id="s-link" class="m-input"><option value="ask" ${store.linkMode() === 'ask' ? 'selected' : ''}>питати, коли переклад різниться (рекомендовано)</option><option value="auto" ${store.linkMode() === 'auto' ? 'selected' : ''}>оновлювати самі</option><option value="off" ${store.linkMode() === 'off' ? 'selected' : ''}>не зв’язувати</option></select>
-      <label class="m-lbl" for="s-who">Ваше ім’я в коментарях та історії</label><input id="s-who" class="m-input" value="${esc(st.who)}" maxlength="40" autocomplete="off"></section>
+      <label class="m-lbl" for="s-who">Ваше ім’я в коментарях та історії</label><input id="s-who" class="m-input" value="${esc(String(st.who))}" maxlength="40" autocomplete="off"></section>
       <section class="m-card"><h3>Довідкові мови</h3><p class="m-hint">Копія тієї ж гри іншою мовою: її рядки показуються під оригіналом як підказка.</p>
         ${store.refLangs().map(l => `<div class="m-var"><span>${esc(l.toUpperCase())}</span><small></small><button class="m-mini ghost" data-refdel="${esc(l)}">Прибрати</button></div>`).join('')}
         <label class="m-lbl" for="rf-lang">Код мови (ru, pl, en…)</label><input id="rf-lang" class="m-input" maxlength="8" value="${esc(refLang)}" autocomplete="off">
@@ -1083,7 +1083,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (q('[data-termgo]')) { const r = store.importTermsText($<HTMLTextAreaElement>('i-terms').value); say(`Додано термінів: ${r.added}${r.rejected ? `, пропущено рядків без пари: ${r.rejected}` : ''}`, !r.added); render(); return; }
     if (q('[data-tmgo]')) { const r = store.importMemory($<HTMLTextAreaElement>('i-tm').value); say(`Імпортовано пар: ${r.added}${r.rejected ? `, пропущено рядків без табуляції: ${r.rejected}` : ''}`, !r.added); render(); return; }
     if (q('[data-plapply]')) { const d = store.setPluginCommands([...(plPick ?? [])]); plPick = null; say(d > 0 ? `Додано рядків із плагінів: ${d}` : d < 0 ? `Прибрано рядків із плагінів: ${-d}` : 'Рядків не змінилося'); render(); return; }
-    if (q('[data-reset]')) { if (!resetArmed) { resetArmed = true; render(); setTimeout(() => { if (resetArmed) { resetArmed = false; if (sub === 'settings') render(); } }, 6000); return; } resetArmed = false; store.resetProject(); sub = null; say('Проєкт скинуто'); go('files'); render(); return; }
+    if (q('[data-reset]')) { if (!resetArmed) { resetArmed = true; resetArmedAt = Date.now(); render(); setTimeout(() => { if (resetArmed) { resetArmed = false; if (sub === 'settings') render(); } }, 6000); return; } if (Date.now() - resetArmedAt < 1200) return; resetArmed = false; store.resetProject(); sub = null; say('Проєкт скинуто'); go('files'); render(); return; }
     if ((x = q('[data-srn]'))) { const r = store.searchAll(sq)[Number(x.dataset.srn)]; if (r) { sub = null; store.open(r.file, r.key); go('edit'); } return; }
     if ((x = q('[data-refdel]'))) { store.removeReference(x.dataset.refdel!); say(`Довідку ${x.dataset.refdel!.toUpperCase()} прибрано`); render(); return; }
     if (q('[data-spsave]')) { const n = store.setSpeakers(sp.draft); sp.draft.clear(); say(n ? `Мовців оновлено: ${n}` : 'Змін немає'); render(); return; }

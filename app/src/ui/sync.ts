@@ -1,4 +1,4 @@
-import { adoptSynced, deriveKeys, httpTransport, syncOnce } from '../core';
+import { adoptSynced, stamp, deriveKeys, httpTransport, syncOnce } from '../core';
 import type { SyncReport } from '../core';
 import type { Ctx } from './state';
 
@@ -26,6 +26,7 @@ export async function runSync(ctx: Ctx, cfg: SyncConfig, adopt: () => void): Pro
   const report = await syncOnce(httpTransport(cfg.url), keys, ctx.s.saved, { since: cfg.last });
   // edits typed while the request was running must survive: merge the result into what is in memory now
   ctx.s.saved = adoptSynced(ctx.s.saved, report.project);
+  stamp(ctx.s.saved, 'copy', 'синхронізація', Date.now());
   cfg.last = Date.now();
   saveSyncConfig(cfg);
   adopt();

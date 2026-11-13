@@ -1,4 +1,4 @@
-import { build, isRpgMakerFile } from '../core';
+import { build, isRpgMakerFile, preflight, preflightLines } from '../core';
 import { $, el, esc, plural, toast } from './dom';
 import { applyToGame, isDesktop, launchGame, pickExe, rememberedExe, restoreGame, restoreJump } from './desktop';
 import { canWriteFolder, downloadZip, writeToFolder } from './export';
@@ -19,6 +19,7 @@ export function openBuild(ctx: Ctx, dataDir: string | null, onBuilt: (n: number)
     <label class="achk"><input type="checkbox" id="bd-block" checked> Не брати рядки з помилкою QA</label>
     ${desk ? '<label class="achk"><input type="checkbox" id="bd-draft"> Додати чернетки (щоб побачити в грі те, що ще пишете)</label>' : ''}
     <p id="bd-sum" class="sum" role="status"></p>
+    <p id="bd-pre" class="hint"></p>
     ${desk ? `<div class="gamebox"><div class="sh">Перевірка в грі</div><p class="hint">Переклад записується прямо в папку даних гри (${esc(dataDir ?? '')}). Оригінали зберігаються поруч, у папці з суфіксом «.transly-orig», і повертаються кнопкою нижче.</p>
       <p class="hint" id="bd-exe">${rememberedExe() ? 'Файл гри: ' + esc(rememberedExe() ?? '') : 'Файл гри ще не вибрано'}</p>
       <div class="acts l"><button class="btn p" id="bd-play" type="button">Застосувати й запустити гру</button><button class="btn" id="bd-apply" type="button">Лише застосувати</button><button class="btn" id="bd-restore" type="button">Повернути оригінали</button><button class="btn" id="bd-pickexe" type="button">Обрати файл гри…</button></div></div>` : ''}
@@ -29,6 +30,9 @@ export function openBuild(ctx: Ctx, dataDir: string | null, onBuilt: (n: number)
   const run = () => build(s.game, s.views, s.saved, { onlyApproved: ($('#bd-appr', dlg) as HTMLInputElement).checked, includeDrafts: !!(dlg.querySelector('#bd-draft') as HTMLInputElement | null)?.checked, blockErrors: ($('#bd-block', dlg) as HTMLInputElement).checked, qa: ctx.qaOpts() });
   const sum = () => {
     const r = run();
+    // what the build will meet in the whole project, before it is made
+    const pre = preflightLines(preflight(s.views, s.saved, ctx.qaOpts()));
+    $('#bd-pre', dlg).textContent = pre.length ? `Не готово: ${pre.join(' · ')}.` : 'Усе перекладено, помилок QA немає.';
     const w = r.wrap, max = ctx.wrapPlan().settings.maxLines;
     const wrapNote = w.messages || w.tooMany || w.over
       ? ` Перенесення рядків: ${plural(w.messages, ['повідомлення', 'повідомлення', 'повідомлень'])}${w.hyphens ? `, слів із переносом ${w.hyphens}` : ''}${w.tooMany ? `. Понад ${max} рядки: ${w.tooMany} (гра покаже їх на кількох сторінках)` : ''}${w.over ? `. Слово не вміщається в рядок у ${w.over}` : ''}.`

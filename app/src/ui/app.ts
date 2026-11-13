@@ -1,4 +1,4 @@
-import { Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, qaOf, termsStamp, adoptSynced, applyPlan, planOf, reconcileChanges, pct, progressOf, rowState, sumProgress, QUEUE_LABEL, nextIn, positionOf, queueRows } from '../core';
+import { Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, qaOf, termsStamp, adoptSynced, applyPlan, planOf, reconcileChanges, pct, progressOf, rowState, sumProgress, QUEUE_LABEL, nextIn, positionOf, queueRows, ago, copyLine, stamp, stampOf } from '../core';
 import type { QaOptions, QueueKind, WrapPlan } from '../core';
 import { pxMeasure } from './measure';
 import { openWrapTool } from './wrap-dialog';
@@ -280,7 +280,7 @@ export async function start(root: HTMLElement): Promise<void> {
     qaOpts, lineLimit, wrapPlan,
     usage: () => { if (!usageCache || usageCache.game !== s.game) usageCache = { game: s.game, u: buildUsage(s.game, f => s.saved.labels?.[f]) }; return usageCache.u; },
     gameDir: () => dataDir,
-    built: n => { s.lastBuild = { at: Date.now(), n }; renderTop(); },
+    built: n => { s.lastBuild = { at: Date.now(), n }; stamp(s.saved, 'build', 'збірка', Date.now(), n); ctx.persist(); renderTop(); },
     names: () => { if (!namesCache || namesCache.views !== s.views) namesCache = { views: s.views, idx: new GameNameIndex(s.views) }; return namesCache.idx; },
     speaker: u => speakerOf(u, s.saved.speakers),
     view: () => (s.current === GROUP ? groupView() : s.views.find(v => v.name === s.current) ?? null),
@@ -686,11 +686,12 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#pg').setAttribute('aria-valuenow', String(pct(prog.translated, total)));
     $('#pg').setAttribute('aria-valuetext', $('#pg-txt').textContent ?? '');
     $('#pg').title = total ? `Вичитано ${pct(A, total)}% · Надіслано, ще не вичитано ${pct(D, total)}% · Чернетки ${pct(W, total)}% · Без перекладу ${pct(prog.untranslated, total)}%` : '';
-    const sy = loadSyncConfig();
-    const lastSync = Math.max(sy.last, loadGithubConfig().last, loadClaudeConfig().last);
-    $('#sb-sync').hidden = !lastSync; $('#sb-build').hidden = !s.lastBuild;
-    $('#sb-sync').textContent = lastSync ? 'Синхр.: ' + new Date(lastSync).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }) : 'Синхр.: ще не було';
-    $('#sb-build').textContent = s.lastBuild ? `Збірка: ${new Date(s.lastBuild.at).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })} · ${s.lastBuild.n} рядків` : 'Збірки ще не було';
+    // The project lives in the browser's storage only: the age of the newest copy outside it is always shown (and marked when there is none).
+    const copy = copyLine(s.saved, Date.now(), prog.translated), built = stampOf(s.saved, 'build');
+    $('#sb-sync').hidden = false; $('#sb-sync').textContent = copy.text; $('#sb-sync').className = copy.warn ? 'bad' : '';
+    $('#sb-sync').title = copy.warn ? 'Проєкт зберігається лише в цьому браузері. Збережіть копію у файл («Налаштування → Застосунок») або синхронізуйте' : 'Остання копія проєкту поза браузером (файл або синхронізація)';
+    $('#sb-build').hidden = !built;
+    $('#sb-build').textContent = built ? `Збірка: ${ago(built.mt, Date.now())}${built.n !== undefined ? ` · ${built.n} рядків` : ''}` : '';
     renderRunCfg();
     setUnavailable($('#cfg-btn'), !s.views.length, 'Спершу відкрийте гру', 'Що запускає кнопка ▶');
     setUnavailable($('#run-btn'), !s.views.length, 'Спершу відкрийте гру', `Запустити «${CFG[runCfg].name}» (F5)`);
@@ -1079,7 +1080,7 @@ export async function start(root: HTMLElement): Promise<void> {
     } else doBuild();
   };
   const runSelected = (): void => runCfgNow(runCfg);
-  const doBuild = () => openBuild(ctx, dataDir, n => { s.lastBuild = { at: Date.now(), n }; renderTop(); });
+  const doBuild = () => openBuild(ctx, dataDir, n => { s.lastBuild = { at: Date.now(), n }; stamp(s.saved, 'build', 'збірка', Date.now(), n); ctx.persist(); renderTop(); });
 
   function openSettingsDlg(tab?: SettingsTab): void {
     openSettings(ctx, {

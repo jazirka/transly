@@ -53,6 +53,8 @@ export interface SavedProject {
   schema?: number;
   /** Terms that were deleted: key = lower-case original word, value = when. A term not edited since is dropped by a merge, so it does not come back. */
   deletedTerms?: Record<string, number>;
+  /** What was done with the project outside this browser: the last copy and the last build (see `stamps.ts`). */
+  stamps?: Record<string, { mt: number; how: string; n?: number }>;
   /** The translator's groups of rows (see `groups.ts`). */
   groups?: Record<string, Group>;
   /** What each file, scene or row is put into (see `groups.ts`). */

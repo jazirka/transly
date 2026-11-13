@@ -1,5 +1,5 @@
 import { HINT_GLYPH, HINT_LABEL, KIND_LABEL, explainCodes, sceneTitle, stepScene, byHintOrder, commentId, historyRows, openThreads, restoreNote, sourceTermHits, targetHasTerm, threadsOf, batchTitle, batchUndoLabel, undoReport, setIgnored, canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, describePage, DEFAULT_LINE_LIMIT, DEFAULT_WRAP, MV_WINDOW, autoLineLimit, flowText, isMessageUnit, linesShown, measureOf, pixelBudget, unitWord, usesPixels, widthOf, wrapMessage, wrapOf } from '../core';
-import { APOSTROPHES, QA_RULES, QUEUE_LABEL, rowsWithTerm, termRowsNote, adoptSynced, groupColor, isAutoFilled, pct as pctOf, keepFromText, keepToText, qaOf, withRuleLevel } from '../core';
+import { APOSTROPHES, QA_RULES, QUEUE_LABEL, copyLine, stamp, rowsWithTerm, termRowsNote, adoptSynced, groupColor, isAutoFilled, pct as pctOf, keepFromText, keepToText, qaOf, withRuleLevel } from '../core';
 import type { Issue, LinkMode, LinkState, QaSettings, RuleSeverity, TermChange, TermProposal, TermSync, WrapSettings } from '../core';
 import { pxMeasure } from '../ui/measure';
 import { CONF_LABEL, flagsText, markHtml } from '../ui/termsync-html';
@@ -734,7 +734,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const gh = loadGithubConfig(), tot = store.totals();
     const pct = pctOf(tot.translated, tot.total);
     return `<div class="m-more">
-      ${store.hasGame ? `<section class="m-card"><h3>Прогрес</h3><div class="m-big">${pct}%</div>${bar(tot.translated, tot.total)}<p class="m-hint">Перекладено ${tot.translated} з ${tot.total} · надіслано ${tot.done} · вичитано ${tot.approved}</p></section>` : ''}
+      ${store.hasGame ? `<section class="m-card"><h3>Прогрес</h3><div class="m-big">${pct}%</div>${bar(tot.translated, tot.total)}<p class="m-hint">Перекладено ${tot.translated} з ${tot.total} · надіслано, не вичитано ${tot.done} · вичитано ${tot.approved}</p>${(() => { const c = copyLine(store.saved, Date.now(), tot.translated); return `<p class="m-hint${c.warn ? ' m-bad' : ''}">${c.text}${c.warn ? '. Проєкт зберігається лише на цьому телефоні: збережіть його у файл або синхронізуйте' : ''}</p>`; })()}</section>` : ''}
       <section class="m-card"><h3>Відкрити</h3><p class="m-hint">На телефоні проєкт береться з комп’ютера або з GitHub. Можна також відкрити файли гри чи файл проєкту (<code>.transly.json</code>).</p>
         <button class="m-primary wide" data-pick>${icon('folder')}<span>Обрати файли…</span></button>
         <label class="m-lbl" for="m-paste">Або вставте вміст файлу</label><textarea id="m-paste" class="m-textarea sm" rows="3" spellcheck="false" placeholder='{"version":1,…}'></textarea>
@@ -980,7 +980,7 @@ export async function start(root: HTMLElement): Promise<void> {
     try {
       await store.flush();
       const rep = await githubSync(githubApi(cfg), cfg, cfg.state, store.saved, { since: cfg.last });
-      store.saved = adoptSynced(store.saved, rep.project); cfg.last = Date.now(); cfg.state = rep.state; saveGithubConfig(cfg); store.adopt();
+      store.saved = adoptSynced(store.saved, rep.project); stamp(store.saved, 'copy', 'синхронізація', Date.now()); cfg.last = Date.now(); cfg.state = rep.state; saveGithubConfig(cfg); store.adopt();
       say(describeGithub(rep));
     } catch (e) { say(e instanceof Error ? e.message : 'Не вдалося синхронізувати', true); }
     finally { busy = ''; render(); }
@@ -995,7 +995,7 @@ export async function start(root: HTMLElement): Promise<void> {
     try {
       await store.flush();
       const rep = await githubSync(githubApi(cfg), cfg, cfg.state, store.saved, { since: cfg.last });
-      store.saved = adoptSynced(store.saved, rep.project); cfg.last = Date.now(); cfg.state = rep.state; saveGithubConfig(cfg); store.adopt();
+      store.saved = adoptSynced(store.saved, rep.project); stamp(store.saved, 'copy', 'синхронізація', Date.now()); cfg.last = Date.now(); cfg.state = rep.state; saveGithubConfig(cfg); store.adopt();
       autoFails = 0;
       if (rep.pulled || rep.conflicts) { say(describeGithub(rep)); if (!$('m-app').classList.contains('kb')) render(); }
     } catch (e) { if (autoFails++ === 0) say('Автосинхронізація не вдалася: ' + (e instanceof Error ? e.message : 'помилка'), true); }
@@ -1015,7 +1015,7 @@ export async function start(root: HTMLElement): Promise<void> {
       await store.flush();
       const cfg = loadClaudeConfig();
       const rep = await claudeSync(db, cfg.holder, cfg.state, store.saved, { since: cfg.last });
-      store.saved = adoptSynced(store.saved, rep.project); cfg.last = Date.now(); cfg.state = rep.state; saveClaudeConfig(cfg); store.adopt();
+      store.saved = adoptSynced(store.saved, rep.project); stamp(store.saved, 'copy', 'синхронізація', Date.now()); cfg.last = Date.now(); cfg.state = rep.state; saveClaudeConfig(cfg); store.adopt();
       say(describeClaude(rep));
     } catch (e) { say(e instanceof Error ? e.message : 'Не вдалося синхронізувати', true); }
     finally { busy = ''; render(); }
@@ -1268,6 +1268,8 @@ export async function start(root: HTMLElement): Promise<void> {
     if (q('[data-ghsync]')) { void syncGithub(); return; }
     if (q('[data-clsync]')) { void syncClaude(); return; }
     if (q('[data-export]')) {
+      // the file carries the mark of its own making (a copy of the project now exists outside the browser)
+      stamp(store.saved, 'copy', 'файл', Date.now()); store.persist();
       const blob = new Blob([JSON.stringify(store.saved)], { type: 'application/json' });
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${store.saved.name || 'transly'}.transly.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
       return;

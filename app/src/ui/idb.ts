@@ -49,6 +49,8 @@ export class IdbStore implements ProjectStore {
    */
   private rev = 0;
   private lastBak = 0;
+  /** Whether the browser was asked not to evict the project's storage under pressure (asked once, after the first save). */
+  private persistAsked = false;
   /** Called after a write that found and merged what another tab had written: the page should take the merged project over. */
   onForeign: ((merged: SavedProject) => void) | null = null;
   constructor(private id: string) {}
@@ -139,6 +141,7 @@ export class IdbStore implements ProjectStore {
         tx.onabort = () => reject(tx.error);
       });
       this.rev = out.rev;
+      if (!this.persistAsked) { this.persistAsked = true; try { void navigator.storage?.persist?.(); } catch { /* not offered here */ } }
       if (bakDue) this.lastBak = Date.now();
       if (writeSnap) this.lastSnap = snapshot;
       if (dropSnap) { this.lastSnap = undefined; this.snapChecked = true; }

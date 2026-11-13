@@ -1,4 +1,4 @@
-import { touchTerms, DEFAULT_SETTINGS, emptyProject, linkModeOf, parseDelimited, parseHtmlTable, parseTerms, referenceSets, serialize, termsFromTable, withoutReference } from '../core';
+import { touchTerms, stamp, DEFAULT_SETTINGS, emptyProject, linkModeOf, parseDelimited, parseHtmlTable, parseTerms, referenceSets, serialize, termsFromTable, withoutReference } from '../core';
 import type { GlossaryTerm, LinkMode } from '../core';
 import { $, el, esc, plural, toast } from './dom';
 import { isDesktop } from './desktop';
@@ -239,7 +239,11 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
   });
   $('#st-export', dlg).addEventListener('click', async () => {
     const name = `${ctx.s.saved.name.replace(/[^\p{L}\p{N}_-]+/gu, '_') || 'transly'}.transly.json`;
-    if (await saveFile(name, serialize(ctx.s.saved), 'application/json')) toast('Проєкт збережено у файл');
+    // The file carries the mark of its own making; when the save is cancelled the mark is taken back.
+    const was = ctx.s.saved.stamps?.copy;
+    stamp(ctx.s.saved, 'copy', 'файл', Date.now());
+    if (await saveFile(name, serialize(ctx.s.saved), 'application/json')) { toast('Проєкт збережено у файл'); ctx.persist(); ctx.render(); }
+    else if (was) ctx.s.saved.stamps!.copy = was; else delete ctx.s.saved.stamps?.copy;
   });
   const file = $('#st-file', dlg) as HTMLInputElement;
   $('#st-import', dlg).addEventListener('click', () => file.click());

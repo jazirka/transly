@@ -1,4 +1,4 @@
-import { EMPTY_CLAUDE_STATE, adoptSynced, claudeSync } from '../core';
+import { EMPTY_CLAUDE_STATE, adoptSynced, claudeSync, stamp } from '../core';
 import type { ClaudeReport, ClaudeState, DbLike } from '../core';
 import type { Ctx } from './state';
 
@@ -46,6 +46,7 @@ export async function runClaudeSync(ctx: Ctx, cfg: ClaudeConfig, adopt: () => vo
   const report = await claudeSync(db, cfg.holder, cfg.state, ctx.s.saved, { since: cfg.last });
   // edits typed while the request was running must survive: merge the result into what is in memory now
   ctx.s.saved = adoptSynced(ctx.s.saved, report.project);
+  stamp(ctx.s.saved, 'copy', 'синхронізація', Date.now());
   cfg.last = Date.now();
   cfg.state = report.state;
   saveClaudeConfig(cfg);

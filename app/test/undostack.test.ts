@@ -56,3 +56,14 @@ describe('UndoStack', () => {
     expect(s.used).toBe(true);
   });
 });
+
+describe('UndoStack after a restart', () => {
+  it('seed puts the journal under this session\'s actions once, newest on top, without repeating ids', () => {
+    const s = new UndoStack();
+    s.record('now');
+    s.seed(['j3', 'j2', 'j1', 'now']);
+    expect([s.takeUndo(), s.takeUndo(), s.takeUndo(), s.takeUndo(), s.takeUndo()]).toEqual(['now', 'j3', 'j2', 'j1', undefined]);
+    s.seed(['other']);
+    expect(s.takeUndo()).toBeUndefined();
+  });
+});

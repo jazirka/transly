@@ -1,4 +1,4 @@
-import { approveEntry, describePage, displayLength, edit, sceneTitle, sourceTermHits, submit, targetHasTerm, termsIn } from '../core';
+import { isAutoFilled, autoNote, approveEntry, describePage, displayLength, edit, sceneTitle, sourceTermHits, submit, targetHasTerm, termsIn } from '../core';
 import type { Entry, RowChange, SceneInfo, Unit } from '../core';
 import { $, esc, plural, toast } from './dom';
 import { KIND_LABEL, nameMarks, namesOfRow, qaRows } from './hintcards';
@@ -203,9 +203,10 @@ function wholeScene(ctx: Ctx, what: 'send' | 'appr'): void {
     if (!r.ok) { blocked.push(u.key); continue; }
     changes.push({ file: at.file, key: u.key, next: r.entry, text: r.entry.target });
   }
+  const auto = changes.filter(c => isAutoFilled(ctx.entries(at.file)[c.key])).length;
   const batch = changes.length ? ctx.commit(changes, what === 'send' ? 'scene' : 'approve', what === 'send' ? undefined : 'вичитано (вся сцена)') : undefined;
   ctx.persist(); ctx.invalidateTm(); ctx.render();
-  undoToast(ctx, `${what === 'send' ? 'Надіслано' : 'Вичитано'}: ${plural(changes.length, ['рядок', 'рядки', 'рядків'])}${blocked.length ? `. Пропущено через помилки QA: ${blocked.length}` : ''}`, batch);
+  undoToast(ctx, `${what === 'send' ? 'Надіслано' : 'Вичитано'}: ${plural(changes.length, ['рядок', 'рядки', 'рядків'])}${autoNote(auto)}${blocked.length ? `. Пропущено через помилки QA: ${blocked.length}` : ''}`, batch);
   // The cards that were left out show their remarks: go to the first of them.
   const first = blocked[0] ? document.querySelector<HTMLElement>(`.sv-card[data-key="${CSS.escape(blocked[0])}"]`) : null;
   if (first) { bringIntoView(first); (first.querySelector<HTMLElement>('.sv-qa [data-fix]') ?? first.querySelector<HTMLElement>('.sv-in'))?.focus({ preventScroll: true }); }

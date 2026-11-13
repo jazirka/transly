@@ -11,7 +11,7 @@ export function openAutofill(ctx: Ctx, openTwins?: () => void): void {
   const twins = reviewClusters(s.saved, ctx.links(), 1).total;
   const dlg = dialog(`<form method="dialog"><h2 id="af-t">Автозаповнення</h2>
     <p class="hint">Застосунок заповнює порожні рядки сам, але завжди чернетками з позначкою «авто»: їх варто переглянути, а в «Активності» можна скасувати. Джерела: однакові оригінали (вони заповнюються й після «Надіслати») і слова з уже перекладених рядків.</p>
-    ${openTwins ? `<div class="sp-row"><div class="sp-b"><b>Однакові оригінали</b><span class="hint">${twins ? `Груп, де є порожні або різні переклади: ${twins}` : 'Усе узгоджено'}</span></div><div class="cs-v"><button class="btn" type="button" id="af-twins">Переглянути…</button></div></div>` : ''}
+    ${openTwins ? `<div class="sp-row cs-row"><div class="sp-b"><b>Однакові оригінали</b><span class="hint">${twins ? `Груп, де є порожні або різні переклади: ${twins}` : 'Усе узгоджено'}</span></div><div class="cs-v"><button class="btn" type="button" id="af-twins">Переглянути…</button></div></div>` : ''}
     <h3>За словами</h3><p class="hint">Короткі рядки без перекладу, у яких усі слова вже зустрічалися в перекладених рядках, збираються по словах.</p>
     <p class="sum" id="af-sum" role="status"></p><div class="sp-list" id="af-list"></div><div id="af-almost"></div>
     <div class="acts"><button class="btn" value="cancel">Закрити</button><button class="btn" type="button" id="af-all">Зняти всі</button><button class="btn p" type="button" id="af-go">Вписати вибрані</button></div></form>`, 'af-t');

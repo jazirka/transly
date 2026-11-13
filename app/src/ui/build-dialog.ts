@@ -31,7 +31,7 @@ export function openBuild(ctx: Ctx, dataDir: string | null, onBuilt: (n: number)
   const sum = () => {
     const r = run();
     // what the build will meet in the whole project, before it is made
-    const pre = preflightLines(preflight(s.views, s.saved, ctx.qaOpts()));
+    const pre = preflightLines(preflight(s.views, s.saved, ctx.qaOpts()), desk);
     $('#bd-pre', dlg).textContent = pre.length ? `Не готово: ${pre.join(' · ')}.` : 'Усе перекладено, помилок QA немає.';
     const w = r.wrap, max = ctx.wrapPlan().settings.maxLines;
     const wrapNote = w.messages || w.tooMany || w.over

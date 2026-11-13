@@ -126,6 +126,7 @@ button{cursor:pointer}
 .sd{width:8px;height:8px;border-radius:50%;background:var(--dim)}
 .sd.new{background:transparent;border:1.5px solid var(--dim)}
 .sd.draft{background:var(--warn)}
+.sd.draft.auto{background:transparent;border:1.5px dashed var(--warn)}
 .sd.done{background:var(--info)}
 .sd.appr{background:var(--ok)}
 .sd.qa{background:var(--bad)}

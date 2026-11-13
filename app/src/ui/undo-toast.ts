@@ -26,15 +26,15 @@ export function undoToast(ctx: Ctx, text: string, batch: string | undefined, sti
 }
 
 /**
- * Ctrl+Z (`back`) and Ctrl+Shift+Z (`forward`) outside the text fields: the last bulk action of this session is taken
- * back, or taken back action repeated. Rows changed since an action are not touched. Right after a restart the line is
- * empty: then the newest action of the journal is offered once, so the key is not dead.
+ * Ctrl+Z (`back`) and Ctrl+Shift+Z (`forward`) outside the text fields: the last action of the journal (also of an
+ * earlier session) is taken back, or taken back action repeated. Rows changed since an action are not touched.
  */
 export function undoByKey(ctx: Ctx, dir: 'back' | 'forward'): void {
   const h = ctx.history;
+  // the journal outlives the session: the actions of earlier sessions go under this session's line, so Ctrl+Z reaches them too
+  if (dir === 'back') h.seed(journalBatches(ctx.s.views, ctx.s.saved, 30).filter(b => b.kind !== 'undo' && b.kind !== 'redo').map(b => b.id));
   for (;;) {
-    let id = dir === 'back' ? h.takeUndo() : h.takeRedo();
-    if (!id && dir === 'back' && !h.used) id = journalBatches(ctx.s.views, ctx.s.saved, 12).find(b => b.kind !== 'undo' && b.kind !== 'redo')?.id;
+    const id = dir === 'back' ? h.takeUndo() : h.takeRedo();
     if (!id) { toast(dir === 'back' ? 'Нічого скасовувати' : 'Нічого повертати'); return; }
     const r = undoJournal(ctx.s.saved, id, ctx.s.who, Date.now());
     // An action whose rows are not there any more was already taken back elsewhere (the activity list): take the next one.

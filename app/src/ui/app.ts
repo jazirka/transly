@@ -1,4 +1,4 @@
-import { Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, qaOf, termsStamp, adoptSynced, applyPlan, planOf, reconcileChanges, pct, progressOf, rowState, sumProgress, QUEUE_LABEL, nextIn, positionOf, queueRows, ago, copyLine, stamp, stampOf } from '../core';
+import { isAutoFilled, autoNote, Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, qaOf, termsStamp, adoptSynced, applyPlan, planOf, reconcileChanges, pct, progressOf, rowState, sumProgress, QUEUE_LABEL, nextIn, positionOf, queueRows, ago, copyLine, stamp, stampOf } from '../core';
 import type { QaOptions, QueueKind, WrapPlan } from '../core';
 import { pxMeasure } from './measure';
 import { openWrapTool } from './wrap-dialog';
@@ -76,7 +76,9 @@ const SVG = {
 const ls = (k: string): string | null => { try { return localStorage.getItem(k); } catch { return null; } };
 const UI_KEY = 'transly.ui.v1';
 
-const FILTERS: [Filter, string][] = [['all', 'Усі'], ['new', 'Без перекладу'], ['draft', 'Чернетки'], ['done', 'Надіслані'], ['appr', 'Вичитані'], ['qa', 'Помилки'], ['adv', 'З порадами'], ['cm', 'З коментарями']];
+/** A draft the program wrote and the translator has not looked at: its dot is drawn as a dashed ring (by shape, not by colour alone). */
+const autoDraft = (st: string, e: Entry | undefined): boolean => st === 'draft' && isAutoFilled(e);
+const FILTERS: [Filter, string][] = [['all', 'Усі'], ['new', 'Без перекладу'], ['draft', 'Чернетки'], ['auto', 'Авто'], ['done', 'Надіслані'], ['appr', 'Вичитані'], ['qa', 'Помилки'], ['adv', 'З порадами'], ['cm', 'З коментарями']];
 const LEN_LABEL = { far: 'далеко від оригіналу', longer: 'довші за оригінал', shorter: 'коротші за оригінал' } as const;
 const FORMAT_LABEL: Record<string, string> = { json: 'RPG Maker MV · UTF-8', po: 'gettext · UTF-8', pot: 'gettext · UTF-8', csv: 'CSV · UTF-8', tsv: 'TSV · UTF-8', rpy: 'Ren’Py · UTF-8' };
 
@@ -364,6 +366,7 @@ export async function start(root: HTMLElement): Promise<void> {
     switch (f) {
       case 'new': return rowState(e) === 'untranslated';
       case 'draft': return e?.status === 'draft';
+      case 'auto': return isAutoFilled(e);
       case 'done': return e?.status === 'done';
       case 'appr': return e?.status === 'appr';
       case 'qa': return shownStatus(ctx, u, e) === 'qa';
@@ -554,7 +557,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const len = e?.target ? `${displayLength(e.target)}/${displayLength(u.source)}` : '—';
     return `<div class="gr ${sel ? 'sel' : ''} ${chk ? 'chk' : ''}" role="row" tabindex="${sel ? 0 : -1}" aria-selected="${sel}" data-key="${esc(u.key)}">
       <div class="ln" role="gridcell"><span class="num">${n}</span><input type="checkbox" class="rc" ${chk ? 'checked' : ''} aria-label="Вибрати рядок ${n}"></div>
-      <div class="st" role="gridcell"><span class="sd ${st}" title="${STATUS_LABEL[st]}"${st === 'qa' ? ` data-hc="qa" data-hk="${esc(u.key)}"` : ''}></span><span class="vh">${STATUS_LABEL[st]}</span>${adv ? '<span class="adv" title="Є порада QA: відкрийте рядок, щоб побачити" data-hc="qa" data-hk="' + esc(u.key) + '"></span><span class="vh">Є порада</span>' : ''}</div>
+      <div class="st" role="gridcell"><span class="sd ${st}${autoDraft(st, e) ? ' auto' : ''}" title="${STATUS_LABEL[st]}${autoDraft(st, e) ? ' (заповнено застосунком, ще не переглянуто)' : ''}"${st === 'qa' ? ` data-hc="qa" data-hk="${esc(u.key)}"` : ''}></span><span class="vh">${STATUS_LABEL[st]}${autoDraft(st, e) ? ', авто' : ''}</span>${adv ? '<span class="adv" title="Є порада QA: відкрийте рядок, щоб побачити" data-hc="qa" data-hk="' + esc(u.key) + '"></span><span class="vh">Є порада</span>' : ''}</div>
       <div role="gridcell"><span class="key" title="${esc(u.key)}">${esc(shortKey(u.key))}</span>${cmIcon(e)}</div>
       <div class="who" role="gridcell">${esc(ctx.speaker(u))}</div>
       <div class="src" role="gridcell">${markup(flow(u.source), hits)}<span class="skey" aria-hidden="true">${esc(shortKey(u.key))}</span></div>
@@ -571,7 +574,7 @@ export async function start(root: HTMLElement): Promise<void> {
 
   const siHtml = (u: Unit, n: number): string => {
     const e = entryOf(u), st = shownStatus(ctx, u, e);
-    return `<div class="si ${u.key === s.cur ? 'sel' : ''}" data-key="${esc(u.key)}" role="button" tabindex="0"><span class="sd ${st}" title="${STATUS_LABEL[st]}"></span><div><div class="a"><span>${n}</span><b>${esc(ctx.speaker(u) || KIND_LABEL[u.kind])}</b><span>${esc(shortKey(u.key))}</span>${cmIcon(e)}</div><div class="s">${esc(flow(u.source))}</div><div class="t">${e?.target ? esc(flow(e.target)) : '—'}</div></div></div>`;
+    return `<div class="si ${u.key === s.cur ? 'sel' : ''}" data-key="${esc(u.key)}" role="button" tabindex="0"><span class="sd ${st}${autoDraft(st, e) ? ' auto' : ''}" title="${STATUS_LABEL[st]}${autoDraft(st, e) ? ' (заповнено застосунком, ще не переглянуто)' : ''}"></span><div><div class="a"><span>${n}</span><b>${esc(ctx.speaker(u) || KIND_LABEL[u.kind])}</b><span>${esc(shortKey(u.key))}</span>${cmIcon(e)}</div><div class="s">${esc(flow(u.source))}</div><div class="t">${e?.target ? esc(flow(e.target)) : '—'}</div></div></div>`;
   };
   const emptyHtml = '<div class="empty-state"><b>Нічого не знайдено</b><span>Немає рядків за поточним пошуком і статусом.</span><button class="btn" data-reset>Скинути фільтри</button></div>';
 
@@ -1356,10 +1359,11 @@ export async function start(root: HTMLElement): Promise<void> {
       const r2 = approveEntry(ents[k], u, now, opts);
       if (r2.ok) changes.push({ file: v.name, key: k, next: r2.entry, text: r2.entry.target }); else miss(r2.reason);
     }
+    const auto = changes.filter(c => isAutoFilled(ents[c.key])).length;
     const batch = changes.length ? ctx.commit(changes, 'approve', 'вичитано') : undefined;
     ctx.persist(); ctx.invalidateTm(); renderAll();
     const nSkip = [...skipped.values()].reduce((a, b) => a + b, 0);
-    undoToast(ctx, `Вичитано: ${changes.length}${nSkip ? `. Пропущено: ${nSkip} (${[...skipped.keys()].slice(0, 2).join('; ')})` : ''}`, batch, nSkip > 0);
+    undoToast(ctx, `Вичитано: ${changes.length}${autoNote(auto)}${nSkip ? `. Пропущено: ${nSkip} (${[...skipped.keys()].slice(0, 2).join('; ')})` : ''}`, batch, nSkip > 0);
   }
   function bulkTm(): void {
     const v = ctx.view();

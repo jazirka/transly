@@ -1,5 +1,5 @@
-import { linkChanges, linkModeOf, linkView, planLinkSync, reviewClusters, setMain } from '../core';
-import type { LinkRowView, LinkState } from '../core';
+import { applyPlan, linkChanges, linkModeOf, linkView, planLinkSync, planOf, reviewClusters, setMain } from '../core';
+import type { LinkRowView, LinkState, Protect } from '../core';
 import { $, esc, plural, toast } from './dom';
 import { oneLine } from './hintcards';
 import { dialog } from './settings';
@@ -10,13 +10,16 @@ import type { Ctx } from './state';
 export const LINK_LABEL: Record<LinkState, string> = { main: 'еталон', same: 'такий самий', empty: 'без перекладу', differs: 'інший', edited: 'змінено пізніше', unlinked: 'відв’язано', draft: 'чернетка' };
 
 /** Write the reference into the rows as one action of the journal (with its «Скасувати»). Returns how many rows changed. */
-export function applyLinks(ctx: Ctx, reference: string, rows: LinkRowView[], what = 'Оновлено зв’язані рядки'): number {
+export function applyLinks(ctx: Ctx, reference: string, rows: LinkRowView[], what = 'Оновлено зв’язані рядки', protect: Protect = 'skip'): number {
   const changes = linkChanges(reference, rows, Date.now());
-  if (!changes.length) return 0;
-  const batch = ctx.commit(changes, 'link');
+  // A proofread row keeps its text unless the translator ticked it by hand (`protect: 'include'`).
+  const plan = planOf(ctx.entries, changes, 'link', protect);
+  const skipped = plan.skipped.length ? `Вичитаних пропущено: ${plan.skipped.length}` : '';
+  if (!plan.changes.length) { if (skipped) toast(`${skipped}, нічого не оновлено`); return 0; }
+  const batch = applyPlan(ctx.commit, plan);
   ctx.persist(); ctx.invalidateTm(); ctx.render();
-  undoToast(ctx, `${what}: ${plural(changes.length, ['рядок', 'рядки', 'рядків'])}`, batch);
-  return changes.length;
+  undoToast(ctx, `${what}: ${plural(plan.changes.length, ['рядок', 'рядки', 'рядків'])}${skipped ? `. ${skipped}` : ''}`, batch);
+  return plan.changes.length;
 }
 
 /**
@@ -30,19 +33,21 @@ export function openLinkRows(ctx: Ctx, file: string, key: string): void {
   const ref = plan.view.reference, reference = ref.target;
   const items = [...plan.fills, ...plan.updates, ...plan.edited];
   if (!items.length) { toast('Зв’язані рядки вже однакові'); return; }
-  const off = new Set(plan.edited.map(r => r.ref));
+  // not ticked: what was changed after the reference (the translator's own later work) and what is proofread
+  const off = new Set(items.filter(r => r.state === 'edited' || r.status === 'appr').map(r => r.ref));
+  const reviewed = items.filter(r => r.status === 'appr').length;
   const dlg = dialog(`<form method="dialog"><h2 id="lk-t">Зв’язані рядки</h2>
     <p class="hint">Однаковий оригінал: <b>${esc(oneLine(plan.view.text, 120))}</b>. Еталон${plan.view.main ? ' (головний, який ви обрали)' : ' (надіслано останнім)'}: «${esc(oneLine(reference, 120))}» у «${esc(ctx.fileTitle(ref.file))}».</p>
     <p class="sum" id="lk-sum" role="status"></p><div class="sp-list" id="lk-list"></div>
     <div class="acts"><button class="btn" value="cancel">Закрити</button><button class="btn p" type="button" id="lk-go">Оновити вибрані</button></div></form>`, 'lk-t');
   const draw = (): void => {
     const n = items.filter(r => !off.has(r.ref)).length;
-    $('#lk-sum', dlg).textContent = `Вибрано ${n} з ${items.length}. Зніміть позначку з рядків, які мають лишитися як є.${plan.edited.length ? ' Рядки, змінені пізніше за еталон, не позначені.' : ''}`;
+    $('#lk-sum', dlg).textContent = `Вибрано ${n} з ${items.length}. Зніміть позначку з рядків, які мають лишитися як є.${plan.edited.length ? ' Рядки, змінені пізніше за еталон, не позначені.' : ''}${reviewed ? ` Вичитані (${reviewed}) не позначені: позначте, якщо їх теж треба замінити.` : ''}`;
     ($('#lk-go', dlg) as HTMLButtonElement).disabled = !n;
   };
-  $('#lk-list', dlg).innerHTML = items.map((r, i) => `<label class="sp-row fr-row"><input type="checkbox" data-i="${i}" ${off.has(r.ref) ? '' : 'checked'} aria-label="Оновити ${esc(ctx.fileTitle(r.file))}"><div class="sp-b"><span class="hint">${esc(ctx.fileTitle(r.file))} · ${LINK_LABEL[r.state]}${r.status === 'appr' ? ' · вичитано (стане «надіслано»)' : ''}</span><div class="fr-b">${esc(oneLine(r.target, 160)) || '—'}</div><div class="fr-a">${esc(oneLine(reference, 160))}</div></div></label>`).join('');
+  $('#lk-list', dlg).innerHTML = items.map((r, i) => `<label class="sp-row fr-row"><input type="checkbox" data-i="${i}" ${off.has(r.ref) ? '' : 'checked'} aria-label="Оновити ${esc(ctx.fileTitle(r.file))}"><div class="sp-b"><span class="hint">${esc(ctx.fileTitle(r.file))} · ${LINK_LABEL[r.state]}${r.status === 'appr' ? ' · вичитано (стане чернеткою)' : ''}</span><div class="fr-b">${esc(oneLine(r.target, 160)) || '—'}</div><div class="fr-a">${esc(oneLine(reference, 160))}</div></div></label>`).join('');
   dlg.addEventListener('change', e => { const t = e.target as HTMLInputElement; if (t.dataset.i === undefined) return; const r = items[Number(t.dataset.i)]!; if (t.checked) off.delete(r.ref); else off.add(r.ref); draw(); });
-  $('#lk-go', dlg).addEventListener('click', () => { const n = applyLinks(ctx, reference, items.filter(r => !off.has(r.ref))); if (n) dlg.close(); });
+  $('#lk-go', dlg).addEventListener('click', () => { const n = applyLinks(ctx, reference, items.filter(r => !off.has(r.ref)), undefined, 'include'); if (n) dlg.close(); });
   draw();
 }
 

@@ -83,3 +83,6 @@ export function autoUndone(views: FileView[], saved: SavedProject, limit = 10): 
   }
   return out;
 }
+
+/** The tail of a message about a bulk send/approve: how many of the rows were drafts the program wrote (they were not read by the translator yet). */
+export const autoNote = (n: number): string => (n ? `. Із них заповнених автоматично: ${n}` : '');

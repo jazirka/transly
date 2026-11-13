@@ -1,5 +1,5 @@
-import { adoptSynced, applyPlan, planMessage, planOf, reconcileChanges, rowState, nextIn, positionOf, queueRows, adviceCount, check, fixRule, hasAdvice, knownStatus, qaOf, ruleStats, GROUP_COLORS, proposeTermSync, termChange, termChanges, LinkIndex, afterSend, clearMain, linkChanges, linkModeOf, linkView, planLinkSync, relinkRow, reviewClusters, setMain, unlinkRow, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, TmIndex, findReplace, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines, approveEntry, sendBack, threadsOf, rowsOfGroup, flowText, wrapMessage, wrapOf } from '../core';
-import type { QueueKind, Issue, QaSettings, RuleStat, LinkRowView, QaOptions, TermChange, TermProposal, TermSync, WrapPlan } from '../core';
+import { isAutoFilled, adoptSynced, applyPlan, planMessage, planOf, reconcileChanges, rowState, nextIn, positionOf, queueRows, adviceCount, check, fixRule, hasAdvice, knownStatus, qaOf, ruleStats, GROUP_COLORS, proposeTermSync, termChange, termChanges, LinkIndex, afterSend, clearMain, linkChanges, linkModeOf, linkView, planLinkSync, relinkRow, reviewClusters, setMain, unlinkRow, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, TmIndex, findReplace, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines, approveEntry, sendBack, threadsOf, rowsOfGroup, flowText, wrapMessage, wrapOf } from '../core';
+import type { Protect, QueueKind, Issue, QaSettings, RuleStat, LinkRowView, QaOptions, TermChange, TermProposal, TermSync, WrapPlan } from '../core';
 import { pxMeasure } from '../ui/measure';
 import type { BatchKind, Group, Entry, GlossaryTerm, RowChange, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
 import { IdbStore, LoadFailure } from '../ui/idb';
@@ -8,12 +8,12 @@ import { IdbStore, LoadFailure } from '../ui/idb';
  * The phone app's own model: what is loaded, what is open and what the rows list shows. It talks to the shared core
  * (formats, QA, merging, glossary, sync) and to the browser's storage, and knows nothing about the desktop UI.
  */
-export type Filter = 'all' | 'new' | 'draft' | 'done' | 'appr' | 'qa' | 'adv' | 'cm';
+export type Filter = 'all' | 'new' | 'draft' | 'auto' | 'done' | 'appr' | 'qa' | 'adv' | 'cm';
 export type Sort = 'order' | 'new' | 'qa' | 'long';
 export type Shown = Status | 'qa';
 
 /** What a bulk action did: how many rows, how many were left out and why (reason → count), which rows a QA error stopped, and the action's id for the undo. */
-export interface BulkResult { done: number; skipped: number; why: Map<string, number>; blocked: { key: string; reason: string }[]; batch?: string }
+export interface BulkResult { done: number; skipped: number; auto?: number; why: Map<string, number>; blocked: { key: string; reason: string }[]; batch?: string }
 
 /** A short name for why a row was left out (the full reason of `submit` is long). */
 export const reasonKey = (reason: string): string => (reason.startsWith('Є помилка QA') ? 'помилка QA' : reason === 'Переклад порожній' ? 'без перекладу' : reason);
@@ -25,7 +25,7 @@ export function skippedText(r: Pick<BulkResult, 'skipped' | 'why'>): string {
   return ` · пропущено: ${r.skipped}${parts.length ? ` (${parts.join('; ')})` : ''}`;
 }
 
-export const FILTERS: [Filter, string][] = [['all', 'Усі'], ['new', 'Без перекладу'], ['draft', 'Чернетки'], ['done', 'Надіслані'], ['appr', 'Вичитано'], ['qa', 'Помилки'], ['adv', 'З порадами'], ['cm', 'З коментарями']];
+export const FILTERS: [Filter, string][] = [['all', 'Усі'], ['new', 'Без перекладу'], ['draft', 'Чернетки'], ['auto', 'Авто'], ['done', 'Надіслані'], ['appr', 'Вичитано'], ['qa', 'Помилки'], ['adv', 'З порадами'], ['cm', 'З коментарями']];
 export const STATUS_LABEL: Record<Shown, string> = { new: 'без перекладу', draft: 'чернетка', done: 'надіслано', appr: 'вичитано', qa: 'є помилка QA' };
 const natural = (a: string, b: string): number => a.localeCompare(b, 'en', { numeric: true });
 
@@ -179,7 +179,7 @@ export class Store {
       else if (this.filter === 'adv') { if (!hasAdvice(u, e, opts!)) return false; }
       else if (this.filter !== 'all') {
         const st = this.shown(u, e);
-        if (this.filter === 'qa' ? st !== 'qa' : this.filter === 'new' ? rowState(e) !== 'untranslated' : (e?.status ?? 'new') !== this.filter) return false;
+        if (this.filter === 'qa' ? st !== 'qa' : this.filter === 'new' ? rowState(e) !== 'untranslated' : this.filter === 'auto' ? !isAutoFilled(e) : (e?.status ?? 'new') !== this.filter) return false;
       }
       return !q || (u.source + ' ' + flowText(e?.target ?? '') + ' ' + u.key + ' ' + this.speaker(u)).toLowerCase().includes(q);
     });
@@ -295,9 +295,10 @@ export class Store {
       if (r.ok) changes.push({ file, key: u.key, next: r.entry, text: r.entry.target });
       else { const k = reasonKey(r.reason); why.set(k, (why.get(k) ?? 0) + 1); if (k === 'помилка QA') blocked.push({ key: u.key, reason: r.reason }); }
     }
+    const auto = changes.filter(c => isAutoFilled(this.entry(file, c.key))).length;
     const batch = changes.length ? this.commit(changes, 'approve', what) : undefined;
     if (batch) { this.tmCache = null; this.persist(); this.emit(); }
-    return { done: changes.length, skipped: units.length - changes.length, why, blocked, batch };
+    return { done: changes.length, skipped: units.length - changes.length, auto, why, blocked, batch };
   }
   /** Fill the empty rows of these units from the translation memory (a match of 70% or more); a batch of rows at a time, so a long selection does not freeze the screen. */
   async memoryFill(file: string, units: Unit[], progress?: (n: number, total: number) => void): Promise<{ n: number; batch?: string }> {
@@ -518,22 +519,23 @@ export class Store {
   /** How many clusters have something to look at (for the badge of the menu; remembered until the next change). */
   linkTodo(): number { return (this.linkTodoCache ??= reviewClusters(this.saved, this.links(), 1).total); }
   /** Write the reference into the given rows as one action of the journal. */
-  applyLinks(reference: string, rows: LinkRowView[]): { n: number; batch?: string } {
-    const changes = linkChanges(reference, rows, Date.now());
-    if (!changes.length) return { n: 0 };
-    const batch = this.commit(changes, 'link');
+  applyLinks(reference: string, rows: LinkRowView[], protect: Protect = 'skip'): { n: number; skipped: number; batch?: string } {
+    // A proofread row keeps its text unless it was ticked by hand (`protect: 'include'`).
+    const plan = planOf(f => this.entries(f), linkChanges(reference, rows, Date.now()), 'link', protect);
+    if (!plan.changes.length) return { n: 0, skipped: plan.skipped.length };
+    const batch = applyPlan(c => this.commit(c, 'link'), plan);
     this.tmCache = null; this.persist(); this.emit();
-    return { n: changes.length, batch };
+    return { n: plan.changes.length, skipped: plan.skipped.length, batch };
   }
   /** Keep this variant in a cluster: its row becomes the main one and the rest (also the empty rows) take its text. */
-  keepVariant(file: string, key: string, variantRow: { file: string; key: string; source: string }): { n: number; batch?: string } {
+  keepVariant(file: string, key: string, variantRow: { file: string; key: string; source: string }): { n: number; skipped?: number; batch?: string } {
     setMain(this.saved, variantRow, Date.now());
     const v = this.linkView(file, key), ref = v?.reference;
-    if (!v || !ref) { this.persist(); this.emit(); return { n: 0 }; }
+    if (!v || !ref) { this.persist(); this.emit(); return { n: 0, skipped: 0 }; }
     return this.applyLinks(ref.target, v.rows.filter(r => r.state === 'empty' || r.state === 'differs' || r.state === 'edited'));
   }
   /** Fill the empty rows of a cluster from its reference. */
-  fillLinked(file: string, key: string): { n: number; batch?: string } {
+  fillLinked(file: string, key: string): { n: number; skipped?: number; batch?: string } {
     const plan = this.linkPlan(file, key);
     return plan?.view.reference ? this.applyLinks(plan.view.reference.target, plan.fills) : { n: 0 };
   }

@@ -32,11 +32,12 @@ export function preflight(views: FileView[], saved: SavedProject, qa: QaOptions)
 }
 
 /** The lines to show: only what is not zero, in the order of how much it matters for a build. */
-export function preflightLines(p: Preflight): string[] {
+/** `draftsOption`: the dialog has the switch «Додати чернетки» (the desktop app); otherwise the text says how to get a draft into the build. */
+export function preflightLines(p: Preflight, draftsOption = false): string[] {
   const out: string[] = [];
   if (p.errors) out.push(`помилок QA: ${p.errors} (такі рядки в збірку не беруться, якщо ввімкнено перемикач)`);
   if (p.sourceChanged) out.push(`оригінал змінився після перекладу: ${p.sourceChanged}`);
-  if (p.drafts) out.push(`чернеток: ${p.drafts} (не потраплять у збірку без «Додати чернетки»)`);
+  if (p.drafts) out.push(`чернеток: ${p.drafts} (${draftsOption ? 'не потраплять у збірку без «Додати чернетки»' : 'до збірки беруться лише надіслані й вичитані: надішліть їх'})`);
   if (p.untranslated) out.push(`без перекладу: ${p.untranslated}`);
   if (p.advice) out.push(`порад: ${p.advice}`);
   return out;

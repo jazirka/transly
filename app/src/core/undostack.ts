@@ -38,6 +38,20 @@ export class UndoStack {
     this.done.push(batch);
   }
 
+  private seeded = false;
+  /**
+   * After a restart the line is empty while the journal still holds the actions of the earlier sessions. The first Ctrl+Z puts
+   * them (newest first in `newestFirst`) under whatever this session has recorded, once, so the key walks back along the whole
+   * journal, not only along this session. Ids that are already in the line are not added again.
+   */
+  seed(newestFirst: string[]): void {
+    if (this.seeded) return;
+    this.seeded = true;
+    const have = new Set([...this.done, ...this.redo]);
+    const older = newestFirst.filter(id => !have.has(id)).reverse();
+    this.done.unshift(...older);
+    if (this.done.length > this.limit) this.done.splice(0, this.done.length - this.limit);
+  }
   get canUndo(): boolean { return this.done.length > 0; }
   get canRedo(): boolean { return this.redo.length > 0; }
   clear(): void { this.done.length = 0; this.redo.length = 0; }

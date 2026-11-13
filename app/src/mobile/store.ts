@@ -1,4 +1,4 @@
-import { adoptSynced, adviceCount, check, fixRule, hasAdvice, knownStatus, qaOf, ruleStats, GROUP_COLORS, proposeTermSync, termChange, termChanges, LinkIndex, afterSend, clearMain, linkChanges, linkModeOf, linkView, planLinkSync, relinkRow, reviewClusters, setMain, unlinkRow, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines, approveEntry, sendBack, threadsOf, rowsOfGroup, flowText, wrapMessage, wrapOf } from '../core';
+import { adoptSynced, applyPlan, planMessage, planOf, adviceCount, check, fixRule, hasAdvice, knownStatus, qaOf, ruleStats, GROUP_COLORS, proposeTermSync, termChange, termChanges, LinkIndex, afterSend, clearMain, linkChanges, linkModeOf, linkView, planLinkSync, relinkRow, reviewClusters, setMain, unlinkRow, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, DupIndex, TmIndex, findReplace, inconsistencies, propagate, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines, approveEntry, sendBack, threadsOf, rowsOfGroup, flowText, wrapMessage, wrapOf } from '../core';
 import type { Issue, QaSettings, RuleStat, LinkRowView, QaOptions, TermChange, TermProposal, TermSync, WrapPlan } from '../core';
 import { pxMeasure } from '../ui/measure';
 import type { BatchKind, Group, Entry, GlossaryTerm, RowChange, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
@@ -115,13 +115,15 @@ export class Store {
   /** What each rule of form found in the open file. */
   ruleStats(): RuleStat[] { const v = this.view(); return v ? ruleStats(v, this.saved, this.qaOpts()) : []; }
   /** Mend one rule over the open file as one action of the journal. */
-  fixRule(id: string): { n: number; batch?: string } {
-    const v = this.view(); if (!v) return { n: 0 };
+  fixRule(id: string): { n: number; batch?: string; skipped: number } {
+    const v = this.view(); if (!v) return { n: 0, skipped: 0 };
     const changes = fixRule([v], this.saved, id, this.qaOpts(), Date.now());
-    if (!changes.length) return { n: 0 };
-    const batch = this.commit(changes, 'fix');
-    this.tmCache = null; this.persist(); this.emit();
-    return { n: changes.length, batch };
+    if (!changes.length) return { n: 0, skipped: 0 };
+    // proofread rows are not rewritten by a bulk tool; `skipped` says how many were left alone
+    const plan = planOf(f => this.entries(f), changes, 'fix');
+    const batch = applyPlan((c, k, w) => this.commit(c, k, w), plan);
+    if (batch) { this.tmCache = null; this.persist(); this.emit(); }
+    return { n: plan.changes.length, batch, skipped: plan.skipped.length };
   }
   /** Keep the choices about the QA rules in the project (an empty choice is not stored). */
   setQa(q: QaSettings): void {
@@ -383,15 +385,23 @@ export class Store {
     return out;
   }
   find(o: { find: string; replace: string; caseSensitive: boolean; wholeWord: boolean }): ReturnType<typeof findReplace> { return findReplace(this.views, this.saved, o); }
-  replaceAll(matches: ReturnType<typeof findReplace>): { n: number; batch?: string } {
+  /** What a replacement would do to proofread and sent rows (for the screen, before anything is written). */
+  replaceImpact(matches: ReturnType<typeof findReplace>): { appr: number; done: number } {
+    let appr = 0, done = 0;
+    for (const m of matches) { const st = this.entry(m.file, m.key)?.status; if (st === 'appr') appr++; else if (st === 'done') done++; }
+    return { appr, done };
+  }
+  /** Replace as one action; proofread rows are left alone unless `includeApproved` (they then fall back to drafts). `note` says what was left out. */
+  replaceAll(matches: ReturnType<typeof findReplace>, includeApproved = false): { n: number; batch?: string; message: string } {
     const now = Date.now(), changes: RowChange[] = [];
     for (const m of matches) {
       const u = this.unit(m.file, m.key); if (!u) continue;
       changes.push({ file: m.file, key: m.key, next: edit(this.entry(m.file, m.key), u, m.after, this.stage, now), text: m.after });
     }
-    const batch = changes.length ? this.commit(changes, 'replace') : undefined;
+    const plan = planOf(f => this.entries(f), changes, 'replace', includeApproved ? 'include' : 'skip');
+    const batch = applyPlan((c, k, w) => this.commit(c, k, w), plan);
     if (batch) { this.tmCache = null; this.persist(); this.emit(); }
-    return { n: changes.length, batch };
+    return { n: plan.changes.length, batch, message: planMessage(plan, plan.changes.length) };
   }
   refLangs(): string[] { return referenceSets(this.saved.reference).map(r => r.lang); }
   /** Another-language copy of the game: its lines are paired with the originals. Returns pairs found and rows in the paired files. */
@@ -430,12 +440,14 @@ export class Store {
   /** The rows that hold the old rendering of a term, with what to put in their place. */
   planTermSync(change: TermChange, limit = 2000): TermSync { return proposeTermSync(this.views, this.saved, change, { limit }); }
   /** Write the chosen replacements as one action of the journal; the rows keep their status. */
-  applyTermSync(picks: { proposal: TermProposal; choice?: number[] }[]): { n: number; batch?: string } {
+  applyTermSync(picks: { proposal: TermProposal; choice?: number[] }[]): { n: number; batch?: string; skipped: number } {
     const changes = termChanges(picks, this.saved, Date.now());
-    if (!changes.length) return { n: 0 };
-    const batch = this.commit(changes, 'term');
-    this.tmCache = null; this.persist(); this.emit();
-    return { n: changes.length, batch };
+    if (!changes.length) return { n: 0, skipped: 0 };
+    // a proofread row keeps its text: the glossary tool does not rewrite it unasked
+    const plan = planOf(f => this.entries(f), changes, 'term');
+    const batch = applyPlan((c, k, w) => this.commit(c, k, w), plan);
+    if (batch) { this.tmCache = null; this.persist(); this.emit(); }
+    return { n: plan.changes.length, batch, skipped: plan.skipped.length };
   }
   removeTerm(en: string): void {
     removeTerm(this.saved, en, Date.now());

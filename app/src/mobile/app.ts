@@ -42,7 +42,7 @@ export async function start(root: HTMLElement): Promise<void> {
   /** The table needs room for its columns (a landscape phone, a tablet); on a narrow screen the rows are cards whatever was chosen. */
   const wide = matchMedia('(min-width: 700px)');
   const lay = (): 'cards' | 'table' => (wide.matches ? layout : 'cards');
-  const fr = { find: '', replace: '', word: false, cs: false, matches: [] as ReturnType<typeof store.find> };
+  const fr = { find: '', replace: '', word: false, cs: false, appr: false, matches: [] as ReturnType<typeof store.find> };
   const PAGE = 100; let page = 1, pageSig = '';
   let refLang = ''; let fq = '';
   const collapsedCats = new Set<string>((() => { try { return JSON.parse(localStorage.getItem('transly-m-cats') ?? '[]') as string[]; } catch { return []; } })()); let sq = '';
@@ -407,8 +407,9 @@ export async function start(root: HTMLElement): Promise<void> {
     return `<div class="m-more"><section class="m-card"><label class="m-lbl" for="f-find">Що замінити</label><input id="f-find" class="m-input" value="${esc(fr.find)}" autocomplete="off" spellcheck="false">
       <label class="m-lbl" for="f-rep">На що</label><input id="f-rep" class="m-input" value="${esc(fr.replace)}" autocomplete="off" spellcheck="false">
       <label class="m-check"><input type="checkbox" id="f-word" ${fr.word ? 'checked' : ''}> Лише ціле слово</label><label class="m-check"><input type="checkbox" id="f-case" ${fr.cs ? 'checked' : ''}> З урахуванням регістру</label>
+      <label class="m-check"><input type="checkbox" id="f-appr" ${fr.appr ? 'checked' : ''}> Змінити й вичитані (вони стануть чернетками)</label>
       <button class="m-secondary wide" data-dofind>Знайти в перекладах</button></section>
-      ${fr.matches.length ? `<section class="m-card"><h3>Знайдено: ${fr.matches.length}</h3>${fr.matches.slice(0, 60).map(m => `<div class="m-diff"><small>${esc(m.file)}</small><s>${esc(m.before)}</s><span>${esc(m.after)}</span></div>`).join('')}${fr.matches.length > 60 ? `<p class="m-hint">Показано 60 із ${fr.matches.length}. Заміна торкнеться всіх.</p>` : ''}<button class="m-primary wide" data-doreplace>Замінити в усіх (${fr.matches.length})</button></section>` : ''}</div>`;
+      ${fr.matches.length ? `<section class="m-card"><h3>Знайдено: ${fr.matches.length}</h3>${fr.matches.slice(0, 60).map(m => `<div class="m-diff"><small>${esc(m.file)}</small><s>${esc(m.before)}</s><span>${esc(m.after)}</span></div>`).join('')}${fr.matches.length > 60 ? `<p class="m-hint">Показано 60 із ${fr.matches.length}. Заміна торкнеться всіх.</p>` : ''}${(() => { const i = store.replaceImpact(fr.matches); return `${i.appr ? `<p class="m-hint">${fr.appr ? `Вичитаних: ${i.appr}, вони стануть чернетками.` : `Вичитаних пропущено: ${i.appr} (позначте «Змінити й вичитані», щоб їх включити).`}</p>` : ''}${i.done ? `<p class="m-hint">Надісланих, що стануть чернетками: ${i.done}.</p>` : ''}`; })()}<button class="m-primary wide" data-doreplace>Замінити в усіх (${fr.matches.length})</button></section>` : ''}</div>`;
   }
 
   /** Find a word in the originals, translations and keys of every file. */
@@ -1049,7 +1050,7 @@ export async function start(root: HTMLElement): Promise<void> {
     }
     if ((x = q('[data-scstep]'))) { stepSceneBy(Number(x.dataset.scstep) as 1 | -1); return; }
     if (q('[data-dofind]')) { fr.matches = store.find({ find: fr.find, replace: fr.replace, caseSensitive: fr.cs, wholeWord: fr.word }); if (!fr.find) say('Вкажіть, що шукати', true); else if (!fr.matches.length) say('Нічого не знайдено'); render(); return; }
-    if (q('[data-doreplace]')) { const r = store.replaceAll(fr.matches); fr.matches = []; say(`Замінено в рядках: ${r.n}`, false, r.batch); buzz(14); render(); return; }
+    if (q('[data-doreplace]')) { const r = store.replaceAll(fr.matches, fr.appr); fr.matches = []; say(r.message, false, r.batch); buzz(14); render(); return; }
     if (q('[data-tsopen]')) { if (ts.change) { ts.res = store.planTermSync(ts.change); ts.on = new Map(ts.res.proposals.map(p => [tsId(p), p.tick])); ts.pick = new Map(); ts.shown = 40; ts.pending = 0; sub = 'termsync'; sheet = false; menu = false; render(); $('m-main').scrollTop = 0; } return; }
     if (q('[data-tsdismiss]')) { ts.pending = 0; render(); return; }
     if (q('[data-tsfind]')) {
@@ -1066,7 +1067,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (q('[data-tsgo]')) {
       const res = ts.res; if (!res) return;
       const r = store.applyTermSync(res.proposals.filter(p => ts.on.get(tsId(p))).map(p => ({ proposal: p, choice: ts.pick.get(tsId(p)) ?? [] })));
-      say(r.n ? `Оновлено за глосарієм: ${plural(r.n, ['рядок', 'рядки', 'рядків'])}` : 'Нічого оновлювати: рядки вже змінено', !r.n, r.batch); buzz(14);
+      say(r.n ? `Оновлено за глосарієм: ${plural(r.n, ['рядок', 'рядки', 'рядків'])}${r.skipped ? `. Вичитаних пропущено: ${r.skipped}` : ''}` : r.skipped ? `Вичитаних пропущено: ${r.skipped}, нічого не оновлено` : 'Нічого оновлювати: рядки вже змінено', !r.n, r.batch); buzz(14);
       ts.res = null; ts.change = null; ts.pending = 0; sub = 'glossary'; render(); return;
     }
     if ((x = q('[data-lkkeep]'))) { const [ci, vi] = x.dataset.lkkeep!.split('|').map(Number); const c = store.linkClusters(60).clusters[ci!]; const v = c?.variants[vi!]; if (c && v) { const f = c.view.rows[0]!; const r = store.keepVariant(f.file, f.key, v.rows[0]!); say(r.n ? `Узгоджено рядків: ${r.n}` : 'Головний переклад обрано', false, r.batch); buzz(14); } render(); return; }
@@ -1205,7 +1206,7 @@ export async function start(root: HTMLElement): Promise<void> {
       return;
     }
     if ((x = q('[data-unign]'))) { store.mutate((_f, _u, en) => setIgnored(en as NonNullable<typeof en>, x!.dataset.unign!, false, Date.now())); refreshMeta(); return; }
-    if ((x = q('[data-fixall]'))) { const r = store.fixRule(x.dataset.fixall!); say(r.n ? `Виправлено рядків: ${r.n}` : 'Нічого виправляти: рядки вже без цієї помилки', false, r.batch); render(); return; }
+    if ((x = q('[data-fixall]'))) { const r = store.fixRule(x.dataset.fixall!); say(r.n ? `Виправлено рядків: ${r.n}${r.skipped ? `. Вичитаних пропущено: ${r.skipped}` : ''}` : r.skipped ? `Вичитаних пропущено: ${r.skipped}, нічого не виправлено` : 'Нічого виправляти: рядки вже без цієї помилки', false, r.batch); render(); return; }
     if ((x = q('[data-ign]'))) { store.mutate((_f, _u, en) => setIgnored(en as NonNullable<typeof en>, x!.dataset.ign!, true, Date.now())); refreshMeta(); return; }
     if (q('[data-gsave]')) {
       const v = (id: string): string => $<HTMLInputElement>(id).value;
@@ -1317,6 +1318,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.id === 'scn-real') { scn.real = (t as HTMLInputElement).checked; const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
     if (t.id === 'f-word') fr.word = (t as HTMLInputElement).checked;
     else if (t.id === 'f-case') fr.cs = (t as HTMLInputElement).checked;
+    else if (t.id === 'f-appr') { fr.appr = (t as HTMLInputElement).checked; render(); }
     else if (t.id === 's-block') { store.saved.settings.blockErrors = (t as HTMLInputElement).checked; store.saved.settingsAt = Date.now(); store.persist(); }
     else if (t.id === 's-link') { const m = (t as HTMLSelectElement).value as LinkMode; store.saved.settings.linkMode = m; store.saved.settings.propagate = m !== 'off'; store.saved.settingsAt = Date.now(); store.persist(); }
     else if (t.id === 'w-face') { wp.face = (t as HTMLInputElement).checked; wrapPreview(); }

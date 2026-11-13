@@ -1,4 +1,4 @@
-import { proposeTermSync, termChanges } from '../core';
+import { applyPlan, planOf, proposeTermSync, termChanges } from '../core';
 import type { TermChange, TermProposal, TermSpan, TermSync } from '../core';
 import { $, esc, plural, toast } from './dom';
 import { CONF_LABEL, flagsText, markHtml } from './termsync-html';
@@ -58,9 +58,11 @@ export function openTermSync(ctx: Ctx, change: TermChange): void {
     const picks = res.proposals.filter(p => on.get(id(p))).map(p => ({ proposal: p, choice: pick.get(id(p)) ?? [] }));
     const changes = termChanges(picks, s.saved, Date.now());
     if (!changes.length) { toast('Нічого оновлювати: рядки вже змінено'); return; }
-    const batch = ctx.commit(changes, 'term');
+    // A proofread row keeps its text: the glossary tool does not rewrite it unasked.
+    const plan = planOf(ctx.entries, changes, 'term');
+    const batch = applyPlan(ctx.commit, plan);
     ctx.persist(); ctx.invalidateTm(); ctx.render();
-    undoToast(ctx, `Оновлено за глосарієм: ${plural(changes.length, ['рядок', 'рядки', 'рядків'])}`, batch);
+    undoToast(ctx, `Оновлено за глосарієм: ${plural(plan.changes.length, ['рядок', 'рядки', 'рядків'])}${plan.skipped.length ? `. Вичитаних пропущено: ${plan.skipped.length}` : ''}`, batch);
     dlg.close();
   });
   list();

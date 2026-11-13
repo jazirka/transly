@@ -1,7 +1,8 @@
-import { edit, findReplace } from '../core';
+import { applyPlan, edit, findReplace, planMessage, planOf } from '../core';
 import type { FileView, RowChange, RowRef } from '../core';
 import { dialog } from './settings';
 import { $, esc, plural, toast } from './dom';
+import { undoToast } from './undo-toast';
 import type { Ctx } from './state';
 
 /** The views reduced to the given rows. */
@@ -20,6 +21,7 @@ export function openFindReplace(ctx: Ctx, scope?: { title: string; rows: RowRef[
     <div class="grid"><label for="fr-find">Знайти</label><input id="fr-find" autocomplete="off"><label for="fr-rep">Замінити на</label><input id="fr-rep" autocomplete="off"></div>
     <label class="achk"><input type="checkbox" id="fr-word"> Лише ціле слово</label>
     <label class="achk"><input type="checkbox" id="fr-case"> Враховувати регістр</label>
+    <label class="achk"><input type="checkbox" id="fr-appr"> Змінити й вичитані (вони стануть чернетками)</label>
     <p class="sum" id="fr-sum" role="status"></p>
     <div class="sp-list" id="fr-list"></div>
     <div class="acts"><button class="btn" value="cancel">Закрити</button><button class="btn p" type="button" id="fr-go">Замінити вибрані</button></div></form>`, 'fr-t');
@@ -27,8 +29,13 @@ export function openFindReplace(ctx: Ctx, scope?: { title: string; rows: RowRef[
   let found: ReturnType<typeof findReplace> = [];
   const run = () => {
     found = findReplace(views, s.saved, { find: ($('#fr-find', dlg) as HTMLInputElement).value, replace: ($('#fr-rep', dlg) as HTMLInputElement).value, wholeWord: ($('#fr-word', dlg) as HTMLInputElement).checked, caseSensitive: ($('#fr-case', dlg) as HTMLInputElement).checked });
-    $('#fr-sum', dlg).textContent = found.length ? `Знайдено: ${plural(found.length, ['переклад', 'переклади', 'перекладів'])}. Зніміть позначку з тих, які міняти не треба.` : ($('#fr-find', dlg) as HTMLInputElement).value ? 'Нічого не знайдено' : 'Введіть, що шукати';
-    $('#fr-list', dlg).innerHTML = found.slice(0, 200).map((m, i) => `<label class="sp-row fr-row"><input type="checkbox" data-i="${i}" ${off.has(m.file + '\u0001' + m.key) ? '' : 'checked'} aria-label="Замінити в ${esc(m.file)}"><div class="sp-b"><span class="hint">${esc(m.file)} · ${esc(m.key.replace(/^.*list/, 'list'))}</span><div class="fr-b">${esc(m.before)}</div><div class="fr-a">${esc(m.after)}</div></div></label>`).join('');
+    const includeAppr = ($('#fr-appr', dlg) as HTMLInputElement).checked;
+    const statusOf = (m: { file: string; key: string }): string | undefined => ctx.entries(m.file)[m.key]?.status;
+    const apprN = found.filter(m => statusOf(m) === 'appr').length, doneN = found.filter(m => statusOf(m) === 'done').length;
+    const apprNote = apprN ? (includeAppr ? ` Вичитаних: ${apprN}, вони стануть чернетками.` : ` Вичитаних пропущено: ${apprN} (позначте «Змінити й вичитані», щоб їх включити).`) : '';
+    const doneNote = doneN ? ` Надісланих, що стануть чернетками: ${doneN}.` : '';
+    $('#fr-sum', dlg).textContent = found.length ? `Знайдено: ${plural(found.length, ['переклад', 'переклади', 'перекладів'])}. Зніміть позначку з тих, які міняти не треба.${apprNote}${doneNote}` : ($('#fr-find', dlg) as HTMLInputElement).value ? 'Нічого не знайдено' : 'Введіть, що шукати';
+    $('#fr-list', dlg).innerHTML = found.slice(0, 200).map((m, i) => { const locked = statusOf(m) === 'appr' && !includeAppr; return `<label class="sp-row fr-row"><input type="checkbox" data-i="${i}" ${locked ? 'disabled' : off.has(m.file + '\u0001' + m.key) ? '' : 'checked'} aria-label="Замінити в ${esc(m.file)}"><div class="sp-b"><span class="hint">${esc(m.file)} · ${esc(m.key.replace(/^.*list/, 'list'))}${locked ? ' · вичитано, пропущено' : ''}</span><div class="fr-b">${esc(m.before)}</div><div class="fr-a">${esc(m.after)}</div></div></label>`; }).join('');
     ($('#fr-go', dlg) as HTMLButtonElement).disabled = !found.length;
   };
   dlg.addEventListener('input', e => { if ((e.target as HTMLElement).closest('#fr-find,#fr-rep')) run(); });
@@ -45,10 +52,11 @@ export function openFindReplace(ctx: Ctx, scope?: { title: string; rows: RowRef[
       if (!u || !ents[m.key]) continue;
       changes.push({ file: m.file, key: m.key, next: edit(ents[m.key]!, u, m.after, ctx.stage(), Date.now()), text: m.after });
     }
-    const n = changes.length;
-    if (n) ctx.commit(changes, 'replace');
+    // Proofread rows are left alone unless the translator ticked «Змінити й вичитані»; the message says what was left out and what fell back to a draft.
+    const plan = planOf(ctx.entries, changes, 'replace', ($('#fr-appr', dlg) as HTMLInputElement).checked ? 'include' : 'skip');
+    const batch = applyPlan(ctx.commit, plan);
     ctx.persist(); ctx.invalidateTm(); ctx.render(); dlg.close();
-    toast(`Замінено: ${plural(n, ['переклад', 'переклади', 'перекладів'])}`);
+    undoToast(ctx, planMessage(plan, plan.changes.length), batch);
   });
   run();
 }

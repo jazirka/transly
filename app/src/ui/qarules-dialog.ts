@@ -1,4 +1,4 @@
-import { QA_RULES, APOSTROPHES, fixRule, keepFromText, keepToText, qaOf, ruleStats, withRuleLevel } from '../core';
+import { QA_RULES, APOSTROPHES, applyPlan, fixRule, keepFromText, planOf, keepToText, qaOf, ruleStats, withRuleLevel } from '../core';
 import type { QaSettings, RuleSeverity, SavedProject } from '../core';
 import { $, esc, plural } from './dom';
 import { dialog } from './settings';
@@ -87,9 +87,12 @@ export function openQaRules(ctx: Ctx): void {
     if (!sc || !rule) return;
     const changes = fixRule(sc.views, sc.saved, rule.id, ctx.qaOpts(), Date.now());
     if (!changes.length) { say('Нічого виправляти: правило не має готового виправлення.'); return; }
-    const batch = ctx.commit(changes, 'fix');
+    // Proofread rows are not rewritten by a bulk tool: the message says how many were left alone.
+    const plan = planOf(ctx.entries, changes, 'fix');
+    const batch = applyPlan(ctx.commit, plan);
     ctx.persist(); ctx.invalidateTm(); ctx.render();
-    say(`Виправлено «${rule.title}»: ${plural(changes.length, ['рядок', 'рядки', 'рядків'])}.`, batch);
+    const left = plan.skipped.length ? ` Вичитаних пропущено: ${plan.skipped.length}.` : '';
+    say(`Виправлено «${rule.title}»: ${plural(plan.changes.length, ['рядок', 'рядки', 'рядків'])}.${left}`, batch);
     draw();
   });
   draw();

@@ -60,3 +60,4 @@ export * from './termmatch';
 export * from './groups';
 export * from './validate';
 export * from './session';
+export * from './plan';

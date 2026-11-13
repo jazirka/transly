@@ -1,4 +1,4 @@
-import { Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, qaOf, termsStamp, adoptSynced } from '../core';
+import { Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, reconcile, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, qaOf, termsStamp, adoptSynced, applyPlan, planOf } from '../core';
 import type { QaOptions, WrapPlan } from '../core';
 import { pxMeasure } from './measure';
 import { openWrapTool } from './wrap-dialog';
@@ -1228,10 +1228,13 @@ export async function start(root: HTMLElement): Promise<void> {
       const text = wrapMessage(plan, u, e.target).text;
       if (text !== e.target) changes.push({ file: v.name, key: u.key, next: edit(e, u, text, ctx.stage(), Date.now()), text });
     }
-    const n = changes.length;
-    const batch = n ? ctx.commit(changes, 'wrap') : undefined;
+    // proofread messages are not re-flowed unasked
+    const changePlan = planOf(ctx.entries, changes, 'wrap');
+    const n = changePlan.changes.length;
+    const batch = applyPlan(ctx.commit, changePlan);
     if (n) { ctx.persist(); ctx.invalidateTm(); renderAll(); }
-    if (n) undoToast(ctx, `Перенесено рядки: ${plural(n, ['репліка', 'репліки', 'реплік'])}`, batch); else toast('Задовгих рядків у файлі немає');
+    const left = changePlan.skipped.length ? `. Вичитаних пропущено: ${changePlan.skipped.length}` : '';
+    if (n) undoToast(ctx, `Перенесено рядки: ${plural(n, ['репліка', 'репліки', 'реплік'])}${left}`, batch); else toast(changePlan.skipped.length ? `Задовгі лише вичитані рядки (${changePlan.skipped.length}): їх не чіпав` : 'Задовгих рядків у файлі немає');
   }
   function jump(kind: 'new' | 'qa' | 'adv', dir: 1 | -1): void {
     const v = ctx.view();

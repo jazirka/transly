@@ -1,4 +1,4 @@
-import { adoptSynced, stamp, deriveKeys, httpTransport, syncOnce } from '../core';
+import { adoptSynced, stamp, deriveKeys, httpTransport, resetNote, syncOnce } from '../core';
 import type { SyncReport } from '../core';
 import type { Ctx } from './state';
 
@@ -34,6 +34,6 @@ export async function runSync(ctx: Ctx, cfg: SyncConfig, adopt: () => void): Pro
 }
 
 export function describe(r: SyncReport): string {
-  const parts = [r.gotSnapshot ? 'отримано оригінальні рядки' : '', r.conflicts ? `конфліктів: ${r.conflicts} (лишилась новіша правка)` : ''].filter(Boolean);
+  const parts = [r.gotSnapshot ? 'отримано оригінальні рядки' : '', r.conflicts ? `конфліктів: ${r.conflicts} (лишилась новіша правка)` : '', r.droppedByReset ? resetNote(r.droppedByReset) : ''].filter(Boolean);
   return 'Синхронізовано' + (parts.length ? ': ' + parts.join(', ') : '');
 }

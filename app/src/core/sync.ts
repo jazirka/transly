@@ -16,6 +16,8 @@ export interface SyncReport {
   pulled: boolean;
   pushed: boolean;
   conflicts: number;
+  /** Rows a reset of the project dropped although they were marked within a day before it (see `ProjectMerge`). */
+  droppedByReset?: number;
   /** Original strings were fetched from the relay (this device had none). */
   gotSnapshot: boolean;
 }
@@ -34,7 +36,7 @@ export async function syncOnce(t: Transport, keys: SyncKeys, local: SavedProject
   const since = opts.since ?? 0, maxTries = opts.maxTries ?? 4;
   let project = local;
   let gotSnapshot = false;
-  let pulled = false, conflicts = 0;
+  let pulled = false, conflicts = 0, droppedByReset = 0;
 
   for (let i = 0; i < maxTries; i++) {
     const remote = await t.get(keys.room, 'data');
@@ -44,7 +46,7 @@ export async function syncOnce(t: Transport, keys: SyncKeys, local: SavedProject
       const theirs = deserialize(await open(keys, remote.bytes), Date.now());
       theirRev = theirs.assetsRev ?? 0;
       const m = mergeProjects(project, theirs, since);
-      conflicts += m.conflicts.length;
+      conflicts += m.conflicts.length; droppedByReset += m.droppedByReset;
       project = m.project;
       etag = remote.etag;
       pulled = true;
@@ -64,7 +66,7 @@ export async function syncOnce(t: Transport, keys: SyncKeys, local: SavedProject
       });
     }
     const res = await t.put(keys.room, 'data', await seal(keys, serialize(lite(project))), etag);
-    if (res.ok) return { project, pulled, pushed: true, conflicts, gotSnapshot };
+    if (res.ok) return { project, pulled, pushed: true, conflicts, gotSnapshot, droppedByReset };
   }
   throw new Error('Не вдалося синхронізувати: інший пристрій постійно змінює дані. Спробуйте ще раз');
 }

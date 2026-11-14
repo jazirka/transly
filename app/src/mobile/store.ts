@@ -1,4 +1,4 @@
-import { isAutoFilled, planIngest, ingestQuiet, adoptSynced, applyPlan, planMessage, planOf, reconcileChanges, rowState, nextIn, positionOf, queueRows, adviceCount, check, fixRule, hasAdvice, knownStatus, qaOf, ruleStats, GROUP_COLORS, proposeTermSync, termChange, termChanges, LinkIndex, afterSend, clearMain, linkChanges, linkModeOf, linkView, planLinkSync, relinkRow, reviewClusters, setMain, unlinkRow, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, TmIndex, findReplace, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines, approveEntry, sendBack, threadsOf, rowsOfGroup, flowText, wrapMessage, wrapOf, outboxRescue, takeOutbox } from '../core';
+import { isAutoFilled, planIngest, ingestQuiet, adoptSynced, applyPlan, planMessage, planOf, reconcileChanges, rowState, nextIn, positionOf, queueRows, adviceCount, check, fixRule, hasAdvice, knownStatus, qaOf, ruleStats, GROUP_COLORS, proposeTermSync, termChange, termChanges, LinkIndex, afterSend, clearMain, linkChanges, linkModeOf, linkView, planLinkSync, relinkRow, reviewClusters, setMain, unlinkRow, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, TmIndex, findReplace, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines, approveEntry, sendBack, threadsOf, rowsOfGroup, flowText, wrapMessage, wrapOf, outboxRescue, takeOutbox, resetNote } from '../core';
 import type { IngestReport, Protect, QueueKind, Issue, QaSettings, RuleStat, LinkRowView, QaOptions, TermChange, TermProposal, TermSync, WrapPlan } from '../core';
 import { pxMeasure } from '../ui/measure';
 import type { BatchKind, Group, Entry, GlossaryTerm, RowChange, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
@@ -604,10 +604,14 @@ export class Store {
   }
   /** A project file (from a computer) is merged into this one. Returns the number of rows where the newer edit won. */
   importProject(text: string): number {
-    const r = mergeProjects(this.saved, deserialize(text));
+    // marks from the future (a clock that runs far ahead) are brought back to now, as on every other way in
+    const r = mergeProjects(this.saved, deserialize(text, Date.now()));
     this.saved = r.project; this.adopt();
+    this.lastDroppedByReset = r.droppedByReset;
     return r.conflicts.length;
   }
+  /** Rows the last import dropped because of a reset (see `ProjectMerge.droppedByReset`). */
+  lastDroppedByReset = 0;
 
   /* ---------- importing glossary and memory, plugin texts, reset, search ---------- */
   /** New terms are added; a known word only gets the extra variants. */

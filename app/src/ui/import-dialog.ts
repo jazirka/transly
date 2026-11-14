@@ -1,4 +1,4 @@
-import { canonicalRpgMakerName, deserialize, formatOf, looksLikeProject, mergeProjects } from '../core';
+import { canonicalRpgMakerName, deserialize, formatOf, looksLikeProject, mergeProjects, resetNote } from '../core';
 import { artifactDb, describeClaude, loadClaudeConfig, runClaudeSync } from './claude';
 import { $, toast } from './dom';
 import { isDesktop } from './desktop';
@@ -9,9 +9,11 @@ import type { Ctx } from './state';
 
 /** Merge a project file's text into the open project. Returns how many rows disagreed (the newer edit wins). */
 export function importProjectText(ctx: Ctx, text: string, adopt: () => void): number {
-  const r = mergeProjects(ctx.s.saved, deserialize(text));
+  // marks from the future (a clock that runs far ahead) are brought back to now, as on every other way in
+  const r = mergeProjects(ctx.s.saved, deserialize(text, Date.now()));
   ctx.s.saved = r.project;
   adopt();
+  if (r.droppedByReset) toast(`Проєкт злито: ${resetNote(r.droppedByReset)}`);
   return r.conflicts.length;
 }
 

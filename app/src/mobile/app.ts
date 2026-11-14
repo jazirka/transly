@@ -1,5 +1,5 @@
 import { autoNote, HINT_GLYPH, HINT_LABEL, KIND_LABEL, explainCodes, sceneTitle, stepScene, byHintOrder, commentId, historyRows, openThreads, restoreNote, sourceTermHits, targetHasTerm, threadsOf, batchTitle, batchUndoLabel, undoReport, setIgnored, canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, describePage, DEFAULT_LINE_LIMIT, DEFAULT_WRAP, MV_WINDOW, autoLineLimit, flowText, isMessageUnit, linesShown, measureOf, pixelBudget, unitWord, usesPixels, widthOf, wrapMessage, wrapOf } from '../core';
-import { APOSTROPHES, QA_RULES, ingestNote, QUEUE_LABEL, copyLine, stamp, rowsWithTerm, termRowsNote, adoptSynced, groupColor, isAutoFilled, pct as pctOf, keepFromText, keepToText, qaOf, withRuleLevel } from '../core';
+import { APOSTROPHES, QA_RULES, resetNote, ingestNote, QUEUE_LABEL, copyLine, stamp, rowsWithTerm, termRowsNote, adoptSynced, groupColor, isAutoFilled, pct as pctOf, keepFromText, keepToText, qaOf, withRuleLevel } from '../core';
 import type { Issue, LinkMode, LinkState, QaSettings, RuleSeverity, TermChange, TermProposal, TermSync, WrapSettings } from '../core';
 import { pxMeasure } from '../ui/measure';
 import { CONF_LABEL, flagsText, markHtml } from '../ui/termsync-html';
@@ -1266,7 +1266,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (q('[data-pick]')) { $<HTMLInputElement>('m-file').click(); return; }
     if (q('[data-paste]')) {
       const text = ($('m-paste') as HTMLTextAreaElement).value.trim(); if (!text) { say('Спершу вставте текст', true); return; }
-      if (looksLikeProject(text)) { const n = store.importProject(text); say(n ? `Проєкт злито, конфліктів: ${n}` : 'Проєкт злито'); render(); return; }
+      if (looksLikeProject(text)) { const n = store.importProject(text); say((n ? `Проєкт злито, конфліктів: ${n}` : 'Проєкт злито') + (store.lastDroppedByReset ? `; ${resetNote(store.lastDroppedByReset)}` : '')); render(); return; }
       const nameBox = $('m-namebox'); const nm = ($('m-pname') as HTMLInputElement).value.trim();
       const name = nm ? canonicalRpgMakerName(nm) ?? nm : null;
       if (!name) { nameBox.hidden = false; say('Вкажіть назву файлу гри (як у папці data)', true); return; }

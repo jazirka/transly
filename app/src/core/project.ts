@@ -233,12 +233,24 @@ function mergeLabels(a: Record<string, string> = {}, b: Record<string, string> =
   return out;
 }
 
+/** What to tell the translator when a reset dropped rows (see `ProjectMerge.droppedByReset`). */
+export const resetNote = (n: number): string => `скидання проєкту відкинуло рядків: ${n} (їх позначено менш ніж за добу до скидання: якщо годинник пристрою, що скидав, спішив, це може бути ваша нова робота: перевірте її)`;
+
 export interface ProjectMerge {
   project: SavedProject;
   conflicts: { file: string; key: string }[];
   /** The second project was written by an older build (without `schema`): data only a newer build keeps may be missing from it. */
   olderPeer: boolean;
+  /**
+   * Rows with a translation that the newest reset of the project dropped although they were marked less than a day before it.
+   * A reset is stamped with the clock of the device that made it; when that clock is ahead, work done on another device
+   * after the reset (by the real time) falls into this window. The caller tells the translator.
+   */
+  droppedByReset: number;
 }
+
+/** How long before a reset a dropped row still counts as possibly done after it (the same tolerance as for clocks that run ahead). */
+const RESET_SKEW_MS = 24 * 3600 * 1000;
 
 /** The later of two stamped values; on equal stamps the greater serialized form, so that the answer does not depend on the order. */
 const laterOf = <T extends { mt: number }>(x: T, y: T): T => (y.mt !== x.mt ? (y.mt > x.mt ? y : x) : (JSON.stringify(y) > JSON.stringify(x) ? y : x));
@@ -273,10 +285,15 @@ function deepCmp(x: unknown, y: unknown): number {
 /** Merge two copies of the same project (e.g. PC and phone). Entries from before the newest reset are dropped. */
 export function mergeProjects(a: SavedProject, b: SavedProject, since = 0): ProjectMerge {
   const epoch = Math.max(a.resetEpoch, b.resetEpoch);
+  let droppedByReset = 0;
   const live = (t: Translations): Translations => {
     if (epoch <= 0) return t;
     const out: Translations = {};
-    for (const [k, e] of Object.entries(t)) { const l = liveEntry(e, epoch); if (l) out[k] = l; }
+    for (const [k, e] of Object.entries(t)) {
+      const l = liveEntry(e, epoch);
+      if (l) out[k] = l;
+      else if (e.target.trim() && epoch - e.mt <= RESET_SKEW_MS) droppedByReset++;
+    }
     return out;
   };
   const files: Record<string, Translations> = {};
@@ -328,7 +345,7 @@ export function mergeProjects(a: SavedProject, b: SavedProject, since = 0): Proj
   if (!grp.groups) delete project.groups;
   if (!grp.members) delete project.members;
   if (!lnk.links) delete project.links;
-  return { project, conflicts, olderPeer: (b.schema ?? 1) < SCHEMA };
+  return { project, conflicts, olderPeer: (b.schema ?? 1) < SCHEMA, droppedByReset };
 }
 
 export type { Entry };

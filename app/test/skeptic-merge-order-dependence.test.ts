@@ -29,3 +29,21 @@ describe('mergeProjects is commutative for the fields the law test leaves out', 
     expect(mergeEntry(mk('A'), mk('B')).comments).toEqual(mergeEntry(mk('B'), mk('A')).comments);
   });
 });
+
+describe('a reset that drops recent rows says so', () => {
+  const row = (target: string, mt: number): Entry => ({ target, status: 'draft', mt });
+  it('counts translated rows dropped within a day before the reset, and only those', () => {
+    const day = 24 * 3600 * 1000;
+    const a = emptyProject('P'), b = emptyProject('P');
+    a.resetEpoch = 10 * day;                                   // the device that reset: its clock says day 10
+    b.files['Map001.json'] = { x: row('зроблено годину тому за годинником B', 10 * day - 3600_000), y: row('давня робота', 2 * day), z: row('', 10 * day - 5) };
+    const r = mergeProjects(a, b);
+    expect(r.droppedByReset).toBe(1);
+    expect(Object.keys(r.project.files['Map001.json'] ?? {})).toEqual([]);
+  });
+  it('counts nothing when there was no reset', () => {
+    const a = emptyProject('P'), b = emptyProject('P');
+    b.files['Map001.json'] = { x: row('є', 5000) };
+    expect(mergeProjects(a, b).droppedByReset).toBe(0);
+  });
+});

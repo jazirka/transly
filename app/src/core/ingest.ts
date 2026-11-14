@@ -178,3 +178,20 @@ export function planIngest(oldSnap: Record<string, Unit[]> | undefined, views: {
   }
   return { changes, report };
 }
+
+/**
+ * Is the game that was read another one than the project's (not a new version of it)? Of the lines that have a translation in files the
+ * two share by name, hardly any original is found again. A project with only a few translated lines is never asked about.
+ */
+export function looksLikeAnotherGame(oldSnap: Record<string, Unit[]> | undefined, views: { name: string; units: Unit[] }[], files: Record<string, Record<string, Entry>>): boolean {
+  if (!oldSnap) return false;
+  let total = 0, shared = 0;
+  for (const v of views) {
+    const old = oldSnap[v.name];
+    if (!old?.length) continue;
+    const ents = files[v.name] ?? {};
+    const now = new Set(v.units.map(u => u.source));
+    for (const u of old) if (ents[u.key]?.target?.trim()) { total++; if (now.has(u.source)) shared++; }
+  }
+  return total >= 5 && shared / total < 0.15;
+}

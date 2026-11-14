@@ -132,7 +132,7 @@ button{cursor:pointer}
 .sd.qa{background:var(--bad)}
 .gr .key{font:12px var(--mono);color:var(--mute);padding-top:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
 .gr .who{color:var(--violet);padding-top:7px}
-.gr .src,.gr .tr{display:block}
+.gr .src,.gr .tr{display:block;min-width:0;overflow-wrap:anywhere}
 .gr .src{color:#c8ccd3;line-height:1.45}
 .gr .tr{line-height:1.45}
 .gr .tr.empty{color:var(--dim);font-style:italic}
@@ -951,6 +951,7 @@ body.resizing{user-select:none;cursor:col-resize}
 .filters{height:auto;min-height:36px;flex-wrap:wrap;overflow:visible;padding:4px 10px;row-gap:4px}
 .filters .fin{flex:0 1 200px;min-width:140px}
 .filters .chipsHost{flex-wrap:wrap}
+.chip.idle{opacity:.5;cursor:default}
 /* ▶ is an outlined round button, not a filled blob */
 /* the last top-bar icon sits exactly over the right rail's icons */
 .topbar{padding-right:4px}

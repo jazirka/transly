@@ -44,8 +44,9 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
       <p class="hint">Папка запам’ятовується для проєкту й відновлюється під час запуску. Якщо її перенесено чи видалено, програма покаже банер із вибором нової, а переклад і оригінали в проєкті збережуться.</p>
       <label class="achk"><input type="checkbox" id="st-sysbar" ${nativeChrome() ? 'checked' : ''}> Системний заголовок вікна</label>
       <p class="hint">Запасний варіант: якщо власного заголовка не видно або його кнопки не працюють. Застосовується одразу.</p></div>` : ''}
-    <div class="grid"><label for="st-tol">Радити, коли переклад відрізняється від оригіналу понад, %</label><input id="st-tol" type="number" min="5" max="100" step="5" value="${esc(String(st.tolerancePct))}">
+    <div class="grid"><label for="st-tol">Радити, коли переклад відрізняється від оригіналу понад, % (від 5 до 100)</label><input id="st-tol" type="number" min="5" max="100" step="5" value="${esc(String(st.tolerancePct))}" aria-describedby="st-tol-err">
       <label for="st-who">Ваше ім’я в коментарях та історії</label><input id="st-who" maxlength="40" value="${esc(String(st.who))}"></div>
+    <p class="hint bad st-err" id="st-tol-err" role="alert"></p>
     <label class="achk"><input type="checkbox" id="st-block" ${st.blockErrors ? 'checked' : ''}> Не надсилати рядок із помилкою QA</label>
     <div class="grid"><label for="st-link">Автозаповнення однакових рядків після «Надіслати»</label><select id="st-link"><option value="ask" ${linkModeOf(st) === 'ask' ? 'selected' : ''}>заповнювати порожні чернетками, про різні питати (рекомендовано)</option><option value="auto" ${linkModeOf(st) === 'auto' ? 'selected' : ''}>заповнювати порожні й самому оновлювати різні (вичитані не чіпає)</option><option value="off" ${linkModeOf(st) === 'off' ? 'selected' : ''}>не заповнювати</option></select></div>
     <p class="hint">Порожні зв’язані рядки заповнюються одразу після надсилання чернетками з позначкою «авто» (цю дію можна відмінити в повідомленні). Вичитаний рядок і рядок, який ви змінили пізніше, не перезаписуються без вашого вибору.</p>
@@ -124,8 +125,13 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
   $('#st-files', dlg).addEventListener('click', () => { dlg.close(); onFiles(); });
   /* The general settings are applied as they change (like the sync ones below), so there is nothing to save and «Закрити» loses nothing. */
   const applyGeneral = (): boolean => {
-    const v = Number(($('#st-tol', dlg) as HTMLInputElement).value);
-    if (!(v >= 5 && v <= 100)) { toast('Відсоток має бути від 5 до 100'); return false; }
+    const tol = $('#st-tol', dlg) as HTMLInputElement, tolErr = $('#st-tol-err', dlg);
+    const v = Number(tol.value);
+    // the refusal is written next to the field (and the field is marked and focused), not only in a message that is gone in three seconds
+    const ok = tol.value.trim() !== '' && v >= 5 && v <= 100;
+    tol.setAttribute('aria-invalid', String(!ok));
+    tolErr.textContent = ok ? '' : 'Відсоток має бути від 5 до 100. Поки значення не виправлено, налаштування не застосовуються.';
+    if (!ok) { tol.focus(); return false; }
     st.tolerancePct = v;
     st.blockErrors = ($('#st-block', dlg) as HTMLInputElement).checked;
     st.linkMode = ($('#st-link', dlg) as HTMLSelectElement).value as LinkMode;

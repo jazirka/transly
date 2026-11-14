@@ -1189,8 +1189,9 @@ export async function start(root: HTMLElement): Promise<void> {
       const r = historyRows(c.entry?.history, c.entry?.target ?? '').find(y => y.index === Number(x!.dataset.i));
       const text = r ? (x.dataset.hv === 'before' ? r.before : r.rec.text) : '';
       if (!r || !text) return;
+      const was = c.entry?.status;
       store.restore(text, restoreNote(r.rec, x.dataset.hv === 'before' ? 'before' : 'text', r.rec.at ? fmtTime(r.rec.at) : 'іншого пристрою'));
-      say('Текст відновлено. Повернути попередній можна тут же, в історії'); buzz(10); render(); return;
+      say(was === 'done' || was === 'appr' ? 'Текст відновлено як чернетку: надішліть його ще раз. Попередній можна повернути тут же, в історії' : 'Текст відновлено. Повернути попередній можна тут же, в історії'); buzz(10); render(); return;
     }
     // A term or a control code of the original opens its card; a tap that just misses one goes to the nearest within reach, not to nothing.
     {

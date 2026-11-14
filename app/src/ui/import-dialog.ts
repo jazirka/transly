@@ -38,13 +38,13 @@ function gameName(name: string): string | null {
  */
 export function openImport(ctx: Ctx, adopt: () => void, openGameFiles: (files: PickedFile[]) => Promise<void>): void {
   const dlg = dialog(`<form method="dialog"><h2 id="im-t">Відкрити файли</h2>
-    <p class="hint">${isDesktop()
-      ? 'Оберіть файл проєкту (<code>.transly.json</code>), який збережено в іншому місці: «Налаштування → Синхронізація → Обмін проєктом через файл». Або скопіюйте весь вміст файлу й вставте в поле нижче.'
-      : 'Щоб продовжити на цьому пристрої переклад із комп’ютера, на ПК виберіть «Налаштування → Синхронізація → Обмін проєктом через файл → Зберегти проєкт у файл». Передайте файл сюди (месенджер, пошта, власний сервер) і оберіть його нижче. Або скопіюйте весь вміст файлу й вставте в поле.'}</p>
+    <p class="hint">Оберіть файли гри (<code>.json</code>, <code>.po</code>, <code>.csv</code>, <code>.rpy</code>) або файл проєкту (<code>.transly.json</code>). Файли гри додаються до відкритого проєкту.</p>
     <div id="im-claude" hidden><p class="hint">У застосунку Claude вікно вибору файлів може не відкриватися. Тоді найпростіше взяти проєкт, який ви вже синхронізували з комп’ютера (там: Налаштування → Синхронізація через Claude).</p>
       <div class="acts l"><button class="btn p" type="button" id="im-cl">Отримати з іншого пристрою (через Claude)</button></div></div>
     <div class="acts l"><button class="btn p" type="button" id="im-pick">Обрати файли…</button></div>
-    <p class="hint">Можна обрати файл проєкту (<code>.transly.json</code>) і/або файли гри: <code>.json</code>, <code>.po</code>, <code>.csv</code>, <code>.rpy</code>. Файли гри додаються до відкритого проєкту.</p>
+    <details><summary>Як перенести проєкт з іншого пристрою</summary><p class="hint">${isDesktop()
+      ? 'Збережіть проєкт у файл там, де він є: «Налаштування → Синхронізація → Обмін проєктом через файл». Потім оберіть цей файл тут. Або скопіюйте весь вміст файлу й вставте в поле нижче.'
+      : 'На іншому пристрої виберіть «Налаштування → Синхронізація → Обмін проєктом через файл → Зберегти проєкт у файл». Передайте файл сюди (месенджер, пошта, власний сервер) і оберіть його вище. Або скопіюйте весь вміст файлу й вставте в поле нижче.'}</p></details>
     <p class="sum" id="im-state" role="status" hidden></p>
     <input type="file" id="im-file" multiple hidden>
     <label class="lbl-b" for="im-paste">Вставити вміст файлу (JSON)</label><textarea id="im-paste" rows="6" spellcheck="false" autocomplete="off" placeholder='{"version":1,"name":…'></textarea>

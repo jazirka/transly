@@ -458,7 +458,10 @@ input::placeholder,textarea::placeholder{color:#9a9ea6;opacity:1}
 
 /* ---------- wave 2: the table's chrome ---------- */
 /* filter chips share the row with the search and shrink to wrap, so the last one is never cut off */
-.filters .chipsHost{flex:1 1 auto;min-width:min-content}
+/* The search and the speaker/length buttons share the first line; the status chips have the next line(s) to themselves, so the bar is as tall as its chips need and no taller */
+.filters .fin{order:0}
+.filters .r{order:1}
+.filters .chipsHost{order:2;flex:1 1 100%;min-width:0}
 /* the bulk bar lies over the header of the table instead of pushing the rows down (the select-all box stays free) */
 .gridwrap>.bulk{display:none;position:sticky;top:0;z-index:5;height:0;padding:0;border:0;background:none;overflow:visible}
 .gridwrap>.bulk.show{display:block}

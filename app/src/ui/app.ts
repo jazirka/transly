@@ -1,4 +1,4 @@
-import { isAutoFilled, autoNote, planIngest, ingestQuiet, ingestNote, Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, qaOf, termsStamp, adoptSynced, applyPlan, planOf, reconcileChanges, pct, progressOf, rowState, sumProgress, QUEUE_LABEL, nextIn, positionOf, queueRows, ago, copyLine, stamp, stampOf } from '../core';
+import { isAutoFilled, autoNote, planIngest, looksLikeAnotherGame, ingestQuiet, ingestNote, Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, qaOf, termsStamp, adoptSynced, applyPlan, planOf, reconcileChanges, pct, progressOf, rowState, sumProgress, QUEUE_LABEL, nextIn, positionOf, queueRows, ago, copyLine, stamp, stampOf } from '../core';
 import type { IngestReport, QaOptions, QueueKind, WrapPlan } from '../core';
 import { pxMeasure } from './measure';
 import { openWrapTool } from './wrap-dialog';
@@ -36,7 +36,7 @@ import { openLinkTool } from './links-dialog';
 import { openTermSyncTool } from './termsync-dialog';
 import { openPluginTexts } from './plugins-dialog';
 import { openActivity, openAutofill } from './activity-dialog';
-import { openIngestReport } from './ingest-dialog';
+import { askAnotherGame, openIngestReport } from './ingest-dialog';
 import { markup } from './markup';
 import { openSettings } from './settings';
 import type { SettingsTab } from './settings';
@@ -539,9 +539,10 @@ export async function start(root: HTMLElement): Promise<void> {
     const opts = qaOpts();
     return FILTERS.map(([f, l]) => {
       const n = f === 'all' ? ctxUnits.length : ctxUnits.filter(u => matchesStatus(u, ents[u.key], f, opts)).length;
-      // A filter that finds nothing is not offered (unless it is the chosen one): the row stays short and nothing is cut off.
-      if (n === 0 && f !== 'all' && s.filter !== f) return '';
-      return `<button class="chip ${s.filter === f ? 'on' : ''}" data-filter="${f}" aria-pressed="${s.filter === f}">${l} <span class="n">${n}</span></button>`;
+      // Every filter stays in its place: a chip that appears when the first row of its kind is made would push the table down
+      // under the reader's eyes. One that finds nothing is dimmed and cannot be pressed (unless it is the chosen one).
+      const idle = n === 0 && f !== 'all' && s.filter !== f;
+      return `<button class="chip ${s.filter === f ? 'on' : ''}${idle ? ' idle' : ''}" data-filter="${f}" aria-pressed="${s.filter === f}"${idle ? ' disabled' : ''}>${l} <span class="n">${n}</span></button>`;
     }).join('');
   }
 
@@ -646,12 +647,17 @@ export async function start(root: HTMLElement): Promise<void> {
    * drawing the whole workspace. Anything that could move or remove the row (a filter, a search, a sort) or a view
    * other than the plain table falls back to the full redraw.
    */
+  /** A mouse button is held down: the tree, the tabs and the filter chips are not redrawn now, or the click that began on one of them would be lost. */
+  let pointerHeld = false, deferChrome = false;
+  const redrawChrome = (): void => { $('#chips1').innerHTML = chipsHtml(); renderTabs(); renderTree(); };
+  addEventListener('pointerdown', () => { pointerHeld = true; }, true);
+  addEventListener('pointerup', () => { pointerHeld = false; if (deferChrome) { deferChrome = false; setTimeout(redrawChrome, 0); } }, true);
   function rowChanged(key: string): void {
     const u = ctx.unit(key);
     const old = u && tablePlain() ? document.querySelector<HTMLElement>(`#grid .gr[data-key="${CSS.escape(key)}"]:not(.lazy)`) : null;
     if (!u || !old || !patchRow('grid', key, rowHtml(u, Number(old.querySelector('.num')?.textContent) || 1))) { renderAll(); return; }
-    $('#chips1').innerHTML = chipsHtml();
-    renderTop(); renderTabs(); renderTree(); renderSidePanel(ctx); renderStatus();
+    renderTop(); renderSidePanel(ctx); renderStatus();
+    if (pointerHeld) deferChrome = true; else redrawChrome();
   }
   /** Make another row the selected one without drawing the table again. */
   function selectRowLight(key: string): void {
@@ -906,11 +912,13 @@ export async function start(root: HTMLElement): Promise<void> {
     const { files, failed } = await readFiles(picked, (d, t) => { if (quiet) showLoad(`Читаю файли гри: ${d} з ${t}`); else { $('#bar').style.width = `${(d / t) * 100}%`; $('#pct').textContent = `${d} з ${t}`; } });
     if (quiet) showLoad(null);
     if (opts.stale?.()) return;
+    // another game in a project that holds translations: asked before the rows are mixed (a new version of the same game is not asked about)
+    if (!keep && !quiet && looksLikeAnotherGame(s.saved.snapshot, readGame(files, { pluginCommands: s.saved.settings.pluginCommands }), s.saved.files) && !(await askAnotherGame())) { renderAll(); return; }
     const reset = ingest(files, keep);
     const ingested = lastIngest;
     dataDir = isDesktop() ? dataDirOf(picked) : null;
     if (!s.views.length) { s.current = null; renderAll(); toast('У цих файлах немає тексту для перекладу'); return; }
-    if (failed.length) toast(`Не вдалося прочитати файлів: ${failed.length}`);
+    if (failed.length) toast(`Не вдалося прочитати: ${failed.slice(0, 4).join(', ')}${failed.length > 4 ? ` і ще ${failed.length - 4}` : ''}. Файл пошкоджений або не є JSON: його рядків у проєкті не буде`, { sticky: true });
     const fromBackup = picked.filter(f => f.fromBackup).length;
     const translated = sumProgress(s.views.map(v => progressOf(v.units, s.saved.files[v.name] ?? {}))).translated;
     const heavy = isDesktop() && !fromBackup && translated >= 10 && reset / translated >= 0.2;
@@ -1117,7 +1125,7 @@ export async function start(root: HTMLElement): Promise<void> {
     } else doBuild();
   };
   const runSelected = (): void => runCfgNow(runCfg);
-  const doBuild = () => openBuild(ctx, dataDir, n => { s.lastBuild = { at: Date.now(), n }; stamp(s.saved, 'build', 'збірка', Date.now(), n); ctx.persist(); renderTop(); });
+  const doBuild = () => openBuild(ctx, dataDir, n => { s.lastBuild = { at: Date.now(), n }; stamp(s.saved, 'build', 'збірка', Date.now(), n); ctx.persist(); renderTop(); }, () => void openFolder());
 
   function openSettingsDlg(tab?: SettingsTab): void {
     openSettings(ctx, {
@@ -1431,9 +1439,10 @@ export async function start(root: HTMLElement): Promise<void> {
     let cancelled = false;
     const save = (): void => {
       if (!cancelled && ta.value !== (entryOf(u)?.target ?? '')) {
-        const ents = ctx.entries(s.current!);
-        ents[key] = edit(ents[key], u, ta.value, ctx.stage(), Date.now());
-        s.sess.n++; ctx.persist(); ctx.softTm();
+        // a change of the cell is an action of the journal: Ctrl+Z takes it back (an overwritten draft is not lost)
+        const next = edit(entryOf(u), u, ta.value, ctx.stage(), Date.now());
+        ctx.commit([{ file: s.current!, key, next, text: next.target }], 'edit');
+        ctx.persist(); ctx.softTm();
       }
     };
     const finish = () => { save(); rowChanged(key); };
@@ -1449,7 +1458,12 @@ export async function start(root: HTMLElement): Promise<void> {
         if (next) { reveal('grid', next.key); selectRowLight(next.key); }
         startInline(next?.key ?? key);
       }
-      else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); ta.removeEventListener('blur', finish); const ents = ctx.entries(s.current!); ents[key] = edit(ents[key], u, ta.value, 'translate', Date.now()); const r = submit(ents[key], u, 'translate', Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: qaOpts() }); if (r.ok) { afterSendFollowUp(ctx, u, ctx.commit([{ file: s.current!, key, next: r.entry, text: r.entry.target }], 'send'), Date.now()); } else toast(r.reason, { sticky: true }); ctx.persist(); ctx.invalidateTm(); renderAll(); }
+      else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); ta.removeEventListener('blur', finish); const ents = ctx.entries(s.current!); ents[key] = edit(ents[key], u, ta.value, 'translate', Date.now()); const r = submit(ents[key], u, 'translate', Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: qaOpts() }); if (r.ok) { afterSendFollowUp(ctx, u, ctx.commit([{ file: s.current!, key, next: r.entry, text: r.entry.target }], 'send'), Date.now()); } else toast(r.reason, { sticky: true }); ctx.persist(); ctx.invalidateTm();
+        // «send and go on»: the next row's cell is opened (the row that was sent may leave a filtered list)
+        const list = visibleUnits(true), at = list.findIndex(x => x.key === key), go = r.ok ? list[at + 1] : undefined;
+        renderAll();
+        if (go) { reveal('grid', go.key); selectRowLight(go.key); startInline(go.key); } else if (!r.ok) startInline(key);
+      }
     });
   }
 
@@ -1783,13 +1797,15 @@ export async function start(root: HTMLElement): Promise<void> {
   // A write that is only started may not survive the page: the changed rows also go to the synchronous outbox first.
   // While the store keeps refusing (storage full), the browser is asked to confirm before the page closes.
   addEventListener('beforeunload', e => {
+    // a cell that is being written in is committed first: its text is saved with the rest
+    document.querySelector<HTMLTextAreaElement>('textarea.cell-ed')?.blur();
     autosave.rescueNow(); void autosave.flush();
     if (autosave.failures > 0 && autosave.unsaved) { e.preventDefault(); e.returnValue = ''; }
   });
-  addEventListener('pagehide', () => { autosave.rescueNow(); void autosave.flush(); });
+  addEventListener('pagehide', () => { document.querySelector<HTMLTextAreaElement>('textarea.cell-ed')?.blur(); autosave.rescueNow(); void autosave.flush(); });
   setTimeout(() => void autoCheck(), 4000);
   // The Android app goes to the background without unloading the page: save what was typed.
-  document.addEventListener('visibilitychange', () => { if (document.hidden) { autosave.rescueNow(); void autosave.flush(); } });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { document.querySelector<HTMLTextAreaElement>('textarea.cell-ed')?.blur(); autosave.rescueNow(); void autosave.flush(); } });
   /** Back button: close whatever is open on top first; false when there is nothing to close. */
   function backStep(): boolean {
     const dlg = document.querySelector<HTMLDialogElement>('dialog[open]');

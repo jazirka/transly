@@ -11,10 +11,11 @@ import { HISTORY_LIMIT } from './workflow';
 export type Prev = NonNullable<HistoryItem['prev']>;
 
 /** What a bulk action is. The kind is the part of the batch id before the colon. */
-export type BatchKind = 'send' | 'approve' | 'scene' | 'words' | 'twin' | 'replace' | 'unify' | 'memory' | 'wrap' | 'clear' | 'copy' | 'back' | 'link' | 'term' | 'fix' | 'reconcile' | 'rekey' | 'undo' | 'redo';
+export type BatchKind = 'edit' | 'send' | 'approve' | 'scene' | 'words' | 'twin' | 'replace' | 'unify' | 'memory' | 'wrap' | 'clear' | 'copy' | 'back' | 'link' | 'term' | 'fix' | 'reconcile' | 'rekey' | 'undo' | 'redo';
 
 /** The history text and the feed title of each kind of action. */
 export const BATCH_INFO: Record<BatchKind, { what: string; title: (n: string) => string }> = {
+  edit: { what: 'змінено переклад', title: n => `Змінено переклад: ${n}` },
   send: { what: 'надіслано', title: n => `Надіслано: ${n}` },
   approve: { what: 'вичитано', title: n => `Вичитано: ${n}` },
   scene: { what: 'надіслано (вся сцена)', title: n => `Надіслано сцену: ${n}` },

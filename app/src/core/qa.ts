@@ -1,4 +1,4 @@
-import { displayLength, missingCodes } from './controlCodes';
+import { displayLength, missingCodes, withCodes } from './controlCodes';
 import { candidateTerms, hasTermIn, prepareText, targetHasTerm, termsStamp } from './glossary';
 import { isMessageUnit, limitFor, linesShown, maxLineWidth, planSig, tooWide, unitWord, wrapLines, wrapMessage } from './wrap';
 import type { WrapPlan } from './wrap';
@@ -78,7 +78,7 @@ export function check(unit: UnitLike, target: string, opts: QaOptions = DEFAULT_
   if (!target.trim()) return [];
   const out: Issue[] = [];
   const miss = missingCodes(unit.source, target);
-  if (miss.length) out.push({ key: 'codes', severity: 'bad', cat: 'error', message: `Пропущено керівні коди: ${miss.join(' ')}`, detail: 'Керівні коди (кольори, імена, змінні) гра підставляє сама; без них текст у грі зламається.', fix: { label: `Вставити ${miss.join(' ')}`, text: target + miss.join('') }, codes: miss });
+  if (miss.length) out.push({ key: 'codes', severity: 'bad', cat: 'error', message: `Пропущено керівні коди: ${miss.join(' ')}`, detail: 'Керівні коди (кольори, імена, змінні) гра підставляє сама; без них текст у грі зламається.', fix: { label: `Вставити ${miss.join(' ')}`, text: withCodes(unit.source, target, miss) }, codes: miss });
   const dev = lengthDeviation(unit.source, target);
   if (Math.abs(dev) > opts.tolerancePct) {
     out.push({ key: 'len', severity: 'warn', cat: 'style', message: `Довжина відрізняється від оригіналу на ${dev > 0 ? '+' : ''}${dev}%. Рекомендація: якнайближче до оригіналу` });

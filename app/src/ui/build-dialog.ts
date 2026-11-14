@@ -6,9 +6,13 @@ import { showDialog } from './modal';
 import type { Ctx } from './state';
 
 /** Build dialog: zip / folder everywhere, plus "apply and launch" inside the desktop app. */
-export function openBuild(ctx: Ctx, dataDir: string | null, onBuilt: (n: number) => void): void {
+export function openBuild(ctx: Ctx, dataDir: string | null, onBuilt: (n: number) => void, openGame?: () => void): void {
   const { s } = ctx;
-  if (!s.game.length) { toast('Для збірки відкрийте папку гри: вона потрібна лише тут'); return; }
+  if (!s.game.length) {
+    // The translation is kept, the game's files are not (they are read again from the folder after a restart): say what is missing and offer the step.
+    toast('Збірка записує переклад у копії файлів гри, а файлів гри зараз немає (після перезапуску їх відкривають знову). Переклад у проєкті цілий.', openGame ? { action: { label: 'Відкрити папку гри…', run: openGame } } : { sticky: true });
+    return;
+  }
   const desk = isDesktop() && !!dataDir && s.game.every(f => isRpgMakerFile(f.name));
   const opener = document.activeElement as HTMLElement | null;
   const dlg = el('dialog', 'adlg');

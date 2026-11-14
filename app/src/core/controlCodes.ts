@@ -27,3 +27,32 @@ export function missingCodes(source: string, target: string): string[] {
   }
   return out;
 }
+
+/**
+ * The translation with the missing codes put back where the original has them: a code at the start of the original goes to the start,
+ * one at the end goes to the end, one in the middle goes to the same share of the text (at the nearest space).
+ */
+export function withCodes(source: string, target: string, miss: string[]): string {
+  const plain = (t: string): number => [...t.replace(new RegExp(CODE_SOURCE, 'g'), '')].length;
+  // where each code goes, in the translation as it is (so that the places do not shift each other)
+  const places = miss.map((code, idx) => {
+    const at = source.indexOf(code);
+    if (at < 0) return { code, idx, pos: target.length };
+    const before = source.slice(0, at), after = source.slice(at + code.length);
+    if (!before.trim() || plain(before) === 0) return { code, idx, pos: 0 };
+    if (!after.trim() || plain(after) === 0) return { code, idx, pos: target.length };
+    let pos = Math.round(target.length * (plain(before) / (plain(before) + plain(after))));
+    // the nearest space, so that a word is not cut; the code stands before the word it belongs to: after the space
+    let l = pos, r = pos;
+    while (l > 0 && target[l - 1] !== ' ') l--;
+    while (r < target.length && target[r] !== ' ') r++;
+    pos = pos - l <= r - pos ? l : r;
+    if (target[pos] === ' ') pos++;
+    return { code, idx, pos };
+  });
+  // from the back, and the codes of one place from the last to the first: they come out in the order of the list
+  places.sort((a, b) => b.pos - a.pos || b.idx - a.idx);
+  let out = target;
+  for (const p of places) out = out.slice(0, p.pos) + p.code + out.slice(p.pos);
+  return out;
+}

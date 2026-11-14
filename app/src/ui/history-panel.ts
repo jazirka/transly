@@ -55,7 +55,9 @@ export function historyClick(ctx: Ctx, t: HTMLElement, apply: (u: Unit, text: st
   if (!r) return true;
   const text = b.dataset.hv === 'before' ? r.before : r.rec.text;
   if (!text) { toast('Тут нічого відновлювати'); return true; }
+  const was = e?.status;
   apply(u, text, restoreNote(r.rec, b.dataset.hv === 'before' ? 'before' : 'text', r.rec.at ? when(r.rec.at) : 'іншого пристрою'));
-  toast('Текст відновлено. Повернути попередній можна тут же, в історії');
+  // a restored text is a new text for the row: it goes back to a draft and wants sending (and review) again
+  toast(was === 'done' || was === 'appr' ? 'Текст відновлено як чернетку: надішліть його ще раз. Попередній можна повернути тут же, в історії' : 'Текст відновлено. Повернути попередній можна тут же, в історії');
   return true;
 }

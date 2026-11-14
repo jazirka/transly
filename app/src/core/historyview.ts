@@ -30,7 +30,8 @@ export function historyRows(history: HistoryItem[] | undefined, current: string)
     return {
       index, rec, before,
       diff: rec.text || before ? diffWords(before, rec.text) : [],
-      isCurrent: rec.text === current,
+      // only the newest record can be the text that stands now (an older record with the same words, after a restore, is not)
+      isCurrent: index === h.length - 1 && rec.text === current,
       canRestore: !!rec.text && rec.text !== current,
       canRestoreBefore: !!before && before !== current && before !== rec.text,
     };

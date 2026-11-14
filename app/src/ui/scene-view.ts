@@ -103,7 +103,8 @@ export function renderSceneView(ctx: Ctx): void {
       <button class="ib sm" type="button" data-sv="next" ${i < idx.scenes.length - 1 ? '' : 'disabled'} title="Наступна сцена" aria-label="Наступна сцена"><svg viewBox="0 0 16 16"><path d="M6 3.5L10.5 8 6 12.5"/></svg></button></div>
     ${cond ? `<div class="sv-cond">Показується, коли: ${esc(cond)}</div>` : ''}
     <div class="sv-acts"><button class="btn" type="button" data-sv="all-send" title="Надіслати всі чернетки сцени">Надіслати сцену</button><button class="btn" type="button" data-sv="all-appr" title="Вичитати всі переклади сцени">Вичитати сцену</button><button class="btn" type="button" data-sv="game" title="Подивитися сцену так, як її покаже гра">Як у грі</button></div>`;
-  const sig = `${file}\u0001${sc.id}`;
+  // the keys are in the signature: a new version of the game can shift them while the scene stays the same size
+  const sig = `${file}\u0001${sc.id}\u0001${sc.units.map(u => u.key).join('\u0002')}`;
   if (sig !== built || body.children.length !== sc.units.length) {
     built = sig;
     body.innerHTML = sc.units.map((u, n) => cardHtml(ctx, u, n + 1)).join('');
@@ -119,7 +120,16 @@ export function sceneInput(ctx: Ctx, ta: HTMLTextAreaElement): boolean {
   if (!ta.classList.contains('sv-in')) return false;
   const { s } = ctx;
   const u = ctx.unit(ta.dataset.key ?? '');
-  if (!u || !s.current) return true;
+  if (!u || !s.current) {
+    // the row is not in the game any more (a card of an older reading): the text goes nowhere, and the card says so instead of
+    // looking saved; the next redraw gives the scene its current rows
+    const card = ta.closest<HTMLElement>('.sv-card');
+    card?.classList.add('err');
+    card?.setAttribute('title', 'Цього рядка вже немає в грі: текст не збережено');
+    toast('Цього рядка вже немає в грі: текст не збережено. Відкрийте сцену знову');
+    built = '';
+    return true;
+  }
   const ents = ctx.entries(s.current);
   ents[u.key] = edit(ents[u.key], u, ta.value, ctx.stage(), Date.now());
   s.sess.n++;

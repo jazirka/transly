@@ -26,19 +26,21 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: app/package-lock.json
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
 
-      - uses: swatinem/rust-cache@v2
+      - uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: app/src-tauri
 
@@ -60,7 +62,7 @@ jobs:
           find app/src-tauri/target/release/bundle -type f \( -name '*.exe' -o -name '*.msi' -o -name '*.dmg' -o -name '*.AppImage' -o -name '*.deb' \) -exec cp {} out/ \;
           ls -la out
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: transly-desktop-${{ runner.os }}
           path: out/*
@@ -68,12 +70,12 @@ jobs:
 
   release:
     needs: build
-    if: ${{ !cancelled() && inputs.release }}
+    if: ${{ needs.build.result == 'success' && inputs.release }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: transly-desktop-*
           merge-multiple: true
@@ -83,6 +85,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           ls -la out
+          # nothing is deleted before it is certain that the new release can be made
+          ls out/*.exe >/dev/null 2>&1 || { echo "::error::No installer to publish"; exit 1; }
           gh release delete desktop-latest --yes --cleanup-tag --repo "$GITHUB_REPOSITORY" || true
           gh release create desktop-latest out/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
             --title "Transly for desktop" \

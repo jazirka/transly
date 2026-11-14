@@ -17,7 +17,17 @@ export function saveSyncConfig(c: SyncConfig): void {
   try { localStorage.setItem(KEY, JSON.stringify(c)); } catch { /* private mode: the user just re-enters it */ }
 }
 
-export const syncConfigured = (c: SyncConfig): boolean => !!c.url.trim() && c.passphrase.length >= 8;
+/** Why an address cannot be a sync server (null when it can): checked before any request, so a typo is not reported as a wrong password. */
+export function syncUrlProblem(url: string): string | null {
+  const t = url.trim();
+  if (!t) return 'Вкажіть адресу сервера';
+  let u: URL;
+  try { u = new URL(t); } catch { return 'Адреса сервера не схожа на адресу: вона має починатися з https:// (для власної мережі можна http://)'; }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return 'Адреса сервера має починатися з https:// (для власної мережі можна http://)';
+  return null;
+}
+
+export const syncConfigured = (c: SyncConfig): boolean => !syncUrlProblem(c.url) && c.passphrase.length >= 8;
 
 /** Sync now and put the merged project into the app. Throws readable errors. */
 export async function runSync(ctx: Ctx, cfg: SyncConfig, adopt: () => void): Promise<SyncReport> {

@@ -22,12 +22,12 @@ export function openQaRules(ctx: Ctx): void {
   const dlg = dialog(`<form method="dialog" class="qr"><h2 id="qr-t">Правила QA</h2>
     <p class="hint">Правила дивляться на форму тексту: літери не з того алфавіту, невидимі символи, пробіли, апостроф, пошкоджені керівні коди. «Порада» нічого не блокує, а «Помилка» не дає надіслати й зібрати рядок, доки його не виправлено. Зміни застосовуються одразу.</p>
     <p class="sum" id="qr-file" role="status"></p>
+    <p class="sum qr-msg" id="qr-msg" role="status" aria-live="polite" hidden></p>
     <div id="qr-list" class="qr-list"></div>
     <fieldset class="wp-fs"><legend>Латинські слова, які можна лишати в українському тексті</legend>
       <label for="qr-keep" class="hint">По одному слову на рядок. Слова з оригіналу, HP, MP, NPC, одиниці виміру й римські цифри дозволені завжди.</label>
       <textarea id="qr-keep" rows="3" spellcheck="false">${esc(keepToText(st.qa?.keep))}</textarea></fieldset>
     <div class="grid"><label for="qr-apos">Апостроф у проєкті</label><select id="qr-apos">${APOSTROPHES.map(a => `<option value="${esc(a)}" ${rules.apostrophe === a ? 'selected' : ''}>${esc(APOS_LABEL[a] ?? a)}</option>`).join('')}</select></div>
-    <p class="sum" id="qr-msg" role="status" aria-live="polite"></p>
     <div class="acts"><button class="btn" value="cancel">Закрити</button></div></form>`, 'qr-t');
 
   /** The open file (or group) with its rows, as a project that holds only it, so the same code mends either. */
@@ -47,6 +47,8 @@ export function openQaRules(ctx: Ctx): void {
   let lastBatch: string | undefined;
   const say = (text: string, undo?: string): void => {
     const box = $('#qr-msg', dlg);
+    // the result is at the top of the dialog and stays in view (it used to sit below a long list, out of sight of the button that was pressed)
+    box.hidden = !text;
     box.innerHTML = esc(text) + (undo ? ` <button type="button" class="btn" id="qr-undo">Скасувати</button>` : '');
     lastBatch = undo;
   };

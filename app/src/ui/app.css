@@ -75,6 +75,7 @@
 .pl-s{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 .adlg .hint.bad{color:#ff9aa5}
+.adlg .qr-msg{position:sticky;top:0;z-index:2;border-color:var(--ok,#6fbf73)}
 /* the line is always there: an error that appears or goes away while «Закрити» is being clicked would move the button from under the pointer */
 .adlg .st-err{min-height:1.4em;margin:2px 0}
 .adlg .sum.bad{border-color:var(--err,#c75450);color:var(--text)}

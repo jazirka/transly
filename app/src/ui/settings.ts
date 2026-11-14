@@ -12,7 +12,7 @@ import { importReference } from './reference';
 import { saveFile } from './save';
 import { loadUpdateConfig, updateSectionHtml, wireUpdateSection } from './updates';
 import { openSpeakers } from './speakers-dialog';
-import { describe, loadSyncConfig, runSync, saveSyncConfig, syncConfigured } from './sync';
+import { describe, loadSyncConfig, runSync, saveSyncConfig, syncConfigured, syncUrlProblem } from './sync';
 
 /** Open a <dialog> above the app (see `modal.ts`); it closes on Esc and restores focus to the opener. */
 export function dialog(html: string, labelId: string): HTMLDialogElement {
@@ -182,11 +182,19 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
   });
   $('#st-terms-go', dlg).addEventListener('click', () => {
     const { terms, rejected } = parseTerms(($('#st-terms', dlg) as HTMLTextAreaElement).value);
-    let added = 0;
-    for (const t of terms) if (!ctx.s.saved.terms.some(x => x.en.toLowerCase() === t.en.toLowerCase())) { ctx.s.saved.terms.push({ ...t, mt: Date.now() }); added++; }
+    let added = 0, same = 0;
+    const clash: string[] = [];
+    for (const t of terms) {
+      const have = ctx.s.saved.terms.find(x => x.en.toLowerCase() === t.en.toLowerCase());
+      if (!have) { ctx.s.saved.terms.push({ ...t, mt: Date.now() }); added++; }
+      else if (have.uk.trim() === t.uk.trim()) same++;
+      else clash.push(`${t.en} → ${t.uk} (у глосарії: ${have.uk})`);
+    }
     touchTerms(ctx.s.saved.terms);
     ctx.persist(); ctx.render();
-    toast(`Додано термінів: ${added}${rejected ? `, пропущено рядків без пари: ${rejected}` : ''}`);
+    // a term that is there already with another translation is not overwritten, and it is not passed over in silence either
+    const notes = [rejected ? `пропущено рядків без пари: ${rejected}` : '', same ? `уже є: ${same}` : '', clash.length ? `не змінено, бо вже є з іншим перекладом: ${clash.slice(0, 5).join('; ')}${clash.length > 5 ? ` і ще ${clash.length - 5}` : ''}` : ''].filter(Boolean);
+    toast(`Додано термінів: ${added}${notes.length ? '. ' + notes.join('. ') : ''}`, clash.length ? { sticky: true } : {});
   });
   $('#st-tm-go', dlg).addEventListener('click', () => {
     let added = 0, rejected = 0;
@@ -239,10 +247,16 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
     const cfg = readSync();
     saveSyncConfig(cfg);
     const state = $('#sy-state', dlg), btn = $('#sy-go', dlg) as HTMLButtonElement;
-    if (!syncConfigured(cfg)) { state.textContent = 'Вкажіть адресу сервера та пароль (щонайменше 8 символів)'; return; }
+    const bad = syncUrlProblem(cfg.url);
+    if (bad) { state.textContent = bad; $('#sy-url', dlg).focus(); return; }
+    if (!syncConfigured(cfg)) { state.textContent = 'Вкажіть пароль синхронізації (щонайменше 8 символів)'; return; }
     btn.disabled = true; state.textContent = 'Синхронізую…';
     try { const rep = await runSync(ctx, cfg, onImport); state.textContent = describe(rep); toast(describe(rep)); }
-    catch (err) { state.textContent = err instanceof Error ? err.message : 'Не вдалося синхронізувати'; }
+    catch (err) {
+      // a request that never reached a server (the address is wrong, the server is off, no network) is not a wrong password
+      const m = err instanceof Error ? err.message : '';
+      state.textContent = err instanceof TypeError || /failed to fetch|networkerror|load failed/i.test(m) ? 'Сервер не відповів: перевірте адресу, чи запущено сервер і чи є мережа' : m || 'Не вдалося синхронізувати';
+    }
     btn.disabled = false;
   });
   $('#st-export', dlg).addEventListener('click', async () => {

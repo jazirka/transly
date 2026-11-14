@@ -86,7 +86,12 @@ export async function projectFiles(p: SavedProject, dirIn: string, withAssets: b
   const out = new Map<string, Uint8Array>();
   const { files, snapshot: _s, reference: _r, ...manifest } = p;
   out.set(`${dir}project.json`, enc.encode(pretty(manifest)));
-  for (const [name, entries] of Object.entries(files)) if (Object.keys(entries).length) out.set(`${dir}translations/${name}.tr.json`, enc.encode(pretty(entries)));
+  for (const [name, entries] of Object.entries(files)) {
+    if (!Object.keys(entries).length) continue;
+    // `src` is the game's own text: it goes only where the originals may go (a private repository, asked for), not into a public one.
+    const shown = withAssets ? entries : Object.fromEntries(Object.entries(entries).map(([k, e]) => { const { src: _src, ...rest } = e; return [k, rest]; }));
+    out.set(`${dir}translations/${name}.tr.json`, enc.encode(pretty(shown)));
+  }
   if (withAssets && p.snapshot) out.set(`${dir}originals/snapshot.json.gz`, await gzip(enc.encode(JSON.stringify(p.snapshot))));
   if (withAssets && p.reference) out.set(`${dir}originals/reference.json.gz`, await gzip(enc.encode(JSON.stringify(p.reference))));
   return out;
@@ -132,6 +137,8 @@ export async function syncFiles(remote: RemoteFiles, cfg: FilesOptions, state: F
       const manifestBytes = blobs.get(pj);
       // Without a changed project.json the remote has nothing new but per-file work: merge it onto our own manifest.
       const manifest: Json = manifestBytes ? asObj(JSON.parse(dec.decode(manifestBytes))) : (() => { const { files: _f, snapshot: _s, reference: _r, ...m } = project; return m as Json; })();
+      // A repository without the originals has rows without `src`: this device keeps the one it knows (the row is not "unchecked" for that).
+      for (const [name, rows] of Object.entries(files)) for (const [k, e] of Object.entries(rows)) { const mine1 = project.files[name]?.[k]; if (e && !e.src && mine1?.src) e.src = mine1.src; }
       const theirs = deserialize(JSON.stringify({ ...manifest, files }), Date.now());
       if (manifestBytes) remoteRev = theirs.assetsRev ?? 0;
       const myRev = project.assetsRev ?? 0;

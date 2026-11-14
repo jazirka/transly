@@ -18,7 +18,9 @@ export function openBuild(ctx: Ctx, dataDir: string | null, onBuilt: (n: number)
   const dlg = el('dialog', 'adlg');
   dlg.setAttribute('aria-labelledby', 'bd-t');
   dlg.innerHTML = `<form method="dialog"><h2 id="bd-t">Збірка</h2>
-    <p class="hint">Записує перекладені рядки в копії файлів гри. Оригінальні файли не змінюються: оберіть окрему порожню папку або завантажте ZIP. Якщо обрати папку гри, застосунок спершу спитає й збереже копії оригіналів.</p>
+    <p class="hint">${desk
+      ? 'Записує перекладені рядки у файли гри. Нижче в блоці «Перевірка в грі» переклад іде прямо в папку даних гри, а оригінали зберігаються поруч і повертаються кнопкою «Повернути оригінали». ZIP не змінює гру взагалі.'
+      : 'Записує перекладені рядки в копії файлів гри. Оригінальні файли не змінюються: оберіть окрему порожню папку або завантажте ZIP. Якщо обрати папку гри, застосунок спершу спитає й збереже копії оригіналів.'}</p>
     <label class="achk"><input type="checkbox" id="bd-appr"> Лише вичитані рядки</label>
     <label class="achk"><input type="checkbox" id="bd-block" checked> Не брати рядки з помилкою QA</label>
     ${desk ? '<label class="achk"><input type="checkbox" id="bd-draft"> Додати чернетки (щоб побачити в грі те, що ще пишете)</label>' : ''}

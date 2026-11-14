@@ -1309,7 +1309,8 @@ export async function start(root: HTMLElement): Promise<void> {
     const v = ctx.view();
     if (!v) { toast('Спершу відкрийте файл'); return; }
     const plan = wrapPlan();
-    if (plan.disabled || (!plan.limit && plan.settings.unit !== 'px')) { toast('Ширину рядка вимкнено в «Перенесення рядків»'); return; }
+    // with no width known from the originals the default one is used, the same as the preview of the dialog
+    if (plan.disabled) { toast('Ширину рядка вимкнено в «Перенесення рядків»'); return; }
     const ents = ctx.entries(v.name);
     const changes: RowChange[] = [];
     for (const u of v.units) {

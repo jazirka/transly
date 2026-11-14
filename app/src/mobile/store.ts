@@ -69,6 +69,7 @@ export class Store {
     this.views = viewsFromSnapshot(saved);
     try { const at = JSON.parse(localStorage.getItem('transly-m-pos') ?? 'null') as { file?: string; key?: string } | null; if (at?.file && this.view(at.file)) { this.file = at.file; this.key = at.key ?? null; } } catch { /* first run */ }
     if (!this.file && this.views[0]) this.file = this.views[0].name;
+    try { const v = JSON.parse(localStorage.getItem('transly-m-view') ?? 'null') as { f?: Filter; q?: string } | null; if (v && typeof v.f === 'string') this.filter = v.f; if (v && typeof v.q === 'string') this.q = v.q; } catch { /* first run */ }
   }
 
   /** `onFailure` is shown when the stored project cannot be read; it resolves when the translator has chosen to start an empty one. */
@@ -232,8 +233,10 @@ export class Store {
     const list = this.rows(); const i = list.findIndex(u => u.key === this.key);
     return list[i + d] ?? null;
   }
-  setFilter(f: Filter): void { this.filter = f; this.emit(); }
-  setQuery(q: string): void { this.q = q; this.emit(); }
+  setFilter(f: Filter): void { this.filter = f; this.rememberView(); this.emit(); }
+  setQuery(q: string): void { this.q = q; this.rememberView(); this.emit(); }
+  /** The filter and the search are kept over a reload (the place in the file is kept already). */
+  private rememberView(): void { try { localStorage.setItem('transly-m-view', JSON.stringify({ f: this.filter, q: this.q })); } catch { /* storage refused */ } }
   setSort(s: Sort): void { this.sort = s; this.emit(); }
   /** There is no review mode: a translation is approved with `approve`. */
   setStage(_s: Stage): void { /* kept for old callers */ }

@@ -613,3 +613,16 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 }
 /* Touch targets of 44 px, not only an enlarged touch area around a smaller button. */
 .m-mini,.m-chip{min-height:44px;height:44px}
+
+/* The preview of the game window: a line wider than the screen scrolls instead of losing its last letters. */
+.m-prevbox{overflow-x:auto}
+.m-prevbox div{overflow:visible}
+/* A search match in a list of rows. */
+.m-src mark{background:rgba(255,214,102,.35);color:inherit;border-radius:3px;padding:0 1px}
+/* The filter strip says that it goes on: a fade at the right edge. */
+.m-chips{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);scroll-padding-inline:12px}
+/* Code chips in the source (\!, \|) have a 44 px target; the hint in an empty field is readable. */
+.m-source .code{min-height:44px;min-width:44px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box}
+textarea::placeholder{color:#a3a6ad}
+/* Two toasts do not cover the field of a short screen: the stack sits under the top bar. */
+@media (max-height:640px){.m-toasts{bottom:auto;top:calc(var(--bar-h, 56px) + 8px)}}

@@ -99,7 +99,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const t = document.createElement('div'); t.className = 'm-toast' + (bad ? ' bad' : '') + (undo ? ' has-undo' : ''); t.dataset.text = text;
     const m = document.createElement('span'); m.className = 'm-tmsg'; m.textContent = text; t.appendChild(m);
     if (undo) {
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'm-tundo'; b.textContent = 'Скасувати';
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'm-tundo'; b.textContent = 'Скасувати'; b.setAttribute('aria-label', `Скасувати: ${text}`);
       b.addEventListener('click', () => { leave(t); const r = store.undoJournalBatch(undo); say(undoReport(r), !r.done); buzz(14); render(); });
       t.appendChild(b);
     }
@@ -115,12 +115,27 @@ export async function start(root: HTMLElement): Promise<void> {
     if (l?.batch) { say(text, false, r.batch); say(`Автозаповнено чернетками: ${plural(l.n, ['однаковий рядок', 'однакові рядки', 'однакових рядків'])}${l.pending ? ` · відрізняється: ${l.pending}` : ''}`, false, l.batch); }
     else say(l?.pending ? `${text} · зв’язаних рядків відрізняється: ${l.pending}` : text, false, r.batch);
   };
+  /** The source of a row in a list: when a search is on, the part around the first match with the match marked (the start of a long line may not hold it). */
+  const excerpt = (text: string, q: string): string => {
+    const needle = q.trim().toLowerCase();
+    const at = needle ? text.toLowerCase().indexOf(needle) : -1;
+    if (at < 0) return esc(text);
+    const from = Math.max(0, at - 24), to = Math.min(text.length, at + needle.length + 40);
+    return `${from > 0 ? '…' : ''}${esc(text.slice(from, at))}<mark>${esc(text.slice(at, at + needle.length))}</mark>${esc(text.slice(at + needle.length, to))}${to < text.length ? '…' : ''}`;
+  };
   /** A destructive button asks twice: the first tap turns it into «Точно очистити?» for 4 seconds. */
   const confirmTap = (btn: HTMLElement, label = 'Точно очистити?'): boolean => {
     if (btn.dataset.armed) { delete btn.dataset.armed; btn.classList.remove('armed'); return true; }
     const was = btn.innerHTML; btn.dataset.armed = '1'; btn.classList.add('armed'); btn.textContent = label;
     setTimeout(() => { if (btn.dataset.armed) { delete btn.dataset.armed; btn.classList.remove('armed'); btn.innerHTML = was; } }, 4000);
     return false;
+  };
+  /** After a step or a send the translation field is on the screen (a short window has it behind the buttons) and, when the keyboard was up, has the focus. */
+  const showTrField = (focus: boolean): void => {
+    const f = document.getElementById('m-tr') as HTMLTextAreaElement | null;
+    if (!f) return;
+    if (focus) f.focus({ preventScroll: true });
+    f.scrollIntoView({ block: 'nearest' });
   };
   /** A big send (20+ rows) needs a second tap within 4 seconds, so it cannot happen by accident. */
   let arm: { key: string; until: number } | null = null;
@@ -299,7 +314,7 @@ export async function start(root: HTMLElement): Promise<void> {
       ${wide.matches ? `<div class="m-scope m-layout" role="group" aria-label="Вигляд"><button class="${L === 'cards' ? 'on' : ''}" data-layout="cards">Картки</button><button class="${L === 'table' ? 'on' : ''}" data-layout="table">Таблиця</button></div>` : ''}</div>
       ${L === 'table' ? tableHtml(v.name, shown, rows.length) : `<ul class="m-list rows">${shown.map((u, i) => {
         const e = store.entry(v.name, u.key), st = store.shown(u, e);
-        return `<li><button class="m-row ${u.key === store.key && !selecting ? 'cur' : ''} ${selecting && picked.has(u.key) ? 'picked' : ''}" ${selecting ? `data-pickkey="${esc(u.key)}" aria-pressed="${picked.has(u.key)}"` : `data-key="${esc(u.key)}"`}>${selecting ? '<span class="m-edge" aria-hidden="true"></span>' : ''}<span class="sd ${SHAPE[st]}${st === 'draft' && isAutoFilled(e) ? ' sd-auto' : ''}" title="${STATUS_LABEL[st]}${st === 'draft' && isAutoFilled(e) ? ' (заповнено застосунком, ще не переглянуто)' : ''}"></span><span class="m-row-t"><small>${i + 1} · ${esc(store.speaker(u) || KIND_LABEL[u.kind])}${threadsOf(e?.comments).length ? ` <span class="m-cmk" title="Є коментарі" aria-label="Є коментарі">${icon('cm')}</span>` : ''}</small><span class="m-src">${esc(u.source.replace(/\s+/g, ' '))}</span><span class="m-tr ${e?.target ? '' : 'none'}">${e?.target ? esc(e.target.replace(/\s+/g, ' ')) : '—'}</span></span></button></li>`;
+        return `<li><button class="m-row ${u.key === store.key && !selecting ? 'cur' : ''} ${selecting && picked.has(u.key) ? 'picked' : ''}" ${selecting ? `data-pickkey="${esc(u.key)}" aria-pressed="${picked.has(u.key)}"` : `data-key="${esc(u.key)}"`}>${selecting ? '<span class="m-edge" aria-hidden="true"></span>' : ''}<span class="sd ${SHAPE[st]}${st === 'draft' && isAutoFilled(e) ? ' sd-auto' : ''}" title="${STATUS_LABEL[st]}${st === 'draft' && isAutoFilled(e) ? ' (заповнено застосунком, ще не переглянуто)' : ''}"></span><span class="m-row-t"><small>${i + 1} · ${esc(store.speaker(u) || KIND_LABEL[u.kind])}${threadsOf(e?.comments).length ? ` <span class="m-cmk" title="Є коментарі" aria-label="Є коментарі">${icon('cm')}</span>` : ''}</small><span class="m-src">${excerpt(u.source.replace(/\s+/g, ' '), store.q)}</span><span class="m-tr ${e?.target ? '' : 'none'}">${e?.target ? esc(e.target.replace(/\s+/g, ' ')) : '—'}</span></span></button></li>`;
       }).join('') || '<li class="m-none">Нічого не знайдено</li>'}${rows.length > shown.length ? `<li class="m-more-li"><button class="m-mini" data-more>Показати ще ${Math.min(PAGE, rows.length - shown.length)} · ${shown.length} з ${rows.length}</button></li>` : ''}</ul>`}${selecting && L === 'cards' ? selBar(picked.size, rows.length, picked.size === rows.length && rows.length > 0, 'data-selall', `<button class="m-mini" data-selcopy ${picked.size ? '' : 'disabled'}>Оригінал</button><button class="m-mini" data-seltm ${picked.size ? '' : 'disabled'}>З пам’яті</button><button class="m-mini danger" data-selclear ${picked.size ? '' : 'disabled'}>Очистити</button>`, `<button class="m-ic" data-selappr ${picked.size ? '' : 'disabled'} aria-label="Вичитати вибрані" title="Вичитати вибрані">${icon('check')}</button><button class="m-primary" data-selsend ${picked.size ? '' : 'disabled'}>${icon('send')}<span>Надіслати</span></button>`, 'data-select') : ''}${selecting && layout === 'cards' ? '' : sbar}`;
   }
 
@@ -475,7 +490,7 @@ export async function start(root: HTMLElement): Promise<void> {
       <label class="m-lbl" for="g-alt">Інші дозволені переклади (через кому)</label><input id="g-alt" class="m-input" value="${esc(gl.alt)}" autocomplete="off">
       <label class="m-check"><input type="checkbox" id="g-qa" ${gl.qa ? 'checked' : ''}> Перевіряти в QA</label>
       <div class="m-btnrow"><button class="m-primary" data-gsave>${gl.edit ? 'Зберегти' : 'Додати термін'}</button>${gl.edit ? '<button class="m-secondary" data-gcancel>Скасувати</button>' : ''}</div></section>
-      <label class="m-search">${icon('search')}<input id="g-q" type="search" placeholder="Пошук серед ${store.saved.terms.length} термінів" value="${esc(gl.q)}" autocomplete="off"></label>
+      <label class="m-search">${icon('search')}<input id="g-q" type="search" placeholder="Пошук серед ${store.saved.terms.length % 10 === 1 && store.saved.terms.length % 100 !== 11 ? `${store.saved.terms.length} терміна` : `${store.saved.terms.length} термінів`}" value="${esc(gl.q)}" autocomplete="off"></label>
       ${list.map(t => `<div class="m-term"><button class="m-term-t" data-gedit="${esc(t.en)}"><b>${esc(t.en)}</b><span>→ ${esc(t.uk)}${t.alt?.length ? ` · ${esc(t.alt.join(', '))}` : ''}</span></button><button class="m-mini ghost" data-tdel="${esc(t.en)}" aria-label="Видалити термін ${esc(t.en)}">Видалити</button></div>`).join('') || '<p class="m-none">Термінів ще немає</p>'}</div>`;
   }
 
@@ -705,7 +720,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const c = store.current; if (!c) return '';
     const sd = (i: Issue): string => `<span class="sd ${i.severity === 'bad' ? 'sd-qa' : 'sd-draft'}"></span>`;
     // a rule of form explains itself under its remark; the older remarks are short enough
-    const live = byHintOrder(store.issues(c.unit, c.entry)).map(i => `<div class="m-issue ${i.severity}"><div class="m-issue-t">${sd(i)}<span class="m-kind k-${i.cat}"><span aria-hidden="true">${HINT_GLYPH[i.cat]}</span> ${HINT_LABEL[i.cat]}</span><span>${esc(i.message)}${i.detail && i.key.includes('-') ? `<small class="m-issue-d">${esc(i.detail)}</small>` : ''}</span></div><div class="m-issue-a">${i.codes?.length ? `<button class="m-mini" data-ins="${esc(i.codes.join(''))}">Вставити</button>` : ''}${i.key === 'wrap' ? '<button class="m-mini" data-wrap>Перенести</button><button class="m-mini ghost" data-sub="wrap">Весь файл…</button>' : ''}${i.fix && !i.codes?.length && i.key !== 'wrap' ? `<button class="m-mini" data-fix="${esc(i.key)}">${esc(i.fix.label)}</button>` : ''}<button class="m-mini ghost" data-ign="${esc(i.key)}">Ігнорувати</button></div></div>`).join('');
+    const live = byHintOrder(store.issues(c.unit, c.entry)).map(i => `<div class="m-issue ${i.severity}"><div class="m-issue-t">${sd(i)}<span class="m-kind k-${i.cat}"><span aria-hidden="true">${HINT_GLYPH[i.cat]}</span> ${HINT_LABEL[i.cat]}</span><span>${esc(i.message)}${i.detail && i.key.includes('-') ? `<small class="m-issue-d">${esc(i.detail)}</small>` : ''}</span></div><div class="m-issue-a">${i.codes?.length ? `<button class="m-mini" data-ins="${esc(i.codes.join(''))}" aria-label="Вставити пропущені коди в місце курсору">Вставити коди</button>` : ''}${i.key === 'wrap' ? '<button class="m-mini" data-wrap>Перенести</button><button class="m-mini ghost" data-sub="wrap">Весь файл…</button>' : ''}${i.fix && !i.codes?.length && i.key !== 'wrap' ? `<button class="m-mini" data-fix="${esc(i.key)}">${esc(i.fix.label)}</button>` : ''}<button class="m-mini ghost" data-ign="${esc(i.key)}">Ігнорувати</button></div></div>`).join('');
     const set = store.ignored(c.unit, c.entry).map(i => `<div class="m-issue muted"><div class="m-issue-t"><span class="sd sd-draft"></span><span>${esc(i.message)} <em class="m-tagi">проігноровано</em></span></div><div class="m-issue-a"><button class="m-mini ghost" data-unign="${esc(i.key)}">Повернути</button></div></div>`).join('');
     return live + set;
   }
@@ -1135,7 +1150,7 @@ export async function start(root: HTMLElement): Promise<void> {
       store.removeGroup(id); if (gscope === id) { scope = 'file'; gscope = null; } gmore = null; say(`Групу «${name}» видалено; файли лишилися`); renderKeep(); return;
     }
     if ((x = q('[data-file]'))) { store.open(x.dataset.file!); go('rows'); return; }
-    if ((x = q('[data-filter]'))) { store.setFilter(x.dataset.filter as Filter); render(); return; }
+    if ((x = q('[data-filter]'))) { store.setFilter(x.dataset.filter as Filter); render(); document.querySelector('.m-chip.on[data-filter]')?.scrollIntoView({ inline: 'center', block: 'nearest' }); return; }
     if (q('[data-more]')) { page++; const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
     if (q('[data-select]')) { selecting = !selecting; picked.clear(); if (selecting) hintOnce(); render(); return; }
     if ((x = q('[data-pickkey]'))) { const k = x.dataset.pickkey!; if (picked.has(k)) picked.delete(k); else picked.add(k); render(); return; }
@@ -1197,13 +1212,15 @@ export async function start(root: HTMLElement): Promise<void> {
       if (r.why) { say(/^Є помилка QA/.test(r.why) ? 'Є помилка QA: виправте її під полем' : r.why, true); buzz(30); document.getElementById('m-issues')?.scrollIntoView({ block: 'nearest' }); return; }
       buzz(14);
       const next = nextBefore;
-      if (next) { store.select(next.key); saySent(r, 'Надіслано'); render(); $('m-main').scrollTop = 0; } else { saySent(r, 'Це був останній рядок у списку'); render(); }
+      // the keyboard stays up for the next row: the field is focused again after the redraw
+      const hadKb = $('m-app').classList.contains('kb');
+      if (next) { store.select(next.key); saySent(r, 'Надіслано'); render(); $('m-main').scrollTop = 0; showTrField(hadKb); } else { saySent(r, 'Це був останній рядок у списку'); render(); }
       return;
     }
     if (q('[data-queue]')) {
       const r = store.nextQueue('untranslated', 1);
       say(r ? `${QUEUE_LABEL.untranslated.title}: ${r.place} з ${r.total}` : QUEUE_LABEL.untranslated.empty, !r);
-      if (r) { render(); $('m-main').scrollTop = 0; }
+      if (r) { const hadKb = $('m-app').classList.contains('kb'); render(); $('m-main').scrollTop = 0; showTrField(hadKb); }
       return;
     }
     if (q('[data-copy]')) { const c = store.current; if (c) { ($('m-tr') as HTMLTextAreaElement).value = c.unit.source; store.write(c.unit.source); refreshMeta(); autosize(); } return; }
@@ -1245,7 +1262,7 @@ export async function start(root: HTMLElement): Promise<void> {
     }
     if (q('[data-gcancel]')) { Object.assign(gl, { en: '', uk: '', alt: '', qa: true, edit: false }); render(); return; }
     if ((x = q('[data-gedit]'))) { const t = store.saved.terms.find(y => y.en === x!.dataset.gedit); if (t) { Object.assign(gl, { en: t.en, uk: t.uk, alt: (t.alt ?? []).join(', '), qa: t.qa !== false, edit: true }); render(); $('m-main').scrollTop = 0; } return; }
-    if ((x = q('[data-tdel]'))) { store.removeTerm(x.dataset.tdel!); say('Термін видалено'); render(); return; }
+    if ((x = q('[data-tdel]'))) { if (!confirmTap(x, 'Точно видалити?')) return; store.removeTerm(x.dataset.tdel!); say('Термін видалено'); render(); return; }
     if ((x = q('[data-actopen]'))) { const k = x.dataset.actopen!; if (act.open.has(k)) act.open.delete(k); else act.open.add(k); const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; return; }
     if ((x = q('[data-undojournal]'))) { const r = store.undoJournalBatch(x.dataset.undojournal!); say(r.done ? undoReport(r) : 'Рядки вже змінено: скасувати нічого', !r.done); buzz(14); render(); return; }
     if ((x = q('[data-undoauto]'))) { const [at, kind] = x.dataset.undoauto!.split('|'); const n = store.undoAutoFill(Number(at), kind!); say(n ? `Скасовано: ${plural(n, ['рядок', 'рядки', 'рядків'])}` : 'Нічого скасовувати', !n); buzz(14); render(); return; }

@@ -1,4 +1,5 @@
 import type { Term } from './qa';
+import { ukNorm, ukWordForms } from './ukmorph';
 
 /** A glossary entry. Imported dictionaries set `qa: false`: they help the translator but never raise QA warnings. */
 export interface GlossaryTerm extends Term {
@@ -89,6 +90,20 @@ export type WordToken = Token;
 export const wordTokens = (text: string): WordToken[] => tokens(text);
 /** Do two keys of Ukrainian words belong to one word? One has to be the beginning of the other, and a very short key must match fully. */
 export const ukStemsAgree = (hay: string, need: string): boolean => hay === need || prefixAgrees(hay, need) || prefixAgrees(need, hay);
+
+const formsMemo = new Map<string, Set<string>[] | null>();
+/** Every form of each word of a Ukrainian phrase, for matching by exact forms (null when the phrase is not Cyrillic or does not decline). */
+export function phraseForms(phrase: string): Set<string>[] | null {
+  if (!CYRILLIC.test(phrase)) return null;
+  let f = formsMemo.get(phrase);
+  if (f === undefined) { f = ukWordForms(phrase); if (formsMemo.size > 2000) formsMemo.clear(); formsMemo.set(phrase, f); }
+  return f;
+}
+/**
+ * Does the word of a text (its key and its letters) stand for word `j` of a phrase? By stems, or, where stems cannot tell (a vowel that
+ * drops out: «майстер» — «майстра», «пес» — «пса»), by the exact forms the phrase has.
+ */
+export const wordAgrees = (forms: Set<string>[] | null, j: number, text: string, key: string, need: string): boolean => ukStemsAgree(key, need) || !!forms?.[j]?.has(ukNorm(text));
 /** `long` starts with `short`: for a short key (the key of «бог» is «бог») only one more letter is the same word, not «богдан». */
 const prefixAgrees = (long: string, short: string): boolean => short.length >= 3 && long.startsWith(short) && (short.length >= 5 || long.length - short.length <= 1);
 
@@ -198,15 +213,15 @@ export function termsIn<T extends Term>(source: string, terms: T[]): T[] {
  */
 export function targetHasTerm(target: string, uk: string, alt: string[] = []): boolean {
   const toks = tokens(target), hay = toks.map(t => t.keys[0]!);
-  const agree = (h: string, n: string): boolean => h === n || prefixAgrees(h, n) || prefixAgrees(n, h);
   const has = (phrase: string) => {
     const need = tokens(phrase).map(t => t.keys[0]!);
     if (!need.length) return false;
+    const forms = phraseForms(phrase);
     // The words of a phrase stand next to each other (only spaces or a hyphen between), the same rule as the highlight in the editor: a translation
     // that has the words scattered over the line does not "have the term".
     for (let i = 0; i + need.length <= hay.length; i++) {
       let ok = true;
-      for (let j = 0; j < need.length && ok; j++) ok = agree(hay[i + j]!, need[j]!) && (j === 0 || /^[\s\-–—]+$/.test(target.slice(toks[i + j - 1]!.end, toks[i + j]!.start)));
+      for (let j = 0; j < need.length && ok; j++) ok = wordAgrees(forms, j, target.slice(toks[i + j]!.start, toks[i + j]!.end), hay[i + j]!, need[j]!) && (j === 0 || /^[\s\-–—]+$/.test(target.slice(toks[i + j - 1]!.end, toks[i + j]!.start)));
       if (ok) return true;
     }
     return false;

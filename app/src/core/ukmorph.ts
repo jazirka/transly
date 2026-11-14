@@ -40,6 +40,8 @@ const F = (form: string, p = 0.99, flags: string[] = []): Form => ({ form, p, fl
 /* ---------- letters and small lists ---------- */
 
 const norm = (s: string): string => s.toLowerCase().replace(/['ʼ`]/g, '’');
+/** A word in the form the exact forms are kept in (lower case, one kind of apostrophe). */
+export const ukNorm = norm;
 const CONS = 'бвгґджзклмнпрстфхцчшщ';
 const isVowel = (c: string | undefined): boolean => !!c && 'аеєиіїоуюя'.includes(c);
 const isCons = (c: string | undefined): boolean => !!c && CONS.includes(c);
@@ -502,6 +504,12 @@ export function ukRetarget(oldPhrase: string, newPhrase: string, observed: strin
     if (!par) { if (norm(w.text) !== o) { capScore = 0.5; flags.push('frozen-differs'); } continue; }
     cells = cells.filter(c => { const vi = par[c].findIndex(f => f.form === o); if (vi >= 0 && !variant.has(c)) variant.set(c, vi); return vi >= 0; });
     if (!cells.length) return null;
+  }
+  // A masculine name that is not in the lists may be animate: «Остапа» after «бачив» is its accusative, after «біля» its genitive. Both readings stay in play (and the row is not ticked).
+  const oh0 = oldP.words[oldP.head]?.noun;
+  if (oh0?.g === 'm' && oh0.flags.includes('animacy-guess') && /^\p{Lu}\p{Ll}/u.test(oldP.words[oldP.head]?.text ?? '')) {
+    if (cells.includes('gen.sg') && !cells.includes('acc.sg')) cells.push('acc.sg');
+    if (cells.includes('gen.pl') && !cells.includes('acc.pl')) cells.push('acc.pl');
   }
   const need = opts.prev ? PREP[norm(opts.prev)] : undefined;
   // the locative stands only after a preposition: without one it stays an alternative, but the plain case comes first («Мечі лежали» is «Клинки лежали»)

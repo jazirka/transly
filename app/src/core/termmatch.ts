@@ -1,4 +1,4 @@
-import { candidateTerms, prepareText, termRangesIn, ukStemsAgree, wordTokens } from './glossary';
+import { candidateTerms, phraseForms, prepareText, termRangesIn, wordAgrees, wordTokens } from './glossary';
 import type { Term } from './qa';
 
 /** A glossary term found in a text: where, and which term. */
@@ -30,9 +30,10 @@ export function termRangesInTarget(text: string, uk: string, alt: string[] = [])
   for (const phrase of [uk, ...alt]) {
     const need = wordTokens(phrase).map(t => t.keys[0]!);
     if (!need.length) continue;
+    const forms = phraseForms(phrase);
     for (let i = 0; i + need.length <= toks.length; i++) {
       let ok = true;
-      for (let j = 0; j < need.length && ok; j++) ok = ukStemsAgree(toks[i + j]!.keys[0]!, need[j]!) && (j === 0 || SEPARATOR.test(text.slice(toks[i + j - 1]!.end, toks[i + j]!.start)));
+      for (let j = 0; j < need.length && ok; j++) ok = wordAgrees(forms, j, text.slice(toks[i + j]!.start, toks[i + j]!.end), toks[i + j]!.keys[0]!, need[j]!) && (j === 0 || SEPARATOR.test(text.slice(toks[i + j - 1]!.end, toks[i + j]!.start)));
       if (ok) out.push([toks[i]!.start, toks[i + need.length - 1]!.end]);
     }
   }

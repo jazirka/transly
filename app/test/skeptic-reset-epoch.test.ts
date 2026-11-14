@@ -27,7 +27,15 @@ describe('reset epoch', () => {
     it(`nothing older than the reset comes back (${name})`, () => {
       const p = merged();
       expect(p.resetEpoch).toBe(100);
-      expect(Object.keys(p.files['M.json']!).sort()).toEqual(['fresh', 'kept', 'mixed']);
+      // rows older than the reset come back empty (a reset within a day before may have been made by a clock that ran ahead: the
+      // text stays in the row's history, see `RESET_WHAT`); rows written after it, and the newer parts of mixed rows, survive
+      const rows = p.files['M.json']!;
+      expect(Object.keys(rows).sort()).toEqual(['fresh', 'kept', 'mixed', 'old', 'onlyOldComment']);
+      expect(rows.old).toMatchObject({ target: '', status: 'new' });
+      expect(rows.old!.history!.map(h => h.text)).toEqual(['старе']);
+      expect(rows.onlyOldComment!.target).toBe('');
+      expect(rows.fresh!.target).toBe('нове');
+      expect(rows.kept!.target).toBe('набране після скидання');
       expect(p.files['M.json']!.mixed!.comments!.map(c => c.text)).toEqual(['new comment']);
       expect(p.files['M.json']!.mixed!.history!.map(h => h.text)).toEqual(['n']);
       expect(p.terms.map(t => t.en)).toEqual(['New']);
@@ -36,6 +44,16 @@ describe('reset epoch', () => {
       expect(p.deletedTerms).toEqual({ recent: 130 });
     });
   }
+
+  it('rows older than a day before the reset are gone, not kept', () => {
+    const day = 24 * 3600 * 1000;
+    const a = emptyProject('P'); a.resetEpoch = 10 * day;
+    const b = emptyProject('P'); b.files['M.json'] = { ancient: row('давнє', 2 * day), recent: row('за годину до скидання', 10 * day - 3600_000) };
+    const rows = m(a, b).files['M.json']!;
+    expect(Object.keys(rows)).toEqual(['recent']);
+    expect(rows.recent).toMatchObject({ target: '', status: 'new' });
+    expect(rows.recent!.history!.map(h => h.text)).toEqual(['за годину до скидання']);
+  });
 
   it('without a reset nothing is filtered by age', () => {
     const p = m(emptyProject('P'), staleSide());

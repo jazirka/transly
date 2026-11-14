@@ -82,7 +82,8 @@ describe('project', () => {
     const reset = proj({}, 20);
     const afterReset = mergeProjects(pc, reset).project;
     expect(afterReset.resetEpoch).toBe(20);
-    expect(Object.keys(afterReset.files['F.json'] ?? {})).toEqual([]);
+    // nothing translated survives the reset (rows within a day before it come back empty, with their text in the history)
+    expect(Object.values(afterReset.files['F.json'] ?? {}).every(x => x.target === '')).toBe(true);
   });
 });
 

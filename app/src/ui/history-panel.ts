@@ -29,7 +29,7 @@ export function renderHistory(ctx: Ctx, row: string, e: Entry | undefined): void
       : cmp ? segs(diffWords(current, r.rec.text))
       : r.before ? segs(r.diff) : esc(r.rec.text);
     return `<div class="hv ${r.isCurrent ? 'cur' : ''}" data-hi="${r.index}">
-      <div class="h"><b>${esc(r.rec.who)}</b> · ${esc(r.rec.what)} · ${when(r.rec.at)}${r.isCurrent ? ' <span class="tagi">зараз у полі</span>' : ''}</div>
+      <div class="h"><b>${esc(r.rec.who)}</b> · ${esc(r.rec.what)}${r.rec.at ? ' · ' + when(r.rec.at) : ''}${r.isCurrent ? ' <span class="tagi">зараз у полі</span>' : ''}</div>
       <div class="t diff">${body}</div>
       ${cmp ? '<div class="hint">Закреслене зникне, підкреслене повернеться, якщо відновити цю версію.</div>' : ''}
       <div class="hv-acts">
@@ -55,7 +55,7 @@ export function historyClick(ctx: Ctx, t: HTMLElement, apply: (u: Unit, text: st
   if (!r) return true;
   const text = b.dataset.hv === 'before' ? r.before : r.rec.text;
   if (!text) { toast('Тут нічого відновлювати'); return true; }
-  apply(u, text, restoreNote(r.rec, b.dataset.hv === 'before' ? 'before' : 'text', when(r.rec.at)));
+  apply(u, text, restoreNote(r.rec, b.dataset.hv === 'before' ? 'before' : 'text', r.rec.at ? when(r.rec.at) : 'іншого пристрою'));
   toast('Текст відновлено. Повернути попередній можна тут же, в історії');
   return true;
 }

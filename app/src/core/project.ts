@@ -7,7 +7,7 @@ import { mergeLinkData } from './links';
 import type { LinkItem, LinkMode } from './links';
 import { extract } from './engine';
 import type { ExtractOptions } from './rpgmaker';
-import { merge } from './merge';
+import { OTHER_DEVICE, RESET_WHAT, merge } from './merge';
 import { clampClock, repairProject } from './validate';
 import { progressOf } from './progress';
 import type { Entry, GameFile, Translations, Unit } from './model';
@@ -234,7 +234,7 @@ function mergeLabels(a: Record<string, string> = {}, b: Record<string, string> =
 }
 
 /** What to tell the translator when a reset dropped rows (see `ProjectMerge.droppedByReset`). */
-export const resetNote = (n: number): string => `скидання проєкту відкинуло рядків: ${n} (їх позначено менш ніж за добу до скидання: якщо годинник пристрою, що скидав, спішив, це може бути ваша нова робота: перевірте її)`;
+export const resetNote = (n: number): string => `скидання проєкту очистило рядків: ${n} (їх позначено менш ніж за добу до скидання: якщо годинник пристрою, що скидав, спішив, це може бути ваша нова робота). Текст кожного збережено в історії рядка`;
 
 export interface ProjectMerge {
   project: SavedProject;
@@ -292,7 +292,11 @@ export function mergeProjects(a: SavedProject, b: SavedProject, since = 0): Proj
     for (const [k, e] of Object.entries(t)) {
       const l = liveEntry(e, epoch);
       if (l) out[k] = l;
-      else if (e.target.trim() && epoch - e.mt <= RESET_SKEW_MS) droppedByReset++;
+      else if (e.target.trim() && epoch - e.mt <= RESET_SKEW_MS) {
+        // dropped by the reset, but possibly done after it: the row starts again, empty, and keeps the text in its history
+        droppedByReset++;
+        out[k] = { target: '', status: 'new', mt: epoch + 1, history: [{ at: 0, who: OTHER_DEVICE, what: RESET_WHAT, text: e.target }] };
+      }
     }
     return out;
   };

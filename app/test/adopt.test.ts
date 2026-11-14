@@ -24,7 +24,9 @@ describe('adoptSynced: what was typed during a sync is not lost', () => {
     live.resetEpoch = 10;                                      // the translator pressed "reset" meanwhile
     const adopted = adoptSynced(live, synced);
     expect(adopted.resetEpoch).toBe(10);
-    expect(adopted.files['Map001.json']).toEqual({});
+    // nothing translated survives the reset; the rows that were marked within a day before it are empty and keep their text in the history
+    expect(Object.values(adopted.files['Map001.json']!).every(e => e.target === '')).toBe(true);
+    expect(adopted.files['Map001.json']!.a!.history!.map(h => h.text)).toEqual(['old']);
   });
 
   it('with nothing typed meanwhile the result is the same project', () => {

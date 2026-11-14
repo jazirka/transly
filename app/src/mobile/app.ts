@@ -833,7 +833,7 @@ export async function start(root: HTMLElement): Promise<void> {
   /** The history of the open row: what changed in each record, and a way back to a version or to what was before it. */
   function historyHtml(rows: ReturnType<typeof historyRows>): string {
     if (!rows.length) return '<p class="m-none">Історії ще немає</p>';
-    return `<ol class="m-time">${rows.map(r => `<li class="${r.isCurrent ? 'cur' : ''}"><small>${fmtTime(r.rec.at)} · ${esc(r.rec.who)}${r.isCurrent ? ' · зараз у полі' : ''}</small><span class="m-chipx">${esc(r.rec.what)}</span>${r.rec.text ? `<p class="m-diff">${r.before ? diffHtml(r.diff) : esc(r.rec.text)}</p>` : ''}
+    return `<ol class="m-time">${rows.map(r => `<li class="${r.isCurrent ? 'cur' : ''}"><small>${r.rec.at ? fmtTime(r.rec.at) + ' · ' : ''}${esc(r.rec.who)}${r.isCurrent ? ' · зараз у полі' : ''}</small><span class="m-chipx">${esc(r.rec.what)}</span>${r.rec.text ? `<p class="m-diff">${r.before ? diffHtml(r.diff) : esc(r.rec.text)}</p>` : ''}
       <div class="m-cma">${r.canRestore ? `<button class="m-mini ghost" data-hv="restore" data-i="${r.index}">Відновити цю версію</button>` : ''}${r.canRestoreBefore ? `<button class="m-mini ghost" data-hv="before" data-i="${r.index}">Було до цього</button>` : ''}</div></li>`).join('')}</ol>`;
   }
   const fmtTime = (t: number): string => new Date(t).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -1174,7 +1174,7 @@ export async function start(root: HTMLElement): Promise<void> {
       const r = historyRows(c.entry?.history, c.entry?.target ?? '').find(y => y.index === Number(x!.dataset.i));
       const text = r ? (x.dataset.hv === 'before' ? r.before : r.rec.text) : '';
       if (!r || !text) return;
-      store.restore(text, restoreNote(r.rec, x.dataset.hv === 'before' ? 'before' : 'text', fmtTime(r.rec.at)));
+      store.restore(text, restoreNote(r.rec, x.dataset.hv === 'before' ? 'before' : 'text', r.rec.at ? fmtTime(r.rec.at) : 'іншого пристрою'));
       say('Текст відновлено. Повернути попередній можна тут же, в історії'); buzz(10); render(); return;
     }
     // A term or a control code of the original opens its card; a tap that just misses one goes to the nearest within reach, not to nothing.

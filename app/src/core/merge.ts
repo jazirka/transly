@@ -47,7 +47,22 @@ function newerOf(a: Entry, b: Entry): Entry {
   return kb > ka ? b : a;
 }
 
-const sameHistory = (h: HistoryItem): string => `${h.at}\u0001${h.who}\u0001${h.what}\u0001${h.text}`;
+/** The wording of the history record that keeps a translation which a merge replaced (the same on every device, so merges still agree). */
+export const OTHER_DEVICE = 'інший пристрій';
+export const REPLACED_WHAT = 'версія з іншого пристрою, замінена пізнішою правкою';
+export const RESET_WHAT = 'переклад, який відкинуло скидання проєкту (годинник пристрою, що скидав, міг спішити)';
+
+/**
+ * Records that keep a translation another device lost carry no time (`at` is 0) and are identified by their text alone: the same lost
+ * text could otherwise be recorded with different times depending on the order in which three copies are merged, and the merge must
+ * not depend on that. The history shows them as versions from another device, after the dated records.
+ */
+const isKept = (h: HistoryItem): boolean => h.who === OTHER_DEVICE && (h.what === REPLACED_WHAT || h.what === RESET_WHAT);
+const sameHistory = (h: HistoryItem): string => (isKept(h) ? `kept\u0001${h.what}\u0001${h.text}` : `${h.at}\u0001${h.who}\u0001${h.what}\u0001${h.text}`);
+/** Oldest first; records of the same time in a fixed order, so that the order of a merge does not show in the result. */
+const byTime = (x: HistoryItem, y: HistoryItem): number => x.at - y.at || (sameHistory(x) < sameHistory(y) ? -1 : sameHistory(x) > sameHistory(y) ? 1 : 0);
+/** Of two records of the same lost text, the earlier one stays (so that every order of merging gives the same record). */
+const earlier = (a: HistoryItem, b: HistoryItem): HistoryItem => (isKept(a) && b.at < a.at ? b : a);
 
 /**
  * Merge two versions of one row. The translation itself (text, status, review marks) comes from the side that was
@@ -60,9 +75,15 @@ export function mergeEntry(a: Entry, b: Entry): Entry {
   const comments = unionBy(a.comments, b.comments, commentId, pickComment);
   if (comments) out.comments = comments === a.comments || comments === b.comments ? comments : [...comments].sort((x, y) => x.at - y.at);
   else delete out.comments;
-  const history = unionBy(a.history, b.history, sameHistory);
-  if (history) out.history = history === a.history || history === b.history ? history : history.sort((x, y) => x.at - y.at).slice(-HISTORY_LIMIT);
+  const history = unionBy(a.history, b.history, sameHistory, earlier);
+  if (history) out.history = history === a.history || history === b.history ? history : history.sort(byTime).slice(-HISTORY_LIMIT);
   else delete out.history;
+  // A kept translation that is the row's text again (an older version that won in the end) is not a lost version any more. Without
+  // this the record would exist or not depending on the order in which three copies were merged.
+  if (out.history?.some(h => isKept(h) && h.text === out.target)) {
+    const rest = out.history.filter(h => !(isKept(h) && h.text === out.target));
+    if (rest.length) out.history = rest; else delete out.history;
+  }
   // Ignored warnings: the side whose list changed later decides (so a warning can also be brought back); without clocks, both lists count.
   const aAt = a.ignAt ?? 0, bAt = b.ignAt ?? 0;
   if (aAt !== bAt) { const from = bAt > aAt ? b : a; if (from.ign) out.ign = from.ign; else delete out.ign; out.ignAt = Math.max(aAt, bAt); }
@@ -82,8 +103,18 @@ export function merge(a: Translations, b: Translations, since = 0): MergeResult 
   for (const [key, eb] of Object.entries(b)) {
     const ea: Entry | undefined = merged[key];
     if (!ea) { merged[key] = eb; continue; }
-    if (ea.target !== eb.target && ea.mt > since && eb.mt > since) conflicts.push(key);
-    merged[key] = mergeEntry(ea, eb);
+    const entry = mergeEntry(ea, eb);
+    if (ea.target !== eb.target && ea.mt > since && eb.mt > since) {
+      conflicts.push(key);
+      // the version that lost is not thrown away: its text goes into the row's history, where it can be brought back
+      const loser = newerOf(ea, eb) === ea ? eb : ea;
+      if (loser.target.trim() && loser.target !== entry.target) {
+        const kept: HistoryItem = { at: 0, who: OTHER_DEVICE, what: REPLACED_WHAT, text: loser.target };
+        const h = unionBy(entry.history, [kept], sameHistory, earlier) ?? [kept];
+        entry.history = h === entry.history ? h : [...h].sort(byTime).slice(-HISTORY_LIMIT);
+      }
+    }
+    merged[key] = entry;
   }
   return { merged, conflicts };
 }

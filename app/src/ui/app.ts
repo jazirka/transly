@@ -3,7 +3,7 @@ import type { IngestReport, QaOptions, QueueKind, WrapPlan } from '../core';
 import { pxMeasure } from './measure';
 import { openWrapTool } from './wrap-dialog';
 import { openQaRules } from './qarules-dialog';
-import { GroupIndex, KIND_LABEL, UndoStack, approveEntry, groupColor, groupRows, liveGroups } from '../core';
+import { GroupIndex, KIND_LABEL, UndoStack, approveEntry, groupColor, groupRows, liveGroups, outboxRescue, takeOutbox } from '../core';
 import type { Entry, FileView, GameFile, Group, RowChange, SavedProject, Unit } from '../core';
 import { openBuild } from './build-dialog';
 import { dataDirOf, forgetGameDir, isDesktop, rememberedGameDir, reopenGameDir, reopenGameDirDesktop, setProject } from './desktop';
@@ -190,6 +190,10 @@ export async function start(root: HTMLElement): Promise<void> {
     await showRecovery(root, e, () => store.releaseAfterBackup(e.raw));
     saved = emptyProject('Новий проєкт');
   }
+  // what the previous session could not finish writing (the page was closed within the delay of the autosave)
+  const kv = (() => { try { return window.localStorage; } catch { return null; } })();
+  const back = kv ? takeOutbox(kv, 'default', saved, Date.now()) : null;
+  if (back) saved = back.project;
   const mq = matchMedia('(max-width: 760px)');
   /** A window too narrow for three columns: the right panel is folded by itself and, when opened, lies over the centre. */
   const narrow = matchMedia('(min-width: 761px) and (max-width: 1180px)');
@@ -206,7 +210,8 @@ export async function start(root: HTMLElement): Promise<void> {
   /** The folder remembered for the project (it changes when another one is picked or forgotten). */
   const desktopDir = (): string | null => (isDesktop() ? rememberedGameDir() : null);
   try { lastHandle = (await loadHandle('default')) as typeof lastHandle; } catch { lastHandle = null; }
-  const autosave = new Autosave(store, 400, ok => { s.saveOk = ok; if (ok) s.savedAt = Date.now(); renderStatus(); });
+  const autosave = new Autosave(store, 400, ok => { s.saveOk = ok; if (ok) s.savedAt = Date.now(); renderStatus(); }, undefined, kv ? outboxRescue(kv, 'default') : null);
+  if (back) { autosave.keepAll(); autosave.queue(saved); }
   // Another tab or window wrote to the same stored project: the save merged its work in; take it over without redrawing
   // (the translator may be typing), the screen shows it the next time it is drawn.
   store.onForeign = merged => {
@@ -229,6 +234,7 @@ export async function start(root: HTMLElement): Promise<void> {
   root.appendChild(input);
   initWindowControls(() => autosave.flush());
   document.documentElement.dataset.booted = '1';
+  if (back) toast(`Відновлено правки, які не встигли зберегтися перед закриттям: ${back.rows}`);
 
   /** Longest line a message may have: the translator's number, or what the original's own lines suggest (0 = not checked). */
   let autoLimit: { views: State['views']; n: number } | null = null;
@@ -1771,10 +1777,16 @@ export async function start(root: HTMLElement): Promise<void> {
     renderAll();
   });
 
-  addEventListener('beforeunload', () => { void autosave.flush(); });
+  // A write that is only started may not survive the page: the changed rows also go to the synchronous outbox first.
+  // While the store keeps refusing (storage full), the browser is asked to confirm before the page closes.
+  addEventListener('beforeunload', e => {
+    autosave.rescueNow(); void autosave.flush();
+    if (autosave.failures > 0 && autosave.unsaved) { e.preventDefault(); e.returnValue = ''; }
+  });
+  addEventListener('pagehide', () => { autosave.rescueNow(); void autosave.flush(); });
   setTimeout(() => void autoCheck(), 4000);
   // The Android app goes to the background without unloading the page: save what was typed.
-  document.addEventListener('visibilitychange', () => { if (document.hidden) void autosave.flush(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { autosave.rescueNow(); void autosave.flush(); } });
   /** Back button: close whatever is open on top first; false when there is nothing to close. */
   function backStep(): boolean {
     const dlg = document.querySelector<HTMLDialogElement>('dialog[open]');

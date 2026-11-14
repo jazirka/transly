@@ -1,4 +1,4 @@
-import { isAutoFilled, planIngest, ingestQuiet, adoptSynced, applyPlan, planMessage, planOf, reconcileChanges, rowState, nextIn, positionOf, queueRows, adviceCount, check, fixRule, hasAdvice, knownStatus, qaOf, ruleStats, GROUP_COLORS, proposeTermSync, termChange, termChanges, LinkIndex, afterSend, clearMain, linkChanges, linkModeOf, linkView, planLinkSync, relinkRow, reviewClusters, setMain, unlinkRow, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, TmIndex, findReplace, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines, approveEntry, sendBack, threadsOf, rowsOfGroup, flowText, wrapMessage, wrapOf } from '../core';
+import { isAutoFilled, planIngest, ingestQuiet, adoptSynced, applyPlan, planMessage, planOf, reconcileChanges, rowState, nextIn, positionOf, queueRows, adviceCount, check, fixRule, hasAdvice, knownStatus, qaOf, ruleStats, GROUP_COLORS, proposeTermSync, termChange, termChanges, LinkIndex, afterSend, clearMain, linkChanges, linkModeOf, linkView, planLinkSync, relinkRow, reviewClusters, setMain, unlinkRow, GroupIndex, createGroup, deleteGroup, liveGroups, placeFile, recolorGroup, renameGroup, deleteComment, editComment, replyTo, resolveThread, touchTerms, removeTerm, saveTerm, commitRows, journalBatches, newBatch, recordChange, undoJournal, usageKey, buildUsage, parseDelimited, parseHtmlTable, parseTerms, pluginCandidates, termsFromTable, autoBatches, autoUndone, undoAuto, sendBatches, undoBatch, undoneBatches, almost as autofillAlmost, learnWords, proposals as autofillProposals, addComment, alignReference, extract, withReference, withoutReference, Autosave, TmIndex, findReplace, referenceSets, activeIssues, autoLineLimit, deserialize, edit, emptyProject, labelsOf, limitFor, mergeProjects, readGame, snapshotOf, speakerOf, statsOf, submit, sysNamesOf, termsIn, viewsFromSnapshot, wrapLines, approveEntry, sendBack, threadsOf, rowsOfGroup, flowText, wrapMessage, wrapOf, outboxRescue, takeOutbox } from '../core';
 import type { IngestReport, Protect, QueueKind, Issue, QaSettings, RuleStat, LinkRowView, QaOptions, TermChange, TermProposal, TermSync, WrapPlan } from '../core';
 import { pxMeasure } from '../ui/measure';
 import type { BatchKind, Group, Entry, GlossaryTerm, RowChange, FileStats, FileView, GameFile, SavedProject, Stage, Status, Unit } from '../core';
@@ -56,9 +56,14 @@ export class Store {
   lastIngest: { batch: string | undefined; report: IngestReport } | null = null;
   /** Told when work from another tab was merged into this one, so the screen can say so. */
   onForeignNotice: (() => void) | null = null;
-  private constructor(private idb: IdbStore, saved: SavedProject) {
+  /** Rows taken back from the outbox at start (work the previous session could not finish writing); 0 when none. */
+  rescuedRows = 0;
+  private constructor(private idb: IdbStore, saved: SavedProject, rescuedRows = 0) {
     this.saved = saved;
-    this.autosave = new Autosave(idb, 400, ok => { this.saveOk = ok; if (ok) this.savedAt = Date.now(); this.emit(); });
+    this.rescuedRows = rescuedRows;
+    const kv = (() => { try { return window.localStorage; } catch { return null; } })();
+    this.autosave = new Autosave(idb, 400, ok => { this.saveOk = ok; if (ok) this.savedAt = Date.now(); this.emit(); }, undefined, kv ? outboxRescue(kv, 'default') : null);
+    if (rescuedRows) { this.autosave.keepAll(); this.autosave.queue(saved); }
     // another tab wrote to the same stored project and the save merged its work in: take it over (no redraw: the translator may be typing)
     idb.onForeign = merged => { this.saved = adoptSynced(this.saved, merged); this.tmCache = null; this.persist(); this.onForeignNotice?.(); };
     this.views = viewsFromSnapshot(saved);
@@ -77,13 +82,18 @@ export class Store {
       await onFailure(e, () => idb.releaseAfterBackup(e.raw));
       saved = emptyProject('Новий проєкт');
     }
-    return new Store(idb, saved);
+    // what the previous session could not finish writing (the page went away within the delay of the autosave)
+    let rows = 0;
+    try { const back = takeOutbox(window.localStorage, 'default', saved, Date.now()); if (back) { saved = back.project; rows = back.rows; } } catch { /* no localStorage here */ }
+    return new Store(idb, saved, rows);
   }
 
   onChange(fn: () => void): void { this.listeners.add(fn); }
   private emit(): void { this.linkTodoCache = null; for (const f of this.listeners) f(); }
   persist(): void { this.autosave.queue(this.saved); }
   flush(): Promise<void> { return this.autosave.flush(); }
+  /** The page is going away: keep the unsaved rows in the synchronous outbox and start the write. */
+  leaving(): void { this.autosave.rescueNow(); void this.autosave.flush(); }
   get who(): string { return this.saved.settings.who; }
   get hasGame(): boolean { return this.views.length > 0; }
 

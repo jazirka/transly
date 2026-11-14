@@ -28,6 +28,7 @@ const SHAPE: Record<Shown, string> = { new: 'sd-new', draft: 'sd-draft', done: '
 export async function start(root: HTMLElement): Promise<void> {
   const store = await Store.open((f, keep) => showRecovery(root, f, keep));
   store.onForeignNotice = () => say('Знайдено правки з іншої вкладки: їх злито з вашими');
+  if (store.rescuedRows) setTimeout(() => say(`Відновлено правки, які не встигли зберегтися: ${store.rescuedRows}`), 300);
   let tab: Tab = store.hasGame ? (store.key ? 'edit' : 'rows') : 'files';
   let menu = false;
   /** Fields the keyboard opens for: only these switch the app into keyboard mode (a checkbox does not). */
@@ -1476,8 +1477,8 @@ export async function start(root: HTMLElement): Promise<void> {
   let sx = 0, sy = 0, st = 0, sw = false;
   root.addEventListener('touchstart', e => { sw = (tab === 'edit' || sub === 'scene') && e.touches.length === 1 && !(e.target as HTMLElement).closest('textarea, button, input, .m-sheet, .m-menu, #m-tcard'); if (sw) { sx = e.touches[0]!.clientX; sy = e.touches[0]!.clientY; st = Date.now(); } }, { passive: true });
   root.addEventListener('touchend', e => { if (!sw) return; sw = false; const c = e.changedTouches[0]!, dx = c.clientX - sx, dy = c.clientY - sy; if (Date.now() - st < 700 && Math.abs(dx) > 80 && Math.abs(dy) < Math.abs(dx) / 2) { if (sub === 'scene') stepSceneBy(dx < 0 ? 1 : -1); else step(dx < 0 ? 1 : -1); } }, { passive: true });
-  window.addEventListener('pagehide', () => void store.flush());
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') void store.flush(); });
+  window.addEventListener('pagehide', () => store.leaving());
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') store.leaving(); });
   // What the Android shell calls: the back button (close the sheet, then one screen up), saving on leaving, a row opened from the widget.
   Object.assign(window, {
     __back: (): boolean => { if (sub) { sub = null; render(); return true; } if (sheet || menu) { sheet = false; menu = false; renderSheet(); renderChrome(); return true; } if (tab === 'edit') { go('rows'); return true; } if (tab === 'rows' || tab === 'more') { go('files'); return true; } return false; },

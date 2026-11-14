@@ -35,6 +35,24 @@ final class WidgetKit {
         }
     }
 
+    /**
+     * A secret of this installation that the widgets put into their taps. The app is exported (the launcher starts it), so any
+     * other app could send it an intent that sends a row; only an intent that carries this token is acted on.
+     */
+    static synchronized String token(Context c) {
+        SharedPreferences p = c.getSharedPreferences("widget_auth", Context.MODE_PRIVATE);
+        String t = p.getString("token", null);
+        if (t == null || t.length() < 32) {
+            byte[] b = new byte[24];
+            new java.security.SecureRandom().nextBytes(b);
+            StringBuilder sb = new StringBuilder();
+            for (byte x : b) sb.append(String.format("%02x", x));
+            t = sb.toString();
+            p.edit().putString("token", t).apply();
+        }
+        return t;
+    }
+
     static SharedPreferences state(Context c) {
         return c.getSharedPreferences("wstate", Context.MODE_PRIVATE);
     }
@@ -75,6 +93,7 @@ final class WidgetKit {
                 .putExtra(MainActivity.EXTRA_FILE, file == null ? "" : file)
                 .putExtra(MainActivity.EXTRA_KEY, key == null ? "" : key)
                 .putExtra(MainActivity.EXTRA_ACTION, action == null ? "open" : action)
+                .putExtra(MainActivity.EXTRA_TOKEN, token(c))
                 // Extras do not tell PendingIntents apart: without a distinct address every widget would overwrite the others' row.
                 .setData(android.net.Uri.parse("transly://widget").buildUpon()
                         .appendQueryParameter("a", action == null ? "open" : action)

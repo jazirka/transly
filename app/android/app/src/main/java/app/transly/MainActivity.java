@@ -43,6 +43,7 @@ public class MainActivity extends Activity {
     static final String EXTRA_FILE = "file";
     static final String EXTRA_KEY = "key";
     static final String EXTRA_ACTION = "action";
+    static final String EXTRA_TOKEN = "token";
 
     private WebView web;
     private ValueCallback<Uri[]> chooser;
@@ -63,7 +64,8 @@ public class MainActivity extends Activity {
         s.setDomStorageEnabled(true);
         s.setAllowFileAccess(false);
         // The sync server of a home network is often plain http.
-        s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        // the page is https: nothing on plain http may be loaded or called from it
+        s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
 
         web.addJavascriptInterface(new Bridge(), "TranslyAndroid");
         web.setWebViewClient(new WebViewClient() {
@@ -112,9 +114,14 @@ public class MainActivity extends Activity {
         String file = intent == null ? null : intent.getStringExtra(EXTRA_FILE);
         String key = intent == null ? null : intent.getStringExtra(EXTRA_KEY);
         String action = intent == null ? null : intent.getStringExtra(EXTRA_ACTION);
+        String token = intent == null ? null : intent.getStringExtra(EXTRA_TOKEN);
         if (file == null || file.isEmpty() || key == null || key.isEmpty()) return;
         intent.removeExtra(EXTRA_FILE);
         intent.removeExtra(EXTRA_ACTION);
+        intent.removeExtra(EXTRA_TOKEN);
+        // This activity is exported for the launcher: a widget tap carries the secret of this installation, an intent from
+        // another app does not, and is ignored (it could otherwise send rows without the translator touching anything).
+        if (token == null || !java.security.MessageDigest.isEqual(token.getBytes(java.nio.charset.StandardCharsets.UTF_8), WidgetKit.token(this).getBytes(java.nio.charset.StandardCharsets.UTF_8))) return;
         String act = action == null ? "open" : action;
         boolean send = "send".equals(act), keyboard = "keyboard".equals(act);
         String js = "(function(){var f=" + org.json.JSONObject.quote(file) + ",k=" + org.json.JSONObject.quote(key) + ",a=" + org.json.JSONObject.quote(act)

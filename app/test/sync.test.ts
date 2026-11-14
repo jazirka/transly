@@ -92,3 +92,43 @@ describe('sync through a real relay', () => {
     await new Promise<void>(r => s.close(() => r()));
   });
 });
+
+describe('the relay is hard to abuse', () => {
+  const start = async (o: Parameters<typeof createRelay>[0]) => {
+    const s = createRelay({ rateLimit: 10_000, ...o });
+    await new Promise<void>(r => s.listen(0, '127.0.0.1', r));
+    return { s, b: `http://127.0.0.1:${(s.address() as AddressInfo).port}`, stop: () => new Promise<void>(r => s.close(() => r())) };
+  };
+  const room = (n: number): string => n.toString(16).padStart(64, '0');
+  it('one client opens only a few new rooms per hour, so the rooms of the others are not used up in a moment', async () => {
+    let t = 0;
+    const { b, stop } = await start({ newRoomsPerHour: 3, maxRooms: 100, now: () => t });
+    const codes: number[] = [];
+    for (let i = 0; i < 5; i++) codes.push((await fetch(`${b}/r/${room(i)}/data`, { method: 'PUT', body: 'x' })).status);
+    expect(codes).toEqual([200, 200, 200, 429, 429]);
+    // a room that exists is written to as often as needed, and an hour later new ones may be opened again
+    expect((await fetch(`${b}/r/${room(0)}/snap`, { method: 'PUT', body: 'y' })).status).toBe(200);
+    t = 3_700_000;
+    expect((await fetch(`${b}/r/${room(9)}/data`, { method: 'PUT', body: 'x' })).status).toBe(200);
+    await stop();
+  });
+  it('a room that exists is not refused when the relay is full of rooms (it only gets its second blob)', async () => {
+    const { b, stop } = await start({ maxRooms: 2, newRoomsPerHour: 100 });
+    await fetch(`${b}/r/${room(1)}/data`, { method: 'PUT', body: 'x' });
+    await fetch(`${b}/r/${room(2)}/data`, { method: 'PUT', body: 'x' });
+    expect((await fetch(`${b}/r/${room(3)}/data`, { method: 'PUT', body: 'x' })).status).toBe(507);
+    expect((await fetch(`${b}/r/${room(1)}/snap`, { method: 'PUT', body: 'x' })).status).toBe(200);
+    await stop();
+  });
+  it('everything stored together is capped, not only each blob', async () => {
+    const { b, stop } = await start({ maxBytes: 1000, maxTotalBytes: 2500, newRoomsPerHour: 100 });
+    const big = 'x'.repeat(900);
+    const codes: number[] = [];
+    for (let i = 0; i < 4; i++) codes.push((await fetch(`${b}/r/${room(i)}/data`, { method: 'PUT', body: big })).status);
+    expect(codes).toEqual([200, 200, 507, 507]);
+    expect((await fetch(`${b}/r/${room(0)}/data`, { method: 'PUT', body: big, headers: { 'If-Match': (await fetch(`${b}/r/${room(0)}/data`)).headers.get('ETag')! } })).status).toBe(200);   // replacing a blob is not growth
+    // a blob over its own limit is refused (the relay may close the connection instead of answering)
+    expect(await fetch(`${b}/r/${room(5)}/data`, { method: 'PUT', body: 'z'.repeat(1001) }).then(r => r.status, () => 413)).toBe(413);
+    await stop();
+  });
+});

@@ -534,10 +534,12 @@ fn download_asset(url: &str, token: &str, dest: &Path) -> Result<u64, String> {
     if want_size.is_some_and(|s| s != n) {
         return bad("Файл оновлення завантажився не повністю: розмір не збігається з тим, що вказав GitHub");
     }
-    if let Some(sum) = want_sum {
-        if sha256_hex(dest)? != sum {
-            return bad("Контрольна сума файлу оновлення не збігається з тією, що вказав GitHub");
-        }
+    // Without a checksum from GitHub the file cannot be checked at all: an installer is never started unchecked.
+    let Some(sum) = want_sum else {
+        return bad("GitHub не повідомив контрольну суму файлу оновлення: інсталятор не запущено");
+    };
+    if sha256_hex(dest)? != sum {
+        return bad("Контрольна сума файлу оновлення не збігається з тією, що вказав GitHub");
     }
     Ok(n)
 }
@@ -957,5 +959,45 @@ mod tests {
         assert!(!seen[1].contains("authorization"));
         // the real function refuses a plain-http redirect
         assert!(download_asset("http://127.0.0.1:1/x", "t", &dest).is_err());
+    }
+
+    /// A one-shot GitHub: the metadata request (Accept: json) is answered with `meta`, the file request with the bytes.
+    fn serve_asset(meta: &'static str, body: &'static str) -> (u16, std::thread::JoinHandle<()>) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let th = std::thread::spawn(move || {
+            for _ in 0..2 {
+                let (mut c, _) = listener.accept().unwrap();
+                let mut buf = [0u8; 4096];
+                let n = c.read(&mut buf).unwrap();
+                let req = String::from_utf8_lossy(&buf[..n]).to_lowercase();
+                let (ctype, payload) = if req.contains("application/vnd.github+json") { ("application/json", meta) } else { ("application/octet-stream", body) };
+                let _ = write!(c, "HTTP/1.1 200 OK\r\nContent-Type: {ctype}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}", payload.len());
+            }
+        });
+        (port, th)
+    }
+
+    #[test]
+    fn an_update_is_never_started_without_a_checksum_from_github_and_never_with_a_wrong_one() {
+        let dest = std::env::temp_dir().join("transly-test-update-sum.bin");
+        // no checksum in the metadata: refused, nothing is left behind
+        let (port, th) = serve_asset("{\"size\":5}", "hello");
+        let err = download_asset(&format!("http://127.0.0.1:{port}/asset"), "t", &dest).unwrap_err();
+        th.join().unwrap();
+        assert!(err.contains("контрольну суму"), "{err}");
+        assert!(!dest.exists());
+        // a wrong checksum: refused
+        let (port, th) = serve_asset("{\"size\":5,\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000000\"}", "hello");
+        let err = download_asset(&format!("http://127.0.0.1:{port}/asset"), "t", &dest).unwrap_err();
+        th.join().unwrap();
+        assert!(err.contains("не збігається"), "{err}");
+        assert!(!dest.exists());
+        // the right one: accepted
+        let (port, th) = serve_asset("{\"size\":5,\"digest\":\"sha256:2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824\"}", "hello");
+        assert_eq!(download_asset(&format!("http://127.0.0.1:{port}/asset"), "t", &dest).unwrap(), 5);
+        th.join().unwrap();
+        let _ = fs::remove_file(&dest);
     }
 }

@@ -19,6 +19,10 @@ export interface RelayOptions {
   /** Blobs older than this are dropped (ms). */
   ttlMs?: number;
   maxRooms?: number;
+  /** Everything stored together may not exceed this many bytes (a full relay refuses new data instead of growing without end). */
+  maxTotalBytes?: number;
+  /** How many new rooms one client address may open per hour: nobody can fill all the rooms of an own relay in a moment. */
+  newRoomsPerHour?: number;
   /** Requests per minute per client address. */
   rateLimit?: number;
   /** Persist blobs here so they survive a restart. */
@@ -37,10 +41,13 @@ export function createRelay(opts: RelayOptions = {}): Server {
   const maxBytes = opts.maxBytes ?? 64 * 1024 * 1024;
   const ttl = opts.ttlMs ?? 30 * 24 * 3600 * 1000;
   const maxRooms = opts.maxRooms ?? 100;
+  const maxTotal = opts.maxTotalBytes ?? 512 * 1024 * 1024;
+  const newRooms = opts.newRoomsPerHour ?? 10;
   const rate = opts.rateLimit ?? 240;
   const now = opts.now ?? Date.now;
   const store = new Map<string, Blob>();
   const hits = new Map<string, { n: number; t: number }>();
+  const opened = new Map<string, { n: number; t: number }>();
 
   if (opts.dir) {
     mkdirSync(opts.dir, { recursive: true });
@@ -101,7 +108,16 @@ export function createRelay(opts: RelayOptions = {}): Server {
         // Optimistic concurrency: a writer must name the version it merged; a stale or missing name is refused.
         if (cur && ifMatch !== cur.etag) return send(res, 412, 'Дані вже змінено іншим пристроєм');
         if (!cur && ifMatch) return send(res, 412, 'Немає такої версії');
-        if (!cur && new Set([...store.keys()].map(k => k.split('.')[0])).size >= maxRooms) return send(res, 507, 'Забагато кімнат');
+        const total = [...store.values()].reduce((n, x) => n + x.bytes.length, 0) - (cur?.bytes.length ?? 0) + body.length;
+        if (total > maxTotal) return send(res, 507, 'Сховище реле заповнене');
+        const rooms = new Set([...store.keys()].map(k => k.split('.')[0]));
+        if (!rooms.has(m[1]!)) {
+          if (rooms.size >= maxRooms) return send(res, 507, 'Забагато кімнат');
+          // a new room: one client address opens only a few per hour (a client that cannot be told apart behind a proxy shares the limit)
+          const o = opened.get(who);
+          if (!o || now() - o.t > 3_600_000) opened.set(who, { n: 1, t: now() });
+          else if (++o.n > newRooms) return send(res, 429, 'Забагато нових кімнат з цієї адреси');
+        }
         const b: Blob = { bytes: body, etag: etagOf(body), at: now() };
         store.set(key, b);
         if (opts.dir) writeFileSync(join(opts.dir, key), body);

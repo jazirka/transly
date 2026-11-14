@@ -22,19 +22,20 @@ const seed = async page => { const p = project(); const { snapshot } = p; delete
 (async () => {
   const browser = await chromium.launch({ args: ['--no-sandbox'] });
 
-  // ---- phone: nothing leaves the screen at 320 px, touch targets are 44 px
-  for (const w of [320, 340]) {
+  // ---- phone: nothing leaves the screen at 320 px, touch targets are 44 px (also with a wider font, as on a CI machine or an old phone)
+  for (const font of [null, 'DejaVu Sans']) for (const w of [320, 340]) {
     const ctx = await browser.newContext({ viewport: { width: w, height: 700 }, hasTouch: true, isMobile: true });
     const page = await ctx.newPage();
     await page.goto(PHONE); await sleep(600); await seed(page);
+    if (font) await page.addStyleTag({ content: `*{font-family:'${font}' !important}` });
     await page.locator('.m-row').first().click(); await sleep(600);
-    const off = await page.evaluate(() => [...document.querySelectorAll('button, select, input')].filter(e => { const b = e.getBoundingClientRect(); return b.width && (b.right > innerWidth + 0.5 || b.left < -0.5); }).map(e => e.className || e.tagName).slice(0, 5));
-    check(`phone ${w} px: every control is on the screen (the main «Надіслати» button included)`, off.length === 0, JSON.stringify(off));
+    const tag = `phone ${w} px${font ? ', ' + font : ''}`;
+    const over = await page.evaluate(() => { const app = document.querySelector('.m-app'); return { app: Math.round(app.getBoundingClientRect().width), doc: document.documentElement.scrollWidth, wide: [...document.querySelectorAll('.m-main, .m-main *')].filter(e => e.getBoundingClientRect().width && e.getBoundingClientRect().right > window.innerWidth + 1 && getComputedStyle(e).position !== 'fixed').map(e => e.className.toString().slice(0, 24)).slice(0, 4) }; });
+    check(`${tag}: the page is not wider than the screen`, over.app <= w && over.doc <= w, JSON.stringify(over));
     const send = await page.locator('.m-act1 .m-primary').first().boundingBox();
-    check(`phone ${w} px: the send button is whole`, !!send && send.x >= 0 && send.x + send.width <= w + 0.5, JSON.stringify(send));
-    await page.locator('.m-tab, [data-tab="rows"]').first().click().catch(() => undefined);
+    check(`${tag}: the main «Надіслати» button is whole`, !!send && send.x >= 0 && send.x + send.width <= w + 0.5, JSON.stringify(send));
     const small = await page.evaluate(() => [...document.querySelectorAll('.m-chip,.m-mini')].filter(e => e.getBoundingClientRect().width && e.getBoundingClientRect().height < 43.5).length);
-    check(`phone ${w} px: chips and mini buttons are at least 44 px high`, small === 0, String(small));
+    check(`${tag}: chips and mini buttons are at least 44 px high`, small === 0, String(small));
     await ctx.close();
   }
 

@@ -749,7 +749,7 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#st-sel').textContent = u && v ? `Рядок ${v.units.indexOf(u) + 1} · ${STATUS_LABEL[shownStatus(ctx, u, entryOf(u))]}` : '';
     if (v) {
       const st = statsOf(v.units, ents);
-      $('#sb-file').textContent = `${s.current === GROUP ? 'Група' : 'Файл'}: ${st.approved} / ${st.total} вичитано · ${st.done} чекають вичитки`;
+      $('#sb-file').textContent = `${s.current === GROUP ? 'Група' : 'Файл'}: ${st.approved} / ${st.total} вичитано · ${st.done} ${st.done % 10 === 1 && st.done % 100 !== 11 ? 'чекає' : 'чекають'} вичитки`;
     } else $('#sb-file').textContent = '';
     const mins = Math.max(0, Math.round((Date.now() - s.sess.t0) / 60000));
     $('#sb-sess').textContent = `Сесія: ${plural(s.sess.n, ['рядок змінено', 'рядки змінено', 'рядків змінено'])} · ${mins} хв`;

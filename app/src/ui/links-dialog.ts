@@ -4,6 +4,7 @@ import { $, esc, plural, toast } from './dom';
 import { oneLine } from './hintcards';
 import { dialog } from './settings';
 import { undoToast } from './undo-toast';
+import { STATUS_LABEL } from './state';
 import type { Ctx } from './state';
 
 /** The words for the state of a row next to its twins. */
@@ -66,9 +67,13 @@ export function openLinkTool(ctx: Ctx): void {
     $('#lt-sum', dlg).textContent = r.total ? `Груп із розбіжностями або порожніми рядками: ${r.total}${r.total > shown.length ? `, показано ${shown.length}` : ''}` : 'Усе узгоджено: зв’язані рядки мають однаковий переклад';
     $('#lt-list', dlg).innerHTML = shown.map((c, ci) => {
       const empties = c.counts.empty;
+      // what the rows are now, so the choice below is made knowing how many of them it touches (a proofread row is not changed by it)
+      const by: Record<string, number> = {};
+      for (const r of c.view.rows) by[r.status] = (by[r.status] ?? 0) + 1;
+      const states = (['new', 'draft', 'done', 'appr'] as const).filter(k => by[k]).map(k => `${STATUS_LABEL[k].toLowerCase()} ${by[k]}`).join(' · ');
       const variants = c.variants.map((v, vi) => `<div class="cs-v"><span>${esc(oneLine(v.target, 120))} <span class="hint">× ${v.rows.length}${v.rows.some(x => x.ref === c.view.main?.ref) ? ' · головний' : ''}</span></span><button class="btn" type="button" data-c="${ci}" data-v="${vi}">Лишити цей</button></div>`).join('');
       const fill = c.variants.length === 1 && empties ? `<div class="cs-v"><span class="hint">Без перекладу: ${empties}</span><button class="btn" type="button" data-c="${ci}" data-fill>Заповнити порожні</button></div>` : '';
-      return `<div class="sp-row cs-row"><div class="sp-b"><b>${esc(oneLine(c.text, 120))}</b> <span class="hint">${plural(c.view.rows.length, ['рядок', 'рядки', 'рядків'])}${c.counts.unlinked ? `, відв’язано ${c.counts.unlinked}` : ''}</span>${variants}${fill}<button class="btn" type="button" data-c="${ci}" data-open>Відкрити перший</button></div></div>`;
+      return `<div class="sp-row cs-row"><div class="sp-b"><b>${esc(oneLine(c.text, 120))}</b> <span class="hint">${plural(c.view.rows.length, ['рядок', 'рядки', 'рядків'])}${c.counts.unlinked ? `, відв’язано ${c.counts.unlinked}` : ''}</span><div class="hint">Зараз: ${esc(states)}${by.appr ? `. Вичитані (${by.appr}) вибір не змінить` : ''}</div>${variants}${fill}<button class="btn" type="button" data-c="${ci}" data-open>Відкрити перший</button></div></div>`;
     }).join('');
   };
   dlg.addEventListener('click', e => {

@@ -7,23 +7,57 @@ export interface TmMatch extends TmEntry { score: number }
 const norm = (t: string) => t.toLowerCase().replace(/\\[A-Za-z]+\[\d+\]|\\[{}.|!><^$]/g, ' ').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 const words = (t: string): string[] => norm(t).split(' ').filter(Boolean);
 
-/** Levenshtein similarity in percent (0–100) between two short strings. */
-export function similarity(a: string, b: string): number {
-  if (a === b) return 100;
-  const x = [...a], y = [...b];
-  if (!x.length || !y.length) return 0;
-  let prev = Array.from({ length: y.length + 1 }, (_, i) => i);
-  for (let i = 1; i <= x.length; i++) {
-    const cur = [i];
-    for (let j = 1; j <= y.length; j++) {
-      cur[j] = Math.min(prev[j]! + 1, cur[j - 1]! + 1, prev[j - 1]! + (x[i - 1] === y[j - 1] ? 0 : 1));
+const codes = (t: string): Int32Array => { const out: number[] = []; for (const ch of t) out.push(ch.codePointAt(0)!); return Int32Array.from(out); };
+/** Two rows of the distance table, reused by every call (a lookup scores hundreds of candidates). */
+let rowA = new Int32Array(256), rowB = new Int32Array(256);
+
+/** Similarity of two texts given as code points; see `similarity`. */
+function scoreCodes(x: Int32Array, y: Int32Array, min: number): number {
+  const n = x.length, m = y.length;
+  if (!n || !m) return 0;
+  const longest = Math.max(n, m);
+  // the score is rounded, so a pair half a point under `min` can still round up to it: the room is measured from there (and a hair of slack for floating point)
+  const room = min > 0 ? Math.floor(longest * (1 - (min - 0.5) / 100) + 1e-9) : longest;
+  if (Math.abs(n - m) > room) return 0;
+  if (rowA.length < m + 2) { rowA = new Int32Array(m + 2); rowB = new Int32Array(m + 2); }
+  const FAR = 1 << 20;
+  let prev = rowA, cur = rowB;
+  // only the band of cells within `room` of the diagonal can hold a distance of at most `room`: the rest is left out
+  for (let j = 0; j <= m; j++) prev[j] = j <= room ? j : FAR;
+  prev[m + 1] = FAR;
+  for (let i = 1; i <= n; i++) {
+    const lo = Math.max(1, i - room), hi = Math.min(m, i + room);
+    cur[lo - 1] = lo === 1 ? i : FAR;
+    let best = FAR;
+    const xi = x[i - 1]!;
+    for (let j = lo; j <= hi; j++) {
+      let v = prev[j - 1]! + (xi === y[j - 1] ? 0 : 1);
+      const del = prev[j]! + 1, ins = cur[j - 1]! + 1;
+      if (del < v) v = del;
+      if (ins < v) v = ins;
+      cur[j] = v;
+      if (v < best) best = v;
     }
-    prev = cur;
+    cur[hi + 1] = FAR;
+    // every way through the next rows passes a cell of this row: when all of them are past the room, the pair is too far apart
+    if (best > room) return 0;
+    const t = prev; prev = cur; cur = t;
   }
-  return Math.round((1 - prev[y.length]! / Math.max(x.length, y.length)) * 100);
+  const d = prev[m]!;
+  if (d > room) return 0;
+  return Math.round((1 - d / longest) * 100);
 }
 
-interface Indexed extends TmEntry { w: Set<string>; len: number }
+/**
+ * Levenshtein similarity in percent (0–100) between two short strings. With `min` the work stops as soon as the pair cannot reach
+ * that score: the answer is then 0, and it is exact whenever it is at least `min`.
+ */
+export function similarity(a: string, b: string, min = 0): number {
+  if (a === b) return 100;
+  return scoreCodes(codes(a), codes(b), min);
+}
+
+interface Indexed extends TmEntry { w: Set<string>; len: number; /** the normalised source as code points, made on the first lookup that needs it */ nc?: Int32Array; ns?: string }
 
 /** Search index over translated pairs. Built once; query per selected unit. */
 export class TmIndex {
@@ -53,14 +87,21 @@ export class TmIndex {
     const cands = [...hits].sort((a, b) => b[1] - a[1]).slice(0, 300);
     const qn = norm(source), out: TmMatch[] = [];
     const ql = displayLength(source);
+    const qc = codes(qn);
+    // Once `limit` matches are in hand, a candidate only matters if it scores as well as the weakest of them: the scoring gives up on the rest early.
+    let floor = min;
     for (const [id, overlap] of cands) {
       const it = this.items[id]!;
       if (opts.exclude?.(it)) continue;
       const union = qw.size + it.w.size - overlap;
       if (overlap / union < 0.3) continue;
       if (Math.abs(it.len - ql) > Math.max(ql, it.len) * 0.6) continue;
-      const score = similarity(qn, norm(it.s));
-      if (score >= min) out.push({ s: it.s, t: this.opts.flow ? unwrap(it.t) : it.t, src: it.src, score });
+      const ns = it.ns ??= norm(it.s), nn = it.nc ??= codes(ns);
+      const score = qn === ns ? 100 : scoreCodes(qc, nn, floor);
+      if (score >= min) {
+        out.push({ s: it.s, t: this.opts.flow ? unwrap(it.t) : it.t, src: it.src, score });
+        if (out.length >= limit) { const kth = [...out].sort((a, b) => b.score - a.score)[limit - 1]!.score; if (kth > floor) floor = kth; }
+      }
     }
     return out.sort((a, b) => b.score - a.score).slice(0, limit);
   }

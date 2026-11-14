@@ -42,7 +42,8 @@ export async function pickGameFolder(input: HTMLInputElement): Promise<Picked | 
 async function walk(dir: DirHandle, prefix: string, out: PickedFile[], depth: number): Promise<void> {
   for await (const entry of dir.values()) {
     if (entry.kind === 'file' && isReadable(entry.name) && entry.getFile) {
-      const getFile = entry.getFile;
+      // bound to its handle: a native FileSystemFileHandle throws «Illegal invocation» when getFile is called without it
+      const getFile = entry.getFile.bind(entry);
       out.push({ name: entry.name, path: prefix + entry.name, rel: prefix + entry.name, read: async () => (await getFile()).text() });
     } else if (entry.kind === 'directory' && depth < 3 && !/^(node_modules|\.)/.test(entry.name)) {
       await walk(entry as unknown as DirHandle, prefix + entry.name + '/', out, depth + 1);

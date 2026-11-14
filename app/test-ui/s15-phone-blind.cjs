@@ -37,6 +37,8 @@ const check = (name, ok, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ') 
   check('after a reload the search text is kept', qv === 'captain would', qv);
   await page.locator('#m-q').fill(''); await sleep(500);
 
+  const mask = await page.evaluate(() => { const c = document.querySelector('.m-chips'); return c ? getComputedStyle(c).maskImage || getComputedStyle(c).webkitMaskImage || '' : 'no chips'; });
+  check('a row of chips fades out at its edge', /gradient/.test(mask), mask);
   // ---- send: the keyboard stays up (the next field has the focus)
   await page.locator('.m-row').first().click(); await sleep(600);
   await page.locator('#m-tr').click(); await page.keyboard.type('Капітан'); await sleep(400);
@@ -48,6 +50,16 @@ const check = (name, ok, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ') 
   const fieldBox = await page.locator('#m-tr').boundingBox();
   check('the field is on the screen after the send', !!fieldBox && fieldBox.y >= 0 && fieldBox.y < 700, JSON.stringify(fieldBox));
 
+  // ---- the notices do not cover the translation field; the placeholder is readable; a long row of chips fades out at the edge
+  const geo = await page.evaluate(() => {
+    const r = e => e && e.getBoundingClientRect();
+    const t = [...document.querySelectorAll('.m-toast')].map(r), f = r(document.getElementById('m-tr'));
+    const ph = getComputedStyle(document.getElementById('m-tr'), '::placeholder').color;
+    return { overlap: t.some(b => f && b.bottom > f.top && b.top < f.bottom && b.right > f.left && b.left < f.right), toasts: t.length, ph };
+  });
+  check('the notices do not cover the translation field', !geo.overlap, JSON.stringify(geo));
+  check('the placeholder of the field is lighter than before (contrast)', /154, 156, 163/.test(geo.ph), geo.ph);
+  
   // ---- the glossary: the word for the number, one tap does not delete
   await page.locator('#m-tr').blur(); await sleep(300);
   await page.locator('[data-menu]').first().click(); await sleep(500);

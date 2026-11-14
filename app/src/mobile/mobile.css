@@ -626,3 +626,16 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 textarea::placeholder{color:#a3a6ad}
 /* Two toasts do not cover the field of a short screen: the stack sits under the top bar. */
 @media (max-height:640px){.m-toasts{bottom:auto;top:calc(var(--bar-h, 56px) + 8px)}}
+
+/* findings of the phone audit */
+/* the preview of a game line is drawn at a size at which `--lim` characters fit the width (it was clipped at the right edge) */
+.m-prevbox{font-size:min(14px,calc((100vw - 76px) / (var(--lim) * .602)))}
+/* a row of chips that goes on past the edge fades out there and has room at the end for the last chip to come clear of the fade */
+.m-chips{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);padding-right:28px}
+/* a control code of the original is a button: its hit area is at least 44 px high and reaches towards its neighbours */
+.code[data-hc]{position:relative}
+.code[data-hc]::before{content:'';position:absolute;inset:-8px -8px}
+textarea::placeholder,input::placeholder{color:#9a9ca3}
+/* the notices sit under the title bar, clear of the translation field (they covered it on a short screen) */
+.m-toasts{top:calc(var(--bar-h,56px) + 8px);bottom:auto}
+.kb .m-toasts{top:calc(var(--bar-h,56px) + 8px);bottom:auto}

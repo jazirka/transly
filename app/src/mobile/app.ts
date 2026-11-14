@@ -720,7 +720,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const c = store.current; if (!c) return '';
     const sd = (i: Issue): string => `<span class="sd ${i.severity === 'bad' ? 'sd-qa' : 'sd-draft'}"></span>`;
     // a rule of form explains itself under its remark; the older remarks are short enough
-    const live = byHintOrder(store.issues(c.unit, c.entry)).map(i => `<div class="m-issue ${i.severity}"><div class="m-issue-t">${sd(i)}<span class="m-kind k-${i.cat}"><span aria-hidden="true">${HINT_GLYPH[i.cat]}</span> ${HINT_LABEL[i.cat]}</span><span>${esc(i.message)}${i.detail && i.key.includes('-') ? `<small class="m-issue-d">${esc(i.detail)}</small>` : ''}</span></div><div class="m-issue-a">${i.codes?.length ? `<button class="m-mini" data-ins="${esc(i.codes.join(''))}" aria-label="Вставити пропущені коди в місце курсору">Вставити коди</button>` : ''}${i.key === 'wrap' ? '<button class="m-mini" data-wrap>Перенести</button><button class="m-mini ghost" data-sub="wrap">Весь файл…</button>' : ''}${i.fix && !i.codes?.length && i.key !== 'wrap' ? `<button class="m-mini" data-fix="${esc(i.key)}">${esc(i.fix.label)}</button>` : ''}<button class="m-mini ghost" data-ign="${esc(i.key)}">Ігнорувати</button></div></div>`).join('');
+    const live = byHintOrder(store.issues(c.unit, c.entry)).map(i => `<div class="m-issue ${i.severity}"><div class="m-issue-t">${sd(i)}<span class="m-kind k-${i.cat}"><span aria-hidden="true">${HINT_GLYPH[i.cat]}</span> ${HINT_LABEL[i.cat]}</span><span>${esc(i.message)}${i.detail && i.key.includes('-') ? `<small class="m-issue-d">${esc(i.detail)}</small>` : ''}</span></div><div class="m-issue-a">${i.codes?.length ? (i.fix ? `<button class="m-mini" data-fix="${esc(i.key)}" aria-label="Вставити пропущені коди на місця з оригіналу">Вставити коди</button>` : `<button class="m-mini" data-ins="${esc(i.codes.join(''))}" aria-label="Вставити пропущені коди в місце курсору">Вставити коди</button>`) : ''}${i.key === 'wrap' ? '<button class="m-mini" data-wrap>Перенести</button><button class="m-mini ghost" data-sub="wrap">Весь файл…</button>' : ''}${i.fix && !i.codes?.length && i.key !== 'wrap' ? `<button class="m-mini" data-fix="${esc(i.key)}">${esc(i.fix.label)}</button>` : ''}<button class="m-mini ghost" data-ign="${esc(i.key)}">Ігнорувати</button></div></div>`).join('');
     const set = store.ignored(c.unit, c.entry).map(i => `<div class="m-issue muted"><div class="m-issue-t"><span class="sd sd-draft"></span><span>${esc(i.message)} <em class="m-tagi">проігноровано</em></span></div><div class="m-issue-a"><button class="m-mini ghost" data-unign="${esc(i.key)}">Повернути</button></div></div>`).join('');
     return live + set;
   }
@@ -959,7 +959,7 @@ export async function start(root: HTMLElement): Promise<void> {
 
   /* ---------- actions ---------- */
   function openRow(key: string): void { store.select(key); go('edit'); }
-  function step(d: 1 | -1): void { const n = store.neighbour(d); if (n) { buzz(8); store.select(n.key); render(); window.scrollTo(0, 0); $('m-main').scrollTop = 0; } }
+  function step(d: 1 | -1): void { const n = store.neighbour(d); if (n) { buzz(8); store.select(n.key); render(); window.scrollTo(0, 0); $('m-main').scrollTop = 0; showTrField(false); } }
   function insert(text: string): void { const t = $('m-tr') as HTMLTextAreaElement; t.focus(); t.setRangeText(text, t.selectionStart, t.selectionEnd, 'end'); t.dispatchEvent(new Event('input', { bubbles: true })); }
 
   async function importFiles(files: File[]): Promise<void> {
@@ -1490,6 +1490,19 @@ export async function start(root: HTMLElement): Promise<void> {
   window.visualViewport?.addEventListener('resize', () => showField(document.activeElement, 'nearest'));
   // Landscape brings the table and the side rail; a turn back takes them away. Nothing is redrawn while the keyboard is up (a redraw would drop the field).
   wide.addEventListener('change', () => { if (!$('m-app').classList.contains('kb')) render(); });
+  // The keyboard went down (the system Back key hides it but leaves the focus in the field): the bar that was hidden for it comes back.
+  {
+    const vv = window.visualViewport;
+    let fullH = vv ? vv.height : window.innerHeight;
+    const onResize = (): void => {
+      const h = vv ? vv.height : window.innerHeight;
+      const app = document.getElementById('m-app');
+      if (!app) return;
+      if (!app.classList.contains('kb')) fullH = Math.max(fullH, h);
+      else if (h >= fullH - 40 && document.activeElement?.matches(TEXTY)) (document.activeElement as HTMLElement).blur();
+    };
+    vv?.addEventListener('resize', onResize); window.addEventListener('resize', onResize);
+  }
   document.addEventListener('focusout', () => { setTimeout(() => { if (!document.activeElement?.matches(TEXTY)) $('m-app').classList.remove('kb'); }, 120); });
   // A swipe across the editor moves to the next / previous row.
   let sx = 0, sy = 0, st = 0, sw = false;

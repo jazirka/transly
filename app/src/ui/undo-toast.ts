@@ -1,6 +1,7 @@
 import { journalBatches, undoJournal, undoReport } from '../core';
 import type { UndoResult } from '../core';
 import { toast } from './dom';
+import { closeTyping } from './focus';
 import type { Ctx } from './state';
 
 /**
@@ -30,6 +31,7 @@ export function undoToast(ctx: Ctx, text: string, batch: string | undefined, sti
  * earlier session) is taken back, or taken back action repeated. Rows changed since an action are not touched.
  */
 export function undoByKey(ctx: Ctx, dir: 'back' | 'forward'): void {
+  closeTyping(ctx);
   const h = ctx.history;
   // the journal outlives the session: the actions of earlier sessions go under this session's line, so Ctrl+Z reaches them too
   if (dir === 'back') h.seed(journalBatches(ctx.s.views, ctx.s.saved, 30).filter(b => b.kind !== 'undo' && b.kind !== 'redo').map(b => b.id));

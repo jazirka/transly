@@ -66,6 +66,17 @@ const check = (name, ok, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ') 
   await page.locator('.gr').nth(1).click(); await sleep(500);
   const twins = await page.locator('.pn-lrow').count();
   check('the linked rows of a repeated line are three cards at most, with a button for the rest', twins <= 3 && (await page.getByRole('button', { name: 'Показати всі' }).count()) >= 1, String(twins));
+  // ---- Ctrl+Z outside the field takes back what was typed in the editor, in its place among the actions (ux-c-09)
+  {
+    await page.locator('[data-m="edit"]').click(); await sleep(400);
+    await page.locator('.si').nth(3).click(); await sleep(300);
+    await page.locator('#i-tr').click(); await page.keyboard.type('Перша правка'); await page.locator('.si').nth(4).click(); await sleep(500);
+    await page.locator('#i-tr').click(); await page.keyboard.type('Друга правка'); await page.locator('.si').nth(5).click(); await sleep(500);
+    await page.locator('body').click({ position: { x: 5, y: 5 } }).catch(() => {});
+    await page.keyboard.press('Control+z'); await sleep(700);
+    const txt = await page.evaluate(() => document.body.innerText);
+    check('Ctrl+Z takes back the last thing typed in the editor, not an older action', !/Друга правка/.test(txt) && /Перша правка/.test(txt), '');
+  }
   check('no page errors', errors.length === 0, errors.join(' | '));
   await browser.close();
   console.log(failed ? `\n${failed} check(s) failed` : '\nall checks passed');

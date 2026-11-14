@@ -11,7 +11,7 @@ import { classifyFolder, folderBanner, folderLine } from './folder-service';
 import type { FolderState } from './folder-service';
 import { $, el, esc, plural, toast } from './dom';
 import { focusFirst, menuKeys, rememberOpener, restoreOpener, roveTree, setUnavailable, treeKeys } from './keynav';
-import { FOCUS_HTML, SIDE_HTML, qaClick, focusClick, focusInput, insertText, renderFocus, renderSidePanel, afterSendFollowUp, send, sideClick, step } from './focus';
+import { FOCUS_HTML, SIDE_HTML, qaClick, focusClick, closeTyping, focusInput, insertText, renderFocus, renderSidePanel, afterSendFollowUp, send, sideClick, step } from './focus';
 import { wireDiscuss } from './discuss';
 import { realOf } from './hintcards';
 import { approveOpenRow } from './rowpanel';
@@ -1674,6 +1674,8 @@ export async function start(root: HTMLElement): Promise<void> {
 
   let scenePanelTimer = 0;
   // A field of the scene mode got the focus: that row is the open one, the right panel follows.
+  // leaving the editor field: what was typed there is one action of the journal
+  root.addEventListener('focusout', e => { const t = e.target as HTMLElement; if (t instanceof HTMLTextAreaElement && t.id === 'i-tr') closeTyping(ctx); });
   root.addEventListener('focusin', e => {
     const t = e.target as HTMLElement;
     if (t instanceof HTMLTextAreaElement) sceneFocus(ctx, t, () => { renderSidePanel(ctx); renderStatus(); saveUi(); });

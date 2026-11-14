@@ -232,10 +232,30 @@ function refreshPanel(ctx: Ctx, u: Unit): void {
 }
 
 /** Typing in the editing textarea. */
+/** The row being typed into in the editor and what it held before the first keystroke: the whole stay in the field becomes one action of the journal. */
+let typing: { file: string; key: string; before: Entry | undefined } | null = null;
+
+/**
+ * The typing in the editor is over (the field lost the focus, or a shortcut is about to change the row): what was typed becomes one
+ * action of the journal, so Ctrl+Z outside the field takes it back in its place among the other actions, not the one before it.
+ */
+export function closeTyping(ctx: Ctx): void {
+  const t = typing; typing = null;
+  if (!t) return;
+  const ents = ctx.entries(t.file);
+  const now = ents[t.key];
+  if (!now || now.target === (t.before?.target ?? '')) return;
+  if (t.before) ents[t.key] = t.before; else delete ents[t.key];
+  ctx.commit([{ file: t.file, key: t.key, next: now, text: now.target }], 'edit');
+  ctx.persist();
+}
+
 export function focusInput(ctx: Ctx, ta: HTMLTextAreaElement): void {
   const u = ctx.unit(ta.dataset.key ?? '');
   if (!u || !ctx.s.current) return;
   const ents = ctx.entries(ctx.s.current);
+  if (typing && (typing.key !== u.key || typing.file !== ctx.s.current)) closeTyping(ctx);
+  if (!typing) typing = { file: ctx.s.current, key: u.key, before: ents[u.key] ? structuredClone(ents[u.key]) : undefined };
   ents[u.key] = edit0(ctx, u, ta.value);
   noteChange(ctx.s, ctx.s.current, u.key);
   ctx.persist();
@@ -247,6 +267,7 @@ export function focusInput(ctx: Ctx, ta: HTMLTextAreaElement): void {
 
 /** Change the text of the open row; `kind` makes it an action of the journal that can be taken back from the activity feed. */
 function setText(ctx: Ctx, u: Unit, text: string, what: string, kind?: BatchKind): string | undefined {
+  closeTyping(ctx);
   const ents = ctx.entries(ctx.s.current!);
   const next = edit0(ctx, u, text);
   let batch: string | undefined;

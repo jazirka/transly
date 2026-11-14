@@ -42,6 +42,7 @@ jobs:
       - name: Browser scenarios
         working-directory: app
         run: |
-          npm i --no-save --no-package-lock playwright@1.63
-          npx playwright install --with-deps chromium
-          npm run test:ui
+          # Playwright is not a dependency of the project: it lives outside it (the scenarios find it through NODE_PATH)
+          npm i --prefix "$RUNNER_TEMP/pw" playwright@1.63.0
+          node "$RUNNER_TEMP/pw/node_modules/playwright/cli.js" install --with-deps chromium
+          NODE_PATH="$RUNNER_TEMP/pw/node_modules" npm run test:ui

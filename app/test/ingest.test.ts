@@ -31,9 +31,16 @@ describe('alignSources', () => {
     expect(alignSources(a, b, 20)).toBeNull();
     expect(alignSources(a, b, 200)).toEqual([]);
   });
-  it('is a common subsequence for random edits', () => {
-    let seed = 7; const rnd = (n: number): number => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed % n; };
-    for (let t = 0; t < 200; t++) {
+  it('is a longest common subsequence for random edits', () => {
+    // mulberry32: a generator whose low bits are as good as its high bits (a plain LCG overflows 2^53 and degenerates)
+    let seed = 7; const rnd = (n: number): number => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return (((t ^ (t >>> 14)) >>> 0) % n); };
+    const lcs = (a: string[], b: string[]): number => {
+      const d: number[][] = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
+      for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i]![j] = a[i - 1] === b[j - 1] ? d[i - 1]![j - 1]! + 1 : Math.max(d[i - 1]![j]!, d[i]![j - 1]!);
+      return d[a.length]![b.length]!;
+    };
+    let nonEmpty = 0, differing = 0;
+    for (let t = 0; t < 300; t++) {
       const a = Array.from({ length: rnd(40) }, () => 's' + rnd(8));
       const b = a.filter(() => rnd(4) !== 0);
       for (let k = rnd(5); k > 0; k--) b.splice(rnd(b.length + 1), 0, 's' + rnd(8));
@@ -43,7 +50,13 @@ describe('alignSources', () => {
         expect(a[m[k]![0]]).toBe(b[m[k]![1]]);
         if (k) { expect(m[k]![0]).toBeGreaterThan(m[k - 1]![0]); expect(m[k]![1]).toBeGreaterThan(m[k - 1]![1]); }
       }
+      expect(m.length).toBe(lcs(a, b));   // not only a common subsequence: the longest one
+      if (b.length && a.length) nonEmpty++;
+      if (a.join() !== b.join()) differing++;
     }
+    // the generator must really exercise the code (the earlier one produced an empty list in a fifth of the cases)
+    expect(nonEmpty).toBeGreaterThan(250);
+    expect(differing).toBeGreaterThan(150);
   });
 });
 

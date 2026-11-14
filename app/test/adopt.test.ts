@@ -50,15 +50,12 @@ describe('a real sync with a slow answer', () => {
     const real = httpTransport(base);
     // the other device has put its work on the relay
     await syncOnce(real, keys, project({ b: entry('з іншого пристрою', 3) }, 'T'));
-    let typedDuringRequest = false;
     const slow: Transport = { ...real, get: async (room, kind) => { const r = await real.get(room, kind); await new Promise(res => setTimeout(res, 50)); return r; } } as Transport;
     const state = { saved: project({ a: entry('перше', 1) }) };
     const request = syncOnce(slow, keys, state.saved).then(report => { state.saved = adoptSynced(state.saved, report.project); });
     await new Promise(res => setTimeout(res, 10));
     state.saved.files['Map001.json']!.a = entry('друге, набране під час синхронізації', Date.now() + 1000);
-    typedDuringRequest = true;
     await request;
-    expect(typedDuringRequest).toBe(true);
     expect(state.saved.files['Map001.json']!.a!.target).toBe('друге, набране під час синхронізації');
     expect(state.saved.files['Map001.json']!.b!.target).toBe('з іншого пристрою');
   }, 30_000);

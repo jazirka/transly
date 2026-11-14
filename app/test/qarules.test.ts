@@ -463,7 +463,7 @@ describe('швидкодія', () => {
     let n = 0;
     for (let i = 0; i < 20000; i++) n += check({ source: 'Source ' + i, kind: 'dialogue' }, base[i % base.length]! + ' ' + i, o).length;
     const dt = performance.now() - t0;
-    expect(n).toBeGreaterThanOrEqual(0);
+    expect(n).toBeGreaterThan(0);   // the registry really ran (a check that returns nothing would pass a bare time limit)
     expect(dt).toBeLessThan(5000);
   });
 });

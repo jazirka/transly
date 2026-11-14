@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { createHash } from 'node:crypto';
 import { defineConfig } from 'vite';
 import type { Plugin } from 'vite';
@@ -46,4 +47,6 @@ export default defineConfig(({ mode }) => ({
   define: { __BUILD_ID__: JSON.stringify(process.env.GITHUB_SHA ?? 'dev'), __BUILD_TIME__: JSON.stringify(process.env.GITHUB_SHA ? new Date().toISOString() : '') },
   plugins: [entry(mode === 'mobile'), csp()],
   build: { outDir: mode === 'mobile' ? 'dist-mobile' : 'dist' },
+  // a test that checks nothing must fail, not pass quietly
+  test: { expect: { requireAssertions: true } },
 }));

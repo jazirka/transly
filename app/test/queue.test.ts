@@ -52,6 +52,8 @@ describe('queue: what waits for the translator, across the whole project', () =>
   });
 
   it('every kind has its words', () => {
-    for (const k of ['untranslated', 'error', 'advice', 'unreviewed', 'sourceChanged'] as const) expect(QUEUE_LABEL[k].empty.length).toBeGreaterThan(5);
+    const kinds = ['untranslated', 'error', 'advice', 'unreviewed', 'sourceChanged'] as const;
+    for (const k of kinds) expect(QUEUE_LABEL[k].empty.length).toBeGreaterThan(5);
+    expect(new Set(kinds.map(k => QUEUE_LABEL[k].empty)).size).toBe(kinds.length);   // each queue says its own thing
   });
 });

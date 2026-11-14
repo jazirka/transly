@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -52,18 +52,15 @@ describe('zip', () => {
   it('crc32 matches the standard check value', () => {
     expect(crc32(new TextEncoder().encode('123456789'))).toBe(0xcbf43926);
   });
-  it('produces an archive that unzip accepts, with UTF-8 content intact', () => {
+  // skipped (visibly) where `unzip` is not installed; the structure of the archive is checked without it in skeptic-zip-structure.test.ts
+  const hasUnzip = spawnSync('unzip', ['-v']).status === 0;
+  it.skipIf(!hasUnzip)('produces an archive that unzip accepts, with UTF-8 content intact', () => {
     const dir = mkdtempSync(join(tmpdir(), 'zip-'));
     const body = new TextEncoder().encode('{"a":"Привіт"}');
     writeFileSync(join(dir, 'x.zip'), createZip([{ name: 'data/Map001.json', data: body }, { name: 'data/Items.json', data: new Uint8Array() }]));
-    try {
-      const out = execFileSync('unzip', ['-p', join(dir, 'x.zip'), 'data/Map001.json']).toString();
-      expect(out).toBe('{"a":"Привіт"}');
-      expect(execFileSync('unzip', ['-t', join(dir, 'x.zip')]).toString()).toContain('No errors detected');
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return; // unzip not installed here
-      throw err;
-    }
+    const out = execFileSync('unzip', ['-p', join(dir, 'x.zip'), 'data/Map001.json']).toString();
+    expect(out).toBe('{"a":"Привіт"}');
+    expect(execFileSync('unzip', ['-t', join(dir, 'x.zip')]).toString()).toContain('No errors detected');
   });
 });
 

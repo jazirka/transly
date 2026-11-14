@@ -20,7 +20,9 @@ function unionBy<T>(x: T[] | undefined, y: T[] | undefined, id: (v: T) => string
 
 /** Two versions of one comment: the text of the later edit, the later resolve state. */
 function pickComment(a: Comment, b: Comment): Comment {
-  const textFrom = (b.ed ?? b.at) > (a.ed ?? a.at) ? b : a;
+  const sa = a.ed ?? a.at, sb = b.ed ?? b.at;
+  // the same stamp on different texts (two devices, one millisecond): the greater form wins, on both devices alike
+  const textFrom = sb !== sa ? (sb > sa ? b : a) : (JSON.stringify(b) > JSON.stringify(a) ? b : a);
   const resFrom = (b.res?.at ?? 0) > (a.res?.at ?? 0) ? b : a;
   if (textFrom === resFrom || textFrom.res === resFrom.res) return textFrom;
   const { res: _res, ...rest } = textFrom;

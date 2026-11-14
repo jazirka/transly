@@ -51,7 +51,8 @@ const CHUNK_BYTES = 6_000_000;
 /** The repository as a set of files: a branch head, its tree, and commits made with the git data API. */
 export function githubRemote(api: GithubApi, cfg: GithubSettings): RemoteFiles {
   const repo = cfg.repo.trim();
-  if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new GithubError('Репозиторій вкажіть як «власник/назва», наприклад ivan/my-translation');
+  // «.» and «..» are legal characters but not names: `/repos/../x` would be normalised to another endpoint of the API
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repo) || repo.split('/').some(p => /^\.+$/.test(p))) throw new GithubError('Репозиторій вкажіть як «власник/назва», наприклад ivan/my-translation');
   const base = `/repos/${repo}`;
   const call = async (method: 'GET' | 'POST' | 'PATCH', path: string, what: string, body?: unknown, okStatus: number[] = [200, 201]): Promise<Json> => {
     let r: { status: number; json: unknown };

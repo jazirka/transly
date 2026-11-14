@@ -144,7 +144,10 @@ describe('planWrap ↔ unwrap', () => {
   it('усі рядки в межах ширини, якщо немає слова, що не ділиться', () => {
     for (const s of samples) for (const width of [10, 16, 24]) {
       const r = planWrap(s, { width, hyphen: 'needed', keep: 'reflow' });
-      for (const i of r.over) expect(displayLength(r.text.split('\n')[i]!)).toBeGreaterThan(width);
+      r.text.split('\n').forEach((line, i) => {
+        if (r.over.includes(i)) expect(displayLength(line)).toBeGreaterThan(width);
+        else expect(displayLength(line)).toBeLessThanOrEqual(width);
+      });
     }
   });
 });

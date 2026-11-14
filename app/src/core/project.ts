@@ -226,6 +226,13 @@ function mergeUnknown(x: unknown, y: unknown, epoch: number): unknown {
   return x;
 }
 
+/** The names of files in the tree carry no stamp: when two devices gave one file different names, the greater wins on both. */
+function mergeLabels(a: Record<string, string> = {}, b: Record<string, string> = {}): Record<string, string> {
+  const out: Record<string, string> = { ...b, ...a };
+  for (const k of Object.keys(a)) if (k in b && b[k]! > a[k]!) out[k] = b[k]!;
+  return out;
+}
+
 export interface ProjectMerge {
   project: SavedProject;
   conflicts: { file: string; key: string }[];
@@ -235,6 +242,33 @@ export interface ProjectMerge {
 
 /** The later of two stamped values; on equal stamps the greater serialized form, so that the answer does not depend on the order. */
 const laterOf = <T extends { mt: number }>(x: T, y: T): T => (y.mt !== x.mt ? (y.mt > x.mt ? y : x) : (JSON.stringify(y) > JSON.stringify(x) ? y : x));
+
+/**
+ * A total order on plain data (objects by sorted keys), used only to break ties the same way whichever copy is `a`.
+ * Compares field by field and stops at the first difference, so equal copies of a big snapshot cost a walk, not a string.
+ */
+function deepCmp(x: unknown, y: unknown): number {
+  if (x === y) return 0;
+  const tx = x === null ? 'null' : Array.isArray(x) ? 'array' : typeof x, ty = y === null ? 'null' : Array.isArray(y) ? 'array' : typeof y;
+  if (tx !== ty) return tx < ty ? -1 : 1;
+  if (tx === 'array') {
+    const p = x as unknown[], q = y as unknown[];
+    for (let i = 0; i < Math.min(p.length, q.length); i++) { const c = deepCmp(p[i], q[i]); if (c) return c; }
+    return p.length - q.length < 0 ? -1 : p.length > q.length ? 1 : 0;
+  }
+  if (tx === 'object') {
+    const p = x as Record<string, unknown>, q = y as Record<string, unknown>;
+    const ks = [...new Set([...Object.keys(p), ...Object.keys(q)])].sort();
+    for (const k of ks) {
+      if (!(k in p)) return -1;
+      if (!(k in q)) return 1;
+      const c = deepCmp(p[k], q[k]);
+      if (c) return c;
+    }
+    return 0;
+  }
+  return (x as number | string | boolean) < (y as number | string | boolean) ? -1 : 1;
+}
 
 /** Merge two copies of the same project (e.g. PC and phone). Entries from before the newest reset are dropped. */
 export function mergeProjects(a: SavedProject, b: SavedProject, since = 0): ProjectMerge {
@@ -263,7 +297,10 @@ export function mergeProjects(a: SavedProject, b: SavedProject, since = 0): Proj
   const settingsAt = Math.max(a.settingsAt ?? 0, b.settingsAt ?? 0);
   // Snapshot and reference describe the game, not the translator's work: the side with the newer revision wins,
   // and when only one side carries them (a lite copy from sync) they are kept.
-  const owner = (b.assetsRev ?? 0) > (a.assetsRev ?? 0) && (b.snapshot || b.reference) ? b : a;
+  // On the same revision with different content the greater content wins, so that the answer does not depend on which copy is `a`.
+  const owner = (b.assetsRev ?? 0) !== (a.assetsRev ?? 0)
+    ? ((b.assetsRev ?? 0) > (a.assetsRev ?? 0) && (b.snapshot || b.reference) ? b : a)
+    : (b.snapshot || b.reference) && (a.snapshot || a.reference) && deepCmp([b.snapshot, b.reference], [a.snapshot, a.reference]) > 0 ? b : a;
   const snapshot = owner.snapshot ?? a.snapshot ?? b.snapshot;
   const reference = owner.reference ?? a.reference ?? b.reference;
   const assetsRev = Math.max(a.assetsRev ?? 0, b.assetsRev ?? 0);
@@ -280,8 +317,8 @@ export function mergeProjects(a: SavedProject, b: SavedProject, since = 0): Proj
       ...newer, ...extra, schema: Math.max(a.schema ?? 1, b.schema ?? 1, SCHEMA),
       settings: { ...settingsFrom.settings, pluginsAsked: a.settings.pluginsAsked || b.settings.pluginsAsked }, ...(settingsAt ? { settingsAt } : {}), resetEpoch: epoch, files, ...(snapshot ? { snapshot } : {}), ...(reference ? { reference } : {}), ...(assetsRev ? { assetsRev } : {}),
       ...(Object.keys(speakers).length ? { speakers } : {}),
-      ...(a.sysNames || b.sysNames ? { sysNames: a.sysNames ?? b.sysNames } : {}),
-      ...(a.labels || b.labels ? { labels: { ...(b.labels ?? {}), ...(a.labels ?? {}) } } : {}),
+      ...(a.sysNames || b.sysNames ? { sysNames: a.sysNames && b.sysNames ? (deepCmp(b.sysNames, a.sysNames) > 0 ? b.sysNames : a.sysNames) : (a.sysNames ?? b.sysNames) } : {}),
+      ...(a.labels || b.labels ? { labels: mergeLabels(a.labels, b.labels) } : {}),
       memory: union(a.memory, b.memory, v => v.s + '\u0001' + v.t),
       terms,
       ...(Object.keys(deleted).length ? { deletedTerms: deleted } : {}),

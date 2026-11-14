@@ -90,7 +90,7 @@ export function repairProject(o: Record<string, unknown>): string[] {
     if (!Array.isArray(o.memory)) { o.memory = []; n.other++; }
     else {
       const ok = (o.memory as unknown[]).filter((m): m is Record<string, unknown> => isObj(m) && typeof m.s === 'string' && typeof m.t === 'string');
-      if (ok.length !== o.memory.length) { o.memory = ok; n.dropped += (o.memory as unknown[]).length - ok.length || 1; }
+      if (ok.length !== o.memory.length) { n.dropped += o.memory.length - ok.length; o.memory = ok; }
       for (const m of ok) if (!num(m.mt)) m.mt = 0;
     }
   }

@@ -639,3 +639,17 @@ textarea::placeholder,input::placeholder{color:#9a9ca3}
 /* the notices sit under the title bar, clear of the translation field (they covered it on a short screen) */
 .m-toasts{top:calc(var(--bar-h,56px) + 8px);bottom:auto}
 .kb .m-toasts{top:calc(var(--bar-h,56px) + 8px);bottom:auto}
+
+/* more findings of the phone audit */
+.m-item.picked{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset;background:rgba(139,114,232,.12)}
+.m-hit-t{display:flex;flex-direction:column;gap:2px;min-width:0;text-align:left}
+.m-hit-s{color:var(--mute);font-size:12px;line-height:1.3}
+/* an attribute `hidden` must win over the card's own display */
+.m-card[hidden]{display:none}
+/* with the keyboard up the explanations under the field are short: what is wrong and the buttons, without the long detail */
+.kb .m-issue-d{display:none}
+.kb .m-issue{padding-top:6px;padding-bottom:6px}
+.m-grp-h[aria-expanded="false"] .m-cat-c svg{transform:rotate(-90deg)}
+/* a proofread row has a check mark in its dot: it differs from a sent one by shape, not by colour alone */
+.sd-appr{position:relative}
+.sd-appr::after{content:'';position:absolute;left:3.5px;top:1.2px;width:3px;height:6px;border:solid #fff;border-width:0 1.6px 1.6px 0;transform:rotate(45deg)}

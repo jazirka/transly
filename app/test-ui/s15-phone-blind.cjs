@@ -60,6 +60,22 @@ const check = (name, ok, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ') 
   check('the notices do not cover the translation field', !geo.overlap, JSON.stringify(geo));
   check('the placeholder of the field is lighter than before (contrast)', /154, 156, 163/.test(geo.ph), geo.ph);
   
+  // ---- a sent row: the big button proofreads and goes on (it used to answer with an error); the clear button is itself again after the second tap
+  await page.locator('#m-tr').blur(); await sleep(200);
+  await page.locator('[data-step="-1"]').click(); await sleep(700);
+  const lab1 = await page.locator('.m-act1 .m-primary').innerText();
+  check('on a sent row the big button says «Вичитати й далі»', /Вичитати й далі/.test(lab1), lab1);
+  await page.locator('.m-act1 .m-primary').click(); await sleep(800);
+  const lab2 = await page.locator('.m-act1 .m-primary').innerText();
+  check('it proofreads the row and the next row opens with «Надіслати»', /Надіслати/.test(lab2), lab2);
+  await page.locator('#m-tr').click(); await page.keyboard.type('Тест'); await sleep(300);
+  await page.locator('#m-tr').blur(); await sleep(300);
+  await page.locator('[data-clear]').click(); await sleep(200);
+  check('the clear button asks once', /Точно очистити/.test(await page.locator('[data-clear]').innerText()));
+  await page.locator('[data-clear]').click(); await sleep(500);
+  const lab3 = (await page.locator('[data-clear]').innerText()).trim();
+  check('and is «Очистити» again after the confirmed tap', lab3 === 'Очистити', lab3);
+
   // ---- the glossary: the word for the number, one tap does not delete
   await page.locator('#m-tr').blur(); await sleep(300);
   await page.locator('[data-menu]').first().click(); await sleep(500);

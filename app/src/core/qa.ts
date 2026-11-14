@@ -42,6 +42,9 @@ export interface QaOptions {
 
 export const DEFAULT_QA: QaOptions = { tolerancePct: 25, terms: [] };
 
+/** Fewer characters than this off the original is never worth a length remark. */
+const MIN_LENGTH_GAP = 6;
+
 /** Deviation of the translation length from the source, in percent (rounded). */
 export function lengthDeviation(source: string, target: string): number {
   const s = displayLength(source);
@@ -80,7 +83,8 @@ export function check(unit: UnitLike, target: string, opts: QaOptions = DEFAULT_
   const miss = missingCodes(unit.source, target);
   if (miss.length) out.push({ key: 'codes', severity: 'bad', cat: 'error', message: `Пропущено керівні коди: ${miss.join(' ')}`, detail: 'Керівні коди (кольори, імена, змінні) гра підставляє сама; без них текст у грі зламається.', fix: { label: `Вставити ${miss.join(' ')}`, text: withCodes(unit.source, target, miss) }, codes: miss });
   const dev = lengthDeviation(unit.source, target);
-  if (Math.abs(dev) > opts.tolerancePct) {
+  // a percentage means little for a few characters (a name of 8 letters in 13 is +63%): the advice needs a difference of a few characters as well
+  if (Math.abs(dev) > opts.tolerancePct && Math.abs(displayLength(target) - displayLength(unit.source)) >= MIN_LENGTH_GAP) {
     out.push({ key: 'len', severity: 'warn', cat: 'style', message: `Довжина відрізняється від оригіналу на ${dev > 0 ? '+' : ''}${dev}%. Рекомендація: якнайближче до оригіналу` });
   }
   if (opts.wrap) out.push(...wrapIssues(unit, target, opts.wrap));

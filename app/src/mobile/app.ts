@@ -116,6 +116,7 @@ export async function start(root: HTMLElement): Promise<void> {
     else say(l?.pending ? `${text} · зв’язаних рядків відрізняється: ${l.pending}` : text, false, r.batch);
   };
   /** The source of a row in a list: when a search is on, the part around the first match with the match marked (the start of a long line may not hold it). */
+  const oneLineOf = (t: string, n: number): string => { const f = t.replace(/\s+/g, ' ').trim(); return f.length > n ? `${f.slice(0, n - 1)}…` : f; };
   const excerpt = (text: string, q: string): string => {
     const needle = q.trim().toLowerCase();
     const at = needle ? text.toLowerCase().indexOf(needle) : -1;
@@ -125,12 +126,22 @@ export async function start(root: HTMLElement): Promise<void> {
   };
   /** A destructive button asks twice: the first tap turns it into «Точно очистити?» for 4 seconds. */
   const confirmTap = (btn: HTMLElement, label = 'Точно очистити?'): boolean => {
-    if (btn.dataset.armed) { delete btn.dataset.armed; btn.classList.remove('armed'); return true; }
-    const was = btn.innerHTML; btn.dataset.armed = '1'; btn.classList.add('armed'); btn.textContent = label;
-    setTimeout(() => { if (btn.dataset.armed) { delete btn.dataset.armed; btn.classList.remove('armed'); btn.innerHTML = was; } }, 4000);
+    // the second tap puts the button back as it was (it kept «Точно очистити?» on an emptied field)
+    if (btn.dataset.armed) { delete btn.dataset.armed; btn.classList.remove('armed'); if (btn.dataset.was !== undefined) { btn.innerHTML = btn.dataset.was; delete btn.dataset.was; } return true; }
+    const was = btn.innerHTML; btn.dataset.armed = '1'; btn.dataset.was = was; btn.classList.add('armed'); btn.textContent = label;
+    setTimeout(() => { if (btn.dataset.armed) { delete btn.dataset.armed; delete btn.dataset.was; btn.classList.remove('armed'); btn.innerHTML = was; } }, 4000);
     return false;
   };
   /** After a step or a send the translation field is on the screen (a short window has it behind the buttons) and, when the keyboard was up, has the focus. */
+  /**
+   * The big button of the editor follows the state of the row: a draft is sent, a sent row is proofread (and the next one opens), a proofread row
+   * just goes on. (It used to answer «Рядок уже надіслано» with an error.)
+   */
+  const primaryBtn = (st: string | undefined): string => st === 'done'
+    ? `<button class="m-primary" data-kind="approve" data-approve-next>${icon('check')}<span>Вичитати й далі</span></button>`
+    : st === 'appr'
+      ? `<button class="m-primary" data-kind="next" data-step="1" ${store.neighbour(1) ? '' : 'disabled'}>${icon('next')}<span>Далі</span></button>`
+      : `<button class="m-primary" data-kind="send" data-send>${icon('send')}<span>Надіслати</span></button>`;
   const showTrField = (focus: boolean): void => {
     const f = document.getElementById('m-tr') as HTMLTextAreaElement | null;
     if (!f) return;
@@ -218,7 +229,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (tab === 'edit' && !sub && store.current) { const list = store.rows(), pos = list.findIndex(x => x.key === store.current!.unit.key); if (pos >= 0) where = `Рядок ${pos + 1} з ${list.length} · `; }
     else if (tab === 'rows' && !sub && scope === 'file' && store.view()) { const adv = store.adviceCount(); where = `${store.rows().length} з ${store.view()!.units.length} · ${adv ? `поради: ${adv} · ` : ''}`; }
     else if (tab === 'rows' && !sub && scope === 'group' && gscope) where = `${plural(store.groupRowList(gscope).length, ['рядок', 'рядки', 'рядків'])} · `;
-    const subline = tab === 'more' || !store.hasGame || sub ? '' : `${where}${pct}% · ${store.saveOk ? 'збережено' : 'не збережено!'}`;
+    const subline = tab === 'more' || !store.hasGame || sub ? '' : `${where}${tab === 'edit' || tab === 'rows' ? 'проєкт ' : ''}${pct}% · ${store.saveOk ? 'збережено' : 'не збережено!'}`;
     $('m-bar').innerHTML = `${sub ? '<button class="m-back" data-subback aria-label="Назад">' + icon('prev') + '</button>' : ''}<div class="m-title"><b>${esc(sub ? SUB_TITLE[sub] : title)}</b>${subline ? `<small class="${store.saveOk ? '' : 'bad'}">${esc(subline)}</small>` : ''}</div>${busy || updBusy ? `<span class="m-busy" role="status"><i class="m-spin"></i>${esc(busy || 'Перевіряю…')}</span>` : ''}${helpBtn()}${toolsBtn()}`;
     $('m-bar').classList.toggle('loading', !!(busy || updBusy));
     document.documentElement.style.setProperty('--bar-h', $('m-bar').offsetHeight + 'px');
@@ -305,16 +316,19 @@ export async function start(root: HTMLElement): Promise<void> {
     const rows = store.rows();
     if (sig !== pageSig) { pageSig = sig; page = 1; const at = store.key ? rows.findIndex(u => u.key === store.key) : -1; if (at >= PAGE) page = Math.ceil((at + 1) / PAGE); }
     const shown = rows.slice(0, PAGE * page);
+    const fileNo = new Map(v.units.map((u, k) => [u.key, k + 1] as const));
     const chips = FILTERS.map(([f, l]) => `<button class="m-chip ${store.filter === f ? 'on' : ''}" data-filter="${f}" aria-pressed="${store.filter === f}">${l}</button>`).join('');
     const sbar = `<div class="m-searchbar"><label class="m-search m-pill">${icon('search')}<span class="m-ph" aria-hidden="true">Пошук у файлі</span><input id="m-q" type="search" placeholder=" " aria-label="Пошук у файлі" value="${esc(store.q)}" enterkeyhint="search" autocomplete="off"></label></div>`;
     const L = lay();
     const orders = { order: 'За порядком', new: 'Спершу без перекладу', qa: 'Спершу з помилками', long: 'Спершу найдовші' } as Record<Sort, string>;
-    return `<div class="m-tools compact"><div class="m-chiprow"><div class="m-chips" role="group" aria-label="Фільтр"><button class="m-chip scope" data-scope="all" aria-pressed="false" title="Шукати в усіх файлах">Усі файли</button>${chips}</div>
+    return `<div class="m-tools compact"><div class="m-chiprow"><div class="m-chips" role="group" aria-label="Фільтр">${chips}<button class="m-chip scope" data-scope="all" aria-pressed="false" title="Шукати в усіх файлах">Усі файли</button></div>
       <div class="m-chipacts">${L === 'cards' ? `<button class="m-mini ${selecting ? 'on' : ''}" data-select aria-pressed="${selecting}">${selecting ? 'Готово' : 'Вибрати'}</button>` : ''}<label class="m-sortbtn" title="Порядок: ${esc(orders[store.sort])}">${icon('sort')}<select id="m-sort" aria-label="Порядок">${(['order', 'new', 'qa', 'long'] as Sort[]).map(s => `<option value="${s}" ${store.sort === s ? 'selected' : ''}>${orders[s]}</option>`).join('')}</select></label></div></div>
       ${wide.matches ? `<div class="m-scope m-layout" role="group" aria-label="Вигляд"><button class="${L === 'cards' ? 'on' : ''}" data-layout="cards">Картки</button><button class="${L === 'table' ? 'on' : ''}" data-layout="table">Таблиця</button></div>` : ''}</div>
       ${L === 'table' ? tableHtml(v.name, shown, rows.length) : `<ul class="m-list rows">${shown.map((u, i) => {
+        // the number is the row's place in the file (the same as in the table), not its place in the filtered list
+        void i;
         const e = store.entry(v.name, u.key), st = store.shown(u, e);
-        return `<li><button class="m-row ${u.key === store.key && !selecting ? 'cur' : ''} ${selecting && picked.has(u.key) ? 'picked' : ''}" ${selecting ? `data-pickkey="${esc(u.key)}" aria-pressed="${picked.has(u.key)}"` : `data-key="${esc(u.key)}"`}>${selecting ? '<span class="m-edge" aria-hidden="true"></span>' : ''}<span class="sd ${SHAPE[st]}${st === 'draft' && isAutoFilled(e) ? ' sd-auto' : ''}" title="${STATUS_LABEL[st]}${st === 'draft' && isAutoFilled(e) ? ' (заповнено застосунком, ще не переглянуто)' : ''}"></span><span class="m-row-t"><small>${i + 1} · ${esc(store.speaker(u) || KIND_LABEL[u.kind])}${threadsOf(e?.comments).length ? ` <span class="m-cmk" title="Є коментарі" aria-label="Є коментарі">${icon('cm')}</span>` : ''}</small><span class="m-src">${excerpt(u.source.replace(/\s+/g, ' '), store.q)}</span><span class="m-tr ${e?.target ? '' : 'none'}">${e?.target ? esc(e.target.replace(/\s+/g, ' ')) : '—'}</span></span></button></li>`;
+        return `<li><button class="m-row ${u.key === store.key && !selecting ? 'cur' : ''} ${selecting && picked.has(u.key) ? 'picked' : ''}" ${selecting ? `data-pickkey="${esc(u.key)}" aria-pressed="${picked.has(u.key)}"` : `data-key="${esc(u.key)}"`}>${selecting ? '<span class="m-edge" aria-hidden="true"></span>' : ''}<span class="sd ${SHAPE[st]}${st === 'draft' && isAutoFilled(e) ? ' sd-auto' : ''}" title="${STATUS_LABEL[st]}${st === 'draft' && isAutoFilled(e) ? ' (заповнено застосунком, ще не переглянуто)' : ''}"></span><span class="m-row-t"><small>${(fileNo.get(u.key) ?? i + 1).toLocaleString('uk-UA')} · ${esc(store.speaker(u) || KIND_LABEL[u.kind])}${threadsOf(e?.comments).length ? ` <span class="m-cmk" title="Є коментарі" aria-label="Є коментарі">${icon('cm')}</span>` : ''}</small><span class="m-src">${excerpt(u.source.replace(/\s+/g, ' '), store.q)}</span><span class="m-tr ${e?.target ? '' : 'none'}">${e?.target ? esc(e.target.replace(/\s+/g, ' ')) : '—'}</span></span></button></li>`;
       }).join('') || '<li class="m-none">Нічого не знайдено</li>'}${rows.length > shown.length ? `<li class="m-more-li"><button class="m-mini" data-more>Показати ще ${Math.min(PAGE, rows.length - shown.length)} · ${shown.length} з ${rows.length}</button></li>` : ''}</ul>`}${selecting && L === 'cards' ? selBar(picked.size, rows.length, picked.size === rows.length && rows.length > 0, 'data-selall', `<button class="m-mini" data-selcopy ${picked.size ? '' : 'disabled'}>Оригінал</button><button class="m-mini" data-seltm ${picked.size ? '' : 'disabled'}>З пам’яті</button><button class="m-mini danger" data-selclear ${picked.size ? '' : 'disabled'}>Очистити</button>`, `<button class="m-ic" data-selappr ${picked.size ? '' : 'disabled'} aria-label="Вичитати вибрані" title="Вичитати вибрані">${icon('check')}</button><button class="m-primary" data-selsend ${picked.size ? '' : 'disabled'}>${icon('send')}<span>Надіслати</span></button>`, 'data-select') : ''}${selecting && layout === 'cards' ? '' : sbar}`;
   }
 
@@ -744,7 +758,7 @@ export async function start(root: HTMLElement): Promise<void> {
       <div id="m-prev" class="m-prev"></div>
       ${linksCard(c)}
     </div>
-    <div class="m-actions" id="m-actions"><div class="m-act2"><button class="m-mini" data-sub="scene">${icon('rows')} Сцена</button>${c.entry?.status === 'appr' ? '' : `<button class="m-mini" data-approve>${icon('check')} Вичитати</button>`}${c.entry?.status === 'done' || c.entry?.status === 'appr' ? `<button class="m-mini" data-rework title="Повернути на доопрацювання">${icon('undo')} Повернути</button>` : ''}<button class="m-mini danger" data-clear>Очистити</button></div><div class="m-act1"><button class="m-ic" data-step="-1" aria-label="Попередній рядок" ${store.neighbour(-1) ? '' : 'disabled'}>${icon('prev')}</button><button class="m-ic" data-step="1" aria-label="Наступний рядок" ${store.neighbour(1) ? '' : 'disabled'}>${icon('next')}</button><button class="m-ic" data-queue aria-label="Наступний рядок без перекладу в проєкті" title="Наступний рядок без перекладу в проєкті">${icon('down')}</button><button class="m-primary" data-send>${icon('send')}<span>Надіслати</span></button></div></div>`;
+    <div class="m-actions" id="m-actions"><div class="m-act2"><button class="m-mini" data-sub="scene">${icon('rows')} Сцена</button>${c.entry?.status === 'appr' ? '' : `<button class="m-mini" data-approve>${icon('check')} Вичитати</button>`}${c.entry?.status === 'done' || c.entry?.status === 'appr' ? `<button class="m-mini" data-rework title="Повернути на доопрацювання">${icon('undo')} Повернути</button>` : ''}<button class="m-mini danger" data-clear>Очистити</button></div><div class="m-act1"><button class="m-ic" data-step="-1" aria-label="Попередній рядок" ${store.neighbour(-1) ? '' : 'disabled'}>${icon('prev')}</button><button class="m-ic" data-step="1" aria-label="Наступний рядок" ${store.neighbour(1) ? '' : 'disabled'}>${icon('next')}</button><button class="m-ic" data-queue aria-label="Наступний рядок без перекладу в проєкті" title="Наступний рядок без перекладу в проєкті">${icon('down')}</button>${primaryBtn(c.entry?.status)}</div></div>`;
   }
 
   function screenMore(): string {
@@ -886,7 +900,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const idx = tabs.findIndex(t => t[0] === cur), dir = fresh ? '' : idx > prevTabIdx ? 'from-r' : idx < prevTabIdx ? 'from-l' : '';
     prevTabIdx = idx;
     const panel = cur === 'terms' ? (terms.length ? terms.map((t, i) => `<button class="m-hit" data-term="${i}"><b>${esc(t.en)}</b><span>→ ${esc(t.uk)}${t.alt?.length ? ` · ${esc(t.alt.join(', '))}` : ''}</span></button>`).join('') : '<p class="m-none">У цьому рядку термінів немає</p>') + '<button class="m-mini" data-gadd>Додати термін</button>'
-      : cur === 'tm' ? (tm.length ? tm.map((m, i) => `<button class="m-hit" data-tm="${i}"><b class="m-score">${m.score}%</b><span>${esc(m.t)}</span></button>`).join('') : '<p class="m-none">Схожих перекладів немає</p>')
+      : cur === 'tm' ? (tm.length ? tm.map((m, i) => `<button class="m-hit" data-tm="${i}"><b class="m-score">${m.score}%</b><span class="m-hit-t"><small class="m-hit-s">${esc(oneLineOf(m.s, 100))}</small>${esc(m.t)}</span></button>`).join('') : '<p class="m-none">Схожих перекладів немає</p>')
       : cur === 'cm' ? threadsHtml(c.entry)
       : historyHtml(hist);
     wrap.innerHTML = `<div class="m-scrim ${fresh ? 'in' : ''}" data-close></div><aside class="m-sheet ${fresh ? 'in' : ''} ${cur === 'cm' ? 'tall' : ''}" role="dialog" aria-modal="true" aria-label="Допомога до рядка">
@@ -954,6 +968,8 @@ export async function start(root: HTMLElement): Promise<void> {
       }
     }
     const box = document.getElementById('m-issues'); if (box) box.innerHTML = issuesHtml();
+    const pb = document.querySelector<HTMLElement>('.m-act1 .m-primary');
+    if (pb) { const s0 = c.entry?.status, want = s0 === 'done' ? 'approve' : s0 === 'appr' ? 'next' : 'send'; if (pb.dataset.kind !== want) pb.outerHTML = primaryBtn(s0); }
     const stEl = document.querySelector('.m-status'); if (stEl) { const st = store.shown(c.unit, c.entry); stEl.innerHTML = `<span class="sd ${SHAPE[st]}"></span>${stateLabel(st, c.entry)}`; }
   }
 
@@ -964,15 +980,17 @@ export async function start(root: HTMLElement): Promise<void> {
 
   async function importFiles(files: File[]): Promise<void> {
     busy = `Читаю файлів: ${files.length}…`; renderChrome();
-    const game: GameFile[] = []; let projects = 0, conflicts = 0; const unknown: string[] = [];
+    const game: GameFile[] = []; let projects = 0, conflicts = 0; const unknown: string[] = [], broken: string[] = [];
     try {
       for (const f of files) {
         const text = await f.text();
         if (looksLikeProject(text)) { conflicts += store.importProject(text); projects++; continue; }
         const name = canonicalRpgMakerName(f.name) ?? (formatOf({ name: f.name }) ? f.name : null);
         if (!name) { unknown.push(f.name); continue; }
-        game.push(isTextFormat(formatOf({ name })) ? { name, json: null, text } : { name, json: JSON.parse(text) });
+        // a damaged file does not stop the others: it is named, and the rest is taken
+        try { game.push(isTextFormat(formatOf({ name })) ? { name, json: null, text } : { name, json: JSON.parse(text) }); } catch { broken.push(f.name); }
       }
+      if (broken.length) say(`Не прочитано (пошкоджений файл): ${broken.slice(0, 3).join(', ')}${broken.length > 3 ? ` і ще ${broken.length - 3}` : ''}`, true);
       let reset = 0;
       if (game.length) reset = store.ingest(game);
       const parts = [projects ? `проєкт злито${conflicts ? ` (конфліктів: ${conflicts})` : ''}` : '', game.length ? `файлів гри: ${game.length}` : '', game.length && store.lastIngest ? ingestNote(store.lastIngest.report) : '', reset ? `оригінал змінився в ${reset} рядках${store.lastReconcile ? `, у чернетки повернуто ${store.lastReconcile.demoted}` : ''}` : ''].filter(Boolean);
@@ -1218,6 +1236,14 @@ export async function start(root: HTMLElement): Promise<void> {
       if (next) { store.select(next.key); saySent(r, 'Надіслано'); render(); $('m-main').scrollTop = 0; showTrField(hadKb); } else { saySent(r, 'Це був останній рядок у списку'); render(); }
       return;
     }
+    if (q('[data-approve-next]')) {
+      const nextBefore = store.neighbour(1);
+      const r = store.approve();
+      if (r.why) { say(/^Є помилка QA/.test(r.why) ? 'Є помилка QA: виправте її під полем' : r.why, true); document.getElementById('m-issues')?.scrollIntoView({ block: 'nearest' }); return; }
+      buzz(14); say('Вичитано', false, r.batch);
+      if (nextBefore) { store.select(nextBefore.key); render(); $('m-main').scrollTop = 0; showTrField(false); } else render();
+      return;
+    }
     if (q('[data-queue]')) {
       const r = store.nextQueue('untranslated', 1);
       say(r ? `${QUEUE_LABEL.untranslated.title}: ${r.place} з ${r.total}` : QUEUE_LABEL.untranslated.empty, !r);
@@ -1304,7 +1330,7 @@ export async function start(root: HTMLElement): Promise<void> {
       // In the Android app a blob link cannot download, so the file goes through `saveFile` (the app writes it into Downloads).
       const was = store.saved.stamps?.copy;
       stamp(store.saved, 'copy', 'файл', Date.now());
-      const name = `${store.saved.name.replace(/[^\p{L}\p{N}_-]+/gu, '_') || 'transly'}.transly.json`;
+      const name = `${store.saved.name.replace(/\.(json|po|csv|rpy)$/i, '').replace(/[^\p{L}\p{N}_-]+/gu, '_') || 'transly'}-${new Date().toISOString().slice(0, 10)}.transly.json`;
       void saveFile(name, JSON.stringify(store.saved), 'application/json').then(ok => {
         if (ok) { store.persist(); say('Проєкт збережено у файл'); } else if (was) store.saved.stamps!.copy = was; else delete store.saved.stamps?.copy;
         render();

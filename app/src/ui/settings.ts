@@ -260,7 +260,7 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
     btn.disabled = false;
   });
   $('#st-export', dlg).addEventListener('click', async () => {
-    const name = `${ctx.s.saved.name.replace(/[^\p{L}\p{N}_-]+/gu, '_') || 'transly'}.transly.json`;
+    const name = `${ctx.s.saved.name.replace(/\.(json|po|csv|rpy)$/i, '').replace(/[^\p{L}\p{N}_-]+/gu, '_') || 'transly'}-${new Date().toISOString().slice(0, 10)}.transly.json`;
     // The file carries the mark of its own making; when the save is cancelled the mark is taken back.
     const was = ctx.s.saved.stamps?.copy;
     stamp(ctx.s.saved, 'copy', 'файл', Date.now());

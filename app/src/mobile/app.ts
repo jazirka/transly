@@ -993,7 +993,7 @@ export async function start(root: HTMLElement): Promise<void> {
       if (broken.length) say(`Не прочитано (пошкоджений файл): ${broken.slice(0, 3).join(', ')}${broken.length > 3 ? ` і ще ${broken.length - 3}` : ''}`, true);
       let reset = 0;
       if (game.length) reset = store.ingest(game);
-      const parts = [projects ? `проєкт злито${conflicts ? ` (конфліктів: ${conflicts})` : ''}` : '', game.length ? `файлів гри: ${game.length}` : '', game.length && store.lastIngest ? ingestNote(store.lastIngest.report) : '', reset ? `оригінал змінився в ${reset} рядках${store.lastReconcile ? `, у чернетки повернуто ${store.lastReconcile.demoted}` : ''}` : ''].filter(Boolean);
+      const parts = [projects ? `проєкт злито${conflicts ? ` (конфліктів: ${conflicts})` : ''}` : '', game.length ? `файлів гри: ${game.length}` : '', game.length && store.lastIngest ? ingestNote(store.lastIngest.report) : '', reset && store.lastReconcile ? `оригінал змінився в ${reset} рядках${store.lastReconcile ? `, у чернетки повернуто ${store.lastReconcile.demoted}` : ''}` : ''].filter(Boolean);
       if (unknown.length) say(`Не впізнав: ${unknown.slice(0, 3).join(', ')}${unknown.length > 3 ? '…' : ''}`, true);
       if (parts.length) say(parts.join(' · '), false, store.lastIngest?.batch ?? store.lastReconcile?.batch);
       if (store.hasGame) go(store.key ? 'edit' : 'files'); else render();

@@ -197,10 +197,19 @@ export function termsIn<T extends Term>(source: string, terms: T[]): T[] {
  * case, number or ending does.
  */
 export function targetHasTerm(target: string, uk: string, alt: string[] = []): boolean {
-  const hay = tokens(target).map(t => t.keys[0]!);
+  const toks = tokens(target), hay = toks.map(t => t.keys[0]!);
+  const agree = (h: string, n: string): boolean => h === n || prefixAgrees(h, n) || prefixAgrees(n, h);
   const has = (phrase: string) => {
     const need = tokens(phrase).map(t => t.keys[0]!);
-    return need.length > 0 && need.every(n => hay.some(h => h === n || prefixAgrees(h, n) || prefixAgrees(n, h)));
+    if (!need.length) return false;
+    // The words of a phrase stand next to each other (only spaces or a hyphen between), the same rule as the highlight in the editor: a translation
+    // that has the words scattered over the line does not "have the term".
+    for (let i = 0; i + need.length <= hay.length; i++) {
+      let ok = true;
+      for (let j = 0; j < need.length && ok; j++) ok = agree(hay[i + j]!, need[j]!) && (j === 0 || /^[\s\-–—]+$/.test(target.slice(toks[i + j - 1]!.end, toks[i + j]!.start)));
+      if (ok) return true;
+    }
+    return false;
   };
   return [uk, ...alt].some(has);
 }

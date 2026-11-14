@@ -938,7 +938,8 @@ export async function start(root: HTMLElement): Promise<void> {
     if (heavy) {
       // Many originals changed at once and there is no backup to read them from: most likely the folder already holds the translation.
       toast('Оригінали в папці гри змінилися майже скрізь, а резервної копії немає: схоже, там уже лежить переклад. Натисніть «Збірка (файл)» → «Повернути оригінали», потім відкрийте папку знову', { sticky: true });
-    } else if (reset) {
+    } else if (reset && lastReconcile) {
+      // said when this reading took rows back to drafts; a draft whose original changed earlier stays marked, and reading the same folder again does not report it again
       const back = lastReconcile ? `: ${plural(lastReconcile.demoted, ['рядок', 'рядки', 'рядків'])} повернуто в чернетки` : '';
       undoToast(ctx, `Оригінал змінився в ${plural(reset, ['рядку', 'рядках', 'рядках'])}${back}`, lastReconcile?.batch);
     } else if (fromBackup) toast('Оригінали прочитано з резервної копії гри (data.transly-orig)');

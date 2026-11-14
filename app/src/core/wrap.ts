@@ -143,7 +143,7 @@ export interface WrapPlan {
 type MessageLike = { kind?: string | undefined; key?: string | undefined; face?: string | undefined };
 
 /** A unit that is a message in the game's window (RPG Maker dialogue and scrolling text). Ren'Py lines (`L12`) are shaped by their engine. */
-export const isMessageUnit = (u: MessageLike): boolean => (u.kind === 'dialogue' || u.kind === 'scroll') && !/^L\d+$/.test(u.key ?? '');
+export const isMessageUnit = (u: MessageLike): boolean => (u.kind === 'dialogue' || u.kind === 'scroll') && !/(^|\u241F)L\d+$/.test(u.key ?? '');
 
 /** True when the width is counted in pixels and there is a way to measure them. */
 export const usesPixels = (plan: WrapPlan): boolean => plan.settings.unit === 'px' && !!plan.measure;

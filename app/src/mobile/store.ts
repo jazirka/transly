@@ -685,7 +685,7 @@ export class Store {
       const ents = this.saved.files[v.name] ?? {};
       for (const u of v.units) {
         const t = ents[u.key]?.target ?? '';
-        if ((u.source + ' ' + t + ' ' + u.key).toLowerCase().includes(w)) { out.push({ file: v.name, key: u.key, source: u.source, target: t }); if (out.length >= limit) return out; }
+        if ((u.source + ' ' + flowText(t) + ' ' + u.key).toLowerCase().includes(w)) { out.push({ file: v.name, key: u.key, source: u.source, target: t }); if (out.length >= limit) return out; }
       }
     }
     return out;

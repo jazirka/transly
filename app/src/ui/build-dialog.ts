@@ -14,7 +14,7 @@ export function openBuild(ctx: Ctx, dataDir: string | null, onBuilt: (n: number)
   const dlg = el('dialog', 'adlg');
   dlg.setAttribute('aria-labelledby', 'bd-t');
   dlg.innerHTML = `<form method="dialog"><h2 id="bd-t">Збірка</h2>
-    <p class="hint">Записує перекладені рядки в копії файлів гри. Оригінальні файли не змінюються: оберіть окрему папку або завантажте ZIP.</p>
+    <p class="hint">Записує перекладені рядки в копії файлів гри. Оригінальні файли не змінюються: оберіть окрему порожню папку або завантажте ZIP. Якщо обрати папку гри, застосунок спершу спитає й збереже копії оригіналів.</p>
     <label class="achk"><input type="checkbox" id="bd-appr"> Лише вичитані рядки</label>
     <label class="achk"><input type="checkbox" id="bd-block" checked> Не брати рядки з помилкою QA</label>
     ${desk ? '<label class="achk"><input type="checkbox" id="bd-draft"> Додати чернетки (щоб побачити в грі те, що ще пишете)</label>' : ''}
@@ -48,7 +48,7 @@ export function openBuild(ctx: Ctx, dataDir: string | null, onBuilt: (n: number)
     const t = e.target as HTMLElement;
     try {
       if (t.id === 'bd-zip') { const r = run(); if (await downloadZip(r)) { toast('ZIP збережено'); onBuilt(r.included); dlg.close(); } }
-      else if (t.id === 'bd-dir') { const r = run(); if (await writeToFolder(r)) { toast('Збірку записано в папку'); onBuilt(r.included); dlg.close(); } }
+      else if (t.id === 'bd-dir') { const r = run(); if (await writeToFolder(r, ctx.gameHandle() as Parameters<typeof writeToFolder>[1])) { toast('Збірку записано в папку'); onBuilt(r.included); dlg.close(); } }
       else if (t.id === 'bd-apply' || t.id === 'bd-play') {
         const r = run();
         const n = await applyToGame(dataDir!, r.files);

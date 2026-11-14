@@ -88,6 +88,8 @@ export interface Ctx {
   usage(): Usage;
   /** The game's data folder when the desktop app knows it (needed to start the game); null otherwise. */
   gameDir(): string | null;
+  /** The folder the game was opened from, when the browser gave a handle to it (null otherwise: a phone, a fallback input, the desktop app). */
+  gameHandle(): { resolve?(possibleDescendant: unknown): Promise<string[] | null> } | null;
   /** A build was written into the game: update the status bar. */
   built(n: number): void;
   view(): FileView | null;

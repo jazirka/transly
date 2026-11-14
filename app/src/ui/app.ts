@@ -289,6 +289,7 @@ export async function start(root: HTMLElement): Promise<void> {
     qaOpts, lineLimit, wrapPlan,
     usage: () => { if (!usageCache || usageCache.game !== s.game) usageCache = { game: s.game, u: buildUsage(s.game, f => s.saved.labels?.[f]) }; return usageCache.u; },
     gameDir: () => dataDir,
+    gameHandle: () => lastHandle as unknown as ReturnType<Ctx['gameHandle']>,
     built: n => { s.lastBuild = { at: Date.now(), n }; stamp(s.saved, 'build', 'збірка', Date.now(), n); ctx.persist(); renderTop(); },
     names: () => { if (!namesCache || namesCache.views !== s.views) namesCache = { views: s.views, idx: new GameNameIndex(s.views) }; return namesCache.idx; },
     speaker: u => speakerOf(u, s.saved.speakers),

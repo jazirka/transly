@@ -131,7 +131,7 @@ button{cursor:pointer}
 .sd.appr{background:var(--ok)}
 .sd.qa{background:var(--bad)}
 .gr .key{font:12px var(--mono);color:var(--mute);padding-top:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
-.gr .who{color:var(--violet);padding-top:7px}
+.gr .who{color:var(--violet);padding-top:7px;min-width:0;overflow-wrap:anywhere}
 .gr .src,.gr .tr{display:block;min-width:0;overflow-wrap:anywhere}
 .gr .src{color:#c8ccd3;line-height:1.45}
 .gr .tr{line-height:1.45}
@@ -952,6 +952,7 @@ body.resizing{user-select:none;cursor:col-resize}
 .filters .fin{flex:0 1 200px;min-width:140px}
 .filters .chipsHost{flex-wrap:wrap}
 .chip.idle{opacity:.5;cursor:default}
+.srcbox .inv{font:10px var(--mono);color:#f0b45c;background:rgba(240,180,92,.14);border-radius:3px;padding:0 2px;margin:0 1px}
 /* in a narrow tree the file's name wins over the little progress bar (the percentage stays) */
 .node .nm{min-width:7ch}
 @media (max-width:1100px){.node .mini{display:none}}

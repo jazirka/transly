@@ -386,13 +386,14 @@ export async function start(root: HTMLElement): Promise<void> {
       default: return true;
     }
   };
-  function visibleUnits(withStatus: boolean): Unit[] {
+  /** The rows that pass the filters. `sorted` false is the table's order: the sort chosen for the list (Редагування, the left panel) is not applied to it, so the table is not reordered behind the reader's back. */
+  function visibleUnits(withStatus: boolean, sorted = true): Unit[] {
     const v = ctx.view();
     if (!v) return [];
     const ents = ctx.entries(v.name);
     const opts = withStatus && s.filter === 'adv' ? qaOpts() : undefined;
     const list = v.units.filter(u => inContext(u, ents[u.key]) && (!withStatus || matchesStatus(u, ents[u.key], s.filter, opts)));
-    if (s.sort === 'order') return list;
+    if (s.sort === 'order' || !sorted) return list;
     // Array.sort is stable: rows with the same rank keep the order of the file.
     const rank = (u: Unit): number => {
       const e = ents[u.key];
@@ -543,7 +544,7 @@ export async function start(root: HTMLElement): Promise<void> {
       // Every filter stays in its place: a chip that appears when the first row of its kind is made would push the table down
       // under the reader's eyes. One that finds nothing is dimmed and cannot be pressed (unless it is the chosen one).
       const idle = n === 0 && f !== 'all' && s.filter !== f;
-      return `<button class="chip ${s.filter === f ? 'on' : ''}${idle ? ' idle' : ''}" data-filter="${f}" aria-pressed="${s.filter === f}"${idle ? ' disabled' : ''}>${l} <span class="n">${n}</span></button>`;
+      return `<button class="chip ${s.filter === f ? 'on' : ''}${idle ? ' idle' : ''}" data-filter="${f}" aria-pressed="${s.filter === f}"${idle ? ' disabled' : ''}>${l} <span class="n">${n.toLocaleString('uk-UA')}</span></button>`;
     }).join('');
   }
 
@@ -639,10 +640,10 @@ export async function start(root: HTMLElement): Promise<void> {
   /** The ticks changed: only the rows that are drawn are touched (a long list keeps shells for the rest, drawn later from `s.checked`). */
   function renderSelection(): void {
     document.querySelectorAll<HTMLElement>('#grid .gr:not(.lazy)').forEach(r => { const on = s.checked.has(r.dataset.key ?? ''); r.classList.toggle('chk', on); const c = r.querySelector<HTMLInputElement>('.rc'); if (c) c.checked = on; });
-    renderBulk(visibleUnits(true).map(u => u.key));
+    renderBulk(visibleUnits(true, false).map(u => u.key));
   }
   /** Is the table showing every row (no filter, search, speaker, length or sort)? Then a changed row stays where it is. */
-  const tablePlain = (): boolean => s.mode === 'table' && s.filter === 'all' && !s.q && s.speaker === null && s.lenFilter === 'all' && s.sort === 'order' && !s.phone && !(lp() === 'rows' || s.leftBoth);
+  const tablePlain = (): boolean => s.mode === 'table' && s.filter === 'all' && !s.q && s.speaker === null && s.lenFilter === 'all' && !s.phone && !(lp() === 'rows' || s.leftBoth);
   /**
    * One row of the table changed (a cell was edited): draw that row again and bring the totals in line, instead of
    * drawing the whole workspace. Anything that could move or remove the row (a filter, a search, a sort) or a view
@@ -668,7 +669,7 @@ export async function start(root: HTMLElement): Promise<void> {
     document.querySelectorAll<HTMLElement>('#grid .gr[tabindex="0"]').forEach(r => { r.tabIndex = -1; r.setAttribute('aria-selected', 'false'); });
     if (row) { row.classList.add('sel'); row.tabIndex = 0; row.setAttribute('aria-selected', 'true'); }
     else ensureGridStop();
-    renderStatus(); renderSidePanel(ctx);
+    renderCrumbs(); renderStatus(); renderSidePanel(ctx);
   }
   /** The table is one stop of the Tab key: when no row is selected the first one is that stop, so the keyboard can get into the table at all. */
   function ensureGridStop(): void {
@@ -678,6 +679,15 @@ export async function start(root: HTMLElement): Promise<void> {
     if (first) first.tabIndex = 0;
   }
 
+  /** How many rows the table lists now (the crumbs say it when a filter hides some). */
+  let crumbShown = 0;
+  /** The line over the table: where the open file is and which row is the selected one (it follows the selection without drawing the table again). */
+  function renderCrumbs(): void {
+    const v = ctx.view();
+    if (!v) return;
+    const cur = s.cur ? v.units.findIndex(u => u.key === s.cur) + 1 : 0;
+    $('#crumbs').innerHTML = `${s.current !== GROUP && s.current?.includes('/') ? `<span>${esc(s.current.split('/').slice(0, -1).join('/'))}</span>›` : ''}<span>${esc(currentLabel())}</span>${cur && s.cur ? `›<b>${esc(ctx.unit(s.cur)?.context ?? '')}</b>` : ''}<span class="r">${cur ? `рядок ${cur.toLocaleString('uk-UA')} з ${v.units.length.toLocaleString('uk-UA')}` : plural(v.units.length, ['рядок', 'рядки', 'рядків'])}${crumbShown !== v.units.length ? ` · показано ${crumbShown.toLocaleString('uk-UA')}` : ''}</span>`;
+  }
   function renderTable(): void {
     const v = ctx.view();
     const grid = $('#grid');
@@ -686,7 +696,7 @@ export async function start(root: HTMLElement): Promise<void> {
     ($('#q') as HTMLInputElement).value = s.q;
     if (!v) { grid.innerHTML = ''; return; }
     const idx = new Map(v.units.map((u, i) => [u.key, i + 1]));
-    const list = visibleUnits(true);
+    const list = visibleUnits(true, false);
     const ids = list.map(u => u.key);
     const nSel = ids.filter(k => s.checked.has(k)).length;
     const hasWho = v.units.some(u => ctx.speaker(u));
@@ -698,8 +708,8 @@ export async function start(root: HTMLElement): Promise<void> {
     else { grid.innerHTML = h + `<div class="empty-wrap" role="row"><div role="gridcell">${emptyHtml}</div></div>`; grid.removeAttribute('aria-rowcount'); grid.removeAttribute('aria-colcount'); }
     renderBulk(ids);
     ensureGridStop();
-    const cur = s.cur ? idx.get(s.cur) : undefined;
-    $('#crumbs').innerHTML = `${s.current !== GROUP && s.current?.includes('/') ? `<span>${esc(s.current.split('/').slice(0, -1).join('/'))}</span>›` : ''}<span>${esc(currentLabel())}</span>${cur && s.cur ? `›<b>${esc(ctx.unit(s.cur)?.context ?? '')}</b>` : ''}<span class="r">${cur ? `рядок ${cur} з ${v.units.length}` : plural(v.units.length, ['рядок', 'рядки', 'рядків'])}${list.length !== v.units.length ? ` · показано ${list.length}` : ''}</span>`;
+    crumbShown = list.length;
+    renderCrumbs();
   }
 
   let topTimer = 0;
@@ -1388,7 +1398,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!v) return;
     const ents = ctx.entries(v.name);
     const changes: RowChange[] = []; const skipped = new Map<string, number>();
-    const visible = new Set(visibleUnits(true));
+    const visible = new Set(visibleUnits(true, false));
     for (const k of s.checked) {
       const u = unitMap.get(k);
       if (!u || !visible.has(u)) continue;
@@ -1413,7 +1423,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!v) return;
     const ents = ctx.entries(v.name);
     const changes: RowChange[] = []; const skipped = new Map<string, number>();
-    const visible = new Set(visibleUnits(true));
+    const visible = new Set(visibleUnits(true, false));
     const opts = { blockErrors: s.saved.settings.blockErrors, qa: qaOpts() };
     const now = Date.now();
     for (const k of s.checked) {
@@ -1472,7 +1482,7 @@ export async function start(root: HTMLElement): Promise<void> {
       // Enter and Tab keep the translation and carry on in the next row's cell (Shift+Enter writes a line break, Shift+Tab goes back).
       else if ((e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) || (e.key === 'Tab' && !e.ctrlKey && !e.altKey)) {
         e.preventDefault(); ta.removeEventListener('blur', finish); save();
-        const list = visibleUnits(true), at = list.findIndex(x => x.key === key);
+        const list = visibleUnits(true, false), at = list.findIndex(x => x.key === key);
         const next = list[at + (e.key === 'Tab' && e.shiftKey ? -1 : 1)];
         rowChanged(key);
         if (next) { reveal('grid', next.key); selectRowLight(next.key); }
@@ -1480,7 +1490,7 @@ export async function start(root: HTMLElement): Promise<void> {
       }
       else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); ta.removeEventListener('blur', finish); const ents = ctx.entries(s.current!); ents[key] = edit(ents[key], u, ta.value, 'translate', Date.now()); const r = submit(ents[key], u, 'translate', Date.now(), { blockErrors: s.saved.settings.blockErrors, qa: qaOpts() }); if (r.ok) { afterSendFollowUp(ctx, u, ctx.commit([{ file: s.current!, key, next: r.entry, text: r.entry.target }], 'send'), Date.now()); } else toast(r.reason, { sticky: true }); ctx.persist(); ctx.invalidateTm();
         // «send and go on»: the next row's cell is opened (the row that was sent may leave a filtered list)
-        const list = visibleUnits(true), at = list.findIndex(x => x.key === key), go = r.ok ? list[at + 1] : undefined;
+        const list = visibleUnits(true, false), at = list.findIndex(x => x.key === key), go = r.ok ? list[at + 1] : undefined;
         renderAll();
         if (go) { reveal('grid', go.key); selectRowLight(go.key); startInline(go.key); } else if (!r.ok) startInline(key);
       }
@@ -1774,9 +1784,11 @@ export async function start(root: HTMLElement): Promise<void> {
     }
     if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && s.mode !== 'table') { e.preventDefault(); step(ctx, e.key === 'ArrowDown' ? 1 : -1); return; }
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && t.id === 'i-tr') { e.preventDefault(); send(ctx); return; }
+    // A name, a choice or a glossary term is one line in the game: Enter there sends the row instead of putting a line break into it
+    if (e.key === 'Enter' && !e.shiftKey && !e.altKey && !e.isComposing && t.id === 'i-tr') { const u1 = ctx.unit((t as HTMLTextAreaElement).dataset.key ?? ''); if (u1 && (u1.kind === 'name' || u1.kind === 'choice' || u1.kind === 'term')) { e.preventDefault(); send(ctx); return; } }
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && t.classList.contains('sv-in')) { e.preventDefault(); s.cur = t.dataset.key ?? s.cur; send(ctx); return; }
     if (s.mode === 'table' && t.classList.contains('gr')) {
-      const list = visibleUnits(true);
+      const list = visibleUnits(true, false);
       const i = list.findIndex(u => u.key === t.dataset.key);
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); const n = list[i + (e.key === 'ArrowDown' ? 1 : -1)]; if (n) { reveal('grid', n.key); selectRowLight(n.key); const r = document.querySelector<HTMLElement>(`.gr[data-key="${CSS.escape(n.key)}"]`); r?.focus(); r?.scrollIntoView({ block: 'nearest' }); } }
       else if (e.key === 'Enter') { e.preventDefault(); ctx.select(t.dataset.key!, 'edit'); }

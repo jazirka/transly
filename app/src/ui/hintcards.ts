@@ -104,7 +104,7 @@ function termCard(ctx: Ctx, en: string): string {
     <div class="tc-alt">${t.alt?.length ? `також: ${t.alt.map(a => `<span>${esc(a)}</span>`).join('')}` : ''}${t.note ? `<span class="tc-n">${esc(t.note)}</span>` : ''}</div>
     ${checkRows(u, target, t)}
     <div class="tc-status"><span class="tg ${t.qa === false ? '' : 'ok'}">${t.qa === false ? 'лише підказка' : 'перевіряється в QA'}</span></div>
-    <div class="tc-acts"><button type="button" class="btn p" data-hca="insert" data-v="${esc(t.uk)}" ${u ? '' : 'disabled'} title="Вставити в переклад на місці курсора">${used ? 'Замінити на' : 'Вставити'} «${esc(t.uk)}»</button><button type="button" class="btn ic" data-hca="edit" data-v="${esc(t.en)}" title="Змінити термін у глосарії" aria-label="Змінити термін">✎</button></div>`;
+    <div class="tc-acts"><button type="button" class="btn p" data-hca="insert" data-v="${esc(t.uk)}" ${u ? '' : 'disabled'} title="Вставити в переклад на місці курсора">Вставити «${esc(t.uk)}»</button><button type="button" class="btn ic" data-hca="edit" data-v="${esc(t.en)}" title="Змінити термін у глосарії" aria-label="Змінити термін">✎</button></div>`;
 }
 
 /** Whether it is right, side by side: what the original has and what the translation has, each with its own verdict. */

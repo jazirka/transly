@@ -250,7 +250,11 @@ export function closeTyping(ctx: Ctx): void {
   ctx.persist();
 }
 
+/** True while a change is put into the field by the program (as typing, for the field's undo): the input event it raises is not a change of the row. */
+let mutedInput = false;
+
 export function focusInput(ctx: Ctx, ta: HTMLTextAreaElement): void {
+  if (mutedInput) return;
   const u = ctx.unit(ta.dataset.key ?? '');
   if (!u || !ctx.s.current) return;
   const ents = ctx.entries(ctx.s.current);
@@ -275,7 +279,17 @@ function setText(ctx: Ctx, u: Unit, text: string, what: string, kind?: BatchKind
   else { ents[u.key] = recordChange(ents[u.key], next, what, text, ctx.s.who, Date.now()); noteChange(ctx.s, ctx.s.current!, u.key); }
   // The field keeps what is typed in it while it has the focus (a shortcut changes the row without leaving it): bring it in line first.
   const card = ctx.s.mode === 'scene' ? document.querySelector<HTMLTextAreaElement>(`.sv-in[data-key="${CSS.escape(u.key)}"]`) : null;
-  if (card) card.value = text; else if (ctx.s.mode === 'edit') ($('#i-tr') as HTMLTextAreaElement).value = text;
+  if (card) card.value = text;
+  else if (ctx.s.mode === 'edit') {
+    const f = $('#i-tr') as HTMLTextAreaElement;
+    // A fix that is not a send is typed into the field the way the keyboard would, so Ctrl+Z in the field takes it back (assigning the value would wipe the field's own undo).
+    if (f.value === text) { /* already there */ }
+    else {
+      // the row was changed above as one action; the input event of the typing is not a second change of it
+      mutedInput = true;
+      try { f.focus(); f.select(); if (!document.execCommand('insertText', false, text)) f.value = text; } finally { mutedInput = false; }
+    }
+  }
   ctx.persist(); ctx.invalidateTm(); ctx.render();
   if (card) focusCard(u.key); else if (ctx.s.mode === 'edit') ($('#i-tr') as HTMLTextAreaElement).focus();
   return batch;

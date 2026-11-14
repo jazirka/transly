@@ -407,7 +407,7 @@ button.cc:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .sv-ok svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 .sv-ok:hover{color:var(--ok);border-color:rgba(76,195,138,.5)}
 .sv-ok:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-.sv-src{padding:8px 10px;font-size:14px}
+.sv-src{padding:8px 10px;font-size:14px;white-space:pre-wrap}
 /* `.sv .sv-in`: the global `textarea.tr-in` (min-height 96, accent border) is more specific than a bare `.sv-in` */
 .sv .sv-in{box-sizing:border-box;width:100%;min-height:44px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r2);background:var(--bg);color:var(--text);font:15px/1.5 var(--ui);resize:none;overflow:hidden;box-shadow:none;outline:none}
 .sv .sv-in:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(139,114,232,.18)}

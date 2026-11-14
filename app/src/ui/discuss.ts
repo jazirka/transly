@@ -54,8 +54,10 @@ export function renderDiscuss(ctx: Ctx, row: string, e: Entry | undefined): void
       ${answering ? `<div class="cm-reply"><textarea class="cmin" data-reply="${esc(t.id)}" rows="2" placeholder="Відповісти…" aria-label="Відповідь">${esc(rd)}</textarea><div class="cm-acts"><button class="btn p" data-cm="send-reply" data-cid="${esc(t.id)}">Надіслати</button><button class="btn" data-cm="cancel">Скасувати</button><span class="hint">Ctrl+Enter</span></div></div>` : ''}
     </div>`;
   };
+  // the section of resolved threads stays as the reader left it (a click inside it redraws the list: it must not fold up under the pointer)
+  const closedWasOpen = !!document.querySelector('#cm-list details.thr-closed[open]');
   $('#cm-list').innerHTML = threads.length
-    ? open.map(threadHtml).join('') + (closed.length ? `<details class="thr-closed"><summary>Розв’язані · ${closed.length}</summary>${closed.map(threadHtml).join('')}</details>` : '')
+    ? open.map(threadHtml).join('') + (closed.length ? `<details class="thr-closed"${closedWasOpen ? ' open' : ''}><summary>Розв’язані · ${closed.length}</summary>${closed.map(threadHtml).join('')}</details>` : '')
     : '<div class="hint">Коментарів немає</div>';
   $('#cm-badge').textContent = String(open.length);
   $('#cm-badge').hidden = !open.length;

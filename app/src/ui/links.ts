@@ -42,7 +42,12 @@ export function drawLinks(_ctx: Ctx): void {
     const r = first(el);
     // The arrow leaves from under the word, at the lower edge of the original's box (a word in the middle of a long text would otherwise have a line drawn across the lines below it).
     const x1 = r.left + r.width / 2 - base.left, y1 = Math.max(r.bottom, srcBottom) - base.top + 2;
-    if (hit) { const t = first(hit); links.push({ key, kind, ok: true, x1, y1, x2: t.left + t.width / 2 - base.left, y2: t.top - base.top - 3 }); }
+    if (hit) {
+      const t = first(hit);
+      // A word on a later line of the translation is pointed at from above the field: the arrow does not cross the lines in between.
+      const firstLine = t.top - field.top < 32;
+      links.push({ key, kind, ok: true, x1, y1, x2: t.left + t.width / 2 - base.left, y2: firstLine ? t.top - base.top - 3 : field.top - base.top - 2 });
+    }
     else links.push({ key, kind, ok: false, x1, y1, x2: Math.min(Math.max(x1, field.left - base.left + 14), field.right - base.left - 14), y2: field.top - base.top - 2 });
   });
   if (!links.length) return;

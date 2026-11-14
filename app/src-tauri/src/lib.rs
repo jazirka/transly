@@ -34,12 +34,6 @@ impl Picked {
         Picked { file: Some(file), list: Mutex::new(list) }
     }
 
-    /// A list that is not kept anywhere (tests).
-    #[cfg(test)]
-    fn memory() -> Self {
-        Picked { file: None, list: Mutex::new(Vec::new()) }
-    }
-
     fn add(&self, p: &Path) {
         let Ok(c) = p.canonicalize() else { return };
         let mut v = self.list.lock().unwrap();
@@ -714,7 +708,7 @@ mod tests {
         let exe = game.join("game.exe");
         fs::write(&exe, b"x").unwrap();
         assert!(allow_picked(&fresh, &later, exe.to_str().unwrap()).is_ok());
-        assert!(!Picked::memory().has(&game));
+        assert!(!Picked { file: None, list: Mutex::new(Vec::new()) }.has(&game));
     }
 
     #[test]

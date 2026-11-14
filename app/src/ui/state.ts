@@ -19,6 +19,9 @@ export const splitKey = (key: string): { file: string; key: string } | null => {
   return i < 0 ? null : { file: key.slice(0, i), key: key.slice(i + SEP.length) };
 };
 
+/** Count a row as changed in this session (once). */
+export const noteChange = (s: { sess: { n: number; seen: Set<string> } }, file: string, key: string): void => { s.sess.seen.add(`${file}\u0000${key}`); s.sess.n = s.sess.seen.size; };
+
 export interface State {
   views: FileView[];
   game: GameFile[];
@@ -66,7 +69,8 @@ export interface State {
   leftBoth: boolean;
   rightOpen: boolean;
   collapsed: Set<string>;
-  sess: { n: number; t0: number };
+  /** What this session changed: `n` rows (each counted once, however many keystrokes it took), since `t0`. */
+  sess: { n: number; t0: number; seen: Set<string> };
   lastBuild: { at: number; n: number } | null;
 }
 
@@ -100,6 +104,8 @@ export interface Ctx {
   invalidateTm(): void;
   /** The memory is a little out of date (a row was typed in): it is rebuilt on its next use, but not more than about once a second. */
   softTm(): void;
+  /** The totals in the header and the status bar follow what is being typed (after a pause, so a long file is not counted on every keystroke). */
+  refreshTop(): void;
   /** The rows that share an original (linked rows), by the files that are loaded. */
   links(): LinkIndex;
   persist(): void;

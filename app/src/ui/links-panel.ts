@@ -7,8 +7,8 @@ import type { Ctx } from './state';
 
 /** The cluster the panel shows now: its buttons point into it by the row's number. */
 let shown: { view: LinkView } | null = null;
-/** More rows than this are summed up in a line. */
-const MAX_ROWS = 8;
+/** More rows than this are summed up in a line (the dialog «Зв’язані рядки» lists them all): a repeated line must not push the terms and the discussion out of the panel. */
+const MAX_ROWS = 3;
 
 /**
  * The section «Зв’язані рядки» of the right panel: the rows that have the same original, what each of them holds, and
@@ -34,7 +34,7 @@ export function linksHtml(ctx: Ctx, u: Unit): string {
     ].join('');
     return `<div class="pn-lrow${self ? ' me' : ''}"><div class="pn-lt"><span class="pn-ls lk-${row.state}">${esc(label)}</span><span class="hint">${esc(where)}</span></div>${row.target.trim() ? `<div class="pn-lx">${esc(oneLine(row.target, 90))}</div>` : ''}<div class="pn-la">${acts}</div></div>`;
   }).join('');
-  const more = ordered.length > MAX_ROWS ? `<div class="hint">І ще ${ordered.length - MAX_ROWS}</div>` : '';
+  const more = ordered.length > MAX_ROWS ? `<div class="hint">І ще ${ordered.length - MAX_ROWS} · <button type="button" class="pn-lb" data-lk="review">Показати всі</button></div>` : '';
   const head = `${plural(view.rows.length - 1, ['зв’язаний рядок', 'зв’язані рядки', 'зв’язаних рядків'])}${mode === 'off' ? ' · зв’язування вимкнено в налаштуваннях' : view.main ? ' · є головний переклад' : ''}`;
   const update = todo && plan?.view.reference ? `<button type="button" class="btn" data-lk="review">Оновити зв’язані (${todo})</button>` : '';
   return `<div class="pn-lh hint">${head}</div>${rows}${more}${update}`;

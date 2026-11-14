@@ -952,6 +952,11 @@ body.resizing{user-select:none;cursor:col-resize}
 .filters .fin{flex:0 1 200px;min-width:140px}
 .filters .chipsHost{flex-wrap:wrap}
 .chip.idle{opacity:.5;cursor:default}
+/* in a narrow tree the file's name wins over the little progress bar (the percentage stays) */
+.node .nm{min-width:7ch}
+@media (max-width:1100px){.node .mini{display:none}}
+/* the match in the quick search (Ctrl+K) */
+.sd-it mark{background:rgba(255,200,60,.28);color:inherit;border-radius:2px}
 /* ▶ is an outlined round button, not a filled blob */
 /* the last top-bar icon sits exactly over the right rail's icons */
 .topbar{padding-right:4px}

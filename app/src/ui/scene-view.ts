@@ -5,7 +5,7 @@ import { KIND_LABEL, nameMarks, namesOfRow, qaRows } from './hintcards';
 import { markupTerms } from './markup';
 import { scenesOf } from './scenecache';
 import { openScene } from './scene-dialog';
-import { GROUP, STATUS_CAP, shownStatus } from './state';
+import { GROUP, STATUS_CAP, noteChange, shownStatus } from './state';
 import type { Ctx } from './state';
 import { autoSize } from './text-editor';
 import { undoToast } from './undo-toast';
@@ -132,8 +132,8 @@ export function sceneInput(ctx: Ctx, ta: HTMLTextAreaElement): boolean {
   }
   const ents = ctx.entries(s.current);
   ents[u.key] = edit(ents[u.key], u, ta.value, ctx.stage(), Date.now());
-  s.sess.n++;
-  ctx.persist(); ctx.softTm();
+  noteChange(s, s.current, u.key);
+  ctx.persist(); ctx.softTm(); ctx.refreshTop();
   const card = ta.closest<HTMLElement>('.sv-card');
   if (card) {
     autoSize(ta);

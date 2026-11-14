@@ -14,7 +14,7 @@ import { openLinkRows } from './links-dialog';
 import { isDesktop, openLink, rememberedGameDir } from './desktop';
 import { drawPic, picOfFace, picsOfRow } from './gameimg';
 import type { Pic } from './gameimg';
-import { STATUS_CAP, shownStatus } from './state';
+import { STATUS_CAP, noteChange, shownStatus } from './state';
 import { undoToast } from './undo-toast';
 import type { Ctx } from './state';
 
@@ -237,11 +237,11 @@ export function focusInput(ctx: Ctx, ta: HTMLTextAreaElement): void {
   if (!u || !ctx.s.current) return;
   const ents = ctx.entries(ctx.s.current);
   ents[u.key] = edit0(ctx, u, ta.value);
-  ctx.s.sess.n++;
+  noteChange(ctx.s, ctx.s.current, u.key);
   ctx.persist();
   refreshTerms(ctx, u);
   meter(ctx, u); refreshQa(ctx, u);
-  ctx.softTm();
+  ctx.softTm(); ctx.refreshTop();
   refreshPanel(ctx, u);
 }
 
@@ -251,7 +251,7 @@ function setText(ctx: Ctx, u: Unit, text: string, what: string, kind?: BatchKind
   const next = edit0(ctx, u, text);
   let batch: string | undefined;
   if (kind) batch = ctx.commit([{ file: ctx.s.current!, key: u.key, next, text }], kind, what);
-  else { ents[u.key] = recordChange(ents[u.key], next, what, text, ctx.s.who, Date.now()); ctx.s.sess.n++; }
+  else { ents[u.key] = recordChange(ents[u.key], next, what, text, ctx.s.who, Date.now()); noteChange(ctx.s, ctx.s.current!, u.key); }
   // The field keeps what is typed in it while it has the focus (a shortcut changes the row without leaving it): bring it in line first.
   const card = ctx.s.mode === 'scene' ? document.querySelector<HTMLTextAreaElement>(`.sv-in[data-key="${CSS.escape(u.key)}"]`) : null;
   if (card) card.value = text; else if (ctx.s.mode === 'edit') ($('#i-tr') as HTMLTextAreaElement).value = text;

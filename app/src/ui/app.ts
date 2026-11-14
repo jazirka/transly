@@ -44,7 +44,7 @@ import { openSpeakers } from './speakers-dialog';
 import { initMobile } from './mobile';
 import { holdInert } from './modal';
 import { WINDOW_CONTROLS_HTML, initWindowControls } from './winctl';
-import { GROUP, SEP, STATUS_LABEL, buildTm, shownStatus, splitKey } from './state';
+import { GROUP, SEP, STATUS_LABEL, buildTm, noteChange, shownStatus, splitKey } from './state';
 import type { Ctx, Filter, LeftTab, Mode, SortMode, State } from './state';
 import { publishWidget } from './android';
 import { artifactDb, describeClaude, loadClaudeConfig, runClaudeSync } from './claude';
@@ -201,7 +201,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const s: State = {
     views: [], game: [], saved, current: null, open: [], group: null, groupSel: null, picked: new Set(), cur: null, scene: null, mode: mq.matches ? 'edit' : 'table', filter: 'all', q: '', speaker: null, lenFilter: 'all', sort: 'order', compact: ls('transly.compact') === '1', kb: false,
     checked: new Set(), sideTab: 'panel', sideOn: ['panel'], saveOk: true, savedAt: null, who: saved.settings.who, phone: mq.matches,
-    leftTab: { table: 'files', edit: 'rows', scene: 'scenes' }, leftOpen: !mq.matches, leftBoth: false, rightOpen: false, collapsed: new Set(), sess: { n: 0, t0: Date.now() }, lastBuild: null,
+    leftTab: { table: 'files', edit: 'rows', scene: 'scenes' }, leftOpen: !mq.matches, leftBoth: false, rightOpen: false, collapsed: new Set(), sess: { n: 0, t0: Date.now(), seen: new Set() }, lastBuild: null,
   };
   if (narrow.matches && !s.phone) s.sideOn = [];
   const fromSnapshot = viewsFromSnapshot(saved);
@@ -305,12 +305,13 @@ export async function start(root: HTMLElement): Promise<void> {
     },
     invalidateTm: () => { tmCache = null; tmStale = false; },
     softTm: () => { tmStale = true; },
+    refreshTop: () => { window.clearTimeout(topTimer); topTimer = window.setTimeout(() => { renderTop(); renderStatus(); }, 500); },
     links: () => { if (!linkCache || linkCache.views !== s.views) linkCache = { views: s.views, idx: new LinkIndex(s.views) }; return linkCache.idx; },
     persist: () => autosave.queue(s.saved),
     stage: () => 'translate',
     history: new UndoStack(),
     fileTitle: name => fileTitle(name),
-    commit: (changes, kind, what) => { const id = commitRows(file => ctx.entries(file), changes, kind, s.who, Date.now(), what); s.sess.n += changes.length; ctx.history.record(id); return id; },
+    commit: (changes, kind, what) => { const id = commitRows(file => ctx.entries(file), changes, kind, s.who, Date.now(), what); for (const c of changes) noteChange(s, c.file, c.key); ctx.history.record(id); return id; },
     render: () => renderAll(),
     open: (file, key) => openRow(file, key),
     openRows: (title, rows, gid) => openRows(title, rows, gid),
@@ -441,7 +442,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const both = (l === 'files' || l === 'rows') && s.leftBoth && !s.phone;
     $('#lpanel').classList.toggle('split', both);
     $('#rz-y').hidden = !both;
-    document.querySelectorAll<HTMLElement>('#strip button').forEach(b => { const on = both || b.dataset.lp === l; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+    document.querySelectorAll<HTMLElement>('#strip button').forEach(b => { const on = both ? b.dataset.lp === 'files' || b.dataset.lp === 'rows' : b.dataset.lp === l; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
     $('#tree').hidden = !both && l !== 'files';
     $('#lp-rows').hidden = !both && l !== 'rows';
     $('#lp-gl').hidden = l !== 'glossary';
@@ -701,6 +702,7 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#crumbs').innerHTML = `${s.current !== GROUP && s.current?.includes('/') ? `<span>${esc(s.current.split('/').slice(0, -1).join('/'))}</span>›` : ''}<span>${esc(currentLabel())}</span>${cur && s.cur ? `›<b>${esc(ctx.unit(s.cur)?.context ?? '')}</b>` : ''}<span class="r">${cur ? `рядок ${cur} з ${v.units.length}` : plural(v.units.length, ['рядок', 'рядки', 'рядків'])}${list.length !== v.units.length ? ` · показано ${list.length}` : ''}</span>`;
   }
 
+  let topTimer = 0;
   function renderTop(): void {
     $('#proj-name').textContent = s.saved.name;
     $('#proj-av').textContent = (Array.from(s.saved.name.trim())[0] ?? 'T').toUpperCase();
@@ -739,7 +741,7 @@ export async function start(root: HTMLElement): Promise<void> {
     sv.className = s.saveOk ? 'ok' : 'bad';
     $('#sb-fmt').textContent = s.current && s.current !== GROUP ? FORMAT_LABEL[s.current.split('.').pop() ?? ''] ?? '' : '';
     $('#sb-qa').textContent = qa ? plural(qa, ['помилка QA', 'помилки QA', 'помилок QA']) : 'Помилок QA немає';
-    $('#sb-qa').className = qa ? 'bad' : 'ok';
+    $('#sb-qa').className = qa ? 'sbtn bad' : 'sbtn ok';
     const ab = $('#sb-adv');
     ab.hidden = !adv;
     ab.textContent = adv ? `Поради: ${adv}` : '';
@@ -750,7 +752,7 @@ export async function start(root: HTMLElement): Promise<void> {
       $('#sb-file').textContent = `${s.current === GROUP ? 'Група' : 'Файл'}: ${st.approved} / ${st.total} вичитано · ${st.done} чекають вичитки`;
     } else $('#sb-file').textContent = '';
     const mins = Math.max(0, Math.round((Date.now() - s.sess.t0) / 60000));
-    $('#sb-sess').textContent = `Сесія: ${s.sess.n} змін · ${mins} хв`;
+    $('#sb-sess').textContent = `Сесія: ${plural(s.sess.n, ['рядок змінено', 'рядки змінено', 'рядків змінено'])} · ${mins} хв`;
     $('#ab-title').textContent = s.current ? currentLabel() : 'Transly';
     $('#ab-sub').textContent = v ? `${statsOf(v.units, ents).approved} / ${v.units.length} вичитано` : '';
   }
@@ -1216,6 +1218,23 @@ export async function start(root: HTMLElement): Promise<void> {
    * The results come in three groups, each with its own limit (so rows never push the terms out): files, rows (the
    * original, the translation under it, where it is and its state) and terms. Without a query: the open files first.
    */
+  /** A piece of `text` of at most `max` characters that contains the first match of `q` (the start of the text when there is none). */
+  const around = (text: string, q: string, max = 90): string => {
+    const flat = text.replace(/\s+/g, ' ');
+    if (flat.length <= max) return flat;
+    const at = q ? flat.toLowerCase().indexOf(q) : -1;
+    if (at < max - 12) return flat.slice(0, max);
+    const from = Math.max(0, Math.min(at - 20, flat.length - max));
+    return `…${flat.slice(from + 1, from + max)}`;
+  };
+  /** The text with the matches of `q` marked (the text is escaped here). */
+  const marked = (text: string, q: string): string => {
+    if (!q) return esc(text);
+    const low = text.toLowerCase();
+    let out = '', i = 0;
+    for (let at = low.indexOf(q); at >= 0; at = low.indexOf(q, i)) { out += esc(text.slice(i, at)) + '<mark>' + esc(text.slice(at, at + q.length)) + '</mark>'; i = at + q.length; }
+    return out + esc(text.slice(i));
+  };
   function sdRender(): void {
     const q = ($('#sd-in') as HTMLInputElement).value.trim().toLowerCase();
     const files: SdItem[] = [], rows: SdItem[] = [], terms: SdItem[] = [];
@@ -1237,7 +1256,7 @@ export async function start(root: HTMLElement): Promise<void> {
           const e = ents[u.key];
           if (!(u.source + ' ' + flowText(e?.target ?? '') + ' ' + u.key).toLowerCase().includes(q)) continue;
           nRows++;
-          if (rows.length < 8) rows.push({ t: 'row', file: v.name, key: u.key, kind: 'Рядки', title: u.source.replace(/\s+/g, ' ').slice(0, 90), sub: e?.target ? e.target.replace(/\s+/g, ' ').slice(0, 90) : '', where: `${fileTitle(v.name)} · ${shortKey(u.key)}`, status: shownStatus(ctx, u, e) });
+          if (rows.length < 8) rows.push({ t: 'row', file: v.name, key: u.key, kind: 'Рядки', title: around(u.source, q), sub: e?.target ? around(e.target, q) : '', where: `${fileTitle(v.name)} · ${shortKey(u.key)}`, status: shownStatus(ctx, u, e) });
           else if (nRows >= CAP) break outer;
         }
       }
@@ -1255,7 +1274,7 @@ export async function start(root: HTMLElement): Promise<void> {
         html += `<div class="sd-h" role="presentation">${x.kind}${all > shown ? ` · показано ${shown} з ${all >= CAP ? `${CAP}+` : all}` : ''}</div>`;
       }
       const dot = x.status ? `<i class="sd ${x.status}" title="${STATUS_LABEL[x.status as keyof typeof STATUS_LABEL] ?? ''}" aria-hidden="true"></i>` : '';
-      html += `<div class="sd-it ${i === 0 ? 'on' : ''}" id="sd-opt-${i}" data-sd="${i}" role="option" aria-selected="${i === 0}">${dot}<span class="sd-b"><span class="sd-t">${esc(x.title)}</span>${x.sub ? `<span class="sd-s">${esc(x.sub)}</span>` : ''}${x.where ? `<span class="sd-w">${esc(x.where)}</span>` : ''}</span></div>`;
+      html += `<div class="sd-it ${i === 0 ? 'on' : ''}" id="sd-opt-${i}" data-sd="${i}" role="option" aria-selected="${i === 0}">${dot}<span class="sd-b"><span class="sd-t">${marked(x.title, q)}</span>${x.sub ? `<span class="sd-s">${marked(x.sub, q)}</span>` : ''}${x.where ? `<span class="sd-w">${marked(x.where, q)}</span>` : ''}</span></div>`;
     });
     $('#sd-res').innerHTML = html || '<div class="sd-empty" role="status">Нічого не знайдено</div>';
     $('#sd-in').setAttribute('aria-activedescendant', sdItems.length ? 'sd-opt-0' : '');

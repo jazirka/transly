@@ -119,6 +119,8 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
   TABS.forEach(([name], i) => { const b = el('button'); b.type = 'button'; b.setAttribute('role', 'tab'); b.textContent = name; b.addEventListener('click', () => show(i)); bar.appendChild(b); });
   form.querySelector('h2')!.after(bar);
   show(shown);
+  // The dialog is as tall for every tab as for the tallest one, so the tab bar does not jump when the tab changes.
+  if (dlg.open) { const start = shown; let tallest = 0; for (let i = 0; i < TABS.length; i++) { show(i); tallest = Math.max(tallest, dlg.offsetHeight); } show(start); dlg.style.minHeight = `min(${tallest}px, 88vh)`; }
   $('#st-wrap', dlg).addEventListener('click', () => { dlg.close(); onWrap(); });
   $('#st-qa', dlg).addEventListener('click', () => { dlg.close(); onQa(); });
   $('#st-plug', dlg).addEventListener('click', () => { dlg.close(); onPlugins(); });

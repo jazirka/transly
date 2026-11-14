@@ -5,6 +5,14 @@
  * the visible part. Nothing is cut off, a redraw does not throw the reader back to the top, and everything that looks a
  * row up by its key keeps working (`reveal` draws a row on demand).
  */
+interface Block {
+  /** First row of the block and the one after its last. */
+  s: number; e: number;
+  /** The empty stand-in while the block is not drawn (null while its rows are drawn). */
+  ph: HTMLElement | null;
+  /** The drawn rows of the block. */
+  rows: HTMLElement[];
+}
 interface Rows {
   host: HTMLElement;
   scroller: HTMLElement;
@@ -16,6 +24,10 @@ interface Rows {
   heights: Map<string, number>;
   est: number;
   realized: number;
+  blocks: Block[];
+  /** Which block a row is in. */
+  at: Map<string, number>;
+  shell: string;
 }
 
 const lists = new Map<string, Rows>();
@@ -25,26 +37,67 @@ const MEMORY = 4;
 
 /** How far from the visible part rows are drawn, in pixels. */
 const AHEAD = 900;
+/**
+ * The list is cut into blocks of this many rows. A block that is not drawn is one empty element of the height its rows have (or are
+ * expected to have), so a list of a hundred thousand rows is a few thousand elements, not a hundred thousand.
+ */
+const BLOCK = 40;
+/** Blocks farther than this many blocks from the one that was drawn last are taken out again (their height stays), so the page does not grow with every screen scrolled. */
+const KEEP = 8;
 
-const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
-function realize(l: Rows, shell: HTMLElement): HTMLElement | null {
-  if (!shell.classList.contains('lazy')) return null;
-  const i = Number(shell.dataset.i);
-  shell.insertAdjacentHTML('afterend', l.html(i));
-  const row = shell.nextElementSibling as HTMLElement;
-  // in a grid every drawn row says which one of all the rows it is (the rows that are still shells are hidden from screen readers)
-  if (l.host.getAttribute('role') === 'grid') row.setAttribute('aria-rowindex', String(i + 2));
-  l.observer?.unobserve(shell);
-  shell.remove();
-  l.sizes?.observe(row);
-  l.realized++;
-  return row;
+const blockHeight = (l: Rows, b: Block): number => { let h = 0; for (let i = b.s; i < b.e; i++) h += l.heights.get(l.keys[i]!) ?? l.est; return h; };
+const placeholder = (l: Rows, bi: number, px: number): string => `<div class="${l.shell}-blk lazy" aria-hidden="true" data-blk="${bi}" style="min-height:${px}px"></div>`;
+
+/** Draw the rows of block `bi` in place of its stand-in. */
+function realizeBlock(l: Rows, bi: number): void {
+  const blk = l.blocks[bi];
+  const ph = blk?.ph;
+  if (!blk || !ph) return;
+  let h = '';
+  for (let i = blk.s; i < blk.e; i++) h += l.html(i);
+  const prev = ph.previousElementSibling;
+  ph.insertAdjacentHTML('beforebegin', h);
+  const rows: HTMLElement[] = [];
+  for (let el = (prev ? prev.nextElementSibling : l.host.firstElementChild); el && el !== ph; el = el.nextElementSibling) rows.push(el as HTMLElement);
+  const grid = l.host.getAttribute('role') === 'grid';
+  rows.forEach((r, k) => {
+    // in a grid every drawn row says which one of all the rows it is (the stand-ins are hidden from screen readers)
+    if (grid) r.setAttribute('aria-rowindex', String(blk.s + k + 2));
+    l.sizes?.observe(r);
+  });
+  l.observer?.unobserve(ph);
+  ph.remove();
+  blk.ph = null; blk.rows = rows;
+  l.realized += rows.length;
+}
+
+/** Take the rows of block `bi` out and put its stand-in back, as tall as the rows were. */
+function unrealizeBlock(l: Rows, bi: number): void {
+  const blk = l.blocks[bi];
+  if (!blk || blk.ph || !blk.rows.length) return;
+  // a row that has the focus (an open cell, a field) is not taken away from under the reader
+  if (blk.rows.some(r => r.contains(document.activeElement))) return;
+  let px = 0;
+  for (const r of blk.rows) { const key = r.dataset.key; const hgt = r.getBoundingClientRect().height; if (key && hgt > 0) l.heights.set(key, hgt); l.sizes?.unobserve(r); }
+  px = blockHeight(l, blk);
+  const first = blk.rows[0]!;
+  first.insertAdjacentHTML('beforebegin', placeholder(l, bi, px));
+  const ph = first.previousElementSibling as HTMLElement;
+  for (const r of blk.rows) r.remove();
+  l.realized -= blk.rows.length;
+  blk.rows = []; blk.ph = ph;
+  l.observer?.observe(ph);
+}
+
+/** After the block `near` was drawn: the blocks far from it go. */
+function trim(l: Rows, near: number): void {
+  for (let bi = 0; bi < l.blocks.length; bi++) if (!l.blocks[bi]!.ph && Math.abs(bi - near) > KEEP) unrealizeBlock(l, bi);
 }
 
 /**
  * Put the rows `keys` into `host` after whatever it holds (a header row, say). `memKey` says which list this is (the
- * file shown): its remembered heights are used for the shells. Rows near the current scroll position are drawn at once,
+ * file shown): its remembered heights are used for the stand-ins. Rows near the current scroll position are drawn at once,
  * the rest as they come near.
  */
 export function mountRows(id: string, host: HTMLElement, scroller: HTMLElement, headerHtml: string, keys: string[], html: (i: number) => string, memKey: string, est = 52, shell = 'gr'): void {
@@ -61,16 +114,20 @@ export function mountRows(id: string, host: HTMLElement, scroller: HTMLElement, 
   memory.delete(mk); memory.set(mk, mem);
   while (memory.size > MEMORY) memory.delete(memory.keys().next().value as string);
 
-  const l: Rows = { host, scroller, keys, html, observer: null, sizes: null, heights: mem.heights, est, realized: 0 };
+  const l: Rows = { host, scroller, keys, html, observer: null, sizes: null, heights: mem.heights, est, realized: 0, blocks: [], at: new Map(), shell };
   lists.set(id, l);
-  // Where each row will be, from the heights known so far: to draw the rows around the scroll position at once.
-  const top = new Float64Array(keys.length + 1);
+  // Where each block will be, from the heights known so far: to draw the blocks around the scroll position at once.
+  const nb = Math.ceil(keys.length / BLOCK);
+  const top = new Float64Array(nb + 1);
   let h = '';
-  for (let i = 0; i < keys.length; i++) {
-    const k = keys[i]!;
-    const px = mem.heights.get(k) ?? est;
-    top[i + 1] = top[i]! + px;
-    h += `<div class="${shell} lazy" aria-hidden="true" data-key="${esc(k)}" data-i="${i}" style="min-height:${px}px"></div>`;
+  for (let bi = 0; bi < nb; bi++) {
+    const s0 = bi * BLOCK, e0 = Math.min(keys.length, s0 + BLOCK);
+    const blk: Block = { s: s0, e: e0, ph: null, rows: [] };
+    l.blocks.push(blk);
+    for (let i = s0; i < e0; i++) l.at.set(keys[i]!, bi);
+    const px = blockHeight(l, blk);
+    top[bi + 1] = top[bi]! + px;
+    h += placeholder(l, bi, px);
   }
   host.innerHTML = headerHtml;
   const header = host.children.length;
@@ -81,6 +138,7 @@ export function mountRows(id: string, host: HTMLElement, scroller: HTMLElement, 
     if (hr) { hr.setAttribute('aria-rowindex', '1'); host.setAttribute('aria-colcount', String(hr.children.length)); }
   }
   host.insertAdjacentHTML('beforeend', h);
+  for (let bi = 0; bi < nb; bi++) l.blocks[bi]!.ph = host.children[header + bi] as HTMLElement;
   scroller.scrollTop = keepTop;
 
   if (typeof ResizeObserver !== 'undefined') {
@@ -94,14 +152,21 @@ export function mountRows(id: string, host: HTMLElement, scroller: HTMLElement, 
   }
   const viewTop = keepTop, viewBottom = viewTop + (scroller.clientHeight || 700);
   if (scroller.getClientRects().length) {
-    // First and last row that reach into [viewTop - AHEAD, viewBottom + AHEAD] (the header's height is not counted: close enough).
-    let lo = 0, hi = keys.length;
+    // First and last block that reach into [viewTop - AHEAD, viewBottom + AHEAD] (the header's height is not counted: close enough).
+    let lo = 0, hi = nb;
     while (lo < hi) { const mid = (lo + hi) >> 1; if (top[mid + 1]! < viewTop - AHEAD) lo = mid + 1; else hi = mid; }
-    for (let i = lo; i < keys.length && top[i]! <= viewBottom + AHEAD; i++) realize(l, host.children[header + i] as HTMLElement);
+    for (let bi = lo; bi < nb && top[bi]! <= viewBottom + AHEAD; bi++) realizeBlock(l, bi);
   }
   if (typeof IntersectionObserver !== 'undefined') {
-    l.observer = new IntersectionObserver(es => { for (const e of es) if (e.isIntersecting) realize(l, e.target as HTMLElement); }, { root: scroller, rootMargin: `${AHEAD}px 0px` });
-    for (let i = header; i < host.children.length; i++) { const el = host.children[i] as HTMLElement; if (el.classList.contains('lazy')) l.observer.observe(el); }
+    l.observer = new IntersectionObserver(es => {
+      for (const e of es) {
+        if (!e.isIntersecting) continue;
+        const bi = Number((e.target as HTMLElement).dataset.blk);
+        realizeBlock(l, bi);
+        trim(l, bi);
+      }
+    }, { root: scroller, rootMargin: `${AHEAD}px 0px` });
+    for (const blk of l.blocks) if (blk.ph) l.observer.observe(blk.ph);
   }
 }
 
@@ -109,8 +174,9 @@ export function mountRows(id: string, host: HTMLElement, scroller: HTMLElement, 
 export function reveal(id: string, key: string): void {
   const l = lists.get(id);
   if (!l) return;
-  const shell = l.host.querySelector<HTMLElement>(`.lazy[data-key="${CSS.escape(key)}"]`);
-  if (shell) realize(l, shell);
+  const bi = l.at.get(key);
+  if (bi === undefined) return;
+  if (l.blocks[bi]!.ph) { realizeBlock(l, bi); trim(l, bi); }
 }
 
 /**

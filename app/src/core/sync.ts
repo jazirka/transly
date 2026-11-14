@@ -1,4 +1,5 @@
 import { open, seal } from './crypto';
+import { REQUEST_TIMEOUT_MS, isTimeout, withTimeout } from './net';
 import type { SyncKeys } from './crypto';
 import { deserialize, mergeProjects, serialize } from './project';
 import type { SavedProject } from './project';
@@ -75,16 +76,17 @@ export async function syncOnce(t: Transport, keys: SyncKeys, local: SavedProject
 export function httpTransport(baseUrl: string, fetchFn: typeof fetch = fetch): Transport {
   const base = baseUrl.replace(/\/+$/, '');
   const url = (room: string, kind: Blob_) => `${base}/r/${room}/${kind}`;
+  const timedOut = (e: unknown): never => { throw isTimeout(e) ? new Error(`Сервер синхронізації не відповів за ${REQUEST_TIMEOUT_MS / 1000} с: перевірте адресу й з’єднання`) : e; };
   const fail = (what: string, status: number): never => { throw new Error(`Сервер синхронізації: ${what} (${status})`); };
   return {
     async get(room, kind) {
-      const r = await fetchFn(url(room, kind));
+      const r = await fetchFn(url(room, kind), withTimeout()).catch(timedOut);
       if (r.status === 404) return null;
       if (!r.ok) return fail('не вдалося отримати дані', r.status);
       return { etag: r.headers.get('ETag') ?? '', bytes: new Uint8Array(await r.arrayBuffer()) };
     },
     async put(room, kind, bytes, ifMatch) {
-      const r = await fetchFn(url(room, kind), { method: 'PUT', body: bytes as BodyInit, headers: ifMatch ? { 'If-Match': ifMatch } : {} });
+      const r = await fetchFn(url(room, kind), withTimeout({ method: 'PUT', body: bytes as BodyInit, headers: ifMatch ? { 'If-Match': ifMatch } : {} })).catch(timedOut);
       if (r.status === 412) return { ok: false, conflict: true };
       if (!r.ok) return fail('не вдалося надіслати дані', r.status);
       return { ok: true, etag: r.headers.get('ETag') ?? '' };

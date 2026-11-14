@@ -18,6 +18,7 @@ export * from './tm';
 export * from './glossary';
 export * from './crypto';
 export * from './sync';
+export * from './net';
 export * from './filesync';
 export * from './github';
 export * from './dbsync';

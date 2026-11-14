@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { RELEASE_TAG, parseRelease, pickAsset, platformOf, updateAvailable } from '../core';
+import { RELEASE_TAG, parseRelease, pickAsset, platformOf, updateAvailable, withTimeout } from '../core';
 import type { Platform, ReleaseAsset, ReleaseInfo } from '../core';
 import { androidBridge } from './android';
 import { isDesktop } from './desktop';
@@ -40,7 +40,7 @@ export async function checkForUpdate(cfg: UpdateConfig, fetchFn: typeof fetch = 
   const tag = RELEASE_TAG[platform];
   let r: Response;
   try {
-    r = await fetchFn(`https://api.github.com/repos/${cfg.repo.trim()}/releases/tags/${tag}`, { headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', Authorization: `Bearer ${cfg.token.trim()}` } });
+    r = await fetchFn(`https://api.github.com/repos/${cfg.repo.trim()}/releases/tags/${tag}`, withTimeout({ headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', Authorization: `Bearer ${cfg.token.trim()}` } }));
   } catch { throw new Error('Немає з’єднання з GitHub'); }
   if (r.status === 401) throw new Error('Токен недійсний або прострочений');
   if (r.status === 404) throw new Error('Релізу ще немає, або токен не має доступу до цього репозиторію');

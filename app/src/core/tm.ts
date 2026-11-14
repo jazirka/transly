@@ -7,6 +7,12 @@ export interface TmMatch extends TmEntry { score: number }
 const norm = (t: string) => t.toLowerCase().replace(/\\[A-Za-z]+\[\d+\]|\\[{}.|!><^$]/g, ' ').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 const words = (t: string): string[] => norm(t).split(' ').filter(Boolean);
 
+/** Words as numbers (one table for all lookups): long texts are compared word by word, which is a few hundred times less work than letter by letter. */
+const wordIds = new Map<string, number>();
+const wordCodes = (norm1: string): Int32Array => { const out: number[] = []; for (const w of norm1.split(' ')) { if (!w) continue; let id = wordIds.get(w); if (id === undefined) { id = wordIds.size + 1; wordIds.set(w, id); } out.push(id); } return Int32Array.from(out); };
+/** From this many letters (in the longer of two texts) the match is counted in words. */
+const LONG_TEXT = 240;
+
 const codes = (t: string): Int32Array => { const out: number[] = []; for (const ch of t) out.push(ch.codePointAt(0)!); return Int32Array.from(out); };
 /** Two rows of the distance table, reused by every call (a lookup scores hundreds of candidates). */
 let rowA = new Int32Array(256), rowB = new Int32Array(256);
@@ -57,7 +63,7 @@ export function similarity(a: string, b: string, min = 0): number {
   return scoreCodes(codes(a), codes(b), min);
 }
 
-interface Indexed extends TmEntry { w: Set<string>; len: number; /** the normalised source as code points, made on the first lookup that needs it */ nc?: Int32Array; ns?: string }
+interface Indexed extends TmEntry { w: Set<string>; len: number; /** the normalised source as code points, made on the first lookup that needs it */ nc?: Int32Array; ns?: string; nw?: Int32Array }
 
 /** Search index over translated pairs. Built once; query per selected unit. */
 export class TmIndex {
@@ -88,6 +94,7 @@ export class TmIndex {
     const qn = norm(source), out: TmMatch[] = [];
     const ql = displayLength(source);
     const qc = codes(qn);
+    let qw2: Int32Array | undefined;
     // Once `limit` matches are in hand, a candidate only matters if it scores as well as the weakest of them: the scoring gives up on the rest early.
     let floor = min;
     for (const [id, overlap] of cands) {
@@ -96,8 +103,11 @@ export class TmIndex {
       const union = qw.size + it.w.size - overlap;
       if (overlap / union < 0.3) continue;
       if (Math.abs(it.len - ql) > Math.max(ql, it.len) * 0.6) continue;
-      const ns = it.ns ??= norm(it.s), nn = it.nc ??= codes(ns);
-      const score = qn === ns ? 100 : scoreCodes(qc, nn, floor);
+      const ns = it.ns ??= norm(it.s);
+      let score: number;
+      if (qn === ns) score = 100;
+      else if (Math.max(qn.length, ns.length) > LONG_TEXT) { qw2 ??= wordCodes(qn); score = scoreCodes(qw2, it.nw ??= wordCodes(ns), floor); }
+      else score = scoreCodes(qc, it.nc ??= codes(ns), floor);
       if (score >= min) {
         out.push({ s: it.s, t: this.opts.flow ? unwrap(it.t) : it.t, src: it.src, score });
         if (out.length >= limit) { const kth = [...out].sort((a, b) => b.score - a.score)[limit - 1]!.score; if (kth > floor) floor = kth; }

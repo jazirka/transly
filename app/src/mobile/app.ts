@@ -48,7 +48,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const PAGE = 100; let page = 1, pageSig = '';
   let refLang = ''; let fq = '';
   const collapsedCats = new Set<string>((() => { try { return JSON.parse(localStorage.getItem('transly-m-cats') ?? '[]') as string[]; } catch { return []; } })()); let sq = '';
-  let srTimer = 0; let scnTimer = 0;
+  let srTimer = 0, mqTimer = 0; let scnTimer = 0;
   let plPick: Set<string> | null = null; let resetArmed = false; let resetArmedAt = 0;
   let selecting = false; const picked = new Set<string>();
   /** Groups of files: files ticked for "into a group", the menu, groups unfolded, the group being renamed or asked about deletion. */
@@ -1380,7 +1380,12 @@ export async function start(root: HTMLElement): Promise<void> {
     else if (t.id === 'm-cm') { const ta = t as HTMLTextAreaElement; ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 140) + 'px'; const b = ta.form?.querySelector<HTMLButtonElement>('.m-send'); if (b) b.disabled = !ta.value.trim(); }
     else if (t.id === 'm-tr') { store.write((t as HTMLTextAreaElement).value); refreshMeta(); autosize(); }
     else if (t.id === 'm-fq') { fq = (t as HTMLInputElement).value; const l = document.getElementById('m-flist'); if (l) l.innerHTML = filesList(); }
-    else if (t.id === 'm-q') { store.setQuery((t as HTMLInputElement).value); const ul = document.querySelector('.m-list.rows'); if (ul) { const keep = (t as HTMLInputElement).selectionStart; render(); const qi = document.getElementById('m-q') as HTMLInputElement; qi.focus(); qi.setSelectionRange(keep, keep); } }
+    else if (t.id === 'm-q') {
+      store.setQuery((t as HTMLInputElement).value);
+      // the list is searched and drawn once the typing pauses (a search over a whole project on every letter held a slow phone for a fifth of a second each)
+      window.clearTimeout(mqTimer);
+      mqTimer = window.setTimeout(() => { const cur = document.getElementById('m-q') as HTMLInputElement | null; const ul = document.querySelector('.m-list.rows'); if (cur && ul) { const keep = cur.selectionStart; render(); const qi = document.getElementById('m-q') as HTMLInputElement; qi.focus(); qi.setSelectionRange(keep, keep); } }, 220);
+    }
     else if (t.id === 'm-who') { store.saved.settings.who = (t as HTMLInputElement).value.trim() || 'Ви'; store.persist(); }
   });
   root.addEventListener('change', e => {

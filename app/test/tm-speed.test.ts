@@ -32,3 +32,20 @@ describe('translation memory lookups', () => {
     expect(ms).toBeLessThan(2500);
   });
 });
+
+describe('long texts in the memory', () => {
+  it('a lookup among many 900-letter messages stays fast and still finds the near copy', () => {
+    const tm = new TmIndex();
+    const base = Array.from({ length: 150 }, () => sentence(1)).join(' ');
+    for (let i = 0; i < 400; i++) { const s = Array.from({ length: 150 }, () => WORDS[Math.floor(rnd() * 60)]!).join(' '); tm.add({ s, t: 'T ' + s, src: 'x' }); }
+    tm.add({ s: base, t: 'ПЕРЕКЛАД', src: 'x' });
+    const near = base.split(' '); near[40] = 'changed'; near[90] = 'other';
+    const t0 = Date.now();
+    let hit: ReturnType<TmIndex['find']>[number] | undefined;
+    for (let i = 0; i < 20; i++) hit = tm.find(near.join(' '), { min: 70, limit: 1 })[0];
+    const ms = Date.now() - t0;
+    expect(hit?.t).toBe('ПЕРЕКЛАД');
+    expect(hit?.score).toBeGreaterThan(95);
+    expect(ms).toBeLessThan(1500);
+  });
+});

@@ -1,4 +1,4 @@
-import { EMPTY_GITHUB_STATE, adoptSynced, githubSync, stamp } from '../core';
+import { EMPTY_GITHUB_STATE, adoptSynced, githubSync, isTimeout, stamp, timeoutMessage, withTimeout } from '../core';
 import type { GithubApi, GithubReport, GithubSettings, GithubState } from '../core';
 import type { Ctx } from './state';
 
@@ -31,13 +31,13 @@ export function githubApi(cfg: GithubConfig, fetchFn: typeof fetch = fetch): Git
   const base = (cfg.api.trim() || DEFAULT_API).replace(/\/+$/, '');
   return {
     async request(method, path, body) {
-      const r = await fetchFn(base + path, {
+      const r = await fetchFn(base + path, withTimeout({
         method,
         // api.github.com answers GETs with max-age=60: a cached branch tip would make every push a non-fast-forward.
         cache: 'no-store',
         headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', Authorization: `Bearer ${cfg.token.trim()}`, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
         ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-      });
+      })).catch((e: unknown) => { throw isTimeout(e) ? new Error(timeoutMessage('GitHub')) : e; });
       const text = await r.text();
       let json: unknown = {};
       try { json = text ? JSON.parse(text) : {}; } catch { /* an error page: only the status matters */ }

@@ -51,7 +51,9 @@ export function learnDetailed(views: FileView[], saved: SavedProject): Learned {
   const dict: WordDict = new Map(), ambiguous = new Map<string, [string, number][]>();
   for (const [w, m] of votes) {
     const ranked = [...m].sort((x, y) => y[1] - x[1]);
-    if (ranked.length === 1 || ranked[0]![1] >= 2 * ranked[1]![1]) dict.set(w, ranked[0]![0]);
+    // a word that got two different translations is dropped even when one of them is commoner: the second is usually the same word in
+    // another case («game» → «гра» and «гру»), and putting the commoner one into a new line gives a wrong form («Нова гру»)
+    if (ranked.length === 1) dict.set(w, ranked[0]![0]);
     else ambiguous.set(w, ranked);
   }
   for (const t of saved.terms) {
@@ -66,10 +68,24 @@ export interface Proposal { file: string; key: string; source: string; target: s
 /** Untranslated short lines in which every word is known: the translation is put together word by word. */
 export function proposals(views: FileView[], saved: SavedProject, dict: WordDict = learnWords(views, saved), limit = 500): Proposal[] {
   const out: Proposal[] = [];
+  // a whole line that was translated already (the same words in another case of the letters) is put in as it was translated
+  const whole = new Map<string, string>();
+  for (const v of views) {
+    const ents = saved.files[v.name] ?? {};
+    for (const u of v.units) { const t = ents[u.key]?.target?.trim(); if (t && !whole.has(lower(u.source.trim()))) whole.set(lower(u.source.trim()), t); }
+  }
   for (const v of views) {
     const ents = saved.files[v.name] ?? {};
     for (const u of v.units) {
       if (ents[u.key]?.target?.trim()) continue;
+      const same = whole.get(lower(u.source.trim()));
+      if (same !== undefined && same !== u.source) {
+        const letters = [...u.source].filter(c => c.toLowerCase() !== c.toUpperCase());
+        const loud = letters.length > 1 && letters.every(c => c === c.toUpperCase());
+        out.push({ file: v.name, key: u.key, source: u.source, target: loud ? same.toUpperCase() : same });
+        if (out.length >= limit) return out;
+        continue;
+      }
       const toks = tokenize(u.source), words = toks.filter(t => t.word);
       if (!words.length || words.length > MAX_WORDS || !words.every(t => dict.has(lower(t.text)))) continue;
       let target = '', at = 0;
@@ -78,7 +94,8 @@ export function proposals(views: FileView[], saved: SavedProject, dict: WordDict
         at = t.index + t.text.length;
         if (!t.word) { target += t.text; continue; }
         const uk = dict.get(lower(t.text))!;
-        target += isCap(t.text) ? capitalise(uk) : uk;
+        const letters = [...t.text].filter(c => c.toLowerCase() !== c.toUpperCase());
+        target += letters.length > 1 && letters.every(c => c === c.toUpperCase()) ? uk.toUpperCase() : isCap(t.text) ? capitalise(uk) : uk;
       }
       if (target === u.source) continue;
       out.push({ file: v.name, key: u.key, source: u.source, target });

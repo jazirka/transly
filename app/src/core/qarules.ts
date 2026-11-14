@@ -83,12 +83,12 @@ function codeHits(text: string): CodeHit[] {
     push('cyr', m, /^[A-Za-z]+$/.test(latin) ? '\\' + latin + (m[2] ?? '') : undefined);
   }
   // a space inside: \ C[2], \C [2]
-  for (const m of text.matchAll(/\\\s+[A-Za-z]{1,3}\[\d+\]|\\[A-Za-z]{1,3}\s+\[\d+\]/g)) push('space', m, m[0].replace(/\s+/g, ''));
+  for (const m of text.matchAll(/\\\s+[A-Za-z]{1,3}\[\d+\]|\\[A-Za-z]{1,3}\s+\[\d+\]|\\[A-Za-z]{1,3}\[(?:\s+\d+\s*|\d+\s+)\]/g)) push('space', m, m[0].replace(/\s+/g, ''));
   // an opening bracket that is never closed: \C[2, \C[2text
-  for (const m of text.matchAll(/\\[A-Za-z]{1,3}\[(\d+)(?![\d\]])/g)) push('open', m, m[0] + ']');
+  for (const m of text.matchAll(/\\[A-Za-z]{1,3}\[(\d+)(?![\d\]]|\s+\])/g)) push('open', m, m[0] + ']');
   for (const m of text.matchAll(/\\[A-Za-z]{1,3}\[(?![\d\]])/g)) if (!/\]/.test(text.slice(m.index! + m[0].length).split('\n')[0] ?? '')) push('open', m);
   // a parameter that is not a number where the game wants one
-  const opened = new Set(hits.filter(h => h.kind === 'open').map(h => h.start));
+  const opened = new Set(hits.filter(h => h.kind === 'open' || h.kind === 'space').map(h => h.start));
   for (const m of text.matchAll(/\\[CVNPI]\[(?!\d+\])[^\]\n]*\]/g)) if (!opened.has(m.index!)) push('param', m);
   // the wide characters of a keyboard or a copy
   for (const m of text.matchAll(/[\uFF3C\uFF3B\uFF3D]/g)) push('wide', m, m[0] === '\uFF3C' ? '\\' : m[0] === '\uFF3B' ? '[' : ']');
@@ -141,14 +141,18 @@ const ruleHomoglyph: QaRule = {
         // НР for HP: capitals that are drawn like the Latin ones and make a word of the original (or an allowed one)
         if (w.text.length >= 2 && w.text === w.text.toUpperCase() && [...w.text].every(ch => C2L_STRONG[ch])) {
           const lat = convert(w.text, C2L_STRONG);
-          if (c.srcWords().has(lat) || c.rules.keep.has(lat.toLowerCase())) { note(w, lat); return; }
-          // ХІХ for XIX: a Roman number written with the Cyrillic Х and І
-          if (/[\u0425]/.test(w.text) && ROMAN.test(lat)) note(w, lat);
+          // a capital word WITH a vowel is a word («АТОМ», «ТОМ», «МАМА!» are Ukrainian words that happen to be drawn like ATOM, TOM, MAMA);
+          // НР for HP, КС for KC have none: those are the abbreviations that were typed with the wrong keyboard
+          if (!/[АЕИІОУЄЇЮЯ]/.test(w.text) && (c.srcWords().has(lat) || c.rules.keep.has(lat.toLowerCase()))) { note(w, lat); return; }
+          // ХІХ for XIX, ІІ for II: a Roman number written with the Cyrillic Х and І (it is never a Ukrainian word)
+          if (/^[\u0406\u0425]{2,}$/.test(w.text) && ROMAN.test(lat)) note(w, lat);
         }
       } else if (w.script === 'lat' && w.cyr === 0 && w.lat === 1 && /^[aioyc]$/.test(w.text)) {
-        // «Ти i я»: a single Latin letter that is a Ukrainian word, standing between two Ukrainian words
+        // «Ти i я»: a single Latin letter that is a Ukrainian word, standing between two Ukrainian words.
+        // With another lone Latin letter in the line («x i y») the line is a formula or a variable list, not a slip of the keyboard.
         const p = near(i, -1), n = near(i, 1);
-        if (p?.script === 'cyr' && n?.script === 'cyr') note(w, convert(w.text, L2C_STRONG));
+        const formula = words.some((o, j) => j !== i && o.script === 'lat' && o.text.length === 1 && !/^[aioyc]$/.test(o.text));
+        if (p?.script === 'cyr' && n?.script === 'cyr' && !formula) note(w, convert(w.text, L2C_STRONG));
       }
     });
     if (!bad.length) return null;
@@ -182,15 +186,19 @@ const ruleNormalization: QaRule = {
   title: 'Літера з двох символів',
   explain: 'Літери й та ї записано розкладеними (и + знак, і + дві крапки). На екрані вони схожі на звичайні, але пошук і порівняння їх не впізнають.',
   run(c) {
-    const n = c.target.normalize('NFC');
-    if (n === c.target || c.source.normalize('NFC') !== c.source) return null;
+    // U+2000 and U+2001 have a canonical twin (U+2002, U+2003) that NFC puts in their place: that is a wide space (the rule for hidden
+    // signs reports it), not a letter written in two parts
+    const t0 = c.target.replace(/[\u2000\u2001]/g, '\u2002');
+    const n = t0.normalize('NFC');
+    // a translation that is the original itself (a name copied over) is not the translator's mistake
+    if (n === t0 || n === c.source.normalize('NFC')) return null;
     return { message: 'Літера записана розкладеною (й, ї)', detail: 'Виправлення складає такі літери в один символ.', fixed: n };
   },
 };
 
 /* ---------- 5. invisible characters ---------- */
 
-const HIDDEN = /[\u200B\u200C\u200D\u2060\uFEFF\u00AD\u2028\u2029\u2002-\u200A\u3000\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
+const HIDDEN = /[\u200B\u200C\u200D\u200E\u200F\u202A-\u202E\u2060\u2066-\u2069\uFEFF\u00AD\u0085\u2028\u2029\u2000-\u200A\u3000\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
 const hex = (ch: string): string => 'U+' + ch.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0');
 /** A joiner inside an emoji sequence (a family, a flag with a skin tone) is part of the picture, not a hidden sign. */
 const emojiJoiner = (text: string, at: number): boolean => text[at] === '\u200D' && /\p{Extended_Pictographic}\uFE0F?$/u.test(text.slice(0, at)) && /^\p{Extended_Pictographic}/u.test(text.slice(at + 1));
@@ -208,7 +216,7 @@ const ruleHidden: QaRule = {
     const own = new Set(c.source.match(HIDDEN) ?? []);
     const found = hiddenIn(c.target, own);
     if (!found.length) return null;
-    const edits = found.map(f => ({ start: f.at, end: f.at + 1, text: /[\u2002-\u200A\u3000]/.test(f.ch) ? ' ' : /[\u2028\u2029]/.test(f.ch) ? '\n' : '' }));
+    const edits = found.map(f => ({ start: f.at, end: f.at + 1, text: /[\u2000-\u200A\u3000]/.test(f.ch) ? ' ' : /[\u2028\u2029\u0085]/.test(f.ch) ? '\n' : '' }));
     return { message: `Невидимі символи: ${[...new Set(found.map(f => f.ch))].slice(0, 3).map(hex).join(' ')}`, detail: 'Виправлення прибирає їх (нестандартні пробіли стають звичайними).', fixed: applyEdits(c.target, edits) };
   },
 };
@@ -250,7 +258,11 @@ const ruleDouble: QaRule = {
 /* ---------- 8. the apostrophe ---------- */
 
 const CYR_LET = '[А-Яа-яЁёҐґЄєІіЇї]';
-const WRONG_APOS = /(?<=[А-Яа-яЁёҐґЄєІіЇї])[`\u00B4‘′ʹˈ՚"”](?=[А-Яа-яЁёҐґЄєІіЇї])/g;
+const WRONG_APOS = /(?<=[А-Яа-яЁёҐґЄєІіЇї])[`\u00B4‘′ʹˈ՚\u02BB\u201B\uFF07"”](?=[А-Яа-яЁёҐґЄєІіЇї])/g;
+/** A closing quote between two letters («„Так”і») is a quote, not an apostrophe: it counts only when no opening quote came before it. */
+const isQuote = (ch: string): boolean => ch === '"' || ch === '”';
+const closesQuote = (text: string, at: number): boolean => (text[at] === '"' ? (text.slice(0, at).match(/"/g)?.length ?? 0) % 2 === 1 : /[„«“‹]/.test(text.slice(0, at)));
+const wrongApos = (text: string): string[] => [...text.matchAll(WRONG_APOS)].filter(m => !(isQuote(m[0]) && closesQuote(text, m.index!))).map(m => m[0]);
 const GOOD_APOS = new RegExp(`(?<=${CYR_LET})['ʼ’](?=${CYR_LET})`, 'g');
 const ruleApostrophe: QaRule = {
   id: 'uk-apostrophe', cat: 'style', def: 'warn', fixable: true,
@@ -258,10 +270,10 @@ const ruleApostrophe: QaRule = {
   explain: 'Між двома українськими літерами стоїть не апостроф (наприклад, ` \u00B4 ‘ або лапка). Правильний апостроф: ’ (U+2019), ʼ (U+02BC) або \' з клавіатури; один знак на весь проєкт обирається в налаштуваннях правил.',
   run(c) {
     const want = c.rules.apostrophe === 'any' ? '’' : c.rules.apostrophe;
-    const wrong = c.target.match(WRONG_APOS) ?? [];
+    const wrong = wrongApos(c.target);
     const differs = c.rules.apostrophe === 'any' ? [] : (c.target.match(GOOD_APOS) ?? []).filter(ch => ch !== want);
     if (!wrong.length && !differs.length) return null;
-    const fixed = c.target.replace(WRONG_APOS, want).replace(GOOD_APOS, ch => (c.rules.apostrophe === 'any' ? ch : want));
+    const fixed = c.target.replace(WRONG_APOS, (ch, at: number) => (isQuote(ch) && closesQuote(c.target, at) ? ch : want)).replace(GOOD_APOS, ch => (c.rules.apostrophe === 'any' ? ch : want));
     return {
       message: wrong.length ? `Неправильний апостроф: ${[...new Set(wrong)].join(' ')}` : `Апостроф не такий, як у проєкті: ${[...new Set(differs)].join(' ')}`,
       detail: `Виправлення ставить ${want}.`, fixed,

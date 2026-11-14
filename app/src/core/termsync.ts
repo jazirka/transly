@@ -63,6 +63,20 @@ export interface TermSync {
 }
 
 const WORD = /[\p{L}\p{N}]+(?:['’ʼ`][\p{L}]+)*/gu;
+const UK_CONS = 'бвгґджзклмнпрстфхцчшщ';
+/**
+ * The form of the preposition з/із/зі before `next`: «зі» before two consonants in a row (зі звіром, зі змієм, зі шкіл, зі мною),
+ * «з» when «зі» stands before a single consonant or a vowel; «із» is kept. Other words are not touched.
+ */
+function euphony(prep: string, next: string): string | null {
+  const low = prep.toLowerCase();
+  if (low !== 'з' && low !== 'із' && low !== 'зі') return null;
+  const w = next.trim().toLowerCase().replace(/^[^\p{L}]+/u, '');
+  const a = w[0] ?? '', b = w[1] ?? '';
+  const cluster = UK_CONS.includes(a) && (UK_CONS.includes(b) || b === 'ь');
+  const want = cluster ? 'зі' : low === 'зі' ? 'з' : low;
+  return prep[0] === prep[0]!.toUpperCase() ? want.charAt(0).toUpperCase() + want.slice(1) : want;
+}
 const BETWEEN = /^[\s\-–—]+$/;
 const RANK = { high: 0, medium: 1, low: 2 } as const;
 
@@ -106,6 +120,13 @@ export function proposeTermSync(views: FileView[], saved: SavedProject, change: 
           const prev = i > 0 && /^[\s]+$/.test(e.target.slice(toks[i - 1]!.end, start)) ? toks[i - 1]!.w : undefined;
           const r = ukRetarget(o.phrase, change.next, e.target.slice(start, end), { ...(prev ? { prev } : {}), ...(opts.dict ? { dict: opts.dict } : {}) });
           if (!r) continue;
+          // з/із/зі before the term follows the first sounds of the new word (з вовком → зі звіром): the preposition goes into the span
+          const pt = i > 0 && prev ? toks[i - 1]! : null;
+          const eu = pt ? euphony(e.target.slice(pt.start, pt.end), r.text) : null;
+          if (pt && eu && eu !== e.target.slice(pt.start, pt.end)) {
+            spans.push({ start: pt.start, end, old: e.target.slice(pt.start, end), text: eu + e.target.slice(pt.end, start) + r.text, conf: r.conf, alts: r.alts.map(a => ({ ...a, text: euphony(e.target.slice(pt.start, pt.end), a.text) + e.target.slice(pt.end, start) + a.text })), cells: r.cells });
+            continue;
+          }
           spans.push({ start, end, old: e.target.slice(start, end), text: r.text, conf: r.conf, alts: r.alts, cells: r.cells });
         }
       }
@@ -114,7 +135,7 @@ export function proposeTermSync(views: FileView[], saved: SavedProject, change: 
       const hasSource = hasTermIn(prepareText(u.source), change.en);
       const worst = spans.reduce((a, s) => (s.conf.score < a.score ? s.conf : a), spans[0]!.conf);
       const conf: Conf = hasSource ? worst : { score: Math.min(worst.score, 0.5), level: levelOf(Math.min(worst.score, 0.5)), flags: [...worst.flags, 'no-source'] };
-      all.push({ file: v.name, key: u.key, source: u.source, before: e.target, after: applySpans(e.target, spans), spans, conf, hasSource, status: e.status, tick: hasSource && conf.level === 'high' });
+      all.push({ file: v.name, key: u.key, source: u.source, before: e.target, after: applySpans(e.target, spans), spans, conf, hasSource, status: e.status, tick: hasSource && conf.level === 'high' && !conf.flags.includes('gender-change') });
     }
   }
   all.sort((a, b) => RANK[a.conf.level] - RANK[b.conf.level] || b.conf.score - a.conf.score);

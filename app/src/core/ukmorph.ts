@@ -51,17 +51,23 @@ const G_A = list('меч щит шолом кинджал клинок лук с
 /** Substances, places, abstract things: genitive -у. */
 const G_U = list('ліс світ страх вогонь дощ сніг дим пил час сон ґрунт гнів вітер лід мороз туман острів будинок міст сад двір храм цех рух звук запах смак шлях бій спокій мир порядок розум успіх голод холод жар суд гріх труд вік рік ранок вечір край');
 /** Animate nouns (matter for the accusative). */
-const ANIMATE = list('дракон ельф гном орк троль гоблін лицар маг чарівник чаклун воїн король принц вовк кінь лев ведмідь пес кіт ворог друг герой бог дух привид демон ангел вампір скелет павук щур змій торговець слуга гість старець селянин купець жрець мудрець хлопець чоловік лікар вчитель мисливець розбійник злодій стражник солдат капітан командир цар князь пан дід батько син брат хазяїн господар бик козел баран вепр олень лис заєць орел ворон сокіл дятел крук соловей шакал гігант велетень циклоп мертвяк упир');
-/** Masculine nouns that end in -а/-я. */
-const MASC_A = list('слуга воєвода староста суддя');
+const ANIMATE = list('дракон ельф гном орк троль гоблін лицар маг чарівник чаклун воїн король принц вовк кінь лев ведмідь пес кіт майстер умілець звір птах лебідь голуб ворог друг герой бог дух привид демон ангел вампір скелет павук щур змій торговець слуга гість старець селянин купець жрець мудрець хлопець чоловік лікар вчитель мисливець розбійник злодій стражник солдат капітан командир цар князь пан дід батько син брат хазяїн господар бик козел баран вепр олень лис заєць орел ворон сокіл дятел крук соловей шакал гігант велетень циклоп мертвяк упир');
+/** Masculine nouns that end in -а/-я (they decline like feminine ones, but an adjective agrees with them as with a masculine word). */
+const MASC_A = list('слуга воєвода староста суддя микола хома лука сава кузьма фома добриня юрась');
+/** Masculine nouns and names in -о: they decline like masculine words (Петра, Петрові, Петре), not like neuter ones. */
+const MASC_O = list('петро павло данило михайло гаврило дмитро панько мирослав батько дядько тарас');
+/** Masculine nouns in -ість: not the third declension. */
+const MASC_IST = list('гість');
+/** Feminine nouns for beings: their accusative plural is the genitive («бачу жінок», not «бачу жінки»). */
+const FEM_AN = list('жінка відьма сестра корова королева миша дочка дівчина дівка лисиця вовчиця принцеса служниця чарівниця відьмачка кобила вівця курка свиня жриця воїтелька пані');
 /** Feminine nouns with a soft sign or a consonant at the end (third declension); the -ість words are found by their ending. */
 const FEM3 = list('ніч піч річ сіль ціль осінь тінь мідь подорож кров любов заметіль мозоль цвіль міць честь лють жовч смерть путь кість');
 /** Mass nouns: a plural is rare, so the plural forms are never «high». */
 const MASS = list('золото залізо срібло молоко масло борошно зілля вугілля насіння любов кров мідь честь лють');
 /** The indeclinable. */
 const INDECL = list('кафе меню метро кіно радіо таксі пальто бюро інтерв’ю шосе какао кенгуру журі цунамі хобі попурі');
-/** Masculine nouns in -ар that decline hard. */
-const HARD_AR = list('базар гектар комар санітар нектар тапір');
+/** Nouns in -ар that decline soft (лікаря); the others, mostly loanwords, decline hard (радаром, аватари). */
+const SOFT_AR = list('лікар пекар кобзар бондар гончар писар секретар бібліотекар слюсар токар володар лицар цар кухар сухар шахтар вівчар школяр');
 /** Nouns in -ій that are not adjectives. */
 const NOUN_IJ = list('геній санаторій андрій сергій василій юрій марій гарій дарій сувій гній змій рій');
 /** Soft adjectives that do not end in -ній. */
@@ -69,7 +75,7 @@ const SOFT_ADJ = list('синій третій');
 /** Genitive plural in -ей. */
 const GEN_EJ = list('кінь гість гусь');
 /** The vowel before the last consonant drops: its stem in the forms with an ending. */
-const FLEET_STEM: Record<string, string> = { день: 'дн', пень: 'пн', сон: 'сн', вогонь: 'вогн', лоб: 'лб', вітер: 'вітр', пес: 'пс', перстень: 'персн' };
+const FLEET_STEM: Record<string, string> = { день: 'дн', пень: 'пн', сон: 'сн', вогонь: 'вогн', лоб: 'лб', вітер: 'вітр', пес: 'пс', перстень: 'персн', майстер: 'майстр', орел: 'орл', козел: 'козл', заєць: 'зайц', корабель: 'корабл', рівень: 'рівн' };
 /** -ок/-ець words whose vowel is a fleeting one (stated, so they come out «high»). */
 const FLEET = list('клинок листок значок мішок візок хлопець палець кінець стрілець купець старець торговець мисливець гаманець');
 /** -ок/-ець/-ень words whose vowel stays. */
@@ -85,7 +91,7 @@ const FROZEN = list('в у на з із зі до від для про при н
 
 /** Prepositions and the cases they ask for (the first is the usual one); a hint for choosing between forms that look alike. */
 const PREP: Record<string, UkCase[]> = {
-  в: ['loc', 'acc'], у: ['loc', 'acc'], на: ['loc', 'acc'], при: ['loc'], по: ['loc', 'dat', 'acc'], о: ['loc', 'acc'],
+  в: ['loc', 'acc', 'gen'], у: ['loc', 'acc', 'gen'], на: ['loc', 'acc'], при: ['loc'], по: ['loc', 'dat', 'acc'], о: ['loc', 'acc'],
   до: ['gen'], від: ['gen'], для: ['gen'], без: ['gen'], біля: ['gen'], коло: ['gen'], серед: ['gen'], навколо: ['gen'], проти: ['gen'],
   з: ['gen', 'ins'], із: ['gen', 'ins'], зі: ['gen', 'ins'], над: ['ins'], під: ['ins', 'acc'], перед: ['ins'], між: ['ins'], за: ['ins', 'acc'],
   про: ['acc'], через: ['acc'], крізь: ['acc'],
@@ -99,19 +105,35 @@ const EXC: Record<string, { g: 'm' | 'f' | 'n'; an?: boolean; forms: Partial<Rec
   око: { g: 'n', forms: { 'gen.sg': ['ока'], 'dat.sg': ['оку'], 'ins.sg': ['оком'], 'loc.sg': ['оці'], 'nom.pl': ['очі'], 'gen.pl': ['очей'], 'dat.pl': ['очам'], 'acc.pl': ['очі'], 'ins.pl': ['очима'], 'loc.pl': ['очах'], 'voc.pl': ['очі'] } },
   людина: { g: 'f', an: true, forms: { 'nom.pl': ['люди'], 'gen.pl': ['людей'], 'dat.pl': ['людям'], 'acc.pl': ['людей'], 'ins.pl': ['людьми'], 'loc.pl': ['людях'], 'voc.pl': ['люди'] } },
   дитина: { g: 'f', an: true, forms: { 'nom.pl': ['діти'], 'gen.pl': ['дітей'], 'dat.pl': ['дітям'], 'acc.pl': ['дітей'], 'ins.pl': ['дітьми'], 'loc.pl': ['дітях'], 'voc.pl': ['діти'] } },
-  друг: { g: 'm', an: true, forms: { 'nom.pl': ['друзі'], 'voc.sg': ['друже'], 'voc.pl': ['друзі'] } },
+  друг: { g: 'm', an: true, forms: { 'nom.pl': ['друзі'], 'gen.pl': ['друзів'], 'dat.pl': ['друзям'], 'acc.pl': ['друзів'], 'ins.pl': ['друзями'], 'loc.pl': ['друзях'], 'voc.sg': ['друже'], 'voc.pl': ['друзі'] } },
+  гра: { g: 'f', forms: { 'nom.pl': ['ігри'], 'gen.pl': ['ігор'], 'dat.pl': ['іграм'], 'acc.pl': ['ігри'], 'ins.pl': ['іграми'], 'loc.pl': ['іграх'], 'voc.pl': ['ігри'] } },
+  ілля: { g: 'm', an: true, forms: { 'gen.sg': ['іллі'], 'dat.sg': ['іллі'], 'acc.sg': ['іллю'], 'ins.sg': ['іллею'], 'loc.sg': ['іллі'], 'voc.sg': ['іллє'], 'nom.pl': [], 'gen.pl': [], 'dat.pl': [], 'acc.pl': [], 'ins.pl': [], 'loc.pl': [], 'voc.pl': [] } },
+  стаття: { g: 'f', forms: { 'gen.sg': ['статті'], 'dat.sg': ['статті'], 'acc.sg': ['статтю'], 'ins.sg': ['статтею'], 'loc.sg': ['статті'], 'voc.sg': ['статте'], 'nom.pl': ['статті'], 'gen.pl': ['статей'], 'dat.pl': ['статтям'], 'acc.pl': ['статті'], 'ins.pl': ['статтями'], 'loc.pl': ['статтях'], 'voc.pl': ['статті'] } },
   серце: { g: 'n', forms: { 'gen.pl': ['сердець'] } },
   кінь: { g: 'm', an: true, forms: { 'gen.pl': ['коней'], 'acc.pl': ['коней'], 'ins.pl': ['кіньми', 'конями'] } },
   двері: { g: 'f', forms: { 'nom.sg': ['двері'], 'gen.sg': ['дверей'], 'dat.sg': ['дверям'], 'acc.sg': ['двері'], 'ins.sg': ['дверима', 'дверми'], 'loc.sg': ['дверях'], 'voc.sg': ['двері'], 'nom.pl': ['двері'], 'gen.pl': ['дверей'], 'dat.pl': ['дверям'], 'acc.pl': ['двері'], 'ins.pl': ['дверима', 'дверми'], 'loc.pl': ['дверях'], 'voc.pl': ['двері'] } },
 };
 
+/** Words that have only a plural: the forms of the nominative, genitive, dative, accusative, instrumental, locative (the same in both numbers). */
+const PLURALIA: Record<string, string> = {
+  ворота: 'ворота воріт воротам ворота воротами воротах', штани: 'штани штанів штанам штани штанами штанах', окуляри: 'окуляри окулярів окулярам окуляри окулярами окулярах',
+  ножиці: 'ножиці ножиць ножицям ножиці ножицями ножицях', сани: 'сани саней саням сани санями санях', гроші: 'гроші грошей грошам гроші грошима грошах',
+  ліки: 'ліки ліків лікам ліки ліками ліках', плечі: 'плечі плечей плечам плечі плечима плечах',
+};
+for (const [lemma, f] of Object.entries(PLURALIA)) {
+  const [nom, gen, dat, acc, ins, loc] = f.split(' ') as [string, string, string, string, string, string];
+  const one = (x: string): string[] => [x];
+  EXC[lemma] = { g: 'n', forms: Object.fromEntries((['sg', 'pl'] as const).flatMap(n => [[`nom.${n}`, one(nom)], [`gen.${n}`, one(gen)], [`dat.${n}`, one(dat)], [`acc.${n}`, one(acc)], [`ins.${n}`, one(ins)], [`loc.${n}`, one(loc)], [`voc.${n}`, one(nom)]])) as Partial<Record<Cell, string[]>> };
+}
+/** Words with only a plural form: an adjective before them is plural too. */
+const PLURAL_ONLY = new Set([...Object.keys(PLURALIA), 'двері']);
 /** Genitive plural of neuter and feminine words that the rules cannot get. */
-const GEN_PL: Record<string, string> = { слово: 'слів', село: 'сіл', число: 'чисел', вікно: 'вікон', місто: 'міст', озеро: 'озер', дерево: 'дерев', коло: 'кіл', крило: 'крил', ліжко: 'ліжок', горло: 'горл', дзеркало: 'дзеркал', нога: 'ніг', гора: 'гір', школа: 'шкіл', рука: 'рук', сестра: 'сестер', країна: 'країн', книга: 'книг', вода: 'вод', ціна: 'цін', земля: 'земель', пісня: 'пісень', вишня: 'вишень', шабля: 'шабель', зброя: 'зброй', море: 'морів', поле: 'полів', стріла: 'стріл', сокира: 'сокир', броня: 'броней' };
+const GEN_PL: Record<string, string> = { слово: 'слів', село: 'сіл', число: 'чисел', вікно: 'вікон', місто: 'міст', озеро: 'озер', дерево: 'дерев', коло: 'кіл', крило: 'крил', ліжко: 'ліжок', горло: 'горл', дзеркало: 'дзеркал', нога: 'ніг', гора: 'гір', школа: 'шкіл', рука: 'рук', сестра: 'сестер', країна: 'країн', книга: 'книг', вода: 'вод', ціна: 'цін', земля: 'земель', пісня: 'пісень', вишня: 'вишень', шабля: 'шабель', зброя: 'зброй', море: 'морів', поле: 'полів', стріла: 'стріл', сокира: 'сокир', броня: 'броней', відьма: 'відьом', королева: 'королев', дівчина: 'дівчат', принцеса: 'принцес' };
 
 /* ---------- nouns ---------- */
 
-type Cls = 'm_h' | 'm_m' | 'm_s' | 'm_y' | 'n_h' | 'n_s' | 'n_ya' | 'f_h' | 'f_m' | 'f_s' | 'f_y' | 'f_i' | 'f_3' | 'indecl' | 'exc';
-interface Noun { kind: 'noun'; lemma: string; g: 'm' | 'f' | 'n'; an: boolean; cls: Cls; p: number; flags: string[] }
+type Cls = 'm_h' | 'm_m' | 'm_s' | 'm_y' | 'm_o' | 'n_h' | 'n_s' | 'n_ya' | 'f_h' | 'f_m' | 'f_s' | 'f_y' | 'f_i' | 'f_3' | 'indecl' | 'exc';
+interface Noun { kind: 'noun'; lemma: string; g: 'm' | 'f' | 'n'; an: boolean; cls: Cls; p: number; flags: string[]; /** Only the plural exists (ворота, штани). */ plural?: boolean }
 
 /** Gender, animacy and declension of a lemma (lower case, one kind of apostrophe). */
 function parseNoun(lemma: string, dict?: MorphDict): Noun {
@@ -131,26 +153,26 @@ function parseNoun(lemma: string, dict?: MorphDict): Noun {
     else if (isVowel(pre)) { g = 'f'; cls = 'f_y'; }
     else { g = 'f'; cls = 'f_s'; }
   }
-  else if (last === 'о') { g = 'n'; cls = 'n_h'; }
+  else if (last === 'о') { if (MASC_O.has(lemma)) { g = 'm'; cls = 'm_o'; } else { g = 'n'; cls = 'n_h'; } }
   else if (last === 'е') { g = 'n'; cls = 'n_s'; }
   else if (last === 'ь') {
-    if (FEM3.has(lemma) || /(ість|сть)$/.test(lemma)) { g = 'f'; cls = 'f_3'; }
+    if ((FEM3.has(lemma) || /(ість|сть)$/.test(lemma)) && !MASC_IST.has(lemma)) { g = 'f'; cls = 'f_3'; }
     else { g = 'm'; cls = 'm_s'; if (!ANIMATE.has(lemma) && !G_A.has(lemma) && !G_U.has(lemma) && !FLEET_STEM[lemma] && !ALT[lemma] && !KEEP_VOWEL.has(lemma)) { p *= 0.9; flags.push('soft-guess'); } }
   }
   else if (last === 'й') { g = 'm'; cls = 'm_y'; p *= 0.7; flags.push('й-stem'); }
   else if (FEM3.has(lemma)) { g = 'f'; cls = 'f_3'; }
   else if (isCons(last)) {
     g = 'm';
-    cls = HUSH.includes(last) ? 'm_m' : /ар$/.test(lemma) && !HARD_AR.has(lemma) ? 'm_s' : 'm_h';
+    cls = HUSH.includes(last) ? 'm_m' : SOFT_AR.has(lemma) ? 'm_s' : 'm_h';
   } else { g = 'm'; cls = 'm_h'; p *= 0.5; flags.push('unknown-shape'); }
   if (info?.gender && info.gender !== g) {
     if (cls.startsWith('m_') && info.gender === 'f' && (isCons(last) || last === 'ь')) cls = 'f_3';
     else if (cls === 'f_3' && info.gender === 'm') cls = last === 'ь' ? 'm_s' : HUSH.includes(last) ? 'm_m' : 'm_h';
     g = info.gender;
   }
-  const an = info?.animate ?? EXC[lemma]?.an ?? ANIMATE.has(lemma);
+  const an = info?.animate ?? EXC[lemma]?.an ?? (ANIMATE.has(lemma) || FEM_AN.has(lemma) || MASC_A.has(lemma) || MASC_O.has(lemma));
   if (!an && g === 'm' && info?.animate === undefined && cls !== 'indecl') flags.push('animacy-guess');
-  return { kind: 'noun', lemma, g, an, cls, p, flags };
+  return { kind: 'noun', lemma, g, an, cls, p, flags, ...(PLURAL_ONLY.has(lemma) ? { plural: true } : {}) };
 }
 
 /** The stem of the forms with an ending: the fleeting vowel gone, і turned to о/е; with its weight. */
@@ -183,7 +205,17 @@ function oblique(n: Noun): { stem: string; p: number; flags: string[] } {
 const VELAR: Record<string, string> = { г: 'з', к: 'ц', х: 'с', ґ: 'з' };
 const VOC_ALT: Record<string, string> = { г: 'ж', к: 'ч', х: 'ш', ґ: 'ж' };
 
+/** Петро, Павло, батько: the forms of a masculine noun with the stem Петр-, Павл-, батьк-, and the nominative as it is. */
+function masculineO(n: Noun): Paradigm {
+  const L = n.lemma;
+  const P = masculine({ ...n, lemma: L.slice(0, -1), cls: 'm_h', an: true, flags: [] });
+  P['nom.sg'] = [F(L, Math.min(0.99, n.p), n.flags)];
+  if (L.endsWith('ько')) P['voc.sg'] = [F(L.slice(0, -1) + 'у', 0.6, ['voc'])];
+  return P;
+}
+
 function masculine(n: Noun): Paradigm {
+  if (n.cls === 'm_o') return masculineO(n);
   const P = blank();
   const L = n.lemma, ob = oblique(n);
   const soft = n.cls === 'm_s' || n.cls === 'm_y', mixed = n.cls === 'm_m', y = n.cls === 'm_y';
@@ -234,7 +266,8 @@ function neuter(n: Noun): Paradigm {
   const stem = L.slice(0, -1), soft = n.cls === 'n_s', ctx = soft && !HUSH.includes(stem.slice(-1));
   add('nom.sg', L); add('gen.sg', stem + (ctx ? 'я' : 'а')); add('dat.sg', stem + (ctx ? 'ю' : 'у')); add('acc.sg', L);
   add('ins.sg', stem + (soft ? 'ем' : 'ом'));
-  add('loc.sg', stem + 'і'); if (!soft) add('loc.sg', stem + 'у', 0.7);
+  if (!soft && VELAR[stem.slice(-1)]) { add('loc.sg', stem + 'у', 0.95); add('loc.sg', stem.slice(0, -1) + VELAR[stem.slice(-1)] + 'і', 0.9); }
+  else { add('loc.sg', stem + 'і'); if (!soft) add('loc.sg', stem + 'у', 0.7); }
   add('voc.sg', L);
   add('nom.pl', stem + (ctx ? 'я' : 'а'));
   const gp = GEN_PL[L];
@@ -296,7 +329,7 @@ function feminine(n: Noun): Paradigm {
   if (gp) add('gen.pl', gp, 0.95, ['gen-pl-listed']);
   else if (soft) add('gen.pl', softGen(stem), 0.7, ['gen-pl?']);
   else add('gen.pl', zeroGen(stem), 0.75, ['gen-pl?']);
-  add('dat.pl', stem + (soft ? 'ям' : 'ам')); add('acc.pl', stem + (soft || mixed ? 'і' : 'и')); add('ins.pl', stem + (soft ? 'ями' : 'ами')); add('loc.pl', stem + (soft ? 'ях' : 'ах')); add('voc.pl', stem + (soft || mixed ? 'і' : 'и'), 0.8);
+  add('dat.pl', stem + (soft ? 'ям' : 'ам')); if (n.an) for (const f of P['gen.pl']) P['acc.pl'].push({ ...f }); else add('acc.pl', stem + (soft || mixed ? 'і' : 'и')); add('ins.pl', stem + (soft ? 'ями' : 'ами')); add('loc.pl', stem + (soft ? 'ях' : 'ах')); add('voc.pl', stem + (soft || mixed ? 'і' : 'и'), 0.8);
   return P;
 }
 
@@ -319,8 +352,10 @@ function nounParadigm(n: Noun, dict?: MorphDict): Paradigm {
 
 /* ---------- adjectives ---------- */
 
-interface Adj { kind: 'adj'; lemma: string; soft: boolean; stem: string; /** < 1 when the word was taken for an adjective only by its place and ending. */ p?: number }
+interface Adj { kind: 'adj'; lemma: string; soft: boolean; stem: string; /** Stands in the plural also in the singular cells (before a noun that has only a plural). */ plural?: boolean; /** < 1 when the word was taken for an adjective only by its place and ending. */ p?: number }
 const parseAdj = (lemma: string): Adj => ({ kind: 'adj', lemma, soft: lemma.endsWith('ій'), stem: lemma.slice(0, -2) });
+/** Stems of plural adjectives that decline soft (давні, давніх: from давній). */
+const SOFT_PL = /^(нижн|верхн|давн|дальн|пізн|ранн|середн|крайн|син|трет)$/;
 /** Stems that look like adjectives (сталев-, залізн-, велик-, нов-): no doubt about the part of speech. */
 const ADJ_STEM = /(ев|єв|ов|н|ськ|цьк|зьк|ичн|чн|лив|ист|аст|ян|ик|ок|ш)$/;
 
@@ -332,7 +367,7 @@ const ADJ_SOFT = { m: 'ій ього ьому = ім ьому|ім ій', f: 'я
 function adjParadigm(a: Adj, g: 'm' | 'f' | 'n', an: boolean): Paradigm {
   const P = blank();
   const t = a.soft ? ADJ_SOFT : ADJ_HARD;
-  const tables = { sg: t[g].split(' '), pl: t.p.split(' ') };
+  const tables = { sg: (a.plural ? t.p : t[g]).split(' '), pl: t.p.split(' ') };
   UK_CASES.forEach((c, i) => {
     for (const num of ['sg', 'pl'] as const) {
       const cell = `${c}.${num}` as Cell, e = tables[num][i] ?? '';
@@ -372,7 +407,10 @@ function parsePhrase(phrase: string, dict?: MorphDict): Parsed {
     if (w.kind !== 'noun' || nx.kind !== 'noun' || w.sep.trim() !== '') continue;
     const low = norm(w.text), last = low.slice(-1), stem = low.slice(0, -1), ng = nx.noun!.g;
     const agrees = ((last === 'а' || last === 'я') && ng === 'f') || ((last === 'е' || last === 'є') && ng === 'n');
+    // залізні двері, чорні ворота: a plural adjective before a noun that has only a plural
+    const plural = !agrees && last === 'і' && !!nx.noun!.plural;
     if (agrees && stem.length >= 3 && isCons(stem.slice(-1))) { w.kind = 'adj'; delete w.noun; w.adj = { kind: 'adj', lemma: low, soft: last === 'я' || last === 'є', stem, p: ADJ_STEM.test(stem) ? 1 : 0.9 }; }
+    else if (plural && stem.length >= 3 && isCons(stem.slice(-1))) { w.kind = 'adj'; delete w.noun; w.adj = { kind: 'adj', lemma: low, soft: SOFT_PL.test(stem), stem, plural: true, p: 1 }; }
   }
   const flags: string[] = [];
   let head = words.findIndex(w => w.kind === 'noun');
@@ -466,19 +504,25 @@ export function ukRetarget(oldPhrase: string, newPhrase: string, observed: strin
     if (!cells.length) return null;
   }
   const need = opts.prev ? PREP[norm(opts.prev)] : undefined;
-  let prior = cellPrior;
+  // the locative stands only after a preposition: without one it stays an alternative, but the plain case comes first («Мечі лежали» is «Клинки лежали»)
+  let prior = need ? cellPrior : (c: Cell): number => cellPrior(c) * (c.startsWith('loc') ? 0.78 : 1);
   if (need) {
     if (cells.some(c => need.includes(c.slice(0, 3) as UkCase))) cells = cells.filter(c => need.includes(c.slice(0, 3) as UkCase));
     prior = (c: Cell): number => cellPrior(c) * (c.startsWith(need[0]!) ? 1 : 0.5);
   }
   const newPars = wordParadigms(newP, dict);
+  // another gender or number of the head word: the words around it (a verb, an adjective not in the term) no longer agree
+  const oh = oldP.words[oldP.head]?.noun, nh = newP.words[newP.head]?.noun;
+  if (oh && nh && (oh.g !== nh.g || !!oh.plural !== !!nh.plural)) { flags.push('gender-change'); }
+  // the number of the variant of the old form belongs to the old word: it is carried over only to a word of the same declension
+  const sameClass = !!oh && !!nh && oh.cls === nh.cls;
   const seen0 = casing(obs[0]!.text), sameCount = newP.words.length === obs.length, obsCase = obs.map(o => casing(o.text));
   const seps = sameCount ? obs.map(o => o.sep) : newP.words.map(w => w.sep);
   const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
   const typed = /['ʼ`’]/.exec(newPhrase)?.[0];
   const build = (cell: Cell): { text: string; p: number; fl: string[] } | null => {
     let p = capScore, text = '';
-    const fl = [...flags], k = variant.get(cell) ?? 0;
+    const fl = [...flags], k = sameClass ? variant.get(cell) ?? 0 : 0;
     for (let i = 0; i < newP.words.length; i++) {
       const w = newP.words[i]!, par = newPars[i];
       let form = w.text;

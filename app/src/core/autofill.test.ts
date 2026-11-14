@@ -38,12 +38,18 @@ describe('autofill by words', () => {
   it('explains what blocks a line: an ambiguous word and an unknown one', () => {
     const vs = [view([unit('1', 'Woodsman [head]'), unit('2', 'Woodsman [torso]'), unit('4', 'Woodsman [head] '), unit('5', 'Guard [torso]')])];
     const sv = saved({ 1: 'Лісник [голова]', 2: 'Лісоруб [тулуб]' });
-    expect(proposals(vs, sv).map(p => p.key)).toEqual([]);
+    // a line that repeats a translated one (here with a space at the end) is filled in whole, whatever the words do alone
+    expect(proposals(vs, sv).map(p => [p.key, p.target])).toEqual([['4', 'Лісник [голова]']]);
     const a = almost(vs, sv);
     expect(a.map(x => [x.key, x.blockers.map(b => `${b.word}:${b.reason}`)])).toEqual([['4', ['Woodsman:ambiguous']], ['5', ['Guard:unknown']]]);
     expect(a[0]!.blockers[0]!.variants.sort()).toEqual(['лісник', 'лісоруб']);
     // a glossary term settles the ambiguity and the line is composed
     const fixed = saved({ 1: 'Лісник [голова]', 2: 'Лісоруб [тулуб]' }, [{ en: 'Woodsman', uk: 'Лісник' }]);
     expect(proposals(vs, fixed).map(p => [p.key, p.target])).toEqual([['4', 'Лісник [голова]']]);
+  });
+  it('a word that got two translations is not composed (the second is usually the same word in another case)', () => {
+    const vs = [view([unit('1', 'New game'), unit('2', 'Save game'), unit('3', 'Load game'), unit('4', 'Quit game')])];
+    const sv = saved({ 1: 'Нова гра', 2: 'Зберегти гру', 3: 'Завантажити гру' });
+    expect(proposals(vs, sv).map(p => p.key)).toEqual([]);
   });
 });

@@ -88,7 +88,9 @@ const WORD = /[\p{L}\p{N}]+(?:['’ʼ`][\p{L}]+)*/gu;
 export type WordToken = Token;
 export const wordTokens = (text: string): WordToken[] => tokens(text);
 /** Do two keys of Ukrainian words belong to one word? One has to be the beginning of the other, and a very short key must match fully. */
-export const ukStemsAgree = (hay: string, need: string): boolean => hay === need || (need.length >= 3 && hay.startsWith(need)) || (hay.length >= 3 && need.startsWith(hay));
+export const ukStemsAgree = (hay: string, need: string): boolean => hay === need || prefixAgrees(hay, need) || prefixAgrees(need, hay);
+/** `long` starts with `short`: for a short key (the key of «бог» is «бог») only one more letter is the same word, not «богдан». */
+const prefixAgrees = (long: string, short: string): boolean => short.length >= 3 && long.startsWith(short) && (short.length >= 5 || long.length - short.length <= 1);
 
 function tokens(text: string): Token[] {
   const out: Token[] = [];
@@ -198,7 +200,7 @@ export function targetHasTerm(target: string, uk: string, alt: string[] = []): b
   const hay = tokens(target).map(t => t.keys[0]!);
   const has = (phrase: string) => {
     const need = tokens(phrase).map(t => t.keys[0]!);
-    return need.length > 0 && need.every(n => hay.some(h => h.startsWith(n) || (h.length >= 3 && n.startsWith(h))));
+    return need.length > 0 && need.every(n => hay.some(h => h === n || prefixAgrees(h, n) || prefixAgrees(n, h)));
   };
   return [uk, ...alt].some(has);
 }

@@ -8,8 +8,10 @@ const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** Every translation containing the text, with what it would become. Nothing is changed here. */
 export function findReplace(views: FileView[], saved: SavedProject, o: FindOptions, limit = 2000): FindMatch[] {
   if (!o.find) return [];
-  const body = esc(o.find);
-  const re = new RegExp(o.wholeWord ? `(?<![\\p{L}\\p{N}])${body}(?![\\p{L}\\p{N}])` : body, o.caseSensitive ? 'gu' : 'giu');
+  // the apostrophe is written in several ways (' ’ ʼ `): whichever one is typed finds all of them
+  const body = esc(o.find).replace(/['’ʼ`]/g, "['’ʼ`]");
+  // a word ends at a space or a sign, not at an apostrophe or a hyphen between letters: «сім» is not the start of «сім’я»
+  const re = new RegExp(o.wholeWord ? `(?<![\\p{L}\\p{N}])(?<![\\p{L}\\p{N}]['’ʼ\`])${body}(?![\\p{L}\\p{N}])(?!['’ʼ\`][\\p{L}\\p{N}])` : body, o.caseSensitive ? 'gu' : 'giu');
   const out: FindMatch[] = [];
   for (const v of views) {
     const ents = saved.files[v.name];

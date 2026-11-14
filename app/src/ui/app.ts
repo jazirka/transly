@@ -26,6 +26,7 @@ import { GLOSSARY_HTML, editTerm, glossaryClick, renderGlossaryPanel, showTerm, 
 import { pickGameFolder, readFiles, reopenHandle } from './folder';
 import type { DirHandle, PickedFile } from './folder';
 import { IdbStore, LoadFailure, loadHandle, saveHandle } from './idb';
+import { announceQa } from './qalive';
 import { showRecovery } from './recovery';
 import { openImport } from './import-dialog';
 
@@ -232,6 +233,7 @@ export async function start(root: HTMLElement): Promise<void> {
   input.setAttribute('webkitdirectory', ''); input.setAttribute('aria-label', 'Папка гри');
   root.innerHTML = SHELL;
   root.appendChild(input);
+  const qaLive = el('div', 'vh'); qaLive.id = 'qa-live'; qaLive.setAttribute('role', 'status'); qaLive.setAttribute('aria-live', 'polite'); root.appendChild(qaLive);
   initWindowControls(() => autosave.flush());
   document.documentElement.dataset.booted = '1';
   if (back) toast(`Відновлено правки, які не встигли зберегтися перед закриттям: ${back.rows}`);
@@ -568,7 +570,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const len = e?.target ? `${displayLength(e.target)}/${displayLength(u.source)}` : '—';
     return `<div class="gr ${sel ? 'sel' : ''} ${chk ? 'chk' : ''}" role="row" tabindex="${sel ? 0 : -1}" aria-selected="${sel}" data-key="${esc(u.key)}">
       <div class="ln" role="gridcell"><span class="num">${n}</span><input type="checkbox" class="rc" ${chk ? 'checked' : ''} aria-label="Вибрати рядок ${n}"></div>
-      <div class="st" role="gridcell"><span class="sd ${st}${autoDraft(st, e) ? ' auto' : ''}" title="${STATUS_LABEL[st]}${autoDraft(st, e) ? ' (заповнено застосунком, ще не переглянуто)' : ''}"${st === 'qa' ? ` data-hc="qa" data-hk="${esc(u.key)}"` : ''}></span><span class="vh">${STATUS_LABEL[st]}${autoDraft(st, e) ? ', авто' : ''}</span>${adv ? '<span class="adv" title="Є порада QA: відкрийте рядок, щоб побачити" data-hc="qa" data-hk="' + esc(u.key) + '"></span><span class="vh">Є порада</span>' : ''}</div>
+      <div class="st" role="gridcell"><span class="sd ${st}${autoDraft(st, e) ? ' auto' : ''}" aria-hidden="true" title="${STATUS_LABEL[st]}${autoDraft(st, e) ? ' (заповнено застосунком, ще не переглянуто)' : ''}"${st === 'qa' ? ` data-hc="qa" data-hk="${esc(u.key)}"` : ''}></span><span class="vh">${STATUS_LABEL[st]}${autoDraft(st, e) ? ', авто' : ''}</span>${adv ? '<span class="adv" title="Є порада QA: відкрийте рядок, щоб побачити" data-hc="qa" data-hk="' + esc(u.key) + '"></span><span class="vh">Є порада</span>' : ''}</div>
       <div role="gridcell"><span class="key" title="${esc(u.key)}">${esc(shortKey(u.key))}</span>${cmIcon(e)}</div>
       <div class="who" role="gridcell">${esc(ctx.speaker(u))}</div>
       <div class="src" role="gridcell" lang="en">${markup(flow(u.source), hits)}<span class="skey" aria-hidden="true">${esc(shortKey(u.key))}</span></div>
@@ -686,7 +688,7 @@ export async function start(root: HTMLElement): Promise<void> {
     let h = `<div class="gh" role="row"><div class="gcheck" role="columnheader"><input type="checkbox" id="selall" aria-label="Вибрати всі видимі рядки" ${nSel && nSel === ids.length ? 'checked' : ''}></div><div title="Статус" role="columnheader" class="s"><span class="vh">Статус</span></div><div class="s" role="columnheader">Ключ</div><div class="s" role="columnheader">Мовець</div><div role="columnheader">Оригінал · EN</div><div class="s" role="columnheader">Переклад · UK</div><div class="s" role="columnheader" title="Кількість знаків: переклад / оригінал (без керівних кодів). Рекомендація: якнайближче до оригіналу" style="justify-content:flex-end;border-right:0">К-сть зн.</div></div>`;
     // Every row has its place; a row is drawn when it comes near the screen: nothing is cut off, however long the file or the group is.
     if (list.length) mountRows('grid', grid, grid.parentElement!, h, ids, i => rowHtml(list[i]!, idx.get(list[i]!.key)!), s.current ?? '', 56);
-    else grid.innerHTML = h + `<div class="empty-wrap" role="row"><div role="gridcell">${emptyHtml}</div></div>`;
+    else { grid.innerHTML = h + `<div class="empty-wrap" role="row"><div role="gridcell">${emptyHtml}</div></div>`; grid.removeAttribute('aria-rowcount'); grid.removeAttribute('aria-colcount'); }
     renderBulk(ids);
     ensureGridStop();
     const cur = s.cur ? idx.get(s.cur) : undefined;
@@ -1644,8 +1646,8 @@ export async function start(root: HTMLElement): Promise<void> {
   });
   root.addEventListener('input', e => {
     const t = e.target as HTMLElement;
-    if (t instanceof HTMLTextAreaElement && t.id === 'i-tr') { focusInput(ctx, t); renderStatus(); return; }
-    if (t instanceof HTMLTextAreaElement && sceneInput(ctx, t)) { renderStatus(); window.clearTimeout(scenePanelTimer); scenePanelTimer = window.setTimeout(() => renderSidePanel(ctx), 250); return; }
+    if (t instanceof HTMLTextAreaElement && t.id === 'i-tr') { focusInput(ctx, t); renderStatus(); const u = ctx.unit(t.dataset.key ?? ''); if (u && s.current) announceQa(ctx, t, u, ctx.entries(s.current)[u.key]); return; }
+    if (t instanceof HTMLTextAreaElement && sceneInput(ctx, t)) { const u = ctx.unit(t.dataset.key ?? ''); if (u && s.current) announceQa(ctx, t, u, ctx.entries(s.current)[u.key]); renderStatus(); window.clearTimeout(scenePanelTimer); scenePanelTimer = window.setTimeout(() => renderSidePanel(ctx), 250); return; }
     if (t.id === 'q' || t.id === 'q2') {
       // The list is filtered as the translator types, but not on every letter: a long file is drawn once the typing pauses.
       s.q = (t as HTMLInputElement).value;

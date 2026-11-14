@@ -33,6 +33,8 @@ function realize(l: Rows, shell: HTMLElement): HTMLElement | null {
   const i = Number(shell.dataset.i);
   shell.insertAdjacentHTML('afterend', l.html(i));
   const row = shell.nextElementSibling as HTMLElement;
+  // in a grid every drawn row says which one of all the rows it is (the rows that are still shells are hidden from screen readers)
+  if (l.host.getAttribute('role') === 'grid') row.setAttribute('aria-rowindex', String(i + 2));
   l.observer?.unobserve(shell);
   shell.remove();
   l.sizes?.observe(row);
@@ -72,6 +74,12 @@ export function mountRows(id: string, host: HTMLElement, scroller: HTMLElement, 
   }
   host.innerHTML = headerHtml;
   const header = host.children.length;
+  if (host.getAttribute('role') === 'grid') {
+    // the size of the whole grid, not of the part that is drawn (one header row comes first)
+    host.setAttribute('aria-rowcount', String(keys.length + header));
+    const hr = host.firstElementChild;
+    if (hr) { hr.setAttribute('aria-rowindex', '1'); host.setAttribute('aria-colcount', String(hr.children.length)); }
+  }
   host.insertAdjacentHTML('beforeend', h);
   scroller.scrollTop = keepTop;
 
@@ -119,7 +127,7 @@ export function patchRow(id: string, key: string, html: string): boolean {
   box.innerHTML = html;
   const fresh = box.firstElementChild as HTMLElement | null;
   if (!fresh) return false;
-  for (const a of [...row.attributes]) if (!fresh.hasAttribute(a.name) && a.name !== 'style') row.removeAttribute(a.name);
+  for (const a of [...row.attributes]) if (!fresh.hasAttribute(a.name) && a.name !== 'style' && a.name !== 'aria-rowindex') row.removeAttribute(a.name);
   for (const a of [...fresh.attributes]) row.setAttribute(a.name, a.value);
   row.replaceChildren(...fresh.childNodes);
   return true;

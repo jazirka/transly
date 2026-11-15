@@ -2,7 +2,7 @@ name: Android APK
 
 # Builds the Android app (app/android): the web app is copied into the APK, so it works offline and can pick files,
 # save to Downloads and show the home-screen widget. The APK is signed with the personal key: fine for installing by hand.
-# Download it from the run's "Artifacts" section (transly-apk).
+# Download it from the run's "Artifacts" section (transly-apk). It runs by hand only (not on every push); the phone code is still checked by the "Tests" workflow.
 
 on:
   workflow_dispatch:
@@ -11,12 +11,6 @@ on:
         description: 'Also publish the APK as the "android-latest" release (a direct download link)'
         type: boolean
         default: false
-  push:
-    branches: [ccr-a0ee6fc6-t2at3x]
-    paths:
-      - 'app/android/**'
-      - 'app/src/**'
-      - '.github/workflows/android.yml'
 
 # The build job runs third-party code (npm, gradle): it gets a read-only token. Only the release job can write.
 permissions:

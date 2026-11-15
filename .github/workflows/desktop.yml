@@ -2,6 +2,7 @@ name: Desktop app
 
 # Builds the Tauri desktop app (app/src-tauri) for Windows only. It adds what a browser cannot do: remembers
 # the game folder, writes the translation into the game, starts the game (also inside a chosen scene).
+# The tests (types, unit tests, browser scenarios) run on every push in the "Tests" workflow, so they are not run again here.
 # Run it by hand from the Actions tab; tick "release" to publish the installers as the "desktop-latest" release.
 
 on:
@@ -44,7 +45,7 @@ jobs:
         with:
           workspaces: app/src-tauri
 
-      - name: Test and build the installer
+      - name: Build the installer
         working-directory: app
         shell: bash
         env:
@@ -52,7 +53,6 @@ jobs:
           TRANSLY_UPDATE_REPO: ${{ github.repository }}
         run: |
           npm ci
-          npm test
           npm run tauri build
 
       - name: Collect the installers

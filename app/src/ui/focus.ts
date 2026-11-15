@@ -3,7 +3,8 @@ import type { BatchKind, Entry, Unit } from '../core';
 import { $, buzz, esc, plural, toast } from './dom';
 import { discussClick, renderDiscuss } from './discuss';
 import { chipsHtml, qaRows, namesOfRow, nameMarks, realOf, tmMatch } from './hintcards';
-import { ROW_PANEL_HTML, renderRowPanel, rowPanelClick, setRowTab } from './rowpanel';
+import { ROW_PANEL_HTML, getRowTab, renderRowPanel, rowPanelClick, setRowTab } from './rowpanel';
+import type { RowTab } from './rowpanel';
 import { focusCard, sceneBlocked } from './scene-view';
 import { historyClick } from './history-panel';
 import { CODE_RE, markupTerms, termMarksOf } from './markup';
@@ -34,6 +35,7 @@ const I = {
   wrap: '<svg viewBox="0 0 16 16"><path d="M2.5 4h11M2.5 8h8.5a2.5 2.5 0 0 1 0 5H8M9.5 11l-1.7 2 1.7 2M2.5 12h2"/></svg>',
   hint: '<svg viewBox="0 0 16 16"><path d="M8 2.5a4 4 0 0 0-2.2 7.3c.5.4.7.9.7 1.4v.3h3v-.3c0-.5.2-1 .7-1.4A4 4 0 0 0 8 2.5zM6.5 13.5h3"/></svg>',
   chat: '<svg viewBox="0 0 16 16"><path d="M3 3.5h10v7H8.5L6 13v-2.5H3z"/></svg>',
+  row: '<svg viewBox="0 0 16 16"><path d="M3 4.5h10M3 8h10M3 11.5h6"/></svg>',
   clock: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.2l2 1.3"/></svg>',
   dict: '<svg viewBox="0 0 16 16"><path d="M3.5 2.5h8a1 1 0 0 1 1 1v10H4.5a1 1 0 0 1-1-1z"/><path d="M6 5.5h4M6 8h4"/></svg>',
 };
@@ -63,10 +65,11 @@ export const FOCUS_HTML = `<div class="fc"><div class="fc-in"><div class="te-lin
 export const SIDE_HTML = `<aside class="fs" aria-label="Панель рядка">
   <div class="rz rz-r" id="rz-r" role="separator" aria-orientation="vertical" aria-label="Ширина правої панелі" aria-valuemin="260" aria-valuemax="640" tabindex="0" title="Потягніть, щоб змінити ширину (подвійний клік — стандартна)"></div>
   <div class="itabs" id="stabs" role="toolbar" aria-label="Права панель">
-    <button class="on" aria-pressed="true" data-p="panel" title="Переклад, пропозиції, терміни й обговорення рядка">${I.chat}<span class="tl">Рядок</span> <span class="cnt" id="cm-badge" hidden>0</span></button>
+    <button class="on" aria-pressed="true" data-p="row" title="Рядок: переклад, версії, нитки">${I.row}<span class="tl">Рядок</span></button>
+    <button aria-pressed="false" data-p="cm" title="Обговорення рядка">${I.chat}<span class="tl">Обговорення</span> <span class="cnt" id="cm-badge" hidden>0</span></button>
   </div>
   <div class="ibody">
-    <div class="ph"><div class="rtabs" id="rp-tabs" role="tablist" aria-label="Рядок і обговорення"><button type="button" class="rtab on" role="tab" data-rt="row" aria-selected="true">Рядок</button><button type="button" class="rtab" role="tab" data-rt="cm" aria-selected="false" tabindex="-1">Обговорення <span class="cnt" id="rt-cm-n" hidden>0</span></button></div><span class="grow"></span><span class="ico" id="rp-close" title="Сховати панель" role="button" tabindex="0" aria-label="Сховати панель">—</span></div>
+    <div class="ph"><span class="grow" id="rp-title">Рядок</span><span class="ico" id="rp-close" title="Сховати панель" role="button" tabindex="0" aria-label="Сховати панель">—</span></div>
     <section class="qa-side" id="qa-side" hidden><div class="lbl">Перевірка рядка</div><div id="i-iss" class="qa-under"></div></section>
     <div class="pane on" id="s-pn" data-title="Рядок">${ROW_PANEL_HTML}</div>
   </div>
@@ -210,16 +213,19 @@ export function renderSidePanel(ctx: Ctx): void {
 function renderSide(ctx: Ctx, u: Unit | undefined, e: Entry | undefined): void {
   const { s } = ctx;
   const open = s.phone || s.sideOn.length > 0;
-  document.querySelectorAll<HTMLElement>('#stabs [data-p]').forEach(b => { b.classList.toggle('on', open); b.setAttribute('aria-pressed', String(open)); });
+  // The rail has the two tabs of the panel: the one that is open is lit (none while the panel is folded).
+  const tab = getRowTab();
+  document.querySelectorAll<HTMLElement>('#stabs [data-p]').forEach(b => { const on = open && b.dataset.p === tab; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+  $('#rp-title').textContent = tab === 'cm' ? 'Обговорення' : 'Рядок';
   document.getElementById('v-focus')?.classList.toggle('side-collapsed', !open);
   // In the table there is no editor to carry the remarks of the row: they stand at the top of this zone.
   const q = u && s.mode === 'table' ? qaRows(ctx, u, e) : { html: '', count: 0 };
   $('#qa-side').hidden = !q.count;
   $('#i-iss').innerHTML = q.count ? q.html : '';
   renderRowPanel(ctx, u, e);
-  if (!u) { $('#cm-list').innerHTML = ''; $('#cm-badge').hidden = true; $('#pn-cm-n').hidden = true; $('#rt-cm-n').hidden = true; return; }
+  if (!u) { $('#cm-list').innerHTML = ''; $('#cm-badge').hidden = true; $('#pn-cm-n').hidden = true; return; }
   const open0 = openThreads(e);
-  for (const id of ['#cm-badge', '#pn-cm-n', '#rt-cm-n']) { $(id).textContent = String(open0); $(id).hidden = !open0; }
+  for (const id of ['#cm-badge', '#pn-cm-n']) { $(id).textContent = String(open0); $(id).hidden = !open0; }
   renderDiscuss(ctx, `${s.current}|${u.key}`, e);
 }
 
@@ -417,15 +423,15 @@ export function sideClick(ctx: Ctx, t: HTMLElement): boolean {
   const { s } = ctx;
   const tab = t.closest<HTMLElement>('#stabs [data-p]');
   if (tab) {
-    // The rail button shows the panel or folds the zone to its rail.
-    if (s.phone) { s.sideOn = ['panel']; } else { s.sideOn = s.sideOn.length ? [] : ['panel']; s.sideTouched = true; }
+    // As on the left rail: a tab that is not open opens the panel on it; the open one folds the panel to the rail (the phone keeps its row of tabs open).
+    const want: RowTab = tab.dataset.p === 'cm' ? 'cm' : 'row', same = getRowTab() === want;
+    setRowTab(want);
+    if (s.phone) { s.sideOn = ['panel']; } else { s.sideOn = same && s.sideOn.length ? [] : ['panel']; s.sideTouched = true; }
     ctx.render(); return true;
   }
   if (t.closest('#rp-close')) { s.sideOn = []; s.sideTouched = true; ctx.render(); return true; }
   if (qaClick(ctx, t)) return true;
   if (!t.closest('.fs')) return false;
-  const rt = t.closest<HTMLElement>('[data-rt]');
-  if (rt) { setRowTab(rt.dataset.rt === 'cm' ? 'cm' : 'row'); ctx.render(); return true; }
   const u = s.cur ? ctx.unit(s.cur) : undefined;
   const ext = t.closest<HTMLElement>('[data-ext]');
   if (ext) { void openLink(ext.dataset.ext!); return true; }

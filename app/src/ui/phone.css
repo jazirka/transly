@@ -74,7 +74,6 @@
 .ide.sz-s .gr>.tr{grid-area:tr;padding:0;font-size:14px;color:var(--text);opacity:.85}
 .ide.sz-s .filters{padding:6px 10px}
 .ide.sz-s .filters .fin{flex:1 1 100%}
-.ide.sz-s .crumbs{display:none}
 
 /* ---- Phone, mobile-first: bottom bar, full-page lists, bottom sheet for the hints, text-only editor ---- */
 .bnav{display:none}

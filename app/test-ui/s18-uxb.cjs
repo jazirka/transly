@@ -1,4 +1,4 @@
-// Browser regression checks for the translator's-workplace findings of the UX audit (ux-b): the crumbs follow the table row, Enter in a
+// Browser regression checks for the translator's-workplace findings of the UX audit (ux-b): Enter in a
 // one-line row sends, the list sort does not reorder the table, a QA fix can be undone in the field, invisible characters show,
 // the resolved threads stay open.
 //   PC_URL=http://localhost:4285/ node test-ui/s18-uxb.cjs
@@ -38,8 +38,6 @@ const check = (name, ok, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ') 
 
   // ---- the line over the table follows the selected row (ux-b-02)
   await page.locator('.gr').nth(3).click(); await sleep(300);
-  const crumb = await page.locator('#crumbs').innerText();
-  check('the line over the table names the selected row', /рядок 4 з 6/.test(crumb), crumb);
 
   // ---- Enter in a one-line row (a name) sends it and puts no line break in (ux-b-08)
   await page.locator('[data-m="edit"]').click(); await sleep(400);
@@ -75,7 +73,7 @@ const check = (name, ok, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ') 
   // ---- a resolved thread: the section stays open when its «Видалити» is armed (ux-b-17)
   await page.locator('.gr').nth(3).click(); await sleep(300);
   await page.locator('[data-m="edit"]').click(); await sleep(500);
-  await page.locator('#rp-tabs [data-rt="cm"]').click(); await sleep(200); // the discussion is the second tab of the right panel
+  await page.locator('#stabs [data-p="cm"]').click(); await sleep(200); // the discussion is the second tab on the rail of the right panel
   await page.locator('#cm-in').click(); await page.keyboard.type('Перевірити термін'); await page.keyboard.press('Control+Enter'); await sleep(500);
   await page.locator('[data-cm="resolve"]').first().click(); await sleep(400);
   await page.locator('details.thr-closed summary').click(); await sleep(300);

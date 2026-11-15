@@ -85,10 +85,10 @@ const stored = () => new Promise((res, rej) => { const o = indexedDB.open('trans
 
   // ---- the first click on a file in the tree is not swallowed while a cell is open
   await page.locator('.gr .tr').nth(5).click(); await page.keyboard.type('x');
-  const before = await page.locator('.crumbs, #crumbs').first().innerText().catch(() => '');
+  const before = await page.locator('.node.cur[data-file]').first().getAttribute('data-file').catch(() => '');
   await page.locator('#tree [data-file], .tree [data-file], .tr-file').filter({ hasText: 'Map002' }).first().click().catch(() => undefined); await sleep(700);
-  const after = await page.locator('#crumbs').innerText().catch(() => '');
-  check('the first click on another file opens it (the cell editor does not swallow it)', /Map002|U\b/.test(after) && after !== before, `${before.slice(0, 30)} -> ${after.slice(0, 30)}`);
+  const after = await page.locator('.node.cur[data-file]').first().getAttribute('data-file').catch(() => '');
+  check('the first click on another file opens it (the cell editor does not swallow it)', /Map002/.test(after || '') && after !== before, `${before} -> ${after}`);
 
   // ---- another game: asked before the rows are mixed
   await open(B, true);

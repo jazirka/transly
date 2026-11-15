@@ -139,7 +139,6 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     <main class="editor" id="main">
       <div class="tabs"><span class="tabs-host" id="tabs-host"></span></div>
       <div class="view" id="v-table">
-        <div class="crumbs" id="crumbs"></div>
         <div class="filters"><div class="fin">${SVG.search}<input class="qin" id="q" placeholder="Фільтр у цьому файлі" aria-label="Фільтр"></div><span class="chipsHost" id="chips1"></span>
           <div class="r"><button class="chip" id="spkbtn">Мовець ▾</button><button class="chip" id="lenbtn">Довжина ▾</button></div></div>
         <div class="gridwrap"><div class="bulk" id="bulk"><div class="bulk-in"><b id="bulkn">0</b><span id="bulkt"></span><button id="bb-ok" title="Надіслати вибрані переклади">Надіслати</button><button id="bb-appr" title="Вичитати вибрані переклади (рядки, що ще не надіслано, надсилаються й вичитуються разом)">Вичитати</button><button id="bb-tm" title="Підставити збіг із пам’яті перекладів (від 70%) у порожні вибрані рядки">З пам’яті</button><button id="bb-clear" class="ghost" title="Скасувати вибір" aria-label="Скасувати вибір">✕</button></div></div><div class="grid" id="grid" role="grid" aria-label="Рядки файлу"></div></div>
@@ -674,7 +673,7 @@ export async function start(root: HTMLElement): Promise<void> {
     document.querySelectorAll<HTMLElement>('#grid .gr[tabindex="0"]').forEach(r => { r.tabIndex = -1; r.setAttribute('aria-selected', 'false'); });
     if (row) { row.classList.add('sel'); row.tabIndex = 0; row.setAttribute('aria-selected', 'true'); }
     else ensureGridStop();
-    renderCrumbs(); renderStatus(); renderSidePanel(ctx);
+    renderStatus(); renderSidePanel(ctx);
   }
   /** The table is one stop of the Tab key: when no row is selected the first one is that stop, so the keyboard can get into the table at all. */
   function ensureGridStop(): void {
@@ -684,15 +683,6 @@ export async function start(root: HTMLElement): Promise<void> {
     if (first) first.tabIndex = 0;
   }
 
-  /** How many rows the table lists now (the crumbs say it when a filter hides some). */
-  let crumbShown = 0;
-  /** The line over the table: where the open file is and which row is the selected one (it follows the selection without drawing the table again). */
-  function renderCrumbs(): void {
-    const v = ctx.view();
-    if (!v) return;
-    const cur = s.cur ? v.units.findIndex(u => u.key === s.cur) + 1 : 0;
-    $('#crumbs').innerHTML = `${s.current !== GROUP && s.current?.includes('/') ? `<span>${esc(s.current.split('/').slice(0, -1).join('/'))}</span>›` : ''}<span>${esc(currentLabel())}</span>${cur && s.cur ? `›<b>${esc(ctx.unit(s.cur)?.context ?? '')}</b>` : ''}<span class="r">${cur ? `рядок ${cur.toLocaleString('uk-UA')} з ${v.units.length.toLocaleString('uk-UA')}` : plural(v.units.length, ['рядок', 'рядки', 'рядків'])}${crumbShown !== v.units.length ? ` · показано ${crumbShown.toLocaleString('uk-UA')}` : ''}</span>`;
-  }
   function renderTable(): void {
     const v = ctx.view();
     const grid = $('#grid');
@@ -713,8 +703,6 @@ export async function start(root: HTMLElement): Promise<void> {
     else { grid.innerHTML = h + `<div class="empty-wrap" role="row"><div role="gridcell">${emptyHtml}</div></div>`; grid.removeAttribute('aria-rowcount'); grid.removeAttribute('aria-colcount'); }
     renderBulk(ids);
     ensureGridStop();
-    crumbShown = list.length;
-    renderCrumbs();
   }
 
   let topTimer = 0;

@@ -93,9 +93,6 @@ button{cursor:pointer}
 .tab.on{color:var(--text);border-bottom-color:var(--accent);background:linear-gradient(#2b2d30,#25282c)}
 .tab .x{color:var(--dim);font-size:12px}
 .tab .badge{font:12px var(--mono);color:var(--warn)}
-.crumbs{display:flex;align-items:center;gap:6px;height:26px;padding:0 12px;color:var(--mute);border-bottom:1px solid var(--line);flex:none;font-size:12px}
-.crumbs b{font-weight:500;color:var(--text)}
-.crumbs .r{margin-left:auto;font-family:var(--mono);font-size:12px}
 .filters{display:flex;align-items:center;gap:6px;height:36px;padding:0 10px;border-bottom:1px solid var(--line);flex:none;background:#222427}
 .fin{flex:none;display:flex;align-items:center;gap:6px;width:180px;height:24px;padding:0 8px;border:1px solid var(--line);border-radius:var(--r1);background:var(--bg);color:var(--mute)}
 .fin input{flex:1;min-width:0;background:none;border:0;outline:0;color:var(--text)}

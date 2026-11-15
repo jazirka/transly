@@ -31,6 +31,7 @@ export const ROW_PANEL_HTML = ['<div class="pn-empty-all hint">Оберіть р
 /** Which of the two tabs of the panel is open: the row, or its discussion. */
 export type RowTab = 'row' | 'cm';
 let rtab: RowTab = (() => { try { return localStorage.getItem('transly.rtab') === 'cm' ? 'cm' : 'row'; } catch { return 'row'; } })();
+export const getRowTab = (): RowTab => rtab;
 export const setRowTab = (t: RowTab): void => { rtab = t; try { localStorage.setItem('transly.rtab', t); } catch { /* private mode */ } };
 
 /** Sections the translator folded. */
@@ -78,8 +79,7 @@ export function renderRowPanel(ctx: Ctx, u: Unit | undefined, e: Entry | undefin
   });
   const pane = $('#s-pn');
   pane.classList.toggle('no-row', !u);
-  // Two tabs: the row (its translation, versions, proposals, threads) and the discussion.
-  document.querySelectorAll<HTMLElement>('#rp-tabs [data-rt]').forEach(b => { const on = b.dataset.rt === rtab; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; });
+  // Two tabs, on the rail beside the panel: the row (its translation, versions, threads) and the discussion.
   for (const id of ['tr']) document.querySelector<HTMLElement>(`.pn-sec[data-sec="${id}"]`)!.hidden = rtab !== 'row';
   document.querySelector<HTMLElement>('.pn-sec[data-sec="cm"]')!.hidden = rtab !== 'cm';
   if (!u) return;

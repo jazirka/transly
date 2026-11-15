@@ -12,7 +12,8 @@
   /* the theme: the hue comes from the project (core/theme.ts sets these when a project is open; these are the defaults) */
   --accent:#a492fb; --accent-2:#a492fb; --accent-rgb:164,146,251; --accent-solid:#765dcf; --accent-hi:#876fe4; --on-accent:#fff;
   --accent-soft:rgba(164,146,251,.16); --accent-ring:rgba(164,146,251,.5); --accent-text:#c9c2ff; --focus-glow:rgba(164,146,251,.24);
-  --sel:rgba(255,255,255,.09);   /* an active or hovered row: the grey of the hover */
+  --use:rgba(164,146,251,.30); --use-ring:rgba(164,146,251,.70);   /* chosen, in the window you are working in */
+  --sel:rgba(255,255,255,.15);   /* chosen, in a window you are not working in */
   --sel-soft:rgba(255,255,255,.05);
   --ok:#5fb865; --warn:#e5a04b; --bad:#f75464; --info:#56a8f5; --violet:#b589d6;
   /* the colours of a row's threads: each glossary entry of the row wears one, from the original to the translation */
@@ -511,7 +512,7 @@ td .term{color:#d9c3ee}
 .sd-box input{width:100%;height:46px;border:0;border-bottom:1px solid var(--line);background:none;color:var(--text);padding:0 16px;font:inherit;font-size:15px;outline:0}
 #sd-res{max-height:46vh;overflow:auto}
 .sd-it{display:flex;gap:12px;align-items:baseline;padding:8px 16px;cursor:pointer}
-.sd-it.on,.sd-it:hover{background:var(--sel)}
+.sd-it.on{background:var(--sel)}.sd-it:hover{background:var(--hv)}
 .sd-t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sd-empty{padding:18px 16px;color:var(--mute)}
 .sd-foot{padding:6px 16px;border-top:1px solid var(--line);color:var(--mute);font-size:12px}
@@ -609,7 +610,7 @@ td .term{color:#d9c3ee}
 .mi .ml{flex:1}
 .mi .ms{color:var(--mute);font-size:12.5px}
 .mi .ma{color:var(--mute);font-size:16px}
-.mi:hover,.mi.open,.mi:focus{background:var(--sel)}
+.mi:hover,.mi.open,.mi:focus{background:var(--hv)}
 .msep{height:1px;margin:5px 8px;background:#43454a}
 .topbar.menu-on .prog{min-width:0}.topbar.menu-on .prog span{display:none}
 /* tree header and editor tab row share one height and surface */
@@ -629,10 +630,10 @@ td .term{color:#d9c3ee}
 /* ===== unified highlight system =====
    controls (buttons, tabs, chips, pills): hover = soft glass, active = brighter glass + ring
    list items (rows, tree, menus, results): hover = soft glass, selected = violet */
-:root{--r1:4px;--r2:8px;--r3:12px;--hv:rgba(255,255,255,.09);--on-bg:rgba(255,255,255,.09);--on-ring:rgba(255,255,255,.24);--r-ctl:var(--r2)}
+:root{--r1:4px;--r2:8px;--r3:12px;--hv:rgba(255,255,255,.07);--on-bg:rgba(255,255,255,.15);--on-ring:rgba(255,255,255,.26);--r-ctl:var(--r2)}
 .tb-ic:hover,.ib:hover,.wc button:hover,.menubar button:hover,.strip button:hover,.seg button:hover,.tab:hover:not(.on),.chip:hover,.tpill:hover,.node:hover,.si:hover,.tgrow:hover,.gr:hover,.pop button:hover,.sbtn:hover,.tab .x:hover{background:var(--hv)}.menubar button.on,.strip button.on,.seg button.on,.seg button.on[data-m=proof],.chip.on,.tpill[aria-expanded=true]{background:var(--on-bg);box-shadow:inset 0 0 0 1px var(--on-ring);color:#fff;border-color:transparent}
 .tab.on{background:var(--on-bg);box-shadow:none;border-bottom-color:rgba(255,255,255,.55)}
-.mi:hover,.mi.open,.mi:focus,.sd-it:hover,.sd-it.on{background:var(--sel)}
+.mi:hover,.mi.open,.mi:focus,.sd-it:hover{background:var(--hv)}.sd-it.on{background:var(--sel)}
 .tb-ic,.ib,.wc button,.menubar button,.strip button,.seg button,.pop button{border-radius:var(--r-ctl)}
 .chip,.tpill{border-radius:999px}
 .tpill{border-color:rgba(255,255,255,.16)}

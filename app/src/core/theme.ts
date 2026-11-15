@@ -2,8 +2,9 @@
  * The accent colour of a project: one hue, taken from the project's name (so projects look different from each other)
  * or chosen by hand; every accent token is derived from it. Plain sRGB strings, not `oklch()`, so that an older WebView draws them too.
  *
- * The roles (the same on the desktop and the phone): `--accent` lines and focus, `--accent-solid` the one main action with `--on-accent`
- * text on it, `--accent-soft` + `--accent-ring` + `--accent-text` an active element under the cursor, `--focus-glow` the keyboard ring.
+ * The roles: `--accent` lines and focus, `--accent-solid` the one main action with `--on-accent` text on it, `--use` + `--use-ring` what is chosen
+ * in the window you are working in (the strongest level; the same choice in a window you are not using is grey, a hovered one is fainter),
+ * `--accent-soft` + `--accent-ring` + `--accent-text` tints and marks, `--focus-glow` the keyboard ring.
  * Status colours (draft, sent, approved, error) are not part of the theme.
  */
 
@@ -77,6 +78,8 @@ export const themeTokens = (hue: number): Record<string, string> => {
     '--on-accent': '#ffffff',
     '--accent-soft': rgba(line, 0.16),
     '--accent-ring': rgba(line, 0.5),
+    '--use': rgba(line, 0.3),
+    '--use-ring': rgba(line, 0.7),
     '--accent-text': hex(text),
     '--focus-glow': rgba(line, 0.24),
   };

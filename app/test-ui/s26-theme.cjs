@@ -35,26 +35,50 @@ async function pcPart(browser) {
   const a0 = await accentOf(page);
   check('the project has its accent colour (a plain #rrggbb, set by the theme)', /^#[0-9a-f]{6}$/.test(a0), a0);
 
-  // the four states of every kind of control: active = the grey fill + the grey ring, no bar; active + hover = the colour of the project
+  // the states of the controls, the way tool windows work in an IDE: the choice in the window you work in wears the colour of the project,
+  // the same choice in another window is grey, a hovered one is the faintest; no bars
   const [r, g, b] = await rgbOf(page);
-  const kinds = { 'left rail': '.strip button.on', 'right rail': '#stabs button.on', 'mode switch': '.seg button.on', 'file tab': '.tab.on', 'file in the tree': '.node.cur', 'filter chip': '.chip.on', 'row in the list': '.si.sel' };
-  const read = sel => page.evaluate(sel => { const e = document.querySelector(sel); const c = getComputedStyle(e); const bf = getComputedStyle(e, '::before'); return { bg: c.backgroundColor, sh: c.boxShadow, bar: bf.content !== 'none' && bf.display !== 'none' && bf.content !== 'normal' }; }, sel);
-  for (const [name, sel] of Object.entries(kinds)) {
-    const el = page.locator(sel).first();
-    if (!(await el.count())) { check(`${name}: is on the screen`, false, sel); continue; }
-    await page.mouse.move(700, 820); await sleep(120);
-    const act = await read(sel);
-    check(`${name}: active = a grey fill and a grey ring`, act.bg === 'rgba(255, 255, 255, 0.09)' && /rgba\(255, 255, 255, 0\.24\)/.test(act.sh), JSON.stringify(act));
-    check(`${name}: no bar`, !act.bar);
-    await el.hover(); await sleep(180);
-    const hov = await read(sel);
-    check(`${name}: active + hover = the colour of the project`, hov.bg.startsWith(`rgba(${r}, ${g}, ${b},`) && hov.sh.includes(`rgba(${r}, ${g}, ${b}, 0.5)`), JSON.stringify(hov));
-  }
-  // hover on a resting control is only grey
+  const ACC = `rgba(${r}, ${g}, ${b}, 0.3)`, GREY = 'rgba(255, 255, 255, 0.15)', HOVER = 'rgba(255, 255, 255, 0.07)';
+  const read = sel => page.evaluate(sel => { const e = document.querySelector(sel); if (!e) return null; const c = getComputedStyle(e); const bf = getComputedStyle(e, '::before'); return { bg: c.backgroundColor, sh: c.boxShadow, col: c.color, bar: bf.content !== 'none' && bf.display !== 'none' && bf.content !== 'normal' }; }, sel);
+  const pane = () => page.evaluate(() => document.documentElement.dataset.pane);
+  const click = async sel => { await page.locator(sel).first().click(); await sleep(150); };
+  await page.locator('[data-m="table"]').click(); await sleep(500);
+  await page.locator('.gr').nth(1).click(); await sleep(300);
+  check('a click in the table makes the centre the working window', (await pane()) === 'centre', String(await pane()));
+  let tab = await read('.tab.on'), row = await read('.gr.sel');
+  check('centre: the open file tab and the chosen row wear the colour of the project', tab.bg === ACC && row.bg === ACC, JSON.stringify([tab.bg, row.bg]));
+  check('and have no bar', !tab.bar);
+  const openFiles = async () => { if (!(await page.locator('.node.cur').first().isVisible())) { await page.locator('.strip [data-lp="files"]').click(); await sleep(200); } };
+  await openFiles();
+  await click('.node.cur');
+  check('a click in the left panel makes it the working window', (await pane()) === 'left', String(await pane()));
+  let node = await read('.node.cur'); tab = await read('.tab.on');
+  check('left: the file in the tree and the rail button are in colour', node.bg === ACC && (await read('.strip button.on')).bg === ACC, JSON.stringify(node));
+  check('the choice in the centre is now grey (the window is not in use)', tab.bg === GREY && /rgba\(255, 255, 255, 0\.26\)/.test(tab.sh), JSON.stringify(tab));
+  check('and so is the right rail button', (await read('#stabs button.on')).bg === GREY);
+  await page.locator('#stabs button.on').click(); await sleep(150); // folds the panel
+  await page.locator('#stabs [data-p="row"]').click(); await sleep(250);
+  check('a click on the right rail makes the right panel the working window', (await pane()) === 'right' && (await read('#stabs button.on')).bg === ACC, String(await pane()));
+  check('and the left file turns grey again', (await read('.node.cur')).bg === GREY);
   const rest = page.locator('.seg button:not(.on)').first();
   await rest.hover(); await sleep(150);
-  const rh = await rest.evaluate(e => getComputedStyle(e).backgroundColor);
-  check('a resting control under the cursor gets a grey fill only', rh === 'rgba(255, 255, 255, 0.09)', rh);
+  check('a hovered control is the faintest grey', (await rest.evaluate(e => getComputedStyle(e).backgroundColor)) === HOVER);
+  await openFiles();
+  await click('.node.cur');
+  const hv = page.locator('.node.cur').first(); await page.mouse.move(700, 820); await hv.hover(); await sleep(150);
+  check('what is chosen does not change under the cursor', (await pane()) === 'left' && (await read('.node.cur')).bg === ACC);
+  await page.evaluate(() => window.dispatchEvent(new Event('blur'))); await sleep(100);
+  check('when the app loses focus nothing is lit', (await pane()) === '' && (await read('.node.cur')).bg === GREY && (await read('.tab.on')).bg === GREY);
+  await page.evaluate(() => window.dispatchEvent(new Event('focus'))); await sleep(100);
+  check('and it is lit again when the focus comes back', (await pane()) === 'left' && (await read('.node.cur')).bg === ACC);
+  // a menu: the item under the cursor is the choice
+  const fileMenu = async () => { if (!(await page.locator('#menubar').isVisible())) { await page.locator('#hamb').click(); await sleep(300); } await page.locator('#menubar [data-mg="Файл"]').click(); await sleep(200); };
+  await fileMenu();
+  const mi = page.locator('#mdd .mi').first(); await mi.hover(); await sleep(150);
+  const mrow = await mi.evaluate(e => ({ bg: getComputedStyle(e).backgroundColor, col: getComputedStyle(e).color }));
+  check('in a menu the item under the cursor wears the colour of the project', mrow.bg === ACC && mrow.col === 'rgb(255, 255, 255)', JSON.stringify(mrow));
+  check('and opening the menu did not change the working window', (await pane()) === 'left');
+  await page.keyboard.press('Escape'); await sleep(200); await page.keyboard.press('Escape'); await sleep(200);
 
   // the dots of the status chips
   const dots = await page.evaluate(() => Object.fromEntries([...document.querySelectorAll('.chip[data-filter]')].map(c => [c.dataset.filter, c.querySelector('.sd')?.className ?? ''])));
@@ -62,7 +86,7 @@ async function pcPart(browser) {
   check('«Усі» has no dot', dots.all === '');
 
   // the accent colour in the settings
-  await page.locator('#hamb').click(); await sleep(300); await page.locator('#menubar [data-mg="Файл"]').click(); await sleep(200);
+  await fileMenu();
   await page.locator('#mdd').getByText('Налаштування…').first().click(); await sleep(500);
   const hint0 = await page.locator('#th-hint').innerText();
   check('the settings say the colour comes from the name of the project', /назви проєкту/.test(hint0) && (await page.locator('#th-reset').isDisabled()), hint0);

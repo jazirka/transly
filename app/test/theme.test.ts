@@ -39,6 +39,15 @@ describe('theme: the tokens', () => {
       expect(contrastOf(t['--accent']!, BG)).toBeGreaterThanOrEqual(3);
     }
   });
+  it('the white text of a choice in the working window reaches 4.5:1 on its fill over the panel and the ground, for every hue', () => {
+    const over = (fg: string, a: number, bg: string): string => '#' + [1, 3, 5].map(i => Math.round(parseInt(bg.slice(i, i + 2), 16) + (parseInt(fg.slice(i, i + 2), 16) - parseInt(bg.slice(i, i + 2), 16)) * a).toString(16).padStart(2, '0')).join('');
+    for (let h = 0; h < 360; h += 5) {
+      const t = themeTokens(h);
+      const alpha = Number(/,([\d.]+)\)$/.exec(t['--use']!)![1]);
+      for (const ground of [PANEL, BG]) expect(contrastOf('#ffffff', over(t['--accent']!, alpha, ground))).toBeGreaterThanOrEqual(4.5);
+      expect(contrastOf(t['--accent']!, PANEL)).toBeGreaterThanOrEqual(3);
+    }
+  });
   it('the main action is darker than the accent line, and its hover is brighter than it', () => {
     const t = themeTokens(250);
     expect(contrastOf(t['--accent-solid']!, BG)).toBeLessThan(contrastOf(t['--accent']!, BG));

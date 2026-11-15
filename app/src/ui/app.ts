@@ -38,6 +38,7 @@ import { openPluginTexts } from './plugins-dialog';
 import { openActivity, openAutofill } from './activity-dialog';
 import { askAnotherGame, openIngestReport } from './ingest-dialog';
 import { markup } from './markup';
+import { trackActivePane } from './activepane';
 import { openSettings } from './settings';
 import type { SettingsTab } from './settings';
 import { openSpeakers } from './speakers-dialog';
@@ -1885,6 +1886,7 @@ export async function start(root: HTMLElement): Promise<void> {
   Object.assign(window, { __back: backStep, __flush: () => autosave.flush(), __open: (file: string, key: string) => openRow(file, key) });
   if (s.current) { unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u])); if (s.mode !== 'table') s.cur = ctx.visible()[0]?.key ?? null; }
   restoreUi();
+  trackActivePane();
   wireDiscuss(ctx);
   wireLinks(ctx);
   wireTermCard(ctx, {

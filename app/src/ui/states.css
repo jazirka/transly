@@ -1,11 +1,12 @@
 /*
- * The states of everything that can be chosen: rest · hover · active · active and hovered · keyboard focus.
- *   hover             a grey fill
- *   active            the same grey fill and a grey ring
- *   active + hover    the colour of the project: its tint, its ring and its text
- *   keyboard focus    an outline of the accent (the rules of each control)
- * There is no bar and no underline: the fill and the ring already say «I am here». The statuses (draft, sent, approved, error)
- * keep their own colours and do not belong to the theme. Loaded last: it is the final word on these states.
+ * The states of everything that can be chosen, the way tool windows work in an IDE: the accent goes to where you are working.
+ *   hover                                 the faintest: a light grey fill
+ *   chosen, in a window you are not in    grey: a fill and a ring
+ *   chosen, in the window you work in     the colour of the project: the strongest
+ *   keyboard focus                        an outline of the accent (the rules of each control)
+ * «The window you work in» is the panel of the last click or focus: left, centre or right (`html[data-pane]`, see activepane.ts); its rail
+ * button is lit with it. When the app loses focus or a dialog is open, nothing is lit. There are no bars and no underlines. The statuses
+ * (draft, sent, approved, error) keep their own colours and are not part of the theme. Loaded last: the final word on these states.
  */
 
 /* a ring for the lists that only had a fill */
@@ -17,18 +18,30 @@
 }
 .stabbar button[aria-selected=true]{border-radius:var(--r2)}
 
-/* active + hover: the colour of the project */
-:is(
-  .strip button.on,.ide:not(.sz-s) .fs .itabs button.on,.ide.sz-s .fs .itabs button.on,.mtabs button[data-lt].on,.ab-ic[aria-pressed=true],
-  .seg button.on,.seg button.on[data-m=proof],.tabs .seg button.on,.tab.on,.tabs .tab.on,.stabbar button[aria-selected=true],.itabs button.on,.btabs button.on,.tc-tabs button.on,
-  .chip.on,.menubar button.on,.tpill[aria-expanded=true],.cfgpop button.on,.cfg-row.on,
-  .node.cur,.node.pick,.si.sel,.tgrow.on,.sd-it.on,.sc-item.cur
-):hover{
-  background:var(--accent-soft)!important;box-shadow:inset 0 0 0 1px var(--accent-ring)!important;color:var(--accent-text)!important;
-  border-color:var(--accent-ring)!important;border-bottom-color:var(--accent-ring)!important;
+/* what is chosen does not change under the cursor (it is already the strongest it can be in its window) */
+.node.cur:hover,.si.sel:hover,.tgrow.on:hover,.sc-item.cur:hover,.sd-it.on:hover{background:var(--sel)}
+
+/* the choice in the window you work in */
+html[data-pane=left] :is(#strip button.on,#lpanel .node.cur,#lpanel .node.pick,#lpanel .si.sel,#lpanel .tgrow.on,#lpanel .sc-item.cur,#lpanel .chip.on),
+html[data-pane=centre] :is(#main .tab.on,#main .chip.on),
+html[data-pane=right] :is(#stabs button.on,.fs .tc-tabs button.on,.fs .chip.on){
+  background:var(--use)!important;box-shadow:inset 0 0 0 1px var(--use-ring)!important;color:#fff!important;
+  border-color:var(--use-ring)!important;border-bottom-color:var(--use-ring)!important;
 }
-.gr.sel:hover{background:var(--accent-soft)!important}
+html[data-pane=centre] #main .gr.sel{background:var(--use)!important}
 /* the parts of a tree row take the colour together with the row */
-.node.cur:hover .nm,.node.cur:hover .nm .lc,.node.cur:hover .pc:not(.full),.node.cur:hover .ic,.node.cur:hover .chev{color:var(--accent-text)}
-.node.cur:hover .mini i:not(.f){background:var(--accent-text)}
-.chip.on:hover .n,.chip.on:hover b{color:inherit}
+html[data-pane=left] #lpanel .node.cur :is(.nm,.nm .lc,.pc:not(.full),.ic,.chev){color:#fff}
+html[data-pane=left] #lpanel .node.cur .mini i:not(.f){background:#fff}
+html[data-pane=left] #lpanel .si.sel .a b,html[data-pane=centre] #main .gr.sel .who{color:#fff}
+/* the window you work in is outlined faintly */
+html[data-pane=left] #lpanel,html[data-pane=centre] #main,html[data-pane=right] .fs .ibody{box-shadow:inset 0 0 0 1px var(--use-ring)}
+
+/* menus and popovers: you work in them while they are open, so what is under the cursor or the keyboard is the choice (the colour of the project);
+   what is only the current option of a popover stays grey */
+:is(.mdd .mi:is(:hover,.open,:focus),.pop button:is(:hover,:focus-visible):not(:disabled),.cfgpop button:hover:not(:disabled)){
+  background:var(--use)!important;box-shadow:inset 0 0 0 1px var(--use-ring)!important;color:#fff!important;
+}
+:is(.mdd .mi:is(:hover,.open,:focus),.pop button:is(:hover,:focus-visible):not(:disabled)) :is(small,.ms,.ma,.dd,.hint,.tl){color:inherit;opacity:.85}
+/* the result you are on in the search over everything */
+.sd-wrap .sd-it.on{background:var(--use);box-shadow:inset 0 0 0 1px var(--use-ring);color:#fff}
+.sd-wrap .sd-it.on :is(.sd-k,.sd-p,small,.sd-h){color:inherit;opacity:.85}

@@ -1,7 +1,7 @@
 import { WordIndex, linkView, strandsOf, termUsage } from '../core';
 import type { GlossaryTerm, StrandKind, TermUsage, Unit } from '../core';
 import { esc, plural } from './dom';
-import { namesOfRow, termView } from './hintcards';
+import { namesOfRow, oneLine, termView, tmFind } from './hintcards';
 import { linksClick, linksHtml } from './links-panel';
 import { invalidateMined, mineClick, suggestionsForRow } from './mine-panel';
 import { showCard } from './termcard';
@@ -110,6 +110,13 @@ export function strandsHtml(ctx: Ctx, u: Unit, target: string): string {
   namesOfRow(ctx, u).forEach((g, i) => {
     const tr = ctx.entries(g.file)[g.key]?.target;
     cards.push(`<div class="thc name"><span class="thc-dot" aria-hidden="true"></span><div class="thc-t"><button type="button" class="thc-name" data-hc="name" data-hk="${i}"><b>${esc(g.name)}</b><span class="arr" aria-hidden="true">→</span>${tr ? `<b>${esc(tr)}</b>` : '<i>ще не перекладено</i>'}</button><span class="tg k">назва з гри</span></div></div>`);
+  });
+  // the translation memory: the rows that were already translated and read like this one; a click puts the translation into the field
+  const srcLabel = (x: string): string => (x === 'Імпорт' ? 'імпорт' : x.replace(/\.json$/, ''));
+  tmFind(ctx, u, target).forEach((x, n) => {
+    cards.push(`<div class="thc mem"><span class="thc-dot" aria-hidden="true"></span>
+      <div class="thc-t"><span class="thc-mt">${esc(oneLine(x.t, 140))}</span><span class="tg k">пам’ять ${x.score}%</span>${x.s !== u.source ? `<div class="hint">«${esc(oneLine(x.s, 70))}» · ${esc(srcLabel(x.src))}</div>` : `<div class="hint">той самий оригінал · ${esc(srcLabel(x.src))}</div>`}</div>
+      <div class="thc-u"></div><div class="thc-a"><button type="button" class="btn" data-tm="${n}" title="Підставити цей переклад у поле">Підставити</button></div></div>`);
   });
   const r = realOf(ctx, u);
   if (linkView(ctx.s.saved, ctx.links(), r.file, r.key)) cards.push(`<div class="thc rows"><span class="thc-dot" aria-hidden="true"></span><div class="thc-t thc-lk">${linksHtml(ctx, u)}</div></div>`);

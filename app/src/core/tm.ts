@@ -82,6 +82,24 @@ export class TmIndex {
 
   get size(): number { return this.items.length; }
 
+  /** The pairs whose source or translation has every word of `query` (for browsing the memory by a word), at most `limit`, the shortest sources first. */
+  search(query: string, limit = 100): TmEntry[] {
+    const qw = words(query);
+    if (!qw.length) return [];
+    const first = this.byWord.get(qw[0]!) ?? [];
+    const out: Indexed[] = [];
+    for (const id of first) {
+      const it = this.items[id]!;
+      if (qw.every(w => it.w.has(w))) out.push(it);
+    }
+    // a word that is only in the translation is found by its text
+    if (!out.length) {
+      const q = qw.join(' ');
+      for (const it of this.items) { if (norm(it.t).includes(q)) { out.push(it); if (out.length >= limit * 4) break; } }
+    }
+    return out.sort((a, b) => a.len - b.len).slice(0, limit).map(({ s, t, src }) => ({ s, t, src }));
+  }
+
   /** Best matches for `source`, highest score first. A unit never suggests itself (same text and same target). */
   find(source: string, opts: { min?: number; limit?: number; exclude?: (e: TmEntry) => boolean } = {}): TmMatch[] {
     const min = opts.min ?? 60, limit = opts.limit ?? 5;

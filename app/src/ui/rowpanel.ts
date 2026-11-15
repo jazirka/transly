@@ -1,7 +1,7 @@
 import { approveEntry, sendBack } from '../core';
 import type { BatchKind, Entry, Unit } from '../core';
 import { $, esc, toast } from './dom';
-import { realOf, tmListHtml } from './hintcards';
+import { realOf } from './hintcards';
 import { renderHistory } from './history-panel';
 import { linksClick } from './links-panel';
 import { clearStrands, strandsClick, strandsHtml } from './strands-panel';
@@ -22,7 +22,6 @@ const sec = (id: string, title: string, body: string, extra = ''): string => `<s
 /** Static markup of the panel (the discussion keeps its own field so what is typed in it survives redraws). */
 export const ROW_PANEL_HTML = ['<div class="pn-empty-all hint">Оберіть рядок</div>',
   sec('tr', 'Переклад: українська', '<div class="pn-b" id="pn-tr"></div>'),
-  sec('sg', 'Пропозиції', '<div class="pn-b" id="pn-sg"></div>'),
   sec('th', 'Нитки: слова, конструкції, назви, однакові рядки', '<div class="pn-b" id="pn-th"></div>'),
   sec('cm', 'Обговорення', `<div class="pn-b" id="pn-cm"><div id="cm-list" class="cm-list"></div>
     <div class="cm-new"><textarea class="cmin" id="cm-in" placeholder="Нове обговорення цього рядка…" aria-label="Новий коментар"></textarea>
@@ -69,13 +68,6 @@ function versionCard(ctx: Ctx, u: Unit, e: Entry | undefined): string {
   </div>`;
 }
 
-/** The proposals: matches of the translation memory and the rows with the same original. */
-function proposalsHtml(ctx: Ctx, u: Unit, target: string): string {
-  const r = realOf(ctx, u);
-  const tm = tmListHtml(ctx, u, target);
-  return tm || '<div class="hint">Збігів немає</div>';
-}
-
 /** Fill the panel for the open row. */
 export function renderRowPanel(ctx: Ctx, u: Unit | undefined, e: Entry | undefined): void {
   document.querySelectorAll<HTMLElement>('.pn-sec').forEach(sec => {
@@ -88,12 +80,11 @@ export function renderRowPanel(ctx: Ctx, u: Unit | undefined, e: Entry | undefin
   pane.classList.toggle('no-row', !u);
   // Two tabs: the row (its translation, versions, proposals, threads) and the discussion.
   document.querySelectorAll<HTMLElement>('#rp-tabs [data-rt]').forEach(b => { const on = b.dataset.rt === rtab; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; });
-  for (const id of ['tr', 'sg']) document.querySelector<HTMLElement>(`.pn-sec[data-sec="${id}"]`)!.hidden = rtab !== 'row';
+  for (const id of ['tr']) document.querySelector<HTMLElement>(`.pn-sec[data-sec="${id}"]`)!.hidden = rtab !== 'row';
   document.querySelector<HTMLElement>('.pn-sec[data-sec="cm"]')!.hidden = rtab !== 'cm';
   if (!u) return;
   const target = e?.target ?? '';
   $('#pn-tr').innerHTML = `${versionCard(ctx, u, e)}<div class="pn-sub">Попередні версії</div><div class="hist" id="hist-list"></div>`;
-  $('#pn-sg').innerHTML = proposalsHtml(ctx, u, target);
   // The cards of the threads stand under the editor in the editing view; where there is no editor (the table, the scenes) they stand here.
   if (ctx.s.mode !== 'edit') clearStrands();
   const th = ctx.s.mode === 'edit' ? '' : strandsHtml(ctx, u, target);

@@ -77,7 +77,9 @@ function fillForm(t: GlossaryTerm | undefined): void {
 }
 
 /** Which entries the list shows: all, words and phrases, constructions (with a gap), the groups of identical rows, or the entries rendered differently somewhere. */
-type Show = 'all' | 'word' | 'construction' | 'rows' | 'diff';
+type Show = 'all' | 'word' | 'construction' | 'rows' | 'memory' | 'diff';
+/** The memory is counted (which builds its index) only after it was asked for once. */
+let memoryAsked = false;
 let show: Show = 'all';
 /** The entries with differences, worked out in slices; null while it is being worked out. */
 let diffs: { stamp: string; set: Set<string> } | null = null;
@@ -86,7 +88,7 @@ let diffsFor = '';
 const stampOf = (ctx: Ctx): string => `${termsStamp(ctx.s.saved.terms)}|${usageRev()}|${ctx.s.views.length}`;
 
 function chipsHtml(ctx: Ctx, counts: Record<Show, number | null>): string {
-  const labels: [Show, string][] = [['all', 'Усе'], ['word', 'Слова'], ['construction', 'Конструкції'], ['rows', 'Рядки'], ['diff', 'Розбіжності']];
+  const labels: [Show, string][] = [['all', 'Усе'], ['word', 'Слова'], ['construction', 'Конструкції'], ['rows', 'Рядки'], ['memory', 'Пам’ять'], ['diff', 'Розбіжності']];
   return labels.map(([k, l]) => `<button type="button" class="chip${show === k ? ' on' : ''}${counts[k] === 0 && show !== k ? ' idle' : ''}" data-glk="${k}" aria-pressed="${show === k}">${l}${counts[k] === null ? '' : ` <span class="n">${counts[k]}</span>`}</button>`).join('');
 }
 
@@ -117,7 +119,7 @@ export function renderGlossaryPanel(ctx: Ctx): void {
   const isConstruction = (t: GlossaryTerm): boolean => hasGap(t.en) && patternParts(t.en).length > 1;
   const counts: Record<Show, number | null> = {
     all: terms.length, word: terms.filter(t => !isConstruction(t)).length, construction: terms.filter(isConstruction).length,
-    rows: ctx.links().size, diff: diffs && diffs.stamp === stamp ? diffs.set.size : null,
+    rows: ctx.links().size, memory: memoryAsked ? ctx.tm().size : null, diff: diffs && diffs.stamp === stamp ? diffs.set.size : null,
   };
   $('#gl-chips').innerHTML = chipsHtml(ctx, counts);
   $('#gl-form').hidden = editing === null;
@@ -126,6 +128,17 @@ export function renderGlossaryPanel(ctx: Ctx): void {
     const c = clusterCards(ctx, q);
     $('#gl-n').textContent = c.total ? `${plural(c.total, ['група однакових рядків', 'групи однакових рядків', 'груп однакових рядків'])}` : 'Однакових рядків немає';
     list.innerHTML = c.total ? c.html + (c.total > SHOWN ? `<div class="grid-note">Показано ${SHOWN} із ${c.total}. Уточніть пошук.</div>` : '') : '<div class="empty-state"><b>Однакових рядків немає</b><span>Тут з’являються рядки, чий оригінал повторюється в грі.</span></div>';
+    return;
+  }
+  if (show === 'memory') {
+    memoryAsked = true;
+    const tm = ctx.tm();
+    const hits = q ? tm.search(query, SHOWN) : [];
+    const label = (x: string): string => (x === 'Імпорт' ? 'імпорт' : x.replace(/\.json$/, ''));
+    $('#gl-n').textContent = `${plural(tm.size, ['пара', 'пари', 'пар'])} у пам’яті${q ? ` · знайдено ${hits.length}` : ''}`;
+    list.innerHTML = !q ? '<div class="empty-state"><b>Пам’ять перекладів</b><span>Введіть слово в пошуку: покажу, як воно вже перекладалося.</span></div>'
+      : hits.length ? hits.map(x => `<div class="gt-card mem"><div class="gt-h"><span>${esc(oneLine(x.s, 120))}</span></div><div class="gt-note">${esc(oneLine(x.t, 160))}</div><div class="gt-m"><span class="tg k">пам’ять</span><span class="hint">${esc(label(x.src))}</span></div></div>`).join('')
+        : '<div class="empty-state"><b>У пам’яті цього немає</b><span>Спробуйте інше слово.</span></div>';
     return;
   }
   const pool = show === 'word' ? terms.filter(t => !isConstruction(t)) : show === 'construction' ? terms.filter(isConstruction) : show === 'diff' ? terms.filter(t => diffs?.stamp === stamp && diffs.set.has(t.en)) : terms;

@@ -70,7 +70,7 @@ const chips = page => page.locator('#gl-chips .chip').evaluateAll(els => els.map
   const diff = await page.locator('#gl-list .gt-card').evaluateAll(els => els.map(e => e.dataset.term));
   check('«Розбіжності» lists the entry that one row renders differently', diff.length === 1 && diff[0] === 'take … off', JSON.stringify(diff) + ' ' + (await chips(page)).join('|'));
   c = await chips(page);
-  check('and the chip counts it', /Розбіжності 1/.test(c[4]), c[4]);
+  check('and the chip counts it', /Розбіжності 1/.test(c[5]), c[5]);
 
   if (process.env.SHOT_DIR) { await page.locator('#gl-chips [data-glk="all"]').click(); await sleep(400); await page.screenshot({ path: process.env.SHOT_DIR + '/s22-related.png' }); }
   // the card of the thread in the editor offers to go through the rows that render the entry another way

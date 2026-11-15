@@ -583,3 +583,9 @@ input::placeholder,textarea::placeholder{color:#9a9ea6;opacity:1}
 /* a proposal of a new construction: dashed, in the colour of information, apart from the entries that exist */
 .thc.new{--tc:var(--info);border-style:dashed;border-color:#244a6e;background:#16222f}
 .thc.new .thc-dot{background:var(--info)}
+
+/* the translation memory as a kind of thread: what was already translated and reads like this row */
+.thc.mem{--tc:#7d828b}
+.thc-mt{font-size:13px;color:var(--text)}
+.gt-card.mem .gt-h{font-weight:400;color:var(--mute)}
+.gt-card.mem .gt-note{color:var(--text)}

@@ -116,7 +116,10 @@ jobs:
           else
             SIGNED="signed with a throw-away debug key (the ANDROID_KEYSTORE_B64 secret is missing): it cannot be installed over an earlier build."
           fi
-          gh release delete android-latest --yes --cleanup-tag --repo "$GITHUB_REPOSITORY" || true
-          gh release create android-latest out/transly.apk --repo "$GITHUB_REPOSITORY" --prerelease --target "$GITHUB_SHA" \
+          # The new release is made complete under a temporary tag first (the upload is the slow part), and only then does the channel tag move to it.
+          TMP="android-build-$GITHUB_RUN_ID"
+          gh release create "$TMP" out/transly.apk --repo "$GITHUB_REPOSITORY" --prerelease --target "$GITHUB_SHA" \
             --title "Transly for Android" \
             --notes "Build of commit $GITHUB_SHA, $SIGNED Install by hand: allow installs from your browser or file manager."
+          gh release delete android-latest --yes --cleanup-tag --repo "$GITHUB_REPOSITORY" || true
+          gh release edit "$TMP" --tag android-latest --target "$GITHUB_SHA" --repo "$GITHUB_REPOSITORY"

@@ -23,6 +23,8 @@ export interface RelayOptions {
   maxTotalBytes?: number;
   /** How many new rooms one client address may open per hour: nobody can fill all the rooms of an own relay in a moment. */
   newRoomsPerHour?: number;
+  /** The relay stands behind a reverse proxy that sets X-Forwarded-For: the client address is taken from it (otherwise every user would be one address, the proxy's). */
+  trustProxy?: boolean;
   /** Requests per minute per client address. */
   rateLimit?: number;
   /** Persist blobs here so they survive a restart. */
@@ -85,7 +87,9 @@ export function createRelay(opts: RelayOptions = {}): Server {
       const url = new URL(req.url ?? '/', 'http://x');
       if (url.pathname === '/health') return send(res, 200, 'ok');
 
-      const who = req.socket.remoteAddress ?? '?';
+      // behind a proxy the address of the client is the last one the proxy added to X-Forwarded-For (what a client writes itself stands before it)
+      const fwd = opts.trustProxy ? String(req.headers['x-forwarded-for'] ?? '').split(',').map(x => x.trim()).filter(Boolean) : [];
+      const who = fwd.length ? fwd[fwd.length - 1]! : (req.socket.remoteAddress ?? '?');
       const h = hits.get(who);
       if (!h || now() - h.t > 60_000) hits.set(who, { n: 1, t: now() });
       else if (++h.n > rate) return send(res, 429, 'Забагато запитів');
@@ -140,5 +144,5 @@ if (process.argv[1] && /relay\.ts$/.test(process.argv[1])) {
   const port = Number(arg('--port') ?? 7421);
   const dir = arg('--dir');
   const origin = arg('--origin');
-  createRelay({ ...(dir ? { dir } : {}), ...(origin ? { origin } : {}) }).listen(port, () => console.log(`Transly relay на порту ${port}${dir ? `, дані в ${dir}` : ' (у пам’яті)'}`));
+  createRelay({ ...(dir ? { dir } : {}), ...(origin ? { origin } : {}), ...(process.argv.includes('--trust-proxy') ? { trustProxy: true } : {}) }).listen(port, () => console.log(`Transly relay на порту ${port}${dir ? `, дані в ${dir}` : ' (у пам’яті)'}`));
 }

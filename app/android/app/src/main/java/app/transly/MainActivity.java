@@ -252,7 +252,12 @@ public class MainActivity extends Activity {
 
         /** Download the new APK from a release of the (private) repository and open the system installer. */
         @JavascriptInterface
-        public void installUpdate(String url, String token) {
+        public void installUpdate(String url, String token, String digest, long size) {
+            // the file is checked against what GitHub says it is (SHA-256 and size): no digest, no installation
+            if (digest == null || !digest.toLowerCase(Locale.ROOT).matches("^sha256:[0-9a-f]{64}$") || size <= 0) {
+                report("error", "GitHub не повідомив контрольну суму цього файлу: оновлення не встановлюється");
+                return;
+            }
             if (url == null || !url.startsWith("https://api.github.com/repos/") || !url.contains("/releases/assets/") || url.contains("..")) {
                 report("error", "Оновлення можна брати лише з релізу GitHub");
                 return;
@@ -265,7 +270,7 @@ public class MainActivity extends Activity {
             new Thread(() -> {
                 try {
                     report("download", "Завантажую оновлення…");
-                    Uri apk = downloadUpdate(url, token);
+                    Uri apk = downloadUpdate(url, token, digest.substring(7).toLowerCase(Locale.ROOT), size);
                     report("install", "Відкриваю встановлення: підтвердьте його в системному вікні");
                     runOnUiThread(() -> startActivity(new Intent(Intent.ACTION_VIEW)
                             .setDataAndType(apk, "application/vnd.android.package-archive")
@@ -305,7 +310,7 @@ public class MainActivity extends Activity {
     }
 
     /** Download a release asset of a private repository into Downloads. The redirect to the file store is followed without the token. */
-    private Uri downloadUpdate(String url, String token) throws Exception {
+    private Uri downloadUpdate(String url, String token, String wantSha, long wantSize) throws Exception {
         HttpURLConnection c = open(url, token);
         int code = c.getResponseCode();
         if (code >= 301 && code <= 308) {
@@ -325,12 +330,19 @@ public class MainActivity extends Activity {
         Uri uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
         if (uri == null) throw new java.io.IOException("Не вдалося створити файл у Завантаженнях");
         long total = 0;
+        java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
         try (InputStream in = c.getInputStream(); OutputStream out = getContentResolver().openOutputStream(uri)) {
             byte[] buf = new byte[64 * 1024];
             int n;
-            while ((n = in.read(buf)) > 0) { out.write(buf, 0, n); total += n; }
+            while ((n = in.read(buf)) > 0) { out.write(buf, 0, n); md.update(buf, 0, n); total += n; }
         }
-        if (total == 0) throw new java.io.IOException("Порожній файл оновлення");
+        StringBuilder hex = new StringBuilder();
+        for (byte b : md.digest()) hex.append(String.format(Locale.ROOT, "%02x", b));
+        if (total == 0 || total != wantSize || !hex.toString().equals(wantSha)) {
+            // not the file the release names: it is taken out of Downloads and never handed to the installer
+            try { getContentResolver().delete(uri, null, null); } catch (Exception ignored) { }
+            throw new java.io.IOException("Завантажений файл не збігається з тим, що вказано в релізі: оновлення скасовано");
+        }
         return uri;
     }
 

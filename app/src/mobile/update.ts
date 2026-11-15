@@ -34,5 +34,5 @@ export async function checkUpdate(cfg: UpdateCfg): Promise<UpdateCheck> {
 export function installUpdate(cfg: UpdateCfg, c: UpdateCheck, onState: (stage: string, text: string) => void): void {
   if (!c.asset) throw new Error('У релізі немає файлу для цієї системи');
   (window as unknown as { __updateState?: typeof onState }).__updateState = onState;
-  androidBridge()!.installUpdate!(c.asset.url, cfg.token.trim());
+  androidBridge()!.installUpdate!(c.asset.url, cfg.token.trim(), c.asset.digest ?? '', c.asset.size);
 }

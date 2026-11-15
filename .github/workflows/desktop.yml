@@ -87,7 +87,11 @@ jobs:
           ls -la out
           # nothing is deleted before it is certain that the new release can be made
           ls out/*.exe >/dev/null 2>&1 || { echo "::error::No installer to publish"; exit 1; }
-          gh release delete desktop-latest --yes --cleanup-tag --repo "$GITHUB_REPOSITORY" || true
-          gh release create desktop-latest out/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+          # The new release is made complete under a temporary tag first (the upload is the slow part), and only then does the channel tag move to it:
+          # the channel is without a release for the length of two quick calls, not for the length of an upload.
+          TMP="desktop-build-$GITHUB_RUN_ID"
+          gh release create "$TMP" out/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
             --title "Transly for desktop" \
             --notes "Build of commit $GITHUB_SHA. Windows: the .exe (installer) or .msi."
+          gh release delete desktop-latest --yes --cleanup-tag --repo "$GITHUB_REPOSITORY" || true
+          gh release edit "$TMP" --tag desktop-latest --target "$GITHUB_SHA" --repo "$GITHUB_REPOSITORY"

@@ -55,7 +55,7 @@ export async function installUpdate(cfg: UpdateConfig, c: UpdateCheck, onState: 
   if (!c.asset) throw new Error('У релізі немає файлу для цієї системи');
   if (c.platform === 'android') {
     (window as unknown as { __updateState?: typeof onState }).__updateState = onState;
-    androidBridge()!.installUpdate!(c.asset.url, cfg.token.trim());
+    androidBridge()!.installUpdate!(c.asset.url, cfg.token.trim(), c.asset.digest ?? '', c.asset.size);
     return;
   }
   if (c.platform !== 'windows') throw new Error(`Автоматичне встановлення поки є лише в Windows і Android. Завантажте файл зі сторінки релізу: ${c.page}`);

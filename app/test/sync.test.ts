@@ -132,3 +132,16 @@ describe('the relay is hard to abuse', () => {
     await stop();
   });
 });
+
+describe('relay behind a reverse proxy', () => {
+  it('with trustProxy the address of the client is the one the proxy added, so two users are two buckets', async () => {
+    const srv = createRelay({ newRoomsPerHour: 1, trustProxy: true });
+    await new Promise<void>(r => srv.listen(0, '127.0.0.1', r));
+    const base = `http://127.0.0.1:${(srv.address() as AddressInfo).port}`;
+    const put = (room: string, ip: string) => fetch(`${base}/r/${room}/data`, { method: 'PUT', body: new Uint8Array([1, 2, 3]), headers: { 'X-Forwarded-For': `1.1.1.1, ${ip}` } });
+    expect((await put('a'.repeat(64), '10.0.0.1')).status).toBe(200);
+    expect((await put('b'.repeat(64), '10.0.0.1')).status).toBe(429);
+    expect((await put('c'.repeat(64), '10.0.0.2')).status).toBe(200);
+    await new Promise<void>(r => srv.close(() => r()));
+  });
+});

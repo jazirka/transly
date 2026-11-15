@@ -68,7 +68,7 @@ function repairSettings(raw: unknown, n: Counts): void {
   fix('tolerancePct', num); fix('who', v => typeof v === 'string'); fix('blockErrors', v => typeof v === 'boolean');
   fix('propagate', v => typeof v === 'boolean'); fix('pluginCommands', strs); fix('pluginsAsked', v => typeof v === 'boolean');
   fix('lineLimit', num); fix('linkMode', v => v === 'off' || v === 'ask' || v === 'auto');
-  fix('wrap', isObj); fix('qa', isObj);
+  fix('wrap', isObj); fix('qa', isObj); fix('hue', v => num(v) && (v as number) >= 0 && (v as number) < 360);
 }
 
 /**

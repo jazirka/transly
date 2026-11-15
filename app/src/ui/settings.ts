@@ -1,4 +1,4 @@
-import { touchTerms, stamp, DEFAULT_SETTINGS, emptyProject, linkModeOf, parseDelimited, parseHtmlTable, parseTerms, referenceSets, serialize, termsFromTable, withoutReference } from '../core';
+import { syncTheme, themeHue, themeTokens, touchTerms, stamp, DEFAULT_SETTINGS, emptyProject, linkModeOf, parseDelimited, parseHtmlTable, parseTerms, referenceSets, serialize, termsFromTable, withoutReference } from '../core';
 import type { GlossaryTerm, LinkMode } from '../core';
 import { $, el, esc, plural, toast } from './dom';
 import { isDesktop } from './desktop';
@@ -47,6 +47,9 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
     <div class="grid"><label for="st-tol">Радити, коли переклад відрізняється від оригіналу понад, % (від 5 до 100)</label><input id="st-tol" type="number" min="5" max="100" step="5" value="${esc(String(st.tolerancePct))}" aria-describedby="st-tol-err">
       <label for="st-who">Ваше ім’я в коментарях та історії</label><input id="st-who" maxlength="40" value="${esc(String(st.who))}"></div>
     <p class="hint bad st-err" id="st-tol-err" role="alert"></p>
+    <div class="theme-set"><div class="grid"><label for="th-hue">Колір акценту</label><input id="th-hue" type="range" min="0" max="359" step="1" aria-describedby="th-hint"></div>
+      <div class="th-row"><span class="th-sw" id="th-sw" aria-hidden="true" style="background:${themeTokens(themeHue(ctx.s.saved.name, st.hue))['--accent']}"></span><span class="hint" id="th-hint" role="status">${st.hue === undefined ? `Колір береться з назви проєкту: ${themeHue(ctx.s.saved.name, st.hue)}°` : `Обрано вручну: ${themeHue(ctx.s.saved.name, st.hue)}°`}</span><button class="btn" type="button" id="th-reset"${st.hue === undefined ? ' disabled' : ''}>Взяти з назви проєкту</button></div>
+      <div class="th-pre" id="th-pre" role="group" aria-label="Готові кольори">${[185, 215, 245, 275, 305, 335].map(h => `<button type="button" data-h="${h}" aria-label="Відтінок ${h}°" aria-pressed="${h === themeHue(ctx.s.saved.name, st.hue)}" style="background:${themeTokens(h)['--accent']}"></button>`).join('')}</div></div>
     <label class="achk"><input type="checkbox" id="st-block" ${st.blockErrors ? 'checked' : ''}> Не надсилати рядок із помилкою QA</label>
     <div class="grid"><label for="st-link">Автозаповнення однакових рядків після «Надіслати»</label><select id="st-link"><option value="ask" ${linkModeOf(st) === 'ask' ? 'selected' : ''}>заповнювати порожні чернетками, про різні питати (рекомендовано)</option><option value="auto" ${linkModeOf(st) === 'auto' ? 'selected' : ''}>заповнювати порожні й самому оновлювати різні (вичитані не чіпає)</option><option value="off" ${linkModeOf(st) === 'off' ? 'selected' : ''}>не заповнювати</option></select></div>
     <p class="hint">Порожні зв’язані рядки заповнюються одразу після надсилання чернетками з позначкою «авто» (цю дію можна відмінити в повідомленні). Вичитаний рядок і рядок, який ви змінили пізніше, не перезаписуються без вашого вибору.</p>
@@ -145,6 +148,27 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
     return true;
   };
   for (const id of ['#st-tol', '#st-who', '#st-block', '#st-link']) $(id, dlg).addEventListener('change', applyGeneral);
+  /* The accent colour: the hue of the project's name, or one picked by hand. It is applied at once, everywhere (see core/theme.ts). */
+  const hueSlider = $('#th-hue', dlg) as HTMLInputElement, hueReset = $('#th-reset', dlg) as HTMLButtonElement, hueSwatches = $('#th-pre', dlg);
+  const paintTheme = (): void => {
+    const h = themeHue(ctx.s.saved.name, st.hue);
+    hueSlider.value = String(h);
+    $('#th-sw', dlg).style.background = themeTokens(h)['--accent']!;
+    $('#th-hint', dlg).textContent = st.hue === undefined ? `Колір береться з назви проєкту: ${h}°` : `Обрано вручну: ${h}°`;
+    hueReset.disabled = st.hue === undefined;
+    hueSwatches.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.h) === h)));
+  };
+  const setHue = (h: number | undefined, keep: boolean): void => {
+    if (h === undefined) delete st.hue; else st.hue = h;
+    syncTheme(document.documentElement, ctx.s.saved);
+    paintTheme();
+    if (keep) { ctx.s.saved.settingsAt = Date.now(); ctx.persist(); }
+  };
+  hueSwatches.querySelectorAll('button').forEach(b => b.addEventListener('click', () => setHue(Number((b as HTMLElement).dataset.h), true)));
+  hueSlider.addEventListener('input', () => setHue(Number(hueSlider.value), false));
+  hueSlider.addEventListener('change', () => setHue(Number(hueSlider.value), true));
+  hueReset.addEventListener('click', () => setHue(undefined, true));
+  paintTheme();
   $('#st-close', dlg).addEventListener('click', () => { if (applyGeneral()) dlg.close(); });
   const addTerms = (terms: GlossaryTerm[]): { added: number; merged: number } => {
     let added = 0, merged = 0;

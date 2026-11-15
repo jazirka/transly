@@ -95,7 +95,7 @@
 .scn-over{background:repeating-linear-gradient(90deg,rgba(255,80,80,.0) 0 6px,rgba(255,80,80,.18) 6px 12px)}
 .scn-orig{padding:0 14px;font-size:12px;color:var(--mute)}
 .scn-chip{padding:0 5px;border-radius:var(--r1);background:rgba(255,255,255,.18);font:12px var(--mono)}
-.scn-name{padding:0 4px;border-radius:var(--r1);background:rgba(139,114,232,.35)}
+.scn-name{padding:0 4px;border-radius:var(--r1);background:rgba(var(--accent-rgb),.35)}
 .scn-tag{align-self:flex-start;margin-left:14px;padding:1px 8px;border-radius:10px;background:#3a3b40;color:var(--mute);font-size:12px}
 .scn-tag.scn-warn{background:#5a2d2d;color:#ffd7d7}
 .scn-choice{display:flex;flex-direction:column;gap:6px;align-self:flex-end;min-width:50%}

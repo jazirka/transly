@@ -62,6 +62,7 @@ export * from './termusage';
 export * from './mine';
 export * from './groups';
 export * from './validate';
+export * from './theme';
 export * from './session';
 export * from './plan';
 export * from './ingest';

@@ -1,0 +1,34 @@
+/*
+ * The states of everything that can be chosen: rest · hover · active · active and hovered · keyboard focus.
+ *   hover             a grey fill
+ *   active            the same grey fill and a grey ring
+ *   active + hover    the colour of the project: its tint, its ring and its text
+ *   keyboard focus    an outline of the accent (the rules of each control)
+ * There is no bar and no underline: the fill and the ring already say «I am here». The statuses (draft, sent, approved, error)
+ * keep their own colours and do not belong to the theme. Loaded last: it is the final word on these states.
+ */
+
+/* a ring for the lists that only had a fill */
+.node.cur,.si.sel,.tgrow.on,.sc-item.cur,.sd-it.on{box-shadow:inset 0 0 0 1px var(--on-ring)}
+
+/* tabs: the ring on every side, no underline */
+.tab.on,.tabs .tab.on,.tabs .seg button.on,.tabs .seg button.on[data-m=proof],.stabbar button[aria-selected=true],.itabs button.on,.btabs button.on,.tc-tabs button.on{
+  background:var(--on-bg);color:#fff;border-color:var(--on-ring);border-bottom-color:var(--on-ring);box-shadow:inset 0 0 0 1px var(--on-ring);
+}
+.stabbar button[aria-selected=true]{border-radius:var(--r2)}
+
+/* active + hover: the colour of the project */
+:is(
+  .strip button.on,.ide:not(.sz-s) .fs .itabs button.on,.ide.sz-s .fs .itabs button.on,.mtabs button[data-lt].on,.ab-ic[aria-pressed=true],
+  .seg button.on,.seg button.on[data-m=proof],.tabs .seg button.on,.tab.on,.tabs .tab.on,.stabbar button[aria-selected=true],.itabs button.on,.btabs button.on,.tc-tabs button.on,
+  .chip.on,.menubar button.on,.tpill[aria-expanded=true],.cfgpop button.on,.cfg-row.on,
+  .node.cur,.node.pick,.si.sel,.tgrow.on,.sd-it.on,.sc-item.cur
+):hover{
+  background:var(--accent-soft)!important;box-shadow:inset 0 0 0 1px var(--accent-ring)!important;color:var(--accent-text)!important;
+  border-color:var(--accent-ring)!important;border-bottom-color:var(--accent-ring)!important;
+}
+.gr.sel:hover{background:var(--accent-soft)!important}
+/* the parts of a tree row take the colour together with the row */
+.node.cur:hover .nm,.node.cur:hover .nm .lc,.node.cur:hover .pc:not(.full),.node.cur:hover .ic,.node.cur:hover .chev{color:var(--accent-text)}
+.node.cur:hover .mini i:not(.f){background:var(--accent-text)}
+.chip.on:hover .n,.chip.on:hover b{color:inherit}

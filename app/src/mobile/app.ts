@@ -1,4 +1,4 @@
-import { strandsOf, hasGap, patternParts, strandKind, autoNote, HINT_GLYPH, HINT_LABEL, KIND_LABEL, explainCodes, sceneTitle, stepScene, byHintOrder, commentId, historyRows, openThreads, restoreNote, sourceTermHits, targetHasTerm, threadsOf, batchTitle, batchUndoLabel, undoReport, setIgnored, canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, describePage, DEFAULT_LINE_LIMIT, DEFAULT_WRAP, MV_WINDOW, autoLineLimit, flowText, isMessageUnit, linesShown, measureOf, pixelBudget, unitWord, usesPixels, widthOf, wrapMessage, wrapOf } from '../core';
+import { themeHue, themeTokens, syncTheme, strandsOf, hasGap, patternParts, strandKind, autoNote, HINT_GLYPH, HINT_LABEL, KIND_LABEL, explainCodes, sceneTitle, stepScene, byHintOrder, commentId, historyRows, openThreads, restoreNote, sourceTermHits, targetHasTerm, threadsOf, batchTitle, batchUndoLabel, undoReport, setIgnored, canonicalRpgMakerName, claudeSync, formatOf, githubSync, isTextFormat, looksLikeProject, sceneLines, sceneUnits, speakerCandidates, describePage, DEFAULT_LINE_LIMIT, DEFAULT_WRAP, MV_WINDOW, autoLineLimit, flowText, isMessageUnit, linesShown, measureOf, pixelBudget, unitWord, usesPixels, widthOf, wrapMessage, wrapOf } from '../core';
 import { APOSTROPHES, QA_RULES, resetNote, ingestNote, QUEUE_LABEL, copyLine, stamp, rowsWithTerm, termRowsNote, adoptSynced, groupColor, isAutoFilled, pct as pctOf, keepFromText, keepToText, qaOf, withRuleLevel } from '../core';
 import type { Issue, LinkMode, LinkState, QaSettings, RuleSeverity, TermChange, TermProposal, TermSync, WrapSettings } from '../core';
 import { pxMeasure } from '../ui/measure';
@@ -319,7 +319,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const fileNo = new Map(v.units.map((u, k) => [u.key, k + 1] as const));
     // the two filters a reviewer needs first (what is not translated, what has an error) come first: the rest of the strip is a swipe away
     const fl = [...FILTERS]; const qi = fl.findIndex(x => x[0] === 'qa'); if (qi > 2) fl.splice(2, 0, ...fl.splice(qi, 1));
-    const chips = fl.map(([f, l]) => `<button class="m-chip ${store.filter === f ? 'on' : ''}" data-filter="${f}" aria-pressed="${store.filter === f}">${l}</button>`).join('');
+    const chips = fl.map(([f, l]) => `<button class="m-chip ${store.filter === f ? 'on' : ''}" data-filter="${f}" aria-pressed="${store.filter === f}">${FILTER_DOT[f] ? `<i class="sd ${FILTER_DOT[f]}" aria-hidden="true"></i>` : ''}${l}</button>`).join('');
     const sbar = `<div class="m-searchbar"><label class="m-search m-pill">${icon('search')}<span class="m-ph" aria-hidden="true">Пошук у файлі</span><input id="m-q" type="search" placeholder=" " aria-label="Пошук у файлі" value="${esc(store.q)}" enterkeyhint="search" autocomplete="off"></label></div>`;
     const L = lay();
     const orders = { order: 'За порядком', new: 'Спершу без перекладу', qa: 'Спершу з помилками', long: 'Спершу найдовші' } as Record<Sort, string>;
@@ -700,13 +700,33 @@ export async function start(root: HTMLElement): Promise<void> {
     if (final) { const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; } else wrapPreview();
   }
 
+  const FILTER_DOT: Partial<Record<string, string>> = { new: 'sd-new', draft: 'sd-draft', auto: 'sd-draft sd-auto', done: 'sd-done', appr: 'sd-appr', qa: 'sd-qa' };
+  const HUE_PRESETS = [185, 215, 245, 275, 305, 335];
+  const hueHint = (): string => { const st = store.saved.settings; const h = themeHue(store.saved.name, st.hue); return st.hue === undefined ? `Колір береться з назви проєкту: ${h}°` : `Обрано вручну: ${h}°`; };
+  /** The accent colour of the project (see core/theme.ts): applied at once; `keep` saves it (while the slider is dragged only the screen changes). */
+  function setHue(h: number | undefined, keep: boolean): void {
+    const st = store.saved.settings;
+    if (h === undefined) delete st.hue; else st.hue = h;
+    syncTheme(document.documentElement, store.saved);
+    if (keep) { store.saved.settingsAt = Date.now(); store.persist(); }
+    const now = themeHue(store.saved.name, st.hue), q = (id: string): HTMLElement | null => document.getElementById(id);
+    const sl = q('s-hue') as HTMLInputElement | null; if (sl) sl.value = String(now);
+    const sw = q('s-hue-sw'); if (sw) sw.style.background = themeTokens(now)['--accent']!;
+    const hint = q('s-hue-hint'); if (hint) hint.textContent = hueHint();
+    const rs = q('s-hue-reset') as HTMLButtonElement | null; if (rs) rs.disabled = st.hue === undefined;
+    document.querySelectorAll<HTMLElement>('#s-hue-pre button').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.hue) === now)));
+  }
   function screenSettings(): string {
     const st = store.saved.settings;
     return `<div class="m-more"><section class="m-card"><label class="m-lbl" for="s-tol">Допуск довжини перекладу відносно оригіналу, %</label><input id="s-tol" class="m-input" type="number" min="5" max="100" step="5" value="${esc(String(st.tolerancePct))}">
       <button class="m-secondary wide" data-sub="wrap">${icon('rows')}<span>Перенесення рядків…</span></button>
       <label class="m-check"><input type="checkbox" id="s-block" ${st.blockErrors ? 'checked' : ''}> Не надсилати рядок із помилкою QA</label>
       <label class="m-lbl" for="s-link">Автозаповнення однакових рядків після «Надіслати»</label><select id="s-link" class="m-input"><option value="ask" ${store.linkMode() === 'ask' ? 'selected' : ''}>заповнювати порожні чернетками, про різні питати (рекомендовано)</option><option value="auto" ${store.linkMode() === 'auto' ? 'selected' : ''}>заповнювати порожні й самому оновлювати різні (вичитані не чіпає)</option><option value="off" ${store.linkMode() === 'off' ? 'selected' : ''}>не заповнювати</option></select>
-      <label class="m-lbl" for="s-who">Ваше ім’я в коментарях та історії</label><input id="s-who" class="m-input" value="${esc(String(st.who))}" maxlength="40" autocomplete="off"></section>
+      <label class="m-lbl" for="s-who">Ваше ім’я в коментарях та історії</label><input id="s-who" class="m-input" value="${esc(String(st.who))}" maxlength="40" autocomplete="off">
+      <label class="m-lbl" for="s-hue">Колір акценту</label><input id="s-hue" class="m-hue" type="range" min="0" max="359" step="1" value="${themeHue(store.saved.name, st.hue)}" aria-describedby="s-hue-hint">
+      <div class="m-hue-row"><i class="m-hue-sw" id="s-hue-sw" style="background:${themeTokens(themeHue(store.saved.name, st.hue))['--accent']}"></i><small class="m-hint" id="s-hue-hint" role="status">${hueHint()}</small></div>
+      <div class="m-hue-pre" id="s-hue-pre" role="group" aria-label="Готові кольори">${HUE_PRESETS.map(h => `<button type="button" data-hue="${h}" aria-label="Відтінок ${h}°" aria-pressed="${h === themeHue(store.saved.name, st.hue)}" style="background:${themeTokens(h)['--accent']}"></button>`).join('')}</div>
+      <button class="m-secondary wide" id="s-hue-reset" type="button" ${st.hue === undefined ? 'disabled' : ''}>Взяти з назви проєкту</button></section>
       <section class="m-card"><h3>Довідкові мови</h3><p class="m-hint">Копія тієї ж гри іншою мовою: її рядки показуються під оригіналом як підказка.</p>
         ${store.refLangs().map(l => `<div class="m-var"><span>${esc(l.toUpperCase())}</span><small></small><button class="m-mini ghost" data-refdel="${esc(l)}">Прибрати</button></div>`).join('')}
         <label class="m-lbl" for="rf-lang">Код мови (ru, pl, en…)</label><input id="rf-lang" class="m-input" maxlength="8" value="${esc(refLang)}" autocomplete="off">
@@ -935,6 +955,7 @@ export async function start(root: HTMLElement): Promise<void> {
   /* ---------- render ---------- */
   const HEAVY: Sub[] = ['autofill', 'consistency', 'sendlog'];
   function render(): void {
+    syncTheme(document.documentElement, store.saved);
     renderChrome();
     const main = $('m-main');
     main.className = 'm-main tab-' + tab;
@@ -1084,6 +1105,8 @@ export async function start(root: HTMLElement): Promise<void> {
     const t = e.target as HTMLElement;
     const q = <T extends HTMLElement>(sel: string): T | null => t.closest<T>(sel);
     let x: HTMLElement | null;
+    if ((x = q('#s-hue-pre [data-hue]'))) { setHue(Number(x.dataset.hue), true); return; }
+    if (q('#s-hue-reset')) { setHue(undefined, true); return; }
     if ((x = q('[data-go]'))) { if (x.closest('#m-nav')) switchTab(x.dataset.go as Tab); else go(x.dataset.go as Tab); return; }
     if ((x = q('[data-sub]'))) { sub = x.dataset.sub as Sub; if (sub === 'consistency') lk.scope = null; if (sub === 'scene' && store.current) scn.picked = store.current.unit.key; sheet = false; menu = false; render(); $('m-main').scrollTop = 0; return; }
     if (q('[data-subback]')) { sub = null; render(); return; }
@@ -1385,6 +1408,7 @@ export async function start(root: HTMLElement): Promise<void> {
     else if (t.id === 'scn-tr') { const v = store.view(); if (v && scn.picked) { store.writeAtQuiet(v.name, scn.picked, (t as HTMLTextAreaElement).value); clearTimeout(scnTimer); scnTimer = window.setTimeout(() => { const el = document.getElementById('scn-tr') as HTMLTextAreaElement | null; if (!el || sub !== 'scene') return; const keep = el.selectionStart; const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; const e2 = document.getElementById('scn-tr') as HTMLTextAreaElement | null; if (e2) { e2.focus(); e2.setSelectionRange(keep, keep); } }, 500); } }
     else if (t.id === 'sp-q') { sp.q = (t as HTMLInputElement).value; const keep = (t as HTMLInputElement).selectionStart ?? 0; render(); const qi = document.getElementById('sp-q') as HTMLInputElement; qi.focus(); qi.setSelectionRange(keep, keep); }
     else if (t.classList.contains('m-spk')) sp.draft.set((t as HTMLInputElement).dataset.k!, (t as HTMLInputElement).value);
+    else if (t.id === 's-hue') setHue(Number((t as HTMLInputElement).value), false);
     else if (t.id === 's-tol') { const n = Number((t as HTMLInputElement).value); if (n >= 5 && n <= 100) { store.saved.settings.tolerancePct = n; store.saved.settingsAt = Date.now(); store.persist(); } }
     else if (t.id === 'ts-old') ts.old = (t as HTMLInputElement).value;
     else if (t.id === 'w-ex') { wp.text = (t as HTMLTextAreaElement).value; wrapPreview(); }
@@ -1404,6 +1428,7 @@ export async function start(root: HTMLElement): Promise<void> {
   });
   root.addEventListener('change', e => {
     const t = e.target as HTMLElement;
+    if (t.id === 's-hue') { setHue(Number((t as HTMLInputElement).value), true); return; }
     if (t.id === 'gh-auto') { const cfg = loadGithubConfig(); cfg.everyMin = (t as HTMLInputElement).checked ? 5 : 0; saveGithubConfig(cfg); say(cfg.everyMin ? 'Автосинхронізація ввімкнена' : 'Автосинхронізацію вимкнено'); if (cfg.everyMin) void autoSync('on'); return; }
     if ((t as HTMLInputElement).dataset?.tspick !== undefined) { const p = ts.res?.proposals[Number((t as HTMLInputElement).dataset.tspick)]; if (p) { ts.on.set(tsId(p), (t as HTMLInputElement).checked); const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; } return; }
     if ((t as HTMLSelectElement).dataset?.tsalt !== undefined) { const [i, si] = (t as HTMLSelectElement).dataset.tsalt!.split('|').map(Number); const p = ts.res?.proposals[i!]; if (p) { const cur = ts.pick.get(tsId(p)) ?? []; cur[si!] = Number((t as HTMLSelectElement).value); ts.pick.set(tsId(p), cur); const y = $('m-main').scrollTop; render(); $('m-main').scrollTop = y; } return; }

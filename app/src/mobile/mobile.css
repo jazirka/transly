@@ -5,7 +5,7 @@
 :root{
   --bg:#1a1b1e; --panel:#232528; --raised:#2a2c30; --line:#383b40;
   --text:#e6e8eb; --mute:#a7acb4; --dim:#8a9099;
-  --accent:#8b72e8; --accent-2:#a290f0; --ok:#5fb865; --warn:#e5a04b; --bad:#f75464; --info:#56a8f5;
+  --accent:#a492fb; --accent-2:#a492fb; --accent-rgb:164,146,251; --accent-solid:#765dcf; --accent-hi:#876fe4; --on-accent:#fff; --accent-soft:rgba(164,146,251,.16); --accent-ring:rgba(164,146,251,.5); --accent-text:#c9c2ff; --focus-glow:rgba(164,146,251,.24); --on-bg:rgba(255,255,255,.09); --on-ring:rgba(255,255,255,.24); --ok:#5fb865; --warn:#e5a04b; --bad:#f75464; --info:#56a8f5;
   --r1:6px; --r2:10px; --r3:16px;
   --nav:60px;
   color-scheme:dark;
@@ -107,8 +107,8 @@ h2,h3{margin:0}
 .m-act2{display:flex;gap:8px}.m-act1{display:flex;gap:8px}
 .m-ic{flex:none;width:52px;height:52px;border-radius:var(--r2);background:var(--raised);border:1px solid var(--line);display:grid;place-items:center}
 .m-ic:disabled{opacity:.4}
-.m-primary{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:52px;padding:0 20px;border-radius:999px;background:#7157d8;color:#fff;font-weight:600}
-.m-primary:active{background:var(--accent-2)}
+.m-primary{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:52px;padding:0 20px;border-radius:999px;background:var(--accent-solid);color:var(--on-accent);font-weight:600}
+.m-primary:active{background:var(--accent-hi)}
 .m-primary.wide,.m-secondary.wide{width:100%}
 .m-secondary{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 20px;border-radius:999px;border:1px solid rgba(255,255,255,.26);background:rgba(255,255,255,.08)}
 .m-primary:disabled,.m-secondary:disabled{opacity:.5}
@@ -203,7 +203,6 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-table th,.m-table td{border-right:1px solid var(--line)}.m-table th:last-child,.m-table td:last-child{border-right:0}.m-table{border-top:1px solid var(--line)}
 .m-var{display:grid;grid-template-columns:1fr auto auto;gap:6px 8px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
 .m-var span{grid-column:1/-1;overflow-wrap:anywhere}.m-var small{color:var(--mute)}
-.m-row.picked{background:rgba(255,255,255,.09);box-shadow:inset 3px 0 0 var(--accent)}
 .m-mini.on{background:rgba(255,255,255,.14)}
 .m-prev{margin:0 0 8px}.m-prev[hidden]{display:none}.m-prev small{color:var(--mute)}
 .m-prevbox{width:calc(var(--lim) * 1ch);max-width:100%;margin-top:4px;padding:6px 8px;border:1px dashed var(--line);border-radius:var(--r2,8px);background:var(--raised);font:14px/1.4 ui-monospace,Menlo,Consolas,monospace;overflow:hidden}
@@ -219,7 +218,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-chips{padding:4px 0;margin:-4px 0}
 .m-hdr{position:relative;flex:none;width:44px;height:44px;border-radius:var(--r2);display:grid;place-items:center;color:var(--text)}
 .m-hdr:active{background:rgba(255,255,255,.1)}.m-hdr svg{width:22px;height:22px}
-.m-badge{position:absolute;top:4px;right:2px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:var(--accent);color:#fff;font-size:11px;line-height:16px;text-align:center}
+.m-badge{position:absolute;top:4px;right:2px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:var(--accent-solid);color:var(--on-accent);font-size:11px;line-height:16px;text-align:center}
 .m-cmform{display:flex;gap:8px;align-items:center}.m-cmform .m-input{height:44px}
 
 /* hints drawer: tabs on top, one panel, comment composer pinned to the bottom */
@@ -240,7 +239,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-composer{flex:none;display:flex;align-items:flex-end;gap:8px;padding:8px 12px;border-top:1px solid var(--line);background:var(--panel)}
 .m-composer textarea{flex:1;min-height:48px;max-height:140px;resize:none;padding:12px;border-radius:var(--r2);background:var(--bg);border:1px solid var(--line);color:var(--text);outline:0;font-size:16px;line-height:1.35}
 .m-composer textarea:focus{border-color:var(--accent)}
-.m-send{flex:none;width:48px;height:48px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center}
+.m-send{flex:none;width:48px;height:48px;border-radius:50%;background:var(--accent-solid);color:var(--on-accent);display:grid;place-items:center}
 .m-send:disabled{background:rgba(255,255,255,.1);color:var(--dim)}
 .m-dseg{display:inline-flex;margin-bottom:10px;border:1px solid var(--line);border-radius:999px;overflow:hidden}
 .m-dseg button{min-height:40px;padding:0 14px;color:var(--mute)}.m-dseg button.on{background:rgba(255,255,255,.14);color:var(--text)}
@@ -264,7 +263,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .scn-box{display:flex;gap:10px;align-items:flex-start;width:100%;padding:10px 12px;text-align:left;border-radius:var(--r2);background:var(--panel);border:1px solid var(--line)}
 .scn-box.cur{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
 .scn-in{display:flex;flex-direction:column;gap:6px;min-width:0;flex:1}
-.scn-who{align-self:flex-start;padding:2px 10px;border-radius:999px;background:rgba(139,114,232,.22);color:var(--accent-2);font-size:13px}
+.scn-who{align-self:flex-start;padding:2px 10px;border-radius:999px;background:rgba(var(--accent-rgb),.22);color:var(--accent-2);font-size:13px}
 .scn-win{display:block;padding:10px 12px;border-radius:10px;background:#101a33;border:2px solid #c9d2ee;color:#fff;font-size:16px;line-height:1.4;overflow-wrap:anywhere}
 .scn-win.scroll{background:#000;border-color:#555}
 .scn-ln.over{color:#ff9d9d;text-decoration:underline wavy #ff6b6b}
@@ -327,7 +326,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-spanel.from-l>*{animation:m-in-l .22s cubic-bezier(.2,.8,.2,1)}
 .m-issue{animation:m-pop .18s ease-out}
 .m-toast{animation:m-up .22s cubic-bezier(.2,.8,.2,1)}
-.m-table tr.cur td{background:rgba(139,114,232,.12)}
+.m-table tr.cur td{background:var(--on-bg)}
 
 /* bottom nav: Файли › Рядки › Переклад | Ще  (the three steps are a path, «Ще» is apart) */
 .m-nav button{position:relative}
@@ -338,8 +337,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-mini.danger{color:#ff9b9b;background:rgba(247,84,100,.12);border-color:rgba(247,84,100,.45)}
 .m-mini.danger.armed{background:var(--bad);border-color:var(--bad);color:#fff}
 /* selected cards have a contour */
-.m-row.picked{background:rgba(139,114,232,.10);box-shadow:0 0 0 2px var(--accent) inset!important;border-color:var(--accent)}
-.m-af{border-width:1px}.m-af.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset;background:rgba(139,114,232,.08)}
+.m-af{border-width:1px}
 .m-row,.m-af{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 /* autofill: the explanation and the actions live in a bar above the nav, like «Надіслати» */
 .m-main:has(.m-afbar){display:flex;flex-direction:column;padding-bottom:0}.m-main:has(.m-afbar)>.m-afwrap{flex:1}
@@ -353,7 +351,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-top{position:absolute;right:14px;bottom:calc(var(--nav) + 14px);z-index:8;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:rgba(42,44,48,.85);border:1px solid var(--line);color:var(--text);box-shadow:0 6px 16px rgba(0,0,0,.4);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);animation:m-pop .15s ease-out}
 .m-top[hidden]{display:none}.m-top.lift{bottom:calc(var(--nav) + 76px)}.m-top svg{width:20px;height:20px}
 /* a mark on a tab that remembers a non-standard screen */
-.m-nav button .m-mark{position:absolute;top:6px;left:calc(50% + 8px);min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:var(--accent);color:#fff;font:600 11px/16px system-ui;font-style:normal;text-align:center}
+.m-nav button .m-mark{position:absolute;top:6px;left:calc(50% + 8px);min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:var(--accent-solid);color:var(--on-accent);font:600 11px/16px system-ui;font-style:normal;text-align:center}
 .m-row,.m-af{touch-action:pan-y}
 
 /* the pills of the action bar share the look of the search field: translucent with a blur */
@@ -370,7 +368,6 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 
 /* one selection look for «Рядки» and «Автозаповнення» */
 .m-row,.m-af{border:1px solid var(--line)}
-.m-row.picked,.m-af.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset;background:rgba(139,114,232,.10)}
 .m-af{display:flex;gap:10px;align-items:center;padding:12px 14px;border-radius:var(--r2);background:var(--raised);min-height:64px}
 .m-af-t{display:flex;flex-direction:column;gap:2px;min-width:0}.m-af-t small{color:var(--mute)}.m-af-t i{font-style:normal;color:var(--accent-2);overflow-wrap:anywhere}
 .m-row-t small .sd{display:inline-block;width:10px;height:10px;margin:0 6px 0 0;vertical-align:0}
@@ -378,7 +375,6 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-main:has(.m-afbar){display:flex;flex-direction:column;padding-bottom:0}.m-main:has(.m-afbar)>.m-afbar{margin-top:auto}
 
 /* selection: cells as big as the normal rows, the bar built like the editor's action bar */
-.m-row.picked{box-shadow:0 0 0 1px var(--accent) inset!important;border-color:var(--accent)}
 .m-af{display:flex;gap:12px;align-items:flex-start;width:100%;min-height:64px;padding:12px;background:var(--raised);border:1px solid var(--line);border-radius:var(--r2)}
 .m-af-t{flex:1}.m-af-t small{font-size:12px;color:var(--mute)}
 .m-af-t b{font-weight:400;font-size:16px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -399,7 +395,6 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 /* selection without a checkbox: the text does not move; a selected card gets a wide left edge, an invisible strip on the left is the drag handle */
 .m-row,.m-af{position:relative}
 .m-edge{position:absolute;left:0;top:0;bottom:0;width:48px;touch-action:none;z-index:1}
-.m-row.picked,.m-af.sel{box-shadow:inset 0 0 0 1px var(--accent),inset 7px 0 0 var(--accent)!important;border-color:var(--accent);background:rgba(139,114,232,.12)}
 
 .m-found{display:block;width:100%;text-align:left;margin-top:8px;padding:12px 14px;border-radius:16px;border:1px solid var(--line);background:var(--panel);color:var(--text);font:inherit}
 .m-found small{display:block;color:var(--dim);font-size:11px}
@@ -442,7 +437,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-diff ins{text-decoration:none;background:rgba(95,184,101,.22);color:#c6f0cb;border-radius:2px;padding:0 1px}
 .m-diff del{background:rgba(247,84,100,.2);color:#ffb3bb;text-decoration:line-through;border-radius:2px;padding:0 1px}
 .m-time li.cur::before{background:#8fd19a}
-.th{cursor:pointer;border-bottom:1.5px dotted #b589d6;color:#d9c3ee;border-radius:2px;background:rgba(139,114,232,.18)}
+.th{cursor:pointer;border-bottom:1.5px dotted #b589d6;color:#d9c3ee;border-radius:2px;background:rgba(var(--accent-rgb),.18)}
 .th.miss{border-bottom:0;text-decoration:underline wavy #f0c477;text-underline-offset:4px;background:none}
 .m-tcard{position:fixed;left:0;right:0;bottom:0;z-index:60;background:var(--panel);border-top:1px solid var(--line);border-radius:16px 16px 0 0;box-shadow:0 -10px 30px rgba(0,0,0,.45);padding:14px 16px calc(14px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:12px}
 .m-tc-r{display:grid;grid-template-columns:34px minmax(0,1fr);gap:10px}
@@ -641,7 +636,6 @@ textarea::placeholder,input::placeholder{color:#9a9ca3}
 .kb .m-toasts{top:calc(var(--bar-h,56px) + 8px);bottom:auto}
 
 /* more findings of the phone audit */
-.m-item.picked{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset;background:rgba(139,114,232,.12)}
 .m-hit-t{display:flex;flex-direction:column;gap:2px;min-width:0;text-align:left}
 .m-hit-s{color:var(--mute);font-size:12px;line-height:1.3}
 /* an attribute `hidden` must win over the card's own display */
@@ -678,3 +672,25 @@ textarea::placeholder,input::placeholder{color:#9a9ca3}
 .m-sdot{width:10px;height:10px;border-radius:50%;background:var(--tc,#b589d6);flex:none}
 .m-strand em{font-style:normal;color:var(--mute);font-weight:400}
 .gl-kinds{margin:2px 0 8px}
+
+/* ===== the states (see ../ui/states.css): chosen = a grey fill and a grey ring; a press = the colour of the project; no bars, no underlines ===== */
+.m-row.picked,.m-af.sel,.m-item.picked,.m-item.cur,.m-row.cur,.m-bubble.cur,.scn-box.cur,.m-lkrow.me,
+.m-chip.on,.m-seg button.on,.m-scope button.on,.m-dseg button.on,.m-mini.on,.m-hdr.on,.m-stabs button.on,.m-nav button.on,.ab-ic[aria-pressed=true]{
+  background:var(--on-bg)!important;box-shadow:inset 0 0 0 1px var(--on-ring)!important;border-color:var(--on-ring)!important;color:var(--text)!important}
+.m-nav button.on{border-radius:12px}
+.m-nav button.on svg{color:inherit}
+.m-stab-ind{display:none}
+:is(.m-row.picked,.m-af.sel,.m-item.picked,.m-item.cur,.m-row.cur,.m-bubble.cur,.scn-box.cur,.m-lkrow.me,
+.m-chip.on,.m-seg button.on,.m-scope button.on,.m-dseg button.on,.m-mini.on,.m-hdr.on,.m-stabs button.on,.m-nav button.on):active{
+  background:var(--accent-soft)!important;box-shadow:inset 0 0 0 1px var(--accent-ring)!important;border-color:var(--accent-ring)!important;color:var(--accent-text)!important}
+
+/* settings: the accent colour */
+.m-hue{width:100%;height:12px;border-radius:6px;appearance:none;-webkit-appearance:none;background:linear-gradient(90deg,#f0828a,#e8a24a,#b8b84a,#58c47a,#3fc4b8,#4fa8f0,#8e86f8,#c58ae0,#f0828a);margin:10px 0 6px}
+.m-hue::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:50%;background:#fff;border:4px solid var(--bg,#1e1f22);box-shadow:0 0 0 2px var(--accent)}
+.m-hue-row{display:flex;align-items:center;gap:10px}.m-hue-row .m-hint{margin:0}
+.m-hue-sw{width:18px;height:18px;border-radius:50%;flex:none}
+.m-hue-pre{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}.m-hue-pre button{width:36px;height:36px;border-radius:50%;border:3px solid transparent;padding:0}.m-hue-pre button[aria-pressed=true]{border-color:var(--text)}
+
+/* the dot of a status filter chip */
+.m-chip .sd{width:10px;height:10px;margin:0 7px 0 0;vertical-align:-1px}
+.m-chip .sd-qa{width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:10px solid var(--bad);vertical-align:-1px}

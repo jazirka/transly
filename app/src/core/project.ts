@@ -91,6 +91,8 @@ export interface ProjectSettings {
   linkMode?: LinkMode;
   /** The rules about the form of the text (letters, spaces, apostrophes); missing in older projects, read it with `qaOf`. */
   qa?: QaSettings;
+  /** The accent hue picked by hand (degrees); missing = the hue the project's name gives (see `theme.ts`). */
+  hue?: number;
 }
 
 export const DEFAULT_SETTINGS: ProjectSettings = { tolerancePct: 25, blockErrors: true, who: 'Ви', propagate: true, pluginCommands: [], pluginsAsked: false, lineLimit: 0 };

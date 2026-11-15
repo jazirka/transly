@@ -1,4 +1,4 @@
-import { isAutoFilled, autoNote, planIngest, looksLikeAnotherGame, ingestQuiet, ingestNote, Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, jumpTarget, qaOf, termsStamp, adoptSynced, applyPlan, planOf, reconcileChanges, pct, progressOf, rowState, sumProgress, QUEUE_LABEL, nextIn, positionOf, queueRows, ago, copyLine, stamp, stampOf } from '../core';
+import { syncTheme, isAutoFilled, autoNote, planIngest, looksLikeAnotherGame, ingestQuiet, ingestNote, Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, jumpTarget, qaOf, termsStamp, adoptSynced, applyPlan, planOf, reconcileChanges, pct, progressOf, rowState, sumProgress, QUEUE_LABEL, nextIn, positionOf, queueRows, ago, copyLine, stamp, stampOf } from '../core';
 import type { IngestReport, QaOptions, QueueKind, WrapPlan } from '../core';
 import { pxMeasure } from './measure';
 import { openWrapTool } from './wrap-dialog';
@@ -83,6 +83,8 @@ const UI_KEY = 'transly.ui.v1';
 /** A draft the program wrote and the translator has not looked at: its dot is drawn as a dashed ring (by shape, not by colour alone). */
 const autoDraft = (st: string, e: Entry | undefined): boolean => st === 'draft' && isAutoFilled(e);
 const FILTERS: [Filter, string][] = [['all', 'Усі'], ['new', 'Без перекладу'], ['draft', 'Чернетки'], ['auto', 'Авто'], ['done', 'Надіслані'], ['appr', 'Вичитані'], ['qa', 'Помилки'], ['adv', 'З порадами'], ['cm', 'З коментарями']];
+/** The dot of a status filter: the same one the rows and the editor wear (see `.sd` in theme.css). */
+export const FILTER_DOT: Partial<Record<Filter, string>> = { new: 'new', draft: 'draft', auto: 'draft auto', done: 'done', appr: 'appr', qa: 'qa' };
 const LEN_LABEL = { far: 'далеко від оригіналу', longer: 'довші за оригінал', shorter: 'коротші за оригінал' } as const;
 const FORMAT_LABEL: Record<string, string> = { json: 'RPG Maker MV · UTF-8', po: 'gettext · UTF-8', pot: 'gettext · UTF-8', csv: 'CSV · UTF-8', tsv: 'TSV · UTF-8', rpy: 'Ren’Py · UTF-8' };
 
@@ -548,7 +550,7 @@ export async function start(root: HTMLElement): Promise<void> {
       // Every filter stays in its place: a chip that appears when the first row of its kind is made would push the table down
       // under the reader's eyes. One that finds nothing is dimmed and cannot be pressed (unless it is the chosen one).
       const idle = n === 0 && f !== 'all' && s.filter !== f;
-      return `<button class="chip ${s.filter === f ? 'on' : ''}${idle ? ' idle' : ''}" data-filter="${f}" aria-pressed="${s.filter === f}"${idle ? ' disabled' : ''}>${l} <span class="n">${n.toLocaleString('uk-UA')}</span></button>`;
+      return `<button class="chip ${s.filter === f ? 'on' : ''}${idle ? ' idle' : ''}" data-filter="${f}" aria-pressed="${s.filter === f}"${idle ? ' disabled' : ''}>${FILTER_DOT[f] ? `<i class="sd ${FILTER_DOT[f]}" aria-hidden="true"></i>` : ''}${l} <span class="n">${n.toLocaleString('uk-UA')}</span></button>`;
     }).join('');
   }
 
@@ -707,6 +709,7 @@ export async function start(root: HTMLElement): Promise<void> {
 
   let topTimer = 0;
   function renderTop(): void {
+    syncTheme(document.documentElement, s.saved);
     $('#proj-name').textContent = s.saved.name;
     $('#proj-av').textContent = (Array.from(s.saved.name.trim())[0] ?? 'T').toUpperCase();
     // the four states of a row (see core/progress.ts): without text, draft, sent (not proofread yet), proofread

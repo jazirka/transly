@@ -52,7 +52,7 @@
 .hh.style .hg{color:var(--warn)}
 .hh.info .hg{color:var(--mute)}
 .hc{border:1px solid var(--line);border-left-width:3px;border-radius:var(--r2);background:rgba(255,255,255,.02);padding:7px 10px}
-.hc.term{border-left-color:#8b72e8;border-left-style:solid}
+.hc.term{border-left-color:var(--accent);border-left-style:solid}
 .hc .hc-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:3px 8px}
 .hc .hc-h .hg{color:#c4a3e2;align-self:center}
 .hc .hc-h b{font-weight:500;color:#d9c3ee}
@@ -107,7 +107,7 @@
 .glpanel .fh{padding:8px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--line)}
 .gl-bar{display:flex;align-items:center;gap:8px}
 .gl-bar .hint{flex:1;min-width:0;font-size:12px}
-.gl-form{display:flex;flex-direction:column;gap:8px;padding:10px 10px 12px;border-bottom:1px solid var(--line);background:rgba(139,114,232,.06)}
+.gl-form{display:flex;flex-direction:column;gap:8px;padding:10px 10px 12px;border-bottom:1px solid var(--line);background:rgba(var(--accent-rgb),.06)}
 .gl-form[hidden]{display:none}
 .gl-f{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--mute)}
 .gl-f input,.gl-f textarea{background:var(--bg);border:1px solid var(--line);border-radius:var(--r2);padding:6px 8px;color:var(--text);font:inherit;font-size:13px;min-width:0}
@@ -115,7 +115,7 @@
 .gl-f input:focus,.gl-f textarea:focus{outline:2px solid var(--accent);outline-offset:-1px}
 .gl-acts{display:flex;gap:8px}
 #gl-list{overflow:auto;min-height:0;flex:1;padding:8px;display:flex;flex-direction:column;gap:6px}
-.gt-card{border:1px solid var(--line);border-left:3px solid #8b72e8;border-radius:var(--r2);padding:7px 10px;background:rgba(255,255,255,.02)}
+.gt-card{border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:var(--r2);padding:7px 10px;background:rgba(255,255,255,.02)}
 .gt-card:hover{background:rgba(255,255,255,.04)}
 .gt-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px}
 .gt-h b{font-weight:500;color:#d9c3ee}
@@ -149,7 +149,7 @@
 #sc-list{overflow:auto;min-height:0;flex:1;padding:6px 0}
 .sc-item{display:grid;grid-template-columns:12px minmax(0,1fr) auto 34px;gap:8px;align-items:center;width:100%;text-align:left;border:0;background:none;color:var(--text);padding:7px 12px;font:inherit;font-size:13px;cursor:pointer;border-left:3px solid transparent}
 .sc-item:hover{background:rgba(255,255,255,.05)}
-.sc-item.cur{background:var(--sel);border-left-color:var(--accent)}
+.sc-item.cur{background:var(--sel)}
 .sc-item:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .sc-item .sc-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sc-item .sc-n{font:12px var(--mono);color:var(--mute)}
@@ -159,7 +159,7 @@
 
 /* The coloured outline of the translation field shows only while the field is active. */
 textarea.tr-in{border-color:var(--line);box-shadow:none;transition:border-color .12s,box-shadow .12s}
-textarea.tr-in:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(139,114,232,.18)}
+textarea.tr-in:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.18)}
 
 /* ----- the translation field with the layer of term underlines under it ----- */
 .te{position:relative;background:var(--bg);border-radius:var(--r2)}
@@ -172,7 +172,7 @@ textarea.tr-in:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(139,11
 
 /* ----- terms in the original: interactive words ----- */
 .th{cursor:help;border-bottom:1.5px dotted var(--violet);border-radius:2px;color:#d9c3ee;transition:background .12s}
-.th:hover,.th:focus-visible{background:rgba(139,114,232,.22);border-bottom-style:solid;outline:none}
+.th:hover,.th:focus-visible{background:rgba(var(--accent-rgb),.22);border-bottom-style:solid;outline:none}
 .th.miss{border-bottom:0;text-decoration:underline wavy var(--warn);text-underline-offset:4px}
 
 /* ----- the card of a term ----- */
@@ -192,7 +192,7 @@ textarea.tr-in:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(139,11
 .tg.warn{border-color:#5a4a2a;color:#f0c477}
 .tc-acts{display:flex;gap:8px;flex-wrap:wrap}
 .fc .te textarea.tr-in{border-color:var(--line)}
-.fc .te textarea.tr-in:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(139,114,232,.18)}
+.fc .te textarea.tr-in:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.18)}
 
 /* ----- term cards in the Terms block can act; counters on the rail ----- */
 .hc-acts{display:flex;gap:12px;margin-top:5px}
@@ -240,7 +240,7 @@ button.cc:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .tc-arr:focus-visible,.tc-tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .tc-tabs{display:inline-flex;gap:2px;margin-left:auto}
 .tc-tabs button{border:0;background:none;color:var(--mute);border-radius:6px;padding:1px 8px;font:inherit;font-size:12px;cursor:pointer}
-.tc-tabs button.on{background:var(--violet-bg,rgba(139,114,232,.22));color:var(--text)}
+.tc-tabs button.on{background:var(--violet-bg,rgba(var(--accent-rgb),.22));color:var(--text)}
 .tc-tabs button:disabled{opacity:.45;cursor:default}
 .tc-alt{display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center;font-size:12px;color:var(--mute);margin:0}
 .tc-alt:empty{display:none}
@@ -255,7 +255,7 @@ button.cc:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .tc-nav small{margin-left:4px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px}
 .tc-nav .tg{margin-left:auto}
 .tc-line{display:grid;grid-template-columns:24px minmax(0,1fr);gap:8px;font-size:13px;overflow-wrap:anywhere}
-.tc-line mark{background:var(--violet-bg,rgba(139,114,232,.22));color:var(--text);border-radius:3px;padding:0 2px}
+.tc-line mark{background:var(--violet-bg,rgba(var(--accent-rgb),.22));color:var(--text);border-radius:3px;padding:0 2px}
 .tc-line i{color:var(--mute)}
 .tc-line .tc-lang{height:fit-content}
 .btn.ic{min-width:34px;padding:0 9px}
@@ -275,7 +275,7 @@ button.cc:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .lk.ok{color:var(--ok);border-color:var(--ok)}
 .lk.warn{color:var(--warn);border-color:var(--warn)}
 .lk.bad{color:#ff9aa5;border-color:#ff9aa5}
-.lk:hover,.lk:focus-visible{background:var(--panel);outline:none;box-shadow:0 0 0 3px rgba(139,114,232,.3)}
+.lk:hover,.lk:focus-visible{background:var(--panel);outline:none;box-shadow:0 0 0 3px rgba(var(--accent-rgb),.3)}
 /* the card points at what it belongs to */
 .termcard::before{content:"";position:absolute;top:-6px;left:var(--ax,20px);width:10px;height:10px;background:#2b2d30;border-left:1px solid #4a4d54;border-top:1px solid #4a4d54;transform:rotate(45deg)}
 .termcard.above::before{top:auto;bottom:-6px;border:0;border-right:1px solid #4a4d54;border-bottom:1px solid #4a4d54}
@@ -306,7 +306,7 @@ button.cc:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .grp-form[hidden]{display:none}
 .grp-form input,.grp-ren input{flex:1;min-width:0}
 .grp-item{display:flex;align-items:center;gap:0;margin:0 6px;border-radius:var(--r2)}
-.grp-item.drop{background:rgba(139,114,232,.2);outline:2px dashed var(--accent);outline-offset:-2px}
+.grp-item.drop{background:rgba(var(--accent-rgb),.2);outline:2px dashed var(--accent);outline-offset:-2px}
 .grp-fold{flex:none;width:20px;height:26px;border:0;background:none;color:var(--mute);cursor:pointer;font-size:12px}
 .grp-open{flex:1;min-width:0;display:flex;align-items:center;gap:7px;padding:6px 6px;border:0;background:none;color:var(--text);font:inherit;font-size:13px;text-align:left;border-radius:var(--r2);cursor:pointer}
 .grp-open:hover,.grp-more:hover,.grp-fopen:hover{background:rgba(255,255,255,.06)}
@@ -398,7 +398,7 @@ button.cc:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .sv-body{display:flex;flex-direction:column;gap:12px}
 .sv-card{display:flex;flex-direction:column;gap:6px;padding:8px 12px 10px;border:1px solid var(--line);border-radius:var(--r3,12px);background:var(--panel)}
 .sv-card.err{border-color:rgba(255,99,71,.6)}
-.sv-card.cur,.sv-card.cur.err{border-color:var(--accent);box-shadow:0 0 0 3px rgba(139,114,232,.16)}
+.sv-card.cur,.sv-card.cur.err{border-color:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.16)}
 .sv-top{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mute)}
 .sv-who{font-size:13px;font-weight:500;color:#b7a6ff}
 .sv-n{font:12px var(--mono);color:var(--dim)}
@@ -410,7 +410,7 @@ button.cc:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .sv-src{padding:8px 10px;font-size:14px;white-space:pre-wrap}
 /* `.sv .sv-in`: the global `textarea.tr-in` (min-height 96, accent border) is more specific than a bare `.sv-in` */
 .sv .sv-in{box-sizing:border-box;width:100%;min-height:44px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r2);background:var(--bg);color:var(--text);font:15px/1.5 var(--ui);resize:none;overflow:hidden;box-shadow:none;outline:none}
-.sv .sv-in:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(139,114,232,.18)}
+.sv .sv-in:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.18)}
 .sv-qa{margin-top:0}
 .sv-qa:empty{display:none}
 .sv .empty-state{margin-top:40px}
@@ -462,7 +462,7 @@ input::placeholder,textarea::placeholder{color:#9a9ea6;opacity:1}
 /* the bulk bar lies over the header of the table instead of pushing the rows down (the select-all box stays free) */
 .gridwrap>.bulk{display:none;position:sticky;top:0;z-index:5;height:0;padding:0;border:0;background:none;overflow:visible}
 .gridwrap>.bulk.show{display:block}
-.bulk-in{position:absolute;left:34px;right:0;top:0;height:26px;display:flex;align-items:center;gap:8px;padding:0 10px;background:#2f2a58;border-bottom:1px solid #5a4a9a;color:#d9d0ff;white-space:nowrap;overflow:hidden}
+.bulk-in{position:absolute;left:34px;right:0;top:0;height:26px;display:flex;align-items:center;gap:8px;padding:0 10px;background:var(--accent-soft);border-bottom:1px solid var(--accent-ring);color:var(--accent-text);white-space:nowrap;overflow:hidden}
 .bulk-in button{flex:none;height:24px}
 .bulk-in .ghost{margin-left:auto;min-width:24px;padding:0 6px}
 .bulk-in #bulkt{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
@@ -586,3 +586,14 @@ input::placeholder,textarea::placeholder{color:#9a9ea6;opacity:1}
 .fs .thc{grid-template-columns:12px minmax(0,1fr)}
 .fs .thc .thc-u,.fs .thc .thc-a{grid-column:2}
 .fs .thc-name{flex-wrap:wrap}
+
+/* settings: the accent colour */
+.theme-set{display:flex;flex-direction:column;gap:8px;margin:6px 0}
+.theme-set input[type=range]{width:100%;height:10px;border-radius:5px;appearance:none;-webkit-appearance:none;background:linear-gradient(90deg,#f0828a,#e8a24a,#b8b84a,#58c47a,#3fc4b8,#4fa8f0,#8e86f8,#c58ae0,#f0828a);outline-offset:3px}
+.theme-set input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid var(--bg);box-shadow:0 0 0 2px var(--accent)}
+.th-row{display:flex;align-items:center;gap:10px}.th-row .hint{flex:1;margin:0}
+.th-sw{width:16px;height:16px;border-radius:50%;flex:none}
+.th-pre{display:flex;gap:8px}.th-pre button{width:26px;height:26px;border-radius:50%;border:2px solid transparent;padding:0}.th-pre button[aria-pressed=true]{border-color:var(--text)}
+
+/* the dot of a status filter chip */
+.chip .sd{margin-right:6px;vertical-align:0;flex:none}

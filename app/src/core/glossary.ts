@@ -189,6 +189,9 @@ export function matchChain(toks: { start: number; end: number }[], text: string,
   return out;
 }
 
+/** The key of the first word of a term or pattern: every text that contains the term has a word with this key. */
+export const termFirstKey = (en: string): string | undefined => termKeys(en.trim())[0];
+
 /** Where the term occurs in the prepared text: a run of words (separated by spaces or hyphens) whose keys agree. */
 export function termRangesIn(p: PreparedText, en: string): [number, number][] {
   return termMatchesIn(p, en).flat();

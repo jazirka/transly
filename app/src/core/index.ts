@@ -57,6 +57,8 @@ export * from './journal';
 export * from './undostack';
 export * from './sceneindex';
 export * from './termmatch';
+export * from './strands';
+export * from './termusage';
 export * from './groups';
 export * from './validate';
 export * from './session';

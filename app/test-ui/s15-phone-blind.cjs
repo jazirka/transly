@@ -87,7 +87,7 @@ const check = (name, ok, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ') 
   // ---- the glossary: the word for the number, one tap does not delete
   await page.locator('#m-tr').blur(); await sleep(300);
   await page.locator('[data-menu]').first().click(); await sleep(500);
-  const glBtn = page.locator('.m-menu button', { hasText: 'Глосарій' });
+  const glBtn = page.locator('.m-menu button', { hasText: 'Пов’язане' });
   const hasGl = await glBtn.count();
   if (hasGl) {
     await glBtn.first().click(); await sleep(600);

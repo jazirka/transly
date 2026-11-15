@@ -669,3 +669,12 @@ textarea::placeholder,input::placeholder{color:#9a9ca3}
 /* with the keyboard up: the first remark only, and a line that says how many more there are (four full cards covered the field and the buttons) */
 .kb #m-issues .m-issue:nth-child(n+2){display:none}
 .kb #m-issues[data-more]::after{content:attr(data-more);display:block;padding:4px 12px;color:var(--mute);font-size:12px}
+
+/* threads: every entry of a row wears one colour, from the word in the original to its card in the sheet */
+[data-ci="0"]{--tc:#b589d6}[data-ci="1"]{--tc:#56a8f5}[data-ci="2"]{--tc:#5fb865}[data-ci="3"]{--tc:#e5a04b}[data-ci="4"]{--tc:#ee7aa8}[data-ci="5"]{--tc:#4cc9c0}
+.m-source .th{text-decoration:underline solid var(--tc,#b589d6) 2px;text-underline-offset:4px;background:color-mix(in srgb,var(--tc,#b589d6) 16%,transparent)}
+.m-source .th.miss{text-decoration:underline wavy #f0c477 2px;background:none}
+.m-strand{align-items:center}
+.m-sdot{width:10px;height:10px;border-radius:50%;background:var(--tc,#b589d6);flex:none}
+.m-strand em{font-style:normal;color:var(--mute);font-weight:400}
+.gl-kinds{margin:2px 0 8px}

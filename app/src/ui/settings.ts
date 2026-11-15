@@ -32,7 +32,7 @@ let lastSettingsTab = 0;
 export interface SettingsActions { reset: () => void; adopt: () => void; plugins: () => void; wrap: () => void; qa: () => void; importFiles: () => void; folder: { text: () => string; change: () => void; forget: () => void } }
 
 /** The tab to open first (by name), or the one that was open last. */
-export type SettingsTab = 'Загальні' | 'Глосарій і пам’ять' | 'Гра і мови' | 'Синхронізація' | 'Застосунок';
+export type SettingsTab = 'Загальні' | 'Пов’язане й пам’ять' | 'Гра і мови' | 'Синхронізація' | 'Застосунок';
 
 export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugins: onPlugins, wrap: onWrap, qa: onQa, importFiles: onFiles, folder: onFolder }: SettingsActions, tab?: SettingsTab): void {
   const st = ctx.s.saved.settings;
@@ -96,7 +96,7 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
   /* Sections live on tabs so nobody scrolls through everything to reach one setting. */
   const TABS: [string, string[]][] = [
     ['Загальні', []],
-    ['Глосарій і пам’ять', ['Імпорт глосарію', 'Імпорт пам’яті перекладів']],
+    ['Пов’язане й пам’ять', ['Імпорт глосарію', 'Імпорт пам’яті перекладів']],
     ['Гра і мови', ['Мовці', 'Довідкові мови', 'Тексти плагінів']],
     ['Синхронізація', ['Синхронізація через Claude', 'Синхронізація через GitHub', 'Синхронізація через власний сервер', 'Обмін проєктом через файл']],
     ['Застосунок', ['Оновлення застосунку', 'Небезпечна зона']],

@@ -1,6 +1,9 @@
-import { joinAlts, removeTerm, rowsWithTerm, saveTerm, termChange, termRowsNote } from '../core';
+import { hasGap, joinAlts, patternParts, removeTerm, rowsWithTerm, saveTerm, strandKind, termChange, termRowsNote, termsStamp } from '../core';
 import type { GlossaryTerm } from '../core';
 import { $, esc, plural, toast } from './dom';
+import { oneLine } from './hintcards';
+import { openLinkRows } from './links-dialog';
+import { entriesWithDifferences, usageAll, usageLine, usageRev } from './strands-panel';
 import { offerTermSync } from './termsync-dialog';
 import type { Ctx } from './state';
 
@@ -12,15 +15,16 @@ import type { Ctx } from './state';
 const SEARCH = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>';
 
 export const GLOSSARY_HTML = `<div class="slist glpanel" id="lp-gl" hidden>
-  <div class="ph card-ph" data-card="glossary"><span class="grow">Глосарій</span><span class="ico" data-hide-left="glossary" role="button" tabindex="0" aria-label="Сховати панель «Глосарій»" title="Сховати">—</span></div>
+  <div class="ph card-ph" data-card="glossary"><span class="grow">Пов’язане</span><span class="ico" data-hide-left="glossary" role="button" tabindex="0" aria-label="Сховати панель «Глосарій»" title="Сховати">—</span></div>
   <div class="fh">
-    <div class="fin">${SEARCH}<input class="qin" id="gl-q" placeholder="Пошук у глосарії" aria-label="Пошук у глосарії" autocomplete="off" spellcheck="false"></div>
-    <div class="gl-bar"><span class="hint" id="gl-n"></span><button class="btn p" id="gl-new" type="button">＋ Додати термін</button></div>
+    <div class="fin">${SEARCH}<input class="qin" id="gl-q" placeholder="Пошук серед записів" aria-label="Пошук серед записів" autocomplete="off" spellcheck="false"></div>
+    <div class="gl-chips chips2" id="gl-chips" role="group" aria-label="Вид записів"></div>
+    <div class="gl-bar"><span class="hint" id="gl-n"></span><button class="btn p" id="gl-new" type="button">＋ Додати</button></div>
   </div>
   <form class="gl-form" id="gl-form" hidden autocomplete="off">
     <div class="lbl" id="gl-form-t">Новий термін</div>
-    <label class="gl-f"><span>Оригінал (EN)</span><input id="gl-en" aria-label="Термін англійською"></label>
-    <label class="gl-f"><span>Переклад (UK)</span><input id="gl-uk" aria-label="Термін українською"></label>
+    <label class="gl-f"><span>Оригінал (EN)</span><input id="gl-en" aria-label="Слово або конструкція англійською" placeholder="слово або конструкція: take … off"></label>
+    <label class="gl-f"><span>Переклад (UK)</span><input id="gl-uk" aria-label="Переклад українською" placeholder="як перекладати"></label>
     <label class="gl-f"><span>Інші прийнятні переклади</span><input id="gl-alt" placeholder="через «;»" aria-label="Інші прийнятні переклади"></label>
     <label class="gl-f"><span>Категорія</span><input id="gl-kind" placeholder="наприклад, Weapons" aria-label="Категорія"></label>
     <label class="gl-f"><span>Примітка</span><textarea id="gl-note" rows="2" aria-label="Примітка"></textarea></label>
@@ -51,11 +55,14 @@ function rank(t: GlossaryTerm, q: string): number {
   return names.some(n => n.includes(q)) || norm(t.kind ?? '').includes(q) || norm(t.note ?? '').includes(q) ? 3 : 4;
 }
 
-function card(t: GlossaryTerm): string {
+const KIND_WORD = { word: 'слово', phrase: 'фраза', construction: 'конструкція' } as const;
+
+function card(ctx: Ctx, t: GlossaryTerm, withUse: boolean): string {
   const askDelete = deleting === norm(t.en);
+  const use = withUse ? usageLine(usageAll(ctx, t)) : '';
   return `<div class="gt-card" data-term="${esc(t.en)}">
     <div class="gt-h"><b>${esc(t.en)}</b><span class="arr">→</span><span class="uk">${esc(t.uk)}</span></div>
-    <div class="gt-m">${t.kind ? `<span class="kchip" title="Категорія терміна">${esc(t.kind)}</span>` : ''}${t.qa === false ? '<span class="tagi">лише підказка, без QA</span>' : '<span class="qatag" title="Перевіряється під час QA">QA</span>'}${t.alt?.length ? `<span class="gt-alt">також: ${esc(t.alt.join(', '))}</span>` : ''}</div>
+    <div class="gt-m"><span class="tg k">${KIND_WORD[strandKind(t.en)]}</span>${use ? `<span class="hint">${esc(use)}</span>` : ''}${t.kind ? `<span class="kchip" title="Категорія терміна">${esc(t.kind)}</span>` : ''}${t.qa === false ? '<span class="tagi">лише підказка, без QA</span>' : '<span class="qatag" title="Перевіряється під час QA">QA</span>'}${t.alt?.length ? `<span class="gt-alt">також: ${esc(t.alt.join(', '))}</span>` : ''}</div>
     ${t.note ? `<div class="gt-note">${esc(t.note)}</div>` : ''}
     <div class="gt-acts"><button class="lnk" type="button" data-gt="edit" data-en="${esc(t.en)}">Змінити</button><button class="lnk ${askDelete ? 'danger on' : ''}" type="button" data-gt="del" data-en="${esc(t.en)}">${askDelete ? 'Справді видалити?' : 'Видалити'}</button></div>
   </div>`;
@@ -65,19 +72,68 @@ function fillForm(t: GlossaryTerm | undefined): void {
   const set = (id: string, v: string): void => { ($(id) as HTMLInputElement | HTMLTextAreaElement).value = v; };
   set('#gl-en', t?.en ?? ''); set('#gl-uk', t?.uk ?? ''); set('#gl-alt', joinAlts(t?.alt)); set('#gl-kind', t?.kind ?? ''); set('#gl-note', t?.note ?? '');
   ($('#gl-qa') as HTMLInputElement).checked = t?.qa !== false;
-  $('#gl-form-t').textContent = t ? `Змінити термін «${t.en}»` : 'Новий термін';
+  $('#gl-form-t').textContent = t ? `Змінити запис «${t.en}»` : 'Новий запис';
+}
+
+/** Which entries the list shows: all, words and phrases, constructions (with a gap), the groups of identical rows, or the entries rendered differently somewhere. */
+type Show = 'all' | 'word' | 'construction' | 'rows' | 'diff';
+let show: Show = 'all';
+/** The entries with differences, worked out in slices; null while it is being worked out. */
+let diffs: { stamp: string; set: Set<string> } | null = null;
+let diffsFor = '';
+
+const stampOf = (ctx: Ctx): string => `${termsStamp(ctx.s.saved.terms)}|${usageRev()}|${ctx.s.views.length}`;
+
+function chipsHtml(ctx: Ctx, counts: Record<Show, number | null>): string {
+  const labels: [Show, string][] = [['all', 'Усе'], ['word', 'Слова'], ['construction', 'Конструкції'], ['rows', 'Рядки'], ['diff', 'Розбіжності']];
+  return labels.map(([k, l]) => `<button type="button" class="chip${show === k ? ' on' : ''}${counts[k] === 0 && show !== k ? ' idle' : ''}" data-glk="${k}" aria-pressed="${show === k}">${l}${counts[k] === null ? '' : ` <span class="n">${counts[k]}</span>`}</button>`).join('');
+}
+
+/** The groups of rows with the same original, the biggest first (the old «Зв’язані рядки»). */
+function clusterCards(ctx: Ctx, q: string): { html: string; total: number } {
+  const all = [...ctx.links().clusters()].filter(([text]) => !q || norm(text).includes(q)).sort((a, b) => b[1].length - a[1].length);
+  const html = all.slice(0, SHOWN).map(([text, rows]) => {
+    const first = rows[0]!;
+    return `<div class="gt-card" data-cluster="${esc(text)}">
+      <div class="gt-h"><b>${esc(oneLine(text, 80))}</b></div>
+      <div class="gt-m"><span class="tg k">однаковий рядок</span><span class="hint">× ${rows.length}</span></div>
+      <div class="gt-acts"><button class="lnk" type="button" data-gt="open-row" data-file="${esc(first.file)}" data-key="${esc(first.key)}">Відкрити</button><button class="lnk" type="button" data-gt="sync-rows" data-file="${esc(first.file)}" data-key="${esc(first.key)}">Поширити переклад…</button></div>
+    </div>`;
+  }).join('');
+  return { html, total: all.length };
 }
 
 /** Draw the list. The form is only filled when it is opened, so what is typed in it survives redraws. */
 export function renderGlossaryPanel(ctx: Ctx): void {
   const terms = ctx.s.saved.terms;
   const q = norm(query);
-  const found = terms.map(t => [rank(t, q), t] as const).filter(([r]) => r < 4).sort((a, b) => a[0] - b[0] || a[1].en.localeCompare(b[1].en, 'en')).map(([, t]) => t);
-  $('#gl-n').textContent = terms.length ? `${plural(terms.length, ['термін', 'терміни', 'термінів'])}${q ? ` · знайдено ${found.length}` : ''}` : 'Термінів ще немає';
+  const stamp = stampOf(ctx);
+  // the entries rendered differently somewhere are worked out when that filter is chosen, and again when the translations changed
+  if (show === 'diff' && (!diffs || diffs.stamp !== stamp) && diffsFor !== stamp) {
+    diffsFor = stamp;
+    void entriesWithDifferences(ctx, terms).then(set => { diffs = { stamp, set }; if (document.getElementById('gl-list') && show === 'diff') renderGlossaryPanel(ctx); }).catch(() => { diffsFor = ''; });
+  }
+  const isConstruction = (t: GlossaryTerm): boolean => hasGap(t.en) && patternParts(t.en).length > 1;
+  const counts: Record<Show, number | null> = {
+    all: terms.length, word: terms.filter(t => !isConstruction(t)).length, construction: terms.filter(isConstruction).length,
+    rows: ctx.links().size, diff: diffs && diffs.stamp === stamp ? diffs.set.size : null,
+  };
+  $('#gl-chips').innerHTML = chipsHtml(ctx, counts);
   $('#gl-form').hidden = editing === null;
-  $('#gl-list').innerHTML = found.length
-    ? found.slice(0, SHOWN).map(card).join('') + (found.length > SHOWN ? `<div class="grid-note">Показано ${SHOWN} із ${found.length}. Уточніть пошук.</div>` : '')
-    : `<div class="empty-state"><b>${terms.length ? 'Нічого не знайдено' : 'Глосарій порожній'}</b><span>${terms.length ? 'Спробуйте інше слово або частину слова.' : 'Додайте перший термін кнопкою вище або імпортуйте таблицю в налаштуваннях.'}</span></div>`;
+  const list = $('#gl-list');
+  if (show === 'rows') {
+    const c = clusterCards(ctx, q);
+    $('#gl-n').textContent = c.total ? `${plural(c.total, ['група однакових рядків', 'групи однакових рядків', 'груп однакових рядків'])}` : 'Однакових рядків немає';
+    list.innerHTML = c.total ? c.html + (c.total > SHOWN ? `<div class="grid-note">Показано ${SHOWN} із ${c.total}. Уточніть пошук.</div>` : '') : '<div class="empty-state"><b>Однакових рядків немає</b><span>Тут з’являються рядки, чий оригінал повторюється в грі.</span></div>';
+    return;
+  }
+  const pool = show === 'word' ? terms.filter(t => !isConstruction(t)) : show === 'construction' ? terms.filter(isConstruction) : show === 'diff' ? terms.filter(t => diffs?.stamp === stamp && diffs.set.has(t.en)) : terms;
+  const found = pool.map(t => [rank(t, q), t] as const).filter(([r]) => r < 4).sort((a, b) => a[0] - b[0] || a[1].en.localeCompare(b[1].en, 'en')).map(([, t]) => t);
+  $('#gl-n').textContent = terms.length ? `${plural(pool.length, ['запис', 'записи', 'записів'])}${q ? ` · знайдено ${found.length}` : ''}` : 'Записів ще немає';
+  if (show === 'diff' && (!diffs || diffs.stamp !== stamp)) { list.innerHTML = '<div class="empty-state"><b>Рахую розбіжності…</b><span>Дивлюсь, де запис перекладено не так, як у ньому сказано.</span></div>'; return; }
+  list.innerHTML = found.length
+    ? found.slice(0, SHOWN).map((t, i) => card(ctx, t, i < 30)).join('') + (found.length > SHOWN ? `<div class="grid-note">Показано ${SHOWN} із ${found.length}. Уточніть пошук.</div>` : '')
+    : `<div class="empty-state"><b>${terms.length ? 'Нічого не знайдено' : 'Записів ще немає'}</b><span>${terms.length ? (show === 'diff' ? 'Усі записи перекладено так, як у них сказано.' : 'Спробуйте інше слово або частину слова.') : 'Додайте перший запис кнопкою вище або імпортуйте таблицю в налаштуваннях.'}</span></div>`;
 }
 
 /** Show the glossary filtered to one word (a result of the global search, or the term in a hint). */
@@ -121,6 +177,8 @@ export function wireGlossary(ctx: Ctx): void {
     e.preventDefault();
     const val = (id: string): string => ($(id) as HTMLInputElement | HTMLTextAreaElement).value;
     // a copy of the term as it was: after the change its old rendering is looked for in the translations
+    const typed = val('#gl-en');
+    if (hasGap(typed) && patternParts(typed).length < 2) { toast('Конструкції потрібні принаймні два слова з пропуском між ними: «take … off». Для одного слова пропуск не потрібен'); return; }
     const was = editing ? ctx.s.saved.terms.find(x => norm(x.en) === norm(editing!)) : undefined;
     const prev = was ? { en: was.en, uk: was.uk, alt: [...(was.alt ?? [])] } : undefined;
     const r = saveTerm(ctx.s.saved, { en: val('#gl-en'), uk: val('#gl-uk'), alt: val('#gl-alt'), kind: val('#gl-kind'), note: val('#gl-note'), qa: ($('#gl-qa') as HTMLInputElement).checked }, Date.now(), editing || undefined);
@@ -129,7 +187,7 @@ export function wireGlossary(ctx: Ctx): void {
     const en = val('#gl-en').trim();
     editing = null;
     ctx.persist(); ctx.invalidateTm(); ctx.render();
-    toast(r === 'added' ? `Термін «${en}» додано` : `Термін «${en}» змінено`);
+    toast(r === 'added' ? `Запис «${en}» додано` : `Запис «${en}» змінено`);
     if (r === 'added') {
       // Where the new word already stands in the originals: what was translated without it, and what is still to be translated.
       const term = ctx.s.saved.terms.find(x => norm(x.en) === norm(en));
@@ -148,10 +206,14 @@ export function wireGlossary(ctx: Ctx): void {
 /** Clicks in the glossary section. Returns true when handled. */
 export function glossaryClick(ctx: Ctx, t: HTMLElement): boolean {
   if (!t.closest('#lp-gl')) return false;
+  const chip = t.closest<HTMLElement>('[data-glk]');
+  if (chip) { show = (chip.dataset.glk as Show) ?? 'all'; renderGlossaryPanel(ctx); return true; }
   if (t.closest('#gl-new')) { newTerm(ctx); return true; }
   if (t.closest('#gl-cancel')) { editing = null; renderGlossaryPanel(ctx); return true; }
   const b = t.closest<HTMLElement>('[data-gt]');
   if (!b) return false;
+  if (b.dataset.gt === 'open-row') { ctx.open(b.dataset.file ?? '', b.dataset.key ?? ''); return true; }
+  if (b.dataset.gt === 'sync-rows') { openLinkRows(ctx, b.dataset.file ?? '', b.dataset.key ?? ''); return true; }
   const en = b.dataset.en ?? '';
   if (b.dataset.gt === 'edit') {
     editing = en;
@@ -170,7 +232,7 @@ export function glossaryClick(ctx: Ctx, t: HTMLElement): boolean {
       return true;
     }
     window.clearTimeout(deleteTimer); deleting = null;
-    if (removeTerm(ctx.s.saved, en, Date.now())) { ctx.persist(); ctx.invalidateTm(); ctx.render(); toast(`Термін «${en}» видалено`); }
+    if (removeTerm(ctx.s.saved, en, Date.now())) { ctx.persist(); ctx.invalidateTm(); ctx.render(); toast(`Запис «${en}» видалено`); }
     return true;
   }
   return false;

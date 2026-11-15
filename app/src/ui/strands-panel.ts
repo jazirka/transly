@@ -22,7 +22,10 @@ const usageCache = new Map<string, TermUsage>();
 let again: (() => void) | null = null;
 
 /** The translations changed (a row was sent, replaced, restored): the numbers are worked out again. */
-export function invalidateUsage(): void { usageCache.clear(); }
+export function invalidateUsage(): void { usageCache.clear(); usageRevision++; }
+let usageRevision = 0;
+/** Changes whenever the numbers may have changed: a list built from them is worked out again when it differs. */
+export const usageRev = (): number => usageRevision;
 
 const pause = (): Promise<void> => new Promise(r => setTimeout(r, 0));
 
@@ -46,6 +49,37 @@ function usageOf(ctx: Ctx, t: GlossaryTerm, row: { file: string; key: string }):
   const u = termUsage(ix, ctx.s.saved, t, row);
   usageCache.set(id, u);
   return u;
+}
+
+/** How an entry is used across the whole game, or null while the index of the words is still being built. */
+export function usageAll(ctx: Ctx, t: GlossaryTerm): TermUsage | null {
+  if (!again) again = () => ctx.render();
+  const id = `${t.en}\u0001*`;
+  const hit = usageCache.get(id);
+  if (hit) return hit;
+  const ix = indexOf(ctx);
+  if (!ix) return null;
+  const u = termUsage(ix, ctx.s.saved, t);
+  usageCache.set(id, u);
+  return u;
+}
+
+/** The entries whose renderings differ from the entry's own somewhere in the game, worked out in slices (the screen is given back between them). */
+export async function entriesWithDifferences(ctx: Ctx, terms: GlossaryTerm[]): Promise<Set<string>> {
+  const ix = await WordIndex.build(ctx.s.views, pause);
+  const out = new Set<string>();
+  for (let i = 0; i < terms.length; i++) {
+    if (termUsage(ix, ctx.s.saved, terms[i]!).other > 0) out.add(terms[i]!.en);
+    if (i % 40 === 39) await pause();
+  }
+  return out;
+}
+
+/** One line about the use of an entry (for the list): how many rows and whether they agree. */
+export function usageLine(u: TermUsage | null): string {
+  if (!u) return '';
+  if (!u.rows.length) return 'ще ніде не вживається';
+  return `${plural(u.rows.length, ['рядок', 'рядки', 'рядків'])} · ${u.other ? `${u.other} інакше` : 'усюди як у записі'}`;
 }
 
 function usageHtml(u: TermUsage | null): string {

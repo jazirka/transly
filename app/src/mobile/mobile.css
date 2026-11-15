@@ -665,3 +665,7 @@ textarea::placeholder,input::placeholder{color:#9a9ca3}
   .m-nav button{min-height:0;font-size:10px;gap:0;max-height:none}
   .m-nav button svg{width:18px;height:18px}
 }
+
+/* with the keyboard up: the first remark only, and a line that says how many more there are (four full cards covered the field and the buttons) */
+.kb #m-issues .m-issue:nth-child(n+2){display:none}
+.kb #m-issues[data-more]::after{content:attr(data-more);display:block;padding:4px 12px;color:var(--mute);font-size:12px}

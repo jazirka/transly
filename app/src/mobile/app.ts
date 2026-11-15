@@ -317,7 +317,9 @@ export async function start(root: HTMLElement): Promise<void> {
     if (sig !== pageSig) { pageSig = sig; page = 1; const at = store.key ? rows.findIndex(u => u.key === store.key) : -1; if (at >= PAGE) page = Math.ceil((at + 1) / PAGE); }
     const shown = rows.slice(0, PAGE * page);
     const fileNo = new Map(v.units.map((u, k) => [u.key, k + 1] as const));
-    const chips = FILTERS.map(([f, l]) => `<button class="m-chip ${store.filter === f ? 'on' : ''}" data-filter="${f}" aria-pressed="${store.filter === f}">${l}</button>`).join('');
+    // the two filters a reviewer needs first (what is not translated, what has an error) come first: the rest of the strip is a swipe away
+    const fl = [...FILTERS]; const qi = fl.findIndex(x => x[0] === 'qa'); if (qi > 2) fl.splice(2, 0, ...fl.splice(qi, 1));
+    const chips = fl.map(([f, l]) => `<button class="m-chip ${store.filter === f ? 'on' : ''}" data-filter="${f}" aria-pressed="${store.filter === f}">${l}</button>`).join('');
     const sbar = `<div class="m-searchbar"><label class="m-search m-pill">${icon('search')}<span class="m-ph" aria-hidden="true">Пошук у файлі</span><input id="m-q" type="search" placeholder=" " aria-label="Пошук у файлі" value="${esc(store.q)}" enterkeyhint="search" autocomplete="off"></label></div>`;
     const L = lay();
     const orders = { order: 'За порядком', new: 'Спершу без перекладу', qa: 'Спершу з помилками', long: 'Спершу найдовші' } as Record<Sort, string>;
@@ -730,6 +732,9 @@ export async function start(root: HTMLElement): Promise<void> {
       <button class="m-primary wide" data-plapply>Застосувати</button></section>`;
   }
 
+  /** With the keyboard up only the first remark of the row is shown; this says how many more there are (they are one touch away: the keyboard goes down). */
+  const moreText = (html: string): string => { const n = (html.match(/class="m-issue /g) ?? []).length; return n > 1 ? `ще ${n - 1}: сховайте клавіатуру, щоб побачити` : ''; };
+  const moreAttr = (html: string): string => { const t = moreText(html); return t ? ` data-more="${esc(t)}"` : ''; };
   function issuesHtml(): string {
     const c = store.current; if (!c) return '';
     const sd = (i: Issue): string => `<span class="sd ${i.severity === 'bad' ? 'sd-qa' : 'sd-draft'}"></span>`;
@@ -753,7 +758,7 @@ export async function start(root: HTMLElement): Promise<void> {
       <section class="m-card"><h3>Оригінал</h3><div class="m-source" id="m-source" lang="en">${sourceHtml(u.source, terms, e?.target ?? '')}</div>${store.refs(c.file, u.key).map(r => `<div class="m-ref"><small>Довідка · ${esc(r.lang.toUpperCase())}</small>${esc(r.text)}</div>`).join('')}${(() => { const w = store.usageOf(c.file, u.key); return w.length ? `<div class="m-ref"><small>Де видається</small>${w.map(esc).join('<br>')}</div>` : ''; })()}</section>
       <section class="m-card m-tr-card"><h3>Переклад<span class="m-count" id="m-count"></span></h3>
         <textarea id="m-tr" class="m-textarea" spellcheck="false" autocapitalize="sentences" placeholder="Напишіть переклад…" aria-label="Переклад">${esc(e?.target ?? '')}</textarea>
-        <div id="m-issues" class="m-issues">${issuesHtml()}</div>
+        <div id="m-issues" class="m-issues"${moreAttr(issuesHtml())}>${issuesHtml()}</div>
       </section>
       <div id="m-prev" class="m-prev"></div>
       ${linksCard(c)}
@@ -954,7 +959,7 @@ export async function start(root: HTMLElement): Promise<void> {
   function refreshMeta(): void {
     const c = store.current; if (!c) return;
     const n = document.getElementById('m-count'); const t = c.entry?.target ?? '';
-    if (n) n.textContent = `${[...t].length} / ${[...c.unit.source].length}`;
+    if (n) n.textContent = `${[...t].length} зн. · оригінал ${[...c.unit.source].length}`;
     const pv = document.getElementById('m-prev');
     if (pv) {
       const plan = store.wrapPlan(), width = isMessageUnit(c.unit) ? widthOf(plan, c.unit) : 0, px = usesPixels(plan), mode = plan.settings.mode;
@@ -967,7 +972,7 @@ export async function start(root: HTMLElement): Promise<void> {
         pv.innerHTML = `<small>${mode === 'build' ? `Так гра покаже: до ${width} ${px ? 'px' : 'зн.'} у рядку` : `Вікно гри: ${width} ${px ? 'px' : 'зн.'} у рядку`}${max > 0 && n > max ? ` · ${plural(n, ['рядок', 'рядки', 'рядків'])}, вікно показує ${max}: гра покаже на кількох сторінках` : ''}</small><div class="m-prevbox">${lines.map(l => { const over = Math.round(measure(l)) - width; return `<div class="${over > 0 ? 'over' : ''}">${esc(l) || '&nbsp;'}${over > 0 ? `<em>+${over}</em>` : ''}</div>`; }).join('')}</div>`;
       }
     }
-    const box = document.getElementById('m-issues'); if (box) box.innerHTML = issuesHtml();
+    const box = document.getElementById('m-issues'); if (box) { const h = issuesHtml(); box.innerHTML = h; box.setAttribute('data-more', moreText(h)); }
     const pb = document.querySelector<HTMLElement>('.m-act1 .m-primary');
     if (pb) { const s0 = c.entry?.status, want = s0 === 'done' ? 'approve' : s0 === 'appr' ? 'next' : 'send'; if (pb.dataset.kind !== want) pb.outerHTML = primaryBtn(s0); }
     const stEl = document.querySelector('.m-status'); if (stEl) { const st = store.shown(c.unit, c.entry); stEl.innerHTML = `<span class="sd ${SHAPE[st]}"></span>${stateLabel(st, c.entry)}`; }

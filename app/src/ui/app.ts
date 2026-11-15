@@ -933,7 +933,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (failed.length) toast(`Не вдалося прочитати: ${failed.slice(0, 4).join(', ')}${failed.length > 4 ? ` і ще ${failed.length - 4}` : ''}. Файл пошкоджений або не є JSON: його рядків у проєкті не буде`, { sticky: true });
     const fromBackup = picked.filter(f => f.fromBackup).length;
     const translated = sumProgress(s.views.map(v => progressOf(v.units, s.saved.files[v.name] ?? {}))).translated;
-    const heavy = isDesktop() && !fromBackup && translated >= 10 && reset / translated >= 0.2;
+    const heavy = isDesktop() && !fromBackup && translated >= 10 && (lastReconcile?.demoted ?? 0) / translated >= 0.2;
     if (ingested && !heavy) toast(`Нова версія гри: ${ingestNote(ingested.report)}`, { action: { label: 'Показати', run: () => openIngestReport(ctx, ingested.report, ingested.batch) } });
     if (heavy) {
       // Many originals changed at once and there is no backup to read them from: most likely the folder already holds the translation.

@@ -323,12 +323,8 @@ public class MainActivity extends Activity {
         if (code == 401) throw new java.io.IOException("Токен недійсний або прострочений");
         if (code == 403 || code == 404) throw new java.io.IOException("Немає доступу до релізу: токен має мати право читати вміст репозиторію");
         if (code != 200) throw new java.io.IOException("Помилка завантаження: " + code);
-        ContentValues v = new ContentValues();
-        v.put(MediaStore.MediaColumns.DISPLAY_NAME, "transly-update.apk");
-        v.put(MediaStore.MediaColumns.MIME_TYPE, "application/vnd.android.package-archive");
-        v.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
-        Uri uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
-        if (uri == null) throw new java.io.IOException("Не вдалося створити файл у Завантаженнях");
+        clearOldUpdates();
+        Uri uri = createUpdateFile();
         long total = 0;
         java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
         try (InputStream in = c.getInputStream(); OutputStream out = getContentResolver().openOutputStream(uri)) {
@@ -344,6 +340,37 @@ public class MainActivity extends Activity {
             throw new java.io.IOException("Завантажений файл не збігається з тим, що вказано в релізі: оновлення скасовано");
         }
         return uri;
+    }
+
+    /** What earlier updates left in Downloads goes first (only the files of this app can be taken away; the others stay and do not matter, the new file has a name of its own). */
+    private void clearOldUpdates() {
+        try {
+            getContentResolver().delete(MediaStore.Downloads.EXTERNAL_CONTENT_URI, MediaStore.MediaColumns.DISPLAY_NAME + " LIKE ?", new String[]{"transly-update%"});
+        } catch (Exception e) {
+            Log.w(TAG, "old updates stay in Downloads", e);
+        }
+    }
+
+    /**
+     * The file for the new APK in Downloads. Its name is new every time: with the same name as the file of the last update Android could not make a unique
+     * one («Failed to build unique file») and the update stopped before it began.
+     */
+    private Uri createUpdateFile() throws java.io.IOException {
+        Exception last = null;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            ContentValues v = new ContentValues();
+            v.put(MediaStore.MediaColumns.DISPLAY_NAME, "transly-update-" + System.currentTimeMillis() + (attempt > 0 ? "-" + attempt : "") + ".apk");
+            v.put(MediaStore.MediaColumns.MIME_TYPE, "application/vnd.android.package-archive");
+            v.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+            try {
+                Uri uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
+                if (uri != null) return uri;
+            } catch (IllegalStateException | IllegalArgumentException | SecurityException e) {
+                last = e;
+                Log.w(TAG, "update file " + attempt + " not created", e);
+            }
+        }
+        throw new java.io.IOException("Не вдалося створити файл оновлення в «Завантаженнях». Видаліть там старі файли transly-update…apk і повторіть" + (last != null && last.getMessage() != null ? " (" + last.getMessage() + ")" : ""));
     }
 
     private boolean closeSave() {

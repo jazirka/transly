@@ -73,7 +73,17 @@ const chips = page => page.locator('#gl-chips .chip').evaluateAll(els => els.map
   check('and the chip counts it', /Розбіжності 1/.test(c[4]), c[4]);
 
   if (process.env.SHOT_DIR) { await page.locator('#gl-chips [data-glk="all"]').click(); await sleep(400); await page.screenshot({ path: process.env.SHOT_DIR + '/s22-related.png' }); }
+  // the card of the thread in the editor offers to go through the rows that render the entry another way
+  await page.locator('[data-m="edit"]').click(); await sleep(400);
+  await page.locator('#mtabs [data-lt="rows"], nav [data-lp="rows"]').first().click(); await sleep(300);
+  await page.locator('#lp-rows [data-key], .slist [data-key]').filter({ hasText: 'Take it off' }).first().click(); await sleep(900);
+  const fixBtn = page.locator('#f-threads [data-th="fix"]');
+  check('the card of a construction used differently elsewhere has «Узгодити (1)»', (await fixBtn.count()) === 1 && /Узгодити \(1\)/.test(await fixBtn.innerText()), await page.locator('#f-threads-b').innerText());
+  await fixBtn.click(); await sleep(700);
+  const queue = await page.locator('#lp-rows [data-key]:visible').allInnerTexts();
+  check('and it opens exactly the rows rendered differently', queue.length === 1 && /Take that off now/.test(queue[0].replace(/\s+/g, ' ')), JSON.stringify(queue));
   // a pattern needs two parts
+  await page.locator('#mtabs [data-lt="glossary"], nav [data-lp="glossary"]').first().click(); await sleep(300);
   await page.locator('#gl-chips [data-glk="all"]').click(); await sleep(200);
   await page.locator('#gl-new').click(); await sleep(150);
   await page.locator('#gl-en').fill('take …'); await page.locator('#gl-uk').fill('зняти'); await page.locator('#gl-save').click(); await sleep(300);

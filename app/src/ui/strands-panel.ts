@@ -98,11 +98,12 @@ export function strandsHtml(ctx: Ctx, u: Unit, target: string): string {
   for (const st of strandsOf(u.source, target, ctx.s.saved.terms)) {
     const t = st.term as GlossaryTerm, use = usageOf(ctx, t, realOf(ctx, u));
     const verdict = st.state === 'pending' ? '' : st.state === 'missing' ? '<span class="thc-st warn">▲ немає в перекладі</span>' : st.state === 'alt' ? '<span class="thc-st ok">✔ альтернатива</span>' : '<span class="thc-st ok">✔ є в перекладі</span>';
-    const all = use && use.rows.length ? `<button type="button" class="btn" data-th="all" data-hk="${esc(t.en)}" title="Інші рядки, де вживається «${esc(t.en)}»">Інші ${use.rows.length}</button>` : '';
+    const fix = use && use.other ? `<button type="button" class="btn p" data-th="fix" data-hk="${esc(t.en)}" title="Рядки, де «${esc(t.en)}» перекладено не так, як у записі: пройти їх по черзі">Узгодити (${use.other})</button>` : '';
+    const all = (use && use.rows.length ? `<button type="button" class="btn" data-th="all" data-hk="${esc(t.en)}" title="Інші рядки, де вживається «${esc(t.en)}»">Інші ${use.rows.length}</button>` : '');
     cards.push(`<div class="thc sc${st.ci}" data-ci="${st.ci}" data-hk="${esc(t.en)}"><span class="thc-dot" aria-hidden="true"></span>
       <div class="thc-t"><button type="button" class="thc-name" data-hc="term" data-hk="${esc(t.en)}"><b>${esc(t.en)}</b><span class="arr" aria-hidden="true">→</span><b>${esc(t.uk)}</b></button><span class="tg k">${KIND_WORD[st.kind]}</span>${verdict}
         ${t.alt?.length ? `<div class="hint">також: ${esc(t.alt.join('; '))}</div>` : ''}${t.note ? `<div class="hint">${esc(t.note)}</div>` : ''}</div>
-      <div class="thc-u">${usageHtml(use)}</div><div class="thc-a">${all}</div></div>`);
+      <div class="thc-u">${usageHtml(use)}</div><div class="thc-a">${fix}${all}</div></div>`);
   }
   namesOfRow(ctx, u).forEach((g, i) => {
     const tr = ctx.entries(g.file)[g.key]?.target;
@@ -144,6 +145,15 @@ export function renderStrands(ctx: Ctx, u: Unit | undefined, target: string): vo
 /** Clicks on the cards' own buttons. */
 export function strandsClick(ctx: Ctx, t: HTMLElement): boolean {
   if (linksClick(ctx, t)) return true;
+  const fix = t.closest<HTMLElement>('[data-th="fix"]');
+  if (fix) {
+    // The rows where the entry was rendered another way, to be gone through one by one (nothing is changed here: the translator decides row by row).
+    const term = ctx.s.saved.terms.find(x => x.en === fix.dataset.hk);
+    const cur = ctx.s.cur ? ctx.unit(ctx.s.cur) : undefined;
+    const use = term && cur ? usageOf(ctx, term, realOf(ctx, cur)) : null;
+    if (term && use?.otherRows.length) ctx.openRows(`«${term.en}»: перекладено інакше`, use.otherRows);
+    return true;
+  }
   const all = t.closest<HTMLElement>('[data-th="all"]');
   if (!all) return false;
   const en = all.dataset.hk ?? '';

@@ -58,6 +58,19 @@ const check = (name, ok, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ') 
   await page.locator('#q').fill('number 29990 of'); await sleep(1200);
   const found = await page.evaluate(() => document.querySelectorAll('#grid .gr:not(.lazy)').length);
   check('a filter finds a row at the end of the file', found === 1, String(found));
+  // ---- a row with a hundred thousand letters in one word does not hold the page (the table shows its beginning; selecting and editing are quick)
+  {
+    await page.locator('#q').fill(''); await sleep(700);
+    const p2 = project(); const snap2 = { 'Map001.json': [{ key: 'k0', source: 'A'.repeat(100000), speaker: '', kind: 'dialogue', context: '' }, { key: 'k1', source: 'Short line', speaker: '', kind: 'dialogue', context: '' }] };
+    delete p2.snapshot;
+    await page.evaluate(put, { text: JSON.stringify(p2), snapshot: snap2 });
+    const t3 = Date.now(); await page.reload(); await page.waitForSelector('#grid .gr:not(.lazy)', { timeout: 60000 }); const opened2 = Date.now() - t3;
+    check('a file with a 100 000-letter word opens in seconds, not half a minute', opened2 < 5000, opened2 + ' ms');
+    const t4 = Date.now(); await page.locator('#grid .gr').first().click(); await page.waitForSelector('#grid .gr.sel'); const sel = Date.now() - t4;
+    check('selecting that row is quick', sel < 3000, sel + ' ms');
+    const clipped = await page.locator('#grid .gr .src').first().innerText();
+    check('the table cell shows the beginning and says how much is left', /ще \d/.test(clipped) && clipped.length < 3000, String(clipped.length));
+  }
   check('no page errors', errors.length === 0, errors.join(' | '));
   await browser.close();
   console.log(failed ? `\n${failed} check(s) failed` : '\nall checks passed');

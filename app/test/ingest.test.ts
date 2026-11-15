@@ -135,3 +135,17 @@ describe('planIngest: a new version of the game', () => {
     expect(Object.keys(saved.files['Map.json']!).filter(isParked).length).toBe(1);
   });
 });
+
+describe('two speakers with the same words', () => {
+  it('a line put in does not swap the translations of Anna and Bob', () => {
+    const u = (key: string, source: string, speaker: string) => ({ key, source, speaker, kind: 'dialogue' as const, context: '' });
+    const old = [u('k0', 'I am ready.', 'Anna'), u('k1', 'I am ready.', 'Bob')];
+    const fresh = [u('k0', 'Hello.', 'Anna'), u('k1', 'I am ready.', 'Anna'), u('k2', 'I am ready.', 'Bob')];
+    const files = { 'Map001.json': { k0: { target: 'Я готова.', status: 'appr' as const, mt: 1, src: 'I am ready.' }, k1: { target: 'Я готовий.', status: 'appr' as const, mt: 1, src: 'I am ready.' } } };
+    const plan = planIngest({ 'Map001.json': old }, [{ name: 'Map001.json', units: fresh }], files, 10);
+    const after: Record<string, string> = { k0: files['Map001.json'].k0.target, k1: files['Map001.json'].k1.target };
+    for (const c of plan.changes) after[c.key] = c.next.target;
+    expect(after['k1']).toBe('Я готова.');
+    expect(after['k2']).toBe('Я готовий.');
+  });
+});

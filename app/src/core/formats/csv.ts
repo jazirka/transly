@@ -1,3 +1,4 @@
+import { safeKey } from '../keys';
 import type { Translations, Unit } from '../model';
 
 interface Table { rows: string[][]; delim: string; eol: string; bom: boolean; hasHeader: boolean; key: number; source: number; target: number }
@@ -44,7 +45,7 @@ function analyse(text: string): Table {
   return { ...s, hasHeader: false, key: s.rows[0] && s.rows[0].length >= 3 ? 0 : -1, source: s.rows[0] && s.rows[0].length >= 3 ? 1 : 0, target: s.rows[0] && s.rows[0].length >= 3 ? 2 : 1 };
 }
 
-const keyOf = (t: Table, row: string[], i: number) => (t.key >= 0 && row[t.key]?.trim() ? row[t.key]!.trim() : `row${i + 1}`);
+const keyOf = (t: Table, row: string[], i: number) => safeKey(t.key >= 0 && row[t.key]?.trim() ? row[t.key]!.trim() : `row${i + 1}`);
 
 export function extractCsv(text: string): Unit[] {
   const t = analyse(text);

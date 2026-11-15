@@ -355,6 +355,9 @@ export async function start(root: HTMLElement): Promise<void> {
   };
   /** The game wraps text with hard line breaks; the table shows it as one paragraph. */
   const flow = (t: string): string => t.replace(/\n/g, ' ');
+  /** A table cell shows the beginning of a very long text (the whole of it is in the editor): laying out a hundred thousand letters in a narrow cell takes the browser half a minute. */
+  const CELL_MAX = 2000;
+  const cellText = (t: string): string => (t.length > CELL_MAX ? `${t.slice(0, CELL_MAX)}… (ще ${(t.length - CELL_MAX).toLocaleString('uk-UA')} символів)` : t);
   const lenCls = (u: Unit, e: Entry | undefined): string => {
     if (!e?.target) return '';
     const d = Math.abs(lengthDeviation(u.source, e.target)), tol = s.saved.settings.tolerancePct;
@@ -574,10 +577,10 @@ export async function start(root: HTMLElement): Promise<void> {
     return `<div class="gr ${sel ? 'sel' : ''} ${chk ? 'chk' : ''}" role="row" tabindex="${sel ? 0 : -1}" aria-selected="${sel}" data-key="${esc(u.key)}">
       <div class="ln" role="gridcell"><span class="num">${n}</span><input type="checkbox" class="rc" ${chk ? 'checked' : ''} aria-label="Вибрати рядок ${n}"></div>
       <div class="st" role="gridcell"><span class="sd ${st}${autoDraft(st, e) ? ' auto' : ''}" aria-hidden="true" title="${STATUS_LABEL[st]}${autoDraft(st, e) ? ' (заповнено застосунком, ще не переглянуто)' : ''}"${st === 'qa' ? ` data-hc="qa" data-hk="${esc(u.key)}"` : ''}></span><span class="vh">${STATUS_LABEL[st]}${autoDraft(st, e) ? ', авто' : ''}</span>${adv ? '<span class="adv" title="Є порада QA: відкрийте рядок, щоб побачити" data-hc="qa" data-hk="' + esc(u.key) + '"></span><span class="vh">Є порада</span>' : ''}</div>
-      <div role="gridcell"><span class="key" title="${esc(u.key)}">${esc(shortKey(u.key))}</span>${cmIcon(e)}</div>
+      <div role="gridcell"><span class="key" title="${esc(u.key.split(SEP).join(' › '))}">${esc(shortKey(u.key))}</span>${cmIcon(e)}</div>
       <div class="who" role="gridcell">${esc(ctx.speaker(u))}</div>
-      <div class="src" role="gridcell" lang="en">${markup(flow(u.source), hits)}<span class="skey" aria-hidden="true">${esc(shortKey(u.key))}</span></div>
-      <div class="tr ${e?.target ? '' : 'empty'}" role="gridcell" title="Клікніть, щоб писати прямо тут">${e?.target ? markup(flow(e.target)) : '—'}</div>
+      <div class="src" role="gridcell" lang="en">${markup(cellText(flow(u.source)), hits)}<span class="skey" aria-hidden="true">${esc(shortKey(u.key))}</span></div>
+      <div class="tr ${e?.target ? '' : 'empty'}" role="gridcell" title="Клікніть, щоб писати прямо тут">${e?.target ? markup(cellText(flow(e.target))) : '—'}</div>
       <div class="len ${lenCls(u, e)}" role="gridcell" title="Символів у перекладі / в оригіналі">${len}</div></div>`;
   }
   let enforcedCache: { stamp: string; en: string[] } | null = null;
@@ -1474,8 +1477,11 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!cell || !u || cell.querySelector('textarea')) return;
     const ta = el('textarea', 'cell-ed');
     ta.rows = 2; ta.value = entryOf(u)?.target ?? ''; ta.setAttribute('aria-label', 'Переклад рядка');
+    // the editor is as tall as its text (up to half the window): the first line is not cut in half and a long text can be read
+    const fit = (): void => { ta.style.height = 'auto'; ta.style.height = `${Math.min(ta.scrollHeight + 2, Math.round(window.innerHeight * 0.5))}px`; };
+    ta.addEventListener('input', fit);
     // The caret goes to the end: the first letter typed must not wipe the translation.
-    cell.innerHTML = ''; cell.appendChild(ta); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+    cell.innerHTML = ''; cell.appendChild(ta); fit(); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
     let cancelled = false;
     const save = (): void => {
       if (!cancelled && ta.value !== (entryOf(u)?.target ?? '')) {

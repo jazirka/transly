@@ -33,6 +33,8 @@ const EN_OUR = /^(arm|col|hon|fav|flav|lab|neighb|rum|sav|vap|harb|hum|behavi|en
 function enSpelling(w: string): string {
   const known = EN_SPELLING[w];
   if (known) return known;
+  // no English word is this long: a run of letters of this length (a hostile line) is not searched with patterns that look at it from every position
+  if (w.length > 40) return w;
   let r = w.replace(EN_OUR, '$1or');
   r = r.replace(/^(defen|offen|licen|preten)ce/, '$1se');                 // defence → defense
   r = r.replace(/([a-z]{2,})is(e|ed|es|ing|ation|ations|er|ers)$/, '$1iz$2'); // organise → organize

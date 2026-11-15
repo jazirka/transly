@@ -1,3 +1,4 @@
+import { safeKey } from '../keys';
 import type { Translations, Unit } from '../model';
 
 /** gettext catalog entry (the header entry has an empty msgid). */
@@ -69,7 +70,7 @@ function serialize(entries: Entry[], eol: string): string {
   }).join(eol + eol) + eol;
 }
 
-const baseKey = (e: Entry) => (e.ctxt !== null ? `${e.ctxt}::` : '') + e.id;
+const baseKey = (e: Entry) => safeKey((e.ctxt !== null ? `${e.ctxt}::` : '') + e.id);
 const isHeader = (e: Entry) => e.id === '' && e.ctxt === null;
 const nplurals = (entries: Entry[]): number => Number(/nplurals\s*=\s*(\d+)/.exec(entries.find(isHeader)?.strs[0] ?? '')?.[1] ?? 2);
 

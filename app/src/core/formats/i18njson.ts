@@ -1,4 +1,5 @@
 import type { Translations, Unit } from '../model';
+import { safeKey } from '../keys';
 import { hasText } from '../rpgmaker';
 
 type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
@@ -12,7 +13,7 @@ export const looksLikeLocaleFile = (name: string): boolean =>
 export function extractLocaleJson(json: unknown): Unit[] {
   const out: Unit[] = [];
   const walk = (v: Json, path: string, ctx: string) => {
-    if (typeof v === 'string') { if (hasText(v)) out.push({ key: path, source: v, speaker: '', kind: 'message', context: ctx }); }
+    if (typeof v === 'string') { if (hasText(v)) out.push({ key: safeKey(path), source: v, speaker: '', kind: 'message', context: ctx }); }
     else if (Array.isArray(v)) v.forEach((x, i) => walk(x, `${path}[${i}]`, ctx));
     else if (isObj(v)) for (const [k, x] of Object.entries(v)) walk(x, path ? `${path}.${k}` : k, path ? path : k);
   };
@@ -23,9 +24,9 @@ export function extractLocaleJson(json: unknown): Unit[] {
 export function applyLocaleJson(json: unknown, tr: Translations): unknown {
   const copy = structuredClone(json) as Json;
   const walk = (v: Json, path: string): Json => {
-    if (typeof v === 'string') { const t = tr[path]?.target; return t && t.trim() ? t : v; }
+    if (typeof v === 'string') { const t = tr[safeKey(path)]?.target; return t && t.trim() ? t : v; }
     if (Array.isArray(v)) return v.map((x, i) => walk(x, `${path}[${i}]`));
-    if (isObj(v)) { const o: { [k: string]: Json } = {}; for (const [k, x] of Object.entries(v)) o[k] = walk(x, path ? `${path}.${k}` : k); return o; }
+    if (isObj(v)) { const o: { [k: string]: Json } = {}; for (const [k, x] of Object.entries(v)) Object.defineProperty(o, k, { value: walk(x, path ? `${path}.${k}` : k), enumerable: true, writable: true, configurable: true }); return o; }
     return v;
   };
   return walk(copy, '');

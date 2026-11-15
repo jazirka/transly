@@ -505,7 +505,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 .m-layout{max-width:320px}
 
 /* ---------- wave 3: landscape (a phone on its side: little height, plenty of width) ---------- */
-@media (orientation:landscape) and (max-height:520px){
+@media (orientation:landscape) and (max-height:520px) and (min-width:560px){
   :root{--nav:0px}
   .m-app{grid-template-columns:64px minmax(0,1fr);grid-template-rows:auto 1fr;max-width:none}
   /* the navigation is a rail on the left, the header and the screen share the rest */
@@ -661,7 +661,7 @@ textarea::placeholder,input::placeholder{color:#9a9ca3}
 .kb-done{display:none}
 .kb .kb-done{display:grid}
 /* a landscape screen as short as a keyboard leaves (200 px): the rail of four buttons fits */
-@media (orientation:landscape) and (max-height:300px){
+@media (orientation:landscape) and (max-height:300px) and (min-width:560px){
   .m-nav button{min-height:0;font-size:10px;gap:0;max-height:none}
   .m-nav button svg{width:18px;height:18px}
 }

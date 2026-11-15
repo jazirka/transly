@@ -113,7 +113,9 @@ export function planIngest(oldSnap: Record<string, Unit[]> | undefined, views: {
     if (!old?.length) continue;
     const units = v.units;
     if (old.length === units.length && old.every((u, i) => u.key === units[i]!.key && u.source === units[i]!.source)) continue;
-    const pairs = alignSources(old.map(u => u.source), units.map(u => u.source));
+    // The speaker is part of what a line is: two people saying the same words are two lines (otherwise a line put in between swaps their translations).
+    const sig = (u: Unit): string => `${u.speaker ?? ''}\u241F${u.source}`;
+    const pairs = alignSources(old.map(sig), units.map(sig));
     // almost nothing in common (and not the same number of lines): this is another text, not an update of this one
     if (!pairs || (old.length !== units.length && pairs.length < 0.2 * Math.min(old.length, units.length))) { report.unaligned.push(v.name); continue; }
     const ents = files[v.name] ?? {};

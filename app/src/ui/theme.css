@@ -1024,3 +1024,8 @@ body.resizing{user-select:none;cursor:col-resize}
   .chip.on,.seg button.on,.strip button.on,.mode button.on{outline:2px solid Highlight;outline-offset:-2px;font-weight:700}
   :focus-visible{outline:2px solid Highlight}
 }
+
+/* the focus ring of the mode switch is drawn inside it (the switch clips what is outside) */
+.seg button:focus-visible{outline-offset:-2px}
+/* the filter chips are a little tighter, so the nine of them take two lines, not three */
+.filters .chip{padding-left:8px;padding-right:8px}

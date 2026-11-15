@@ -61,11 +61,12 @@ describe('jump target', () => {
 });
 
 /** The plugin runs against stand-ins for the engine's objects: what it calls, in what order, with which numbers. */
-function runPlugin(target: JumpTarget, opts: { loadGame?: (slot: number) => unknown; mapId?: number; emptyParty?: boolean } = {}) {
+function runPlugin(target: JumpTarget, opts: { loadGame?: (slot: number) => unknown; mapId?: number; emptyParty?: boolean; breakSetup?: boolean } = {}) {
   const calls: unknown[][] = [];
-  const interpreter = { _index: -1, setup: (list: unknown, id: number) => calls.push(['setup', (list as unknown[]).length, id]) };
+  const interpreter = { _index: -1, setup: (list: unknown, id: number) => { if (opts.breakSetup) throw new Error('no interpreter'); calls.push(['setup', (list as unknown[]).length, id]); } };
   const sandbox: Record<string, unknown> = {
     console: { error: (m: string) => calls.push(['error', m]) },
+    $gameMessage: { add: (m: string) => calls.push(['say', m]) },
     DataManager: { setupNewGame: () => calls.push(['newGame']), loadGame: (s: number) => { calls.push(['load', s]); return opts.loadGame ? opts.loadGame(s) : true; } },
     SceneManager: { goto: (c: { name: string }) => calls.push(['goto', c.name]), push: (c: { name: string }) => calls.push(['push', c.name]) },
     BattleManager: { setup: (...a: unknown[]) => calls.push(['battle', ...a]), onEncounter: () => calls.push(['encounter']) },
@@ -160,6 +161,26 @@ describe('the test plugin', () => {
     const r = runPlugin({ ...target, eventIndex: 9 });
     r.startMap();
     expect(r.calls.some(c => c[0] === 'error' && String(c[1]).includes('сцену не знайдено'))).toBe(true);
+  });
+
+  it('also tells the tester in the game when the scene is gone, or the engine refuses', () => {
+    const gone = runPlugin({ ...target, eventIndex: 9 });
+    gone.startMap();
+    expect(gone.calls.some(c => c[0] === 'say' && String(c[1]).includes('сцену не знайдено'))).toBe(true);
+    const broken = runPlugin(target, { breakSetup: true });
+    expect(() => broken.startMap()).not.toThrow();
+    expect(broken.calls.some(c => c[0] === 'say' && String(c[1]).includes('no interpreter'))).toBe(true);
+    const fight = runPlugin(jumpTarget('Troops.json', '[1].pages[0].list[2]', game, 'line')!, { breakSetup: true });
+    fight.startMap();
+    expect(() => fight.startBattle()).not.toThrow();
+    expect(fight.calls.some(c => c[0] === 'say' && String(c[1]).includes('no interpreter'))).toBe(true);
+  });
+
+  it('works where the game has no message window yet', () => {
+    const r = runPlugin({ ...target, eventIndex: 9 });
+    const src = jumpPlugin({ ...target, eventIndex: 9 });
+    expect(src).toContain('$gameMessage.add');
+    expect(() => r.startMap()).not.toThrow();
   });
 
   it('uses only syntax old NW.js understands', () => {

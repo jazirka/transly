@@ -65,7 +65,11 @@ export function jumpPlugin(target: JumpTarget): string {
   var armed = true;
   var armedBattle = true;
 
-  function complain(what) { try { console.error('Transly: ' + what); } catch (e) { /* no console */ } }
+  // show: also say it in the game itself (once a map or a battle is open), so the tester sees why the start is not where it was asked for.
+  function complain(what, show) {
+    try { console.error('Transly: ' + what); } catch (e) { /* no console */ }
+    if (show) { try { $gameMessage.add('Transly: ' + what); } catch (e) { /* no message window yet */ } }
+  }
 
   // A fresh game has no switches on and may have an empty party: put in what the event page needs, so the
   // characters appear as they would in the game, and make sure there is someone to walk the map.
@@ -128,10 +132,13 @@ export function jumpPlugin(target: JumpTarget): string {
       var ce = $dataCommonEvents[J.common];
       list = ce ? ce.list : null;
     }
-    if (!list) { complain('сцену не знайдено: гра змінилася після останнього відкриття?'); return; }
+    if (!list) { complain('сцену не знайдено: гра змінилася після останнього відкриття?', true); return; }
     $gameMap._interpreter.setup(list, eventId);
     $gameMap._interpreter._index = Math.min(J.index, list.length - 1);
   }
+
+  // A game whose engine differs from the stock one must not end up on a black screen: say what went wrong and play on.
+  function guarded(fn) { try { fn(); } catch (e) { complain('не вдалося почати зі сцени (' + String(e) + ')', true); } }
 
   var bootStart = Scene_Boot.prototype.start;
   Scene_Boot.prototype.start = function () {
@@ -145,9 +152,11 @@ export function jumpPlugin(target: JumpTarget): string {
     if (J.kind !== 'troop' || !armedBattle) return;
     armedBattle = false;
     var troop = $dataTroops[J.troop], pg = troop && troop.pages[J.page];
-    if (!pg) { complain('сцену не знайдено: гра змінилася після останнього відкриття?'); return; }
-    $gameTroop._interpreter.setup(pg.list, 0);
-    $gameTroop._interpreter._index = Math.min(J.index, pg.list.length - 1);
+    if (!pg) { complain('сцену не знайдено: гра змінилася після останнього відкриття?', true); return; }
+    guarded(function () {
+      $gameTroop._interpreter.setup(pg.list, 0);
+      $gameTroop._interpreter._index = Math.min(J.index, pg.list.length - 1);
+    });
   };
 
   var mapStart = Scene_Map.prototype.start;
@@ -155,7 +164,7 @@ export function jumpPlugin(target: JumpTarget): string {
     mapStart.call(this);
     if (armed && (J.kind !== 'map' || $gameMap.mapId() === J.mapId)) {
       armed = false;
-      run();
+      guarded(run);
     }
   };
 })();

@@ -1,4 +1,4 @@
-import { isAutoFilled, autoNote, planIngest, looksLikeAnotherGame, ingestQuiet, ingestNote, Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, qaOf, termsStamp, adoptSynced, applyPlan, planOf, reconcileChanges, pct, progressOf, rowState, sumProgress, QUEUE_LABEL, nextIn, positionOf, queueRows, ago, copyLine, stamp, stampOf } from '../core';
+import { isAutoFilled, autoNote, planIngest, looksLikeAnotherGame, ingestQuiet, ingestNote, Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, jumpTarget, qaOf, termsStamp, adoptSynced, applyPlan, planOf, reconcileChanges, pct, progressOf, rowState, sumProgress, QUEUE_LABEL, nextIn, positionOf, queueRows, ago, copyLine, stamp, stampOf } from '../core';
 import type { IngestReport, QaOptions, QueueKind, WrapPlan } from '../core';
 import { pxMeasure } from './measure';
 import { openWrapTool } from './wrap-dialog';
@@ -1090,7 +1090,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const loadCfg = (): RunCfg => { try { const v = localStorage.getItem('transly.runcfg'); return (v === 'game' || v === 'scene') && isDesktop() ? v : 'file'; } catch { return 'file'; } };
   let runCfg: RunCfg = loadCfg();
   function renderRunCfg(): void {
-    if (runCfg === 'game' && !isDesktop()) runCfg = 'file';
+    if (CFG[runCfg].desk && !isDesktop()) runCfg = 'file';
     $('#cfg-name').textContent = CFG[runCfg].name;
     $('#cfg-btn').setAttribute('aria-label', `Що запускає кнопка ▶: ${CFG[runCfg].name}`);
     $('#run-btn').title = `Запустити «${CFG[runCfg].name}» (F5)`;
@@ -1134,12 +1134,25 @@ export async function start(root: HTMLElement): Promise<void> {
     const fail = (err: unknown) => toast('Не вдалося запустити: ' + (err instanceof Error ? err.message : String(err)));
     if (k === 'game') buildAndRunGame(ctx).catch(fail);
     else if (k === 'scene') {
-      const u = s.cur ? ctx.unit(s.cur) : undefined;
-      if (!u || !s.current) { toast('Виберіть рядок: гра почнеться з його сцени'); return; }
+      if (!s.current) { toast('Відкрийте файл і виберіть рядок: гра почнеться з його сцени'); return; }
       if (s.current === GROUP) { toast('Запуск у грі працює для файлу, відкритого окремо: відкрийте його зі списку файлів'); return; }
+      const u = sceneStartRow();
+      if (!u) { toast('У цьому файлі немає рядків із сценою (події мапи, загальні події, бої): відкрийте інший файл'); return; }
       playInGame(ctx, s.current, u, 'event', 0).catch(fail);
     } else doBuild();
   };
+  /** The row the scene test starts from: the selected one, else the one in focus in the table, else the first row of the file that has a scene. */
+  function sceneStartRow(): Unit | undefined {
+    const file = s.current;
+    if (!file) return undefined;
+    const at = (key: string | null | undefined): Unit | undefined => (key ? ctx.unit(key) : undefined);
+    const chosen = at(s.cur);
+    if (chosen) return chosen; // an explicit choice stands, even when it has no scene: the answer says why
+    const hasScene = (u: Unit): boolean => !!jumpTarget(file, u.key, s.game, 'event');
+    const stop = at(document.querySelector<HTMLElement>('#grid .gr[tabindex="0"]')?.dataset.key);
+    if (stop && hasScene(stop)) return stop;
+    return (ctx.view()?.units ?? []).find(hasScene);
+  }
   const runSelected = (): void => runCfgNow(runCfg);
   const doBuild = () => openBuild(ctx, dataDir, n => { s.lastBuild = { at: Date.now(), n }; stamp(s.saved, 'build', 'збірка', Date.now(), n); ctx.persist(); renderTop(); }, () => void openFolder());
 

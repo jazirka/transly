@@ -93,16 +93,25 @@ export const restoreJump = (dataDir: string): Promise<boolean> => invoke<boolean
 
 export const restoreGame = (dataDir: string): Promise<number> => invoke<number>('restore_data', { dataDir });
 
-export async function launchGame(): Promise<void> {
-  let exe = rememberedExe();
-  if (!exe) exe = await pickExe();
-  if (!exe) return;
+/** The game's program: the remembered one, else the translator is asked once. Null when nothing was chosen. */
+export async function gameExe(): Promise<string | null> {
+  return rememberedExe() ?? (await pickExe());
+}
+
+/** Start the game. False when there was nothing to start (no program chosen), so the caller does not claim a launch that did not happen. */
+export async function launchGame(): Promise<boolean> {
+  const exe = await gameExe();
+  if (!exe) return false;
   try { await invoke('allow_again', { path: exe }); } catch { /* picked again below */ }
   try { await invoke('launch', { exe }); }
   catch (e) {
-    if (String(e).includes('не знайдено') || String(e).includes('не дозволено')) { const again = await pickExe(); if (again) await invoke('launch', { exe: again }); }
-    else throw e;
+    if (String(e).includes('не знайдено') || String(e).includes('не дозволено')) {
+      const again = await pickExe();
+      if (!again) return false;
+      await invoke('launch', { exe: again });
+    } else throw e;
   }
+  return true;
 }
 
 /** A picture from the game folder as bytes, or null when there is no folder or no such file. */

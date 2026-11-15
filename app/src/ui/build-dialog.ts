@@ -61,7 +61,7 @@ export function openBuild(ctx: Ctx, dataDir: string | null, onBuilt: (n: number)
         await restoreJump(dataDir!).catch(() => false); // a normal start, not the scene test
         toast(`Записано файлів у гру: ${n}`);
         onBuilt(r.included);
-        if (t.id === 'bd-play') { await launchGame(); toast('Гру запущено'); }
+        if (t.id === 'bd-play') toast((await launchGame()) ? 'Гру запущено' : 'Гру не запущено: не вказано файл гри (.exe)');
         dlg.close();
       } else if (t.id === 'bd-restore') { const n = await restoreGame(dataDir!); const plugin = await restoreJump(dataDir!).catch(() => false); toast(`Повернуто оригінальних файлів: ${n}${plugin ? '. Тестовий плагін прибрано' : ''}`); }
       else if (t.id === 'bd-pickexe') { const x = await pickExe(); if (x) $('#bd-exe', dlg).textContent = 'Файл гри: ' + x; }

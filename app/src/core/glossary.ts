@@ -22,7 +22,14 @@ const APOSTROPHES = /['’ʼ`]/g;
 
 /* ---------- English ---------- */
 
-const EN_IRREGULAR: Record<string, string> = { knives: 'knife', wolves: 'wolf', leaves: 'leaf', lives: 'life', halves: 'half', thieves: 'thief', shelves: 'shelf', men: 'man', women: 'woman', children: 'child', feet: 'foot', teeth: 'tooth', mice: 'mouse', geese: 'goose', oxen: 'ox', people: 'person', dice: 'die', staves: 'staff' };
+const EN_IRREGULAR: Record<string, string> = { knives: 'knife', wolves: 'wolf', leaves: 'leaf', lives: 'life', halves: 'half', thieves: 'thief', shelves: 'shelf', men: 'man', women: 'woman', children: 'child', feet: 'foot', teeth: 'tooth', mice: 'mouse', geese: 'goose', oxen: 'ox', people: 'person', dice: 'die', staves: 'staff',
+  // the past forms of common irregular verbs, so «took … off» is «take … off» (not «saw», «left», «found», «lost», «rose»: those are also nouns or adjectives)
+  took: 'take', taken: 'take', gave: 'give', given: 'give', went: 'go', gone: 'go', came: 'come', made: 'make', got: 'get', gotten: 'get', ran: 'run', seen: 'see', knew: 'know', known: 'know',
+  threw: 'throw', thrown: 'throw', drew: 'draw', drawn: 'draw', wore: 'wear', worn: 'wear', broke: 'break', broken: 'break', fell: 'fall', fallen: 'fall', ate: 'eat', eaten: 'eat', drank: 'drink', drunk: 'drink',
+  rode: 'ride', ridden: 'ride', sang: 'sing', sung: 'sing', swam: 'swim', swum: 'swim', held: 'hold', kept: 'keep', brought: 'bring', bought: 'buy', caught: 'catch', taught: 'teach', sold: 'sell', told: 'tell',
+  stood: 'stand', sat: 'sit', spoke: 'speak', spoken: 'speak', woke: 'wake', woken: 'wake', chose: 'choose', chosen: 'choose', hid: 'hide', hidden: 'hide', blew: 'blow', blown: 'blow', grew: 'grow', grown: 'grow',
+  flew: 'fly', flown: 'fly', shook: 'shake', shaken: 'shake', forgot: 'forget', forgotten: 'forget', froze: 'freeze', frozen: 'freeze', stole: 'steal', stolen: 'steal', wrote: 'write', written: 'write',
+  began: 'begin', begun: 'begin', sent: 'send', built: 'build', lay: 'lie', laid: 'lay', paid: 'pay', said: 'say', slept: 'sleep', met: 'meet', led: 'lead', fought: 'fight', sought: 'seek' };
 
 /** British spellings written as American, whole words (inflected forms are handled by the rules below). */
 const EN_SPELLING: Record<string, string> = { centre: 'center', theatre: 'theater', metre: 'meter', litre: 'liter', fibre: 'fiber', calibre: 'caliber', sabre: 'saber', sombre: 'somber', lustre: 'luster', spectre: 'specter', grey: 'gray', mould: 'mold', plough: 'plow', cheque: 'check', tyre: 'tire', sceptic: 'skeptic', artefact: 'artifact', catalogue: 'catalog', dialogue: 'dialog', analogue: 'analog', aluminium: 'aluminum', jewellery: 'jewelry', moustache: 'mustache', speciality: 'specialty', ageing: 'aging', towards: 'toward', learnt: 'learned', burnt: 'burned', spelt: 'spelled', dreamt: 'dreamed', judgement: 'judgment', manoeuvre: 'maneuver', sulphur: 'sulfur', cosy: 'cozy', draught: 'draft', kerb: 'curb', storey: 'story', pyjamas: 'pajamas', mum: 'mom', whilst: 'while', amongst: 'among', gaol: 'jail', paralyse: 'paralyze', cancelled: 'canceled', cancelling: 'canceling' };
@@ -135,9 +142,73 @@ function termKeys(en: string): string[] {
   return k;
 }
 
+/* ---------- patterns: words that belong together although other words stand between them ---------- */
+
+/** The gap marker of a pattern like «take … off»: it can be typed as «…» or as three dots. */
+export const GAP = '…';
+const GAP_RE = /\s*(?:…|\.{3})\s*/;
+/** Words that may stand between the parts of a pattern: in the original, and in a translation (whose word order is freer). */
+export const EN_GAP = 4;
+export const UK_GAP = 6;
+
+/** Does the text have a gap in it («take … off», «зняти … з»)? */
+export const hasGap = (s: string): boolean => GAP_RE.test(s);
+/** The runs of words that stand together, between the gaps: «take … off» is «take» and «off»; a text without a gap is one part. */
+export const patternParts = (s: string): string[] => s.split(GAP_RE).map(x => x.trim()).filter(Boolean);
+/** One way to write a gap: «take...off» and «take … off» are the same pattern. */
+export const normalizeGap = (s: string): string => s.replace(/\s*(?:…|\.{3})\s*/g, ` ${GAP} `).trim();
+
+/** One part of a pattern as the matcher sees it: how many words it has, and whether it stands at word `i`. */
+export interface PartMatcher { len: number; at(i: number): boolean }
+/** A sentence ends between two parts of a pattern: they do not belong together. */
+const BREAK = /[.!?;]|\n/;
+
+/**
+ * The places where every part of a pattern stands, in order, with at most `maxGap` words between one part and the next
+ * and no end of a sentence between them. Each place is the list of the parts' ranges; the words in the gaps are free for other
+ * patterns and terms (the matches may nest).
+ */
+export function matchChain(toks: { start: number; end: number }[], text: string, parts: PartMatcher[], maxGap: number): [number, number][][] {
+  const out: [number, number][][] = [];
+  const first = parts[0];
+  if (!first || first.len < 1) return out;
+  for (let i = 0; i + first.len <= toks.length; i++) {
+    if (!first.at(i)) continue;
+    const spans: [number, number][] = [[toks[i]!.start, toks[i + first.len - 1]!.end]];
+    let end = i + first.len - 1, ok = true;
+    for (let k = 1; k < parts.length && ok; k++) {
+      const part = parts[k]!;
+      ok = false;
+      for (let j = end + 1; j <= end + 1 + maxGap && j + part.len <= toks.length; j++) {
+        if (BREAK.test(text.slice(toks[end]!.end, toks[j]!.start))) break;
+        if (part.at(j)) { spans.push([toks[j]!.start, toks[j + part.len - 1]!.end]); end = j + part.len - 1; ok = true; break; }
+      }
+    }
+    if (ok) out.push(spans);
+  }
+  return out;
+}
+
 /** Where the term occurs in the prepared text: a run of words (separated by spaces or hyphens) whose keys agree. */
 export function termRangesIn(p: PreparedText, en: string): [number, number][] {
-  const need = termKeys(en.trim());
+  return termMatchesIn(p, en).flat();
+}
+
+/** Where the term occurs, as one list of ranges per occurrence: a plain term has one range, a pattern («take … off») one for each of its parts. */
+export function termMatchesIn(p: PreparedText, en: string): [number, number][][] {
+  const e = en.trim();
+  if (!hasGap(e)) return plainRanges(p, e).map(r => [r]);
+  const parts = patternParts(e);
+  if (parts.length < 2) return plainRanges(p, parts[0] ?? '').map(r => [r]);
+  const keys = parts.map(part => termKeys(part));
+  if (keys.some(k => !k.length)) return [];
+  const t = p.tokens;
+  const matchers: PartMatcher[] = keys.map(need => ({ len: need.length, at: i => need.every((k, j) => t[i + j]!.keys.includes(k) && (j === 0 || /^[\s\-–—]+$/.test(p.text.slice(t[i + j - 1]!.end, t[i + j]!.start)))) }));
+  return matchChain(t, p.text, matchers, EN_GAP);
+}
+
+function plainRanges(p: PreparedText, en: string): [number, number][] {
+  const need = termKeys(en);
   const out: [number, number][] = [];
   if (!need.length) return out;
   const t = p.tokens;
@@ -216,6 +287,7 @@ export function termsIn<T extends Term>(source: string, terms: T[]): T[] {
 export function targetHasTerm(target: string, uk: string, alt: string[] = []): boolean {
   const toks = tokens(target), hay = toks.map(t => t.keys[0]!);
   const has = (phrase: string) => {
+    if (hasGap(phrase) && patternParts(phrase).length > 1) return termMatchesInTarget(target, phrase).length > 0;
     const need = tokens(phrase).map(t => t.keys[0]!);
     if (!need.length) return false;
     const forms = phraseForms(phrase);
@@ -229,6 +301,23 @@ export function targetHasTerm(target: string, uk: string, alt: string[] = []): b
     return false;
   };
   return [uk, ...alt].some(has);
+}
+
+/**
+ * Where a Ukrainian pattern («зняти … з») stands in a translation: one list of ranges per occurrence, a range for each of its parts, in
+ * order, with at most `UK_GAP` words between them. A pattern with a single part (a gap at its edge only: «зняти …») is just that phrase.
+ */
+export function termMatchesInTarget(text: string, phrase: string): [number, number][][] {
+  const parts = patternParts(phrase);
+  const toks = tokens(text);
+  const matchers: PartMatcher[] = [];
+  for (const part of parts) {
+    const need = tokens(part).map(t => t.keys[0]!);
+    if (!need.length) continue;
+    const forms = phraseForms(part);
+    matchers.push({ len: need.length, at: i => need.every((k, j) => wordAgrees(forms, j, text.slice(toks[i + j]!.start, toks[i + j]!.end), toks[i + j]!.keys[0]!, k) && (j === 0 || /^[\s\-–—]+$/.test(text.slice(toks[i + j - 1]!.end, toks[i + j]!.start)))) });
+  }
+  return matchers.length ? matchChain(toks, text, matchers, UK_GAP) : [];
 }
 
 /** Parse "english<TAB>українською" lines (also accepts ;). Returns valid pairs and the count of rejected lines. */

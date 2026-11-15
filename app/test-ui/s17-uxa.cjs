@@ -6,7 +6,7 @@ const PC = process.env.PC_URL || 'http://localhost:4285/';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const long = 'The harbour master looks at you for a long time and then says that the ship you came on left three days ago without a single passenger, and nobody saw it go.';
 const project = () => ({
-  version: 1, name: 'P', sourceLang: 'en', targetLang: 'uk', resetEpoch: 0, files: {}, memory: [], terms: [],
+  version: 1, name: 'P', sourceLang: 'en', targetLang: 'uk', resetEpoch: 0, files: {}, memory: [{ s: 'Yes', t: 'Авжеж', mt: 1 }], terms: [],
   settings: { tolerancePct: 25, blockErrors: true, who: 'Ви', propagate: true, pluginCommands: [], pluginsAsked: false, lineLimit: 0 },
   snapshot: { 'Map001.json': [...Array(7).fill('Yes'), long, 'Another line here'].map((src, i) => ({ key: 'k' + i, source: src, speaker: 'Hero', kind: 'dialogue', context: '' })) },
 });
@@ -76,6 +76,14 @@ const check = (name, ok, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ') 
     await page.keyboard.press('Control+z'); await sleep(700);
     const txt = await page.evaluate(() => document.body.innerText);
     check('Ctrl+Z takes back the last thing typed in the editor, not an older action', !/Друга правка/.test(txt) && /Перша правка/.test(txt), '');
+  }
+  // ---- «З пам'яті» fills the chosen empty rows (it works in steps now, so the page is not held) (ux-c-08)
+  {
+    await page.locator('[data-m="table"]').click(); await sleep(500);
+    await page.locator('.gr').nth(4).hover(); await page.locator('.gr .rc').nth(4).check({ force: true }); await sleep(300);
+    await page.locator('#bb-tm').click(); await sleep(1200);
+    const rows = await page.locator('.gr').evaluateAll(r => r.map(x => x.innerText.replace(/\s+/g, ' ')));
+    check('«З пам’яті» puts the match into the chosen empty row', rows.some(r => /k4 Yes/.test(r) && !/—/.test(r)), JSON.stringify(rows.filter(r => /Yes/.test(r)).map(r => r.slice(0, 40))));
   }
   check('no page errors', errors.length === 0, errors.join(' | '));
   await browser.close();

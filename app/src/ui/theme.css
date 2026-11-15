@@ -952,9 +952,9 @@ body.resizing{user-select:none;cursor:col-resize}
 .filters .fin{flex:0 1 200px;min-width:140px}
 .filters .chipsHost{flex-wrap:wrap}
 .chip.idle{opacity:.5;cursor:default}
-.srcbox .inv{font:10px var(--mono);color:#f0b45c;background:rgba(240,180,92,.14);border-radius:3px;padding:0 2px;margin:0 1px}
+.inv{font:10px var(--mono);color:#f0b45c;background:rgba(240,180,92,.14);border-radius:3px;padding:0 2px;margin:0 1px}
 /* in a narrow tree the file's name wins over the little progress bar (the percentage stays) */
-.node .nm{min-width:7ch}
+.node .nm{min-width:0}
 @media (max-width:1100px){.node .mini{display:none}}
 /* the match in the quick search (Ctrl+K) */
 .sd-it mark{background:rgba(255,200,60,.28);color:inherit;border-radius:2px}

@@ -1440,21 +1440,30 @@ export async function start(root: HTMLElement): Promise<void> {
     const nSkip = [...skipped.values()].reduce((a, b) => a + b, 0);
     undoToast(ctx, `Вичитано: ${changes.length}${autoNote(auto)}${nSkip ? `. Пропущено: ${nSkip} (${[...skipped.keys()].slice(0, 2).join('; ')})` : ''}`, batch, nSkip > 0);
   }
-  function bulkTm(): void {
+  /** The fill from the memory is going on (it works in steps, so the page stays alive; Esc stops it). */
+  let tmBusy = false, tmCancel = false;
+  window.addEventListener('keydown', e => { if (e.key === 'Escape' && tmBusy) tmCancel = true; }, true);
+  async function bulkTm(): Promise<void> {
     const v = ctx.view();
-    if (!v) return;
+    if (!v || tmBusy) return;
     const ents = ctx.entries(v.name);
+    const keys = [...s.checked].filter(k => unitMap.has(k) && !ents[k]?.target);
     const changes: RowChange[] = [];
-    for (const k of s.checked) {
-      const u = unitMap.get(k);
-      if (!u || ents[k]?.target) continue;
-      const m = ctx.tm().find(u.source, { min: 70, limit: 1, exclude: x => x.s === u.source && false })[0];
-      if (m) changes.push({ file: v.name, key: k, next: edit(ents[k], u, m.t, ctx.stage(), Date.now()), text: m.t, what: `підставлено з пам’яті (${m.score}%)` });
-    }
+    tmBusy = true; tmCancel = false;
+    let last = performance.now();
+    try {
+      for (let i = 0; i < keys.length; i++) {
+        const k = keys[i]!, u = unitMap.get(k)!;
+        const m = ctx.tm().find(u.source, { min: 70, limit: 1 })[0];
+        if (m) changes.push({ file: v.name, key: k, next: edit(ents[k], u, m.t, ctx.stage(), Date.now()), text: m.t, what: `підставлено з пам’яті (${m.score}%)` });
+        // after a fifth of a second the page gets to breathe, and the reader sees how far it is (Esc stops it, what is found so far is kept)
+        if (performance.now() - last > 200) { showLoad(`З пам’яті: ${i + 1} з ${keys.length} (Esc зупинить)`); await new Promise(r => setTimeout(r, 0)); last = performance.now(); if (tmCancel) break; }
+      }
+    } finally { tmBusy = false; showLoad(null); }
     const n = changes.length;
     const batch = n ? ctx.commit(changes, 'memory') : undefined;
     ctx.persist(); ctx.invalidateTm(); renderAll();
-    if (n) undoToast(ctx, `Підставлено з пам’яті: ${n}`, batch); else toast('Збігів від 70% для порожніх вибраних рядків немає');
+    if (n) undoToast(ctx, `Підставлено з пам’яті: ${n}${tmCancel ? ' (зупинено)' : ''}`, batch); else toast(tmCancel ? 'Зупинено: збігів поки немає' : 'Збігів від 70% для порожніх вибраних рядків немає');
   }
 
   /* ---------- inline cell editing ---------- */
@@ -1615,7 +1624,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (ln) { s.lenFilter = ln.dataset.len as typeof s.lenFilter; closePops(); renderAll(); return; }
     if (t.closest('#bb-ok')) { bulkSend(); return; }
     if (t.closest('#bb-appr')) { bulkApprove(); return; }
-    if (t.closest('#bb-tm')) { bulkTm(); return; }
+    if (t.closest('#bb-tm')) { void bulkTm(); return; }
     if (t.closest('#tree-grp')) { const first = [...s.picked][0]; if (first) showPop(t.closest<HTMLElement>('#tree-grp')!, placeMenuHtml(ctx, filesTarget(first))); return; }
     if (t.closest('#bb-clear')) { s.checked.clear(); renderSelection(); return; }
     if (t.closest('#selall')) { const all = ($('#selall') as HTMLInputElement).checked; for (const u of visibleUnits(true)) all ? s.checked.add(u.key) : s.checked.delete(u.key); renderSelection(); return; }

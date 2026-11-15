@@ -3,6 +3,10 @@ import { esc } from './dom';
 
 const CODE = /\\[A-Za-z]+\[\d+\]|\\[{}.|!><^$]/g;
 
+/** Characters that take no room but change how a text reads or is laid out (zero-width, direction marks and overrides): shown as marks, so they can be seen. */
+const INVISIBLE = /[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g;
+const showInvisible = (escaped: string): string => escaped.replace(INVISIBLE, c => { const hex = c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0'); return `<span class="inv" title="Невидимий символ U+${hex}">‹${hex}›</span>`; });
+
 /** Escape text and mark control codes. Optionally mark glossary terms (any plural/verb/British-American form). */
 export function markup(text: string, termsEn: string[] = []): string {
   const marks: { start: number; end: number; cls: 'code' | 'term-hit' }[] = [];
@@ -15,15 +19,11 @@ export function markup(text: string, termsEn: string[] = []): string {
   let out = '', at = 0;
   for (const m of marks) {
     if (m.start < at) continue;
-    out += esc(text.slice(at, m.start)) + `<span class="${m.cls}"${m.cls === 'term-hit' ? ' title="Термін глосарію"' : ''}>${esc(text.slice(m.start, m.end))}</span>`;
+    out += showInvisible(esc(text.slice(at, m.start))) + `<span class="${m.cls}"${m.cls === 'term-hit' ? ' title="Термін глосарію"' : ''}>${esc(text.slice(m.start, m.end))}</span>`;
     at = m.end;
   }
-  return out + esc(text.slice(at));
+  return out + showInvisible(esc(text.slice(at)));
 }
-
-/** Characters that take no room but change how a text reads or is laid out (zero-width, direction marks and overrides): shown as marks in the original, so they can be seen. */
-const INVISIBLE = /[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g;
-const showInvisible = (escaped: string): string => escaped.replace(INVISIBLE, c => { const hex = c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0'); return `<span class="inv" title="Невидимий символ U+${hex}">‹${hex}›</span>`; });
 
 /** A word of an original that has a card: a glossary term, or a name the game itself defines (`key` is then the name's place in the list the panel keeps). */
 export interface TermMark { start: number; end: number; en: string; missing: boolean; kind?: 'term' | 'name'; key?: string }

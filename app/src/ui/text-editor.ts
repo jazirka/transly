@@ -38,7 +38,7 @@ export function insertAtCursor(ta: HTMLTextAreaElement, text: string): void {
   ta.focus();
   // a word put in next to a letter would stick to it: it gets a space on that side
   const before = ta.value[ta.selectionStart - 1], after = ta.value[ta.selectionEnd];
-  if (/^[\p{L}\p{N}]/u.test(text) && before !== undefined && /[\p{L}\p{N}]/u.test(before)) text = ' ' + text;
+  if (/^[\p{L}\p{N}]/u.test(text) && before !== undefined && /[\p{L}\p{N}.,!?;:…»”)\]]/u.test(before)) text = ' ' + text;
   if (/[\p{L}\p{N}]$/u.test(text) && after !== undefined && /[\p{L}\p{N}]/u.test(after)) text += ' ';
   if (!document.execCommand('insertText', false, text)) {
     // The browser would not (an old engine): put it in by hand; the change is still reported.

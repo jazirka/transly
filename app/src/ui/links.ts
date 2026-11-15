@@ -10,7 +10,7 @@ import type { Ctx } from './state';
 
 const NS = 'http://www.w3.org/2000/svg';
 
-interface Link { key: string; kind: 'term' | 'code'; ok: boolean; x1: number; y1: number; x2: number; y2: number; mx?: number; my?: number }
+interface Link { key: string; kind: 'term' | 'code'; ok: boolean; ci?: string; primary: boolean; x1: number; y1: number; x2: number; y2: number; mx?: number; my?: number }
 
 /** A point of the arrow's curve (t from 0 at the original to 1 at the translation). */
 function at(l: Link, t: number): { x: number; y: number } {
@@ -26,53 +26,80 @@ export function drawLinks(_ctx: Ctx): void {
   if (!host) return;
   host.replaceChildren();
   const ta = $('#i-tr') as HTMLTextAreaElement, layer = $('#te-layer');
+  // The threads need room between the original and the translation: the translation steps down while there are some to draw.
+  const room = !!document.querySelector('#f-src [data-hc="term"], #f-src [data-hc="code"]') && !!ta.value.trim() && !ta.disabled;
+  document.querySelector('.fc-in')?.classList.toggle('weave', room);
   const base = host.getBoundingClientRect();
   if (!base.width || !ta.value.trim() || ta.disabled) return;
   const field = ta.getBoundingClientRect();
   const srcBottom = $('#f-src').getBoundingClientRect().bottom;
   const links: Link[] = [];
-  const seen = new Set<string>();
+  const arcs: { key: string; ci?: string; x1: number; x2: number; y: number }[] = [];
+  // The parts of one entry (a pattern like «take … off» has several) are grouped: each part gets its arrow to the place in the translation.
+  const groups = new Map<string, HTMLElement[]>();
   document.querySelectorAll<HTMLElement>('#f-src [data-hc="term"], #f-src [data-hc="code"]').forEach(el => {
-    const kind = el.dataset.hc as 'term' | 'code', key = el.dataset.hk ?? '', id = kind + key;
-    if (seen.has(id)) return;
-    seen.add(id);
+    const id = (el.dataset.hc ?? '') + (el.dataset.hk ?? '');
+    const g = groups.get(id);
+    if (g) { if (el.dataset.hc === 'term' && el.dataset.part !== undefined && g[0]?.dataset.part !== undefined) g.push(el); } else groups.set(id, [el]);
+  });
+  for (const els of groups.values()) {
+    const el0 = els[0]!, kind = el0.dataset.hc as 'term' | 'code', key = el0.dataset.hk ?? '', ci = el0.dataset.ci;
     const hit = layer.querySelector<HTMLElement>(`mark[data-hc="${kind}"][data-hk="${CSS.escape(key)}"]`);
     // A code that is in place needs no arrow.
-    if (kind === 'code' && hit) return;
-    const r = first(el);
-    // The arrow leaves from under the word, at the lower edge of the original's box (a word in the middle of a long text would otherwise have a line drawn across the lines below it).
-    const x1 = r.left + r.width / 2 - base.left, y1 = Math.max(r.bottom, srcBottom) - base.top + 2;
-    if (hit) {
-      const t = first(hit);
-      // A word on a later line of the translation is pointed at from above the field: the arrow does not cross the lines in between.
-      const firstLine = t.top - field.top < 32;
-      links.push({ key, kind, ok: true, x1, y1, x2: t.left + t.width / 2 - base.left, y2: firstLine ? t.top - base.top - 3 : field.top - base.top - 2 });
+    if (kind === 'code' && hit) continue;
+    els.forEach((el, n) => {
+      const r = first(el);
+      // The arrow leaves from under the word, at the lower edge of the original's box (a word in the middle of a long text would otherwise have a line drawn across the lines below it).
+      // A word on the last line of the original is left from its own underline; a word higher up would have the line drawn across the text below it, so that one leaves from the lower edge of the box.
+      const lastLine = srcBottom - r.bottom < 18;
+      const x1 = r.left + r.width / 2 - base.left, y1 = (lastLine ? r.bottom + 1 : Math.max(r.bottom, srcBottom) + 2) - base.top;
+      if (hit) {
+        const t = first(hit);
+        // A word on a later line of the translation is pointed at from above the field: the arrow does not cross the lines in between.
+        const firstLine = t.top - field.top < 32;
+        links.push({ key, kind, ok: true, ...(ci === undefined ? {} : { ci }), primary: n === 0, x1, y1, x2: t.left + t.width / 2 - base.left, y2: firstLine ? t.top - base.top - 1 : field.top - base.top - 2 });
+      }
+      else links.push({ key, kind, ok: false, ...(ci === undefined ? {} : { ci }), primary: n === 0, x1, y1, x2: Math.min(Math.max(x1, field.left - base.left + 14), field.right - base.left - 14), y2: field.top - base.top - 2 });
+    });
+    // The parts of a pattern are joined above the original by a dashed arc (when they stand on one line): the words between them are not part of it.
+    if (els.length > 1) {
+      const rs = els.map(first);
+      const top = Math.min(...rs.map(r => r.top)), sameLine = rs.every(r => Math.abs(r.top - rs[0]!.top) < 6);
+      if (sameLine) arcs.push({ key, ...(ci === undefined ? {} : { ci }), x1: rs[0]!.left + rs[0]!.width / 2 - base.left, x2: rs[rs.length - 1]!.left + rs[rs.length - 1]!.width / 2 - base.left, y: top - base.top - 1 });
     }
-    else links.push({ key, kind, ok: false, x1, y1, x2: Math.min(Math.max(x1, field.left - base.left + 14), field.right - base.left - 14), y2: field.top - base.top - 2 });
-  });
-  if (!links.length) return;
+  }
+  if (!links.length && !arcs.length) return;
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('aria-hidden', 'true');
-  svg.innerHTML = `<defs><marker id="lk-ok" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" class="lk-h ok"/></marker><marker id="lk-warn" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" class="lk-h warn"/></marker></defs>`;
+  svg.innerHTML = `<defs><marker id="lk-ok" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="6" markerHeight="6"><circle cx="4" cy="4" r="3.4" class="lk-h ok"/></marker><marker id="lk-warn" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="6" markerHeight="6"><circle cx="4" cy="4" r="3.4" class="lk-h warn"/></marker></defs>`;
   for (const l of links) {
     const ym = (l.y1 + l.y2) / 2;
     const path = document.createElementNS(NS, 'path');
     path.setAttribute('d', `M${l.x1} ${l.y1} C${l.x1} ${ym}, ${l.x2} ${ym}, ${l.x2} ${l.y2}`);
-    path.setAttribute('class', `lk-p ${l.ok ? 'ok' : 'warn'}`);
-    path.setAttribute('marker-end', `url(#lk-${l.ok ? 'ok' : 'warn'})`);
+    path.setAttribute('class', `lk-p ${l.ok ? 'ok' : 'warn'}${l.ci === undefined ? '' : ` sc${l.ci}`}`);
+    // What is right needs no mark: a line that reaches its word is enough. A word the translation lacks ends in a dot of the warning colour.
+    if (!l.ok) path.setAttribute('marker-end', 'url(#lk-warn)');
     path.dataset.link = l.kind + l.key;
+    svg.appendChild(path);
+  }
+  for (const a of arcs) {
+    const path = document.createElementNS(NS, 'path');
+    path.setAttribute('d', `M${a.x1} ${a.y} C${a.x1} ${a.y - 14}, ${a.x2} ${a.y - 14}, ${a.x2} ${a.y}`);
+    path.setAttribute('class', `lk-arc${a.ci === undefined ? '' : ` sc${a.ci}`}`);
+    path.dataset.link = 'term' + a.key;
     svg.appendChild(path);
   }
   host.appendChild(svg);
   // Marks close to each other would sit on top of one another: spread them out to the right.
+  // Only what needs a look gets a mark (a term the translation lacks, a lost code): what is right is told by the card under the translation.
+  const marked = links.filter(l => l.primary && !l.ok);
   let lastX = -99;
-  for (const l of [...links].sort((a, b) => a.x1 - b.x1)) { const m = at(l, 0.24); l.mx = Math.max(m.x, lastX + 24); lastX = l.mx; l.my = m.y; }
-  for (const l of links) {
+  for (const l of [...marked].sort((a, b) => a.x1 - b.x1)) { const m = at(l, 0.5); l.mx = Math.max(m.x, lastX + 22); lastX = l.mx; l.my = m.y; }
+  for (const l of marked) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = `lk ${l.ok ? 'ok' : l.kind === 'code' ? 'bad' : 'warn'}`;
     b.dataset.hc = l.kind; b.dataset.hk = l.key; b.dataset.link = l.kind + l.key;
-    const m = at(l, 0.24);
     b.style.left = `${l.mx}px`; b.style.top = `${l.my}px`;
     b.textContent = l.ok ? '✔' : l.kind === 'code' ? '✖' : '▲';
     b.setAttribute('aria-label', l.ok ? `«${l.key}»: у перекладі є, відкрити картку` : l.kind === 'code' ? `Код ${l.key} загублено в перекладі, відкрити картку` : `«${l.key}»: у перекладі немає, відкрити картку`);
@@ -87,10 +114,18 @@ export function wireLinks(ctx: Ctx): void {
   const fc = document.querySelector('.fc-in');
   if (fc && typeof ResizeObserver !== 'undefined') new ResizeObserver(redraw).observe(fc);
   const lit = (e: Event, on: boolean): void => {
-    const el = (e.target as Element).closest<HTMLElement>('[data-hc]');
+    const el = (e.target as Element).closest<HTMLElement>('[data-hc], .thc[data-hk]');
     if (!el?.dataset.hk) return;
-    const id = (el.dataset.hc ?? '') + el.dataset.hk;
+    const id = (el.dataset.hc ?? 'term') + el.dataset.hk;
     document.querySelectorAll<SVGPathElement>('#te-links path').forEach(p => { if (p.dataset.link === id) p.classList.toggle('hot', on); });
+    // the other threads step back, so the one that is pointed at can be followed from the word to its place
+    if (el.dataset.hc === 'code' || el.dataset.hc === 'name') return;
+    const root = document.querySelector('.fc-in');
+    root?.classList.toggle('lit', on);
+    root?.querySelectorAll<HTMLElement>('.th[data-hk], mark.tt[data-hk], .thc[data-hk], #te-links path').forEach(n => {
+      const hk = n instanceof SVGElement ? (n.dataset.link ?? '').replace(/^term/, '') : n.dataset.hk;
+      n.classList.toggle('dim', on && hk !== el.dataset.hk);
+    });
   };
   document.addEventListener('mouseover', e => lit(e, true));
   document.addEventListener('mouseout', e => lit(e, false));

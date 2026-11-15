@@ -78,3 +78,17 @@ describe('removeTerm', () => {
     expect(p.deletedTerms).toBeUndefined();
   });
 });
+
+describe('patterns in the glossary form', () => {
+  it('a gap typed as three dots is stored as the gap mark, in the term, its rendering and its alternatives', () => {
+    const saved = { terms: [] as never[], deletedTerms: {} } as never as Parameters<typeof saveTerm>[0];
+    expect(saveTerm(saved, { en: 'take...off', uk: 'зняти ...', alt: 'здійняти...з' }, 1)).toBe('added');
+    expect(saved.terms[0]).toMatchObject({ en: 'take … off', uk: 'зняти …', alt: ['здійняти … з'] });
+  });
+
+  it('a form with nothing but gap marks is refused', () => {
+    const saved = { terms: [], deletedTerms: {} } as never as Parameters<typeof saveTerm>[0];
+    expect(saveTerm(saved, { en: '…', uk: 'x' }, 1)).toBeNull();
+    expect(saveTerm(saved, { en: 'x', uk: '...' }, 1)).toBeNull();
+  });
+});

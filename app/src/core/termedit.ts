@@ -1,4 +1,4 @@
-import { touchTerms } from './glossary';
+import { normalizeGap, patternParts, touchTerms } from './glossary';
 import type { GlossaryTerm } from './glossary';
 import type { SavedProject } from './project';
 
@@ -20,13 +20,14 @@ export const joinAlts = (alt: string[] | undefined): string => (alt ?? []).join(
  * come back in a merge.
  */
 export function saveTerm(saved: SavedProject, form: TermForm, now: number, was?: string): 'added' | 'changed' | 'exists' | null {
-  const en = form.en.trim(), uk = form.uk.trim();
-  if (!en || !uk) return null;
+  // «take...off» and «take … off» are one pattern: the gap is written one way
+  const en = normalizeGap(form.en), uk = normalizeGap(form.uk);
+  if (!en || !uk || !patternParts(en).length || !patternParts(uk).length) return null;
   const oldKey = keyOf(was ?? en), newKey = keyOf(en);
   const at = saved.terms.findIndex(t => keyOf(t.en) === oldKey);
   if (was === undefined && at >= 0) return 'exists';
   if (at >= 0 && oldKey !== newKey && saved.terms.some(t => keyOf(t.en) === newKey)) return 'exists';
-  const alts = splitAlts(form.alt);
+  const alts = splitAlts(form.alt).map(normalizeGap);
   const prev = at >= 0 ? saved.terms[at] : undefined;
   const { alt: _a, kind: _k, note: _n, qa: _q, ...kept } = prev ?? ({} as GlossaryTerm);
   // A field the form does not have (undefined) keeps what the term already holds; an empty one clears it.

@@ -1,15 +1,17 @@
-import { activeIssues, afterSend, applyPlan, linkModeOf, planOf, sourceTermHits, targetHasTerm, targetTermHits, displayLength, edit as editFn, lengthDeviation, linesShown, openThreads, recordChange, referenceSets, setIgnored, submit, termsIn, tooWide, unitWord, wrapMessage } from '../core';
+import { activeIssues, afterSend, applyPlan, linkModeOf, planOf, strandsOf, targetHasTerm, targetTermHits, displayLength, edit as editFn, lengthDeviation, linesShown, openThreads, recordChange, referenceSets, setIgnored, submit, termsIn, tooWide, unitWord, wrapMessage } from '../core';
 import type { BatchKind, Entry, Unit } from '../core';
 import { $, buzz, esc, plural, toast } from './dom';
 import { discussClick, renderDiscuss } from './discuss';
 import { chipsHtml, qaRows, namesOfRow, nameMarks, realOf, tmMatch } from './hintcards';
-import { ROW_PANEL_HTML, renderRowPanel, rowPanelClick } from './rowpanel';
+import { ROW_PANEL_HTML, renderRowPanel, rowPanelClick, setRowTab } from './rowpanel';
 import { focusCard, sceneBlocked } from './scene-view';
 import { historyClick } from './history-panel';
-import { CODE_RE, markupTerms } from './markup';
+import { CODE_RE, markupTerms, termMarksOf } from './markup';
 import { autoSize, drawMarks, insertAtCursor } from './text-editor';
+import type { Mark } from './text-editor';
 import { hideTermCard } from './termcard';
 import { drawLinks } from './links';
+import { renderStrands, strandsClick } from './strands-panel';
 import { openLinkRows } from './links-dialog';
 import { isDesktop, openLink, rememberedGameDir } from './desktop';
 import { drawPic, picOfFace, picsOfRow } from './gameimg';
@@ -40,7 +42,7 @@ const I = {
 export const FOCUS_HTML = `<div class="fc"><div class="fc-in"><div class="te-links" id="te-links"></div>
   <div class="fhd"><span class="k" id="f-key"></span><span class="fchips" id="f-chips"></span><span class="st-pill" id="f-state"></span></div>
   <div class="offlist" id="f-off" hidden><span>Цей рядок не входить у поточний фільтр або пошук.</span><button data-reset>Показати всі рядки</button></div>
-  <div><div class="lbl">Оригінал · EN</div><div class="srcbox" id="f-src" lang="en"></div><div class="pics" id="f-pics" hidden></div></div>
+  <div><div class="lbl">Оригінал · EN<span class="thr-chips" id="f-thr-chips"></span></div><div class="srcbox" id="f-src" lang="en"></div><div class="pics" id="f-pics" hidden></div></div>
   <div id="f-refbox" hidden></div>
   <div class="trblock">
     <div class="lbl"><span id="f-trlbl">Переклад · UK</span></div>
@@ -55,6 +57,7 @@ export const FOCUS_HTML = `<div class="fc"><div class="fc-in"><div class="te-lin
     <div class="wraphint" id="f-wrap" hidden></div>
     <div class="qa-under" id="f-qa"></div>
   </div>
+  <section class="thr" id="f-threads" aria-label="Нитки цього рядка" hidden><div class="lbl">Нитки цього рядка <span class="thr-hint">слово · конструкція · назва · однаковий рядок</span></div><div class="thr-b" id="f-threads-b"></div></section>
 </div></div>`;
 
 export const SIDE_HTML = `<aside class="fs" aria-label="Панель рядка">
@@ -63,7 +66,7 @@ export const SIDE_HTML = `<aside class="fs" aria-label="Панель рядка"
     <button class="on" aria-pressed="true" data-p="panel" title="Переклад, пропозиції, терміни й обговорення рядка">${I.chat}<span class="tl">Рядок</span> <span class="cnt" id="cm-badge" hidden>0</span></button>
   </div>
   <div class="ibody">
-    <div class="ph"><span class="grow" id="rp-title">Рядок</span><span class="ico" id="rp-close" title="Сховати панель" role="button" tabindex="0" aria-label="Сховати панель">—</span></div>
+    <div class="ph"><div class="rtabs" id="rp-tabs" role="tablist" aria-label="Рядок і обговорення"><button type="button" class="rtab on" role="tab" data-rt="row" aria-selected="true">Рядок</button><button type="button" class="rtab" role="tab" data-rt="cm" aria-selected="false" tabindex="-1">Обговорення <span class="cnt" id="rt-cm-n" hidden>0</span></button></div><span class="grow"></span><span class="ico" id="rp-close" title="Сховати панель" role="button" tabindex="0" aria-label="Сховати панель">—</span></div>
     <section class="qa-side" id="qa-side" hidden><div class="lbl">Перевірка рядка</div><div id="i-iss" class="qa-under"></div></section>
     <div class="pane on" id="s-pn" data-title="Рядок">${ROW_PANEL_HTML}</div>
   </div>
@@ -112,6 +115,7 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
     $('#f-chips').innerHTML = '';
     renderPics(ctx, undefined);
     $('#f-src').innerHTML = `<span class="hint">${list.length ? 'Оберіть рядок зліва.' : 'За поточним фільтром рядків немає.'}</span>`;
+    renderStrands(ctx, undefined, '');
     return;
   }
   ($('#i-tr') as HTMLTextAreaElement).disabled = false;
@@ -121,9 +125,8 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
   $('#f-key').textContent = `${realOf(ctx, u).file.replace(/\.[^.]+$/, '')} › ${u.context} › ${u.key.replace(/^.*\.list/, 'list')}`;
   $('#f-state').innerHTML = `<span class="sd ${st}"></span>${e?.returned && e.status === 'draft' ? 'повернено на доопрацювання' : STATUS_CAP[st]}`;
   $('#f-off').hidden = pos >= 0;
-  const hits = termsIn(u.source, s.saved.terms);
   const have = e?.target ?? '';
-  const termMarks = sourceTermHits(u.source, hits).map(h => ({ start: h.start, end: h.end, en: h.term.en, missing: !!have && !targetHasTerm(have, h.term.uk, h.term.alt) }));
+  const termMarks = termMarksOf(u.source, have, s.saved.terms);
   $('#f-src').innerHTML = markupTerms(u.source, [...termMarks, ...nameMarks(u, namesOfRow(ctx, u), termMarks)]);
   $('#f-chips').innerHTML = chipsHtml(ctx, u);
   renderPics(ctx, u);
@@ -133,6 +136,7 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
   const ta = $('#i-tr') as HTMLTextAreaElement;
   if (document.activeElement !== ta || ta.dataset.key !== u.key) { if (ta.dataset.key !== u.key) hideTermCard(); ta.value = e?.target ?? ''; ta.dataset.key = u.key; }
   refreshTerms(ctx, u);
+  renderStrands(ctx, u, ta.value);
   meter(ctx, u);
   refreshQa(ctx, u);
   const lab = 'Надіслати';
@@ -152,7 +156,8 @@ function refreshTerms(ctx: Ctx, u: Unit): void {
   const ta = $('#i-tr') as HTMLTextAreaElement;
   if (!rowTerms || rowTerms.key !== u.key || rowTerms.source !== u.source) rowTerms = { key: u.key, source: u.source, terms: termsIn(u.source, ctx.s.saved.terms) };
   const terms = rowTerms.terms;
-  const found = targetTermHits(ta.value, terms).map(h => ({ start: h.start, end: h.end, cls: 'tt', data: { hc: 'term', hk: h.term.en } }));
+  const ci = new Map(strandsOf(u.source, ta.value, terms).map(st => [st.term, st.ci]));
+  const found: Mark[] = targetTermHits(ta.value, terms).flatMap(h => (h.parts ?? [[h.start, h.end] as [number, number]]).map(([start, end]) => ({ start, end, cls: 'tt', data: { hc: 'term', hk: h.term.en, ci: String(ci.get(h.term) ?? 0) } })));
   for (const m of ta.value.matchAll(CODE_RE)) if (!found.some(x => m.index! < x.end && m.index! + m[0].length > x.start)) found.push({ start: m.index!, end: m.index! + m[0].length, cls: 'tc', data: { hc: 'code', hk: m[0] } });
   found.sort((a, b) => a.start - b.start);
   drawMarks($('#te-layer'), ta.value, found);
@@ -161,6 +166,7 @@ function refreshTerms(ctx: Ctx, u: Unit): void {
   document.querySelectorAll<HTMLElement>('#f-src .th').forEach(el => { const t = byEn.get(el.dataset.term ?? ''); if (t) el.classList.toggle('miss', !!ta.value && !targetHasTerm(ta.value, t.uk, t.alt)); });
   autoSize(ta);
   drawLinks(ctx);
+  renderStrands(ctx, u, ta.value);
 }
 
 function meter(ctx: Ctx, u: Unit): void {
@@ -211,9 +217,9 @@ function renderSide(ctx: Ctx, u: Unit | undefined, e: Entry | undefined): void {
   $('#qa-side').hidden = !q.count;
   $('#i-iss').innerHTML = q.count ? q.html : '';
   renderRowPanel(ctx, u, e);
-  if (!u) { $('#cm-list').innerHTML = ''; $('#cm-badge').hidden = true; $('#pn-cm-n').hidden = true; return; }
+  if (!u) { $('#cm-list').innerHTML = ''; $('#cm-badge').hidden = true; $('#pn-cm-n').hidden = true; $('#rt-cm-n').hidden = true; return; }
   const open0 = openThreads(e);
-  for (const id of ['#cm-badge', '#pn-cm-n']) { $(id).textContent = String(open0); $(id).hidden = !open0; }
+  for (const id of ['#cm-badge', '#pn-cm-n', '#rt-cm-n']) { $(id).textContent = String(open0); $(id).hidden = !open0; }
   renderDiscuss(ctx, `${s.current}|${u.key}`, e);
 }
 
@@ -359,6 +365,7 @@ export function focusClick(ctx: Ctx, t: HTMLElement): boolean {
   const { s } = ctx;
   const u = s.cur ? ctx.unit(s.cur) : undefined;
   if (sideClick(ctx, t)) return true;
+  if (strandsClick(ctx, t)) return true;
   if (!u || !s.current) return false;
   const ents = ctx.entries(s.current);
   const ta = $('#i-tr') as HTMLTextAreaElement;
@@ -417,6 +424,8 @@ export function sideClick(ctx: Ctx, t: HTMLElement): boolean {
   if (t.closest('#rp-close')) { s.sideOn = []; s.sideTouched = true; ctx.render(); return true; }
   if (qaClick(ctx, t)) return true;
   if (!t.closest('.fs')) return false;
+  const rt = t.closest<HTMLElement>('[data-rt]');
+  if (rt) { setRowTab(rt.dataset.rt === 'cm' ? 'cm' : 'row'); ctx.render(); return true; }
   const u = s.cur ? ctx.unit(s.cur) : undefined;
   const ext = t.closest<HTMLElement>('[data-ext]');
   if (ext) { void openLink(ext.dataset.ext!); return true; }

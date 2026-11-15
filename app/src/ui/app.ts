@@ -53,6 +53,7 @@ import { describe as describeSync, loadSyncConfig, runSync, syncConfigured } fro
 import { initResize, initRightResize } from './resize';
 import { mountRows, patchRow, reveal } from './chunks';
 import { buildAndRunGame, playInGame } from './play';
+import { invalidateUsage } from './strands-panel';
 
 const SVG = {
   files: '<svg viewBox="0 0 16 16"><path d="M2 4.5h4l1.2 1.5H14V12.5H2z"/></svg>',
@@ -303,7 +304,7 @@ export async function start(root: HTMLElement): Promise<void> {
       if (!tmCache || tmFlow !== flow || (tmStale && Date.now() - tmBuiltAt > 1000)) { tmCache = buildTm(s); tmFlow = flow; tmBuiltAt = Date.now(); tmStale = false; }
       return tmCache;
     },
-    invalidateTm: () => { tmCache = null; tmStale = false; },
+    invalidateTm: () => { tmCache = null; tmStale = false; invalidateUsage(); },
     softTm: () => { tmStale = true; },
     refreshTop: () => { window.clearTimeout(topTimer); topTimer = window.setTimeout(() => { renderTop(); renderStatus(); }, 500); },
     links: () => { if (!linkCache || linkCache.views !== s.views) linkCache = { views: s.views, idx: new LinkIndex(s.views) }; return linkCache.idx; },

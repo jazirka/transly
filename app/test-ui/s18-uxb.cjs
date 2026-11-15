@@ -75,6 +75,7 @@ const check = (name, ok, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ') 
   // ---- a resolved thread: the section stays open when its «Видалити» is armed (ux-b-17)
   await page.locator('.gr').nth(3).click(); await sleep(300);
   await page.locator('[data-m="edit"]').click(); await sleep(500);
+  await page.locator('#rp-tabs [data-rt="cm"]').click(); await sleep(200); // the discussion is the second tab of the right panel
   await page.locator('#cm-in').click(); await page.keyboard.type('Перевірити термін'); await page.keyboard.press('Control+Enter'); await sleep(500);
   await page.locator('[data-cm="resolve"]').first().click(); await sleep(400);
   await page.locator('details.thr-closed summary').click(); await sleep(300);

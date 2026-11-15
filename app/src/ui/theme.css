@@ -13,6 +13,8 @@
   --sel:#3a3170;         /* selected row */
   --sel-soft:#2a2548;
   --ok:#5fb865; --warn:#e5a04b; --bad:#f75464; --info:#56a8f5; --violet:#b589d6;
+  /* the colours of a row's threads: each glossary entry of the row wears one, from the original to the translation */
+  --s0:#b589d6; --s1:#56a8f5; --s2:#5fb865; --s3:#e5a04b; --s4:#ee7aa8; --s5:#4cc9c0;
   --ui:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
   --mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
   color-scheme:dark;

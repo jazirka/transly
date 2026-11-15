@@ -1,9 +1,10 @@
-import { approveEntry, sendBack, sourceTermHits, targetHasTerm, termsIn } from '../core';
+import { approveEntry, sendBack } from '../core';
 import type { BatchKind, Entry, Unit } from '../core';
 import { $, esc, toast } from './dom';
-import { namesOfRow, realOf, tmListHtml } from './hintcards';
+import { realOf, tmListHtml } from './hintcards';
 import { renderHistory } from './history-panel';
-import { linksClick, linksHtml } from './links-panel';
+import { linksClick } from './links-panel';
+import { clearStrands, strandsClick, strandsHtml } from './strands-panel';
 import { STATUS_CAP, shownStatus } from './state';
 import { undoToast } from './undo-toast';
 import type { Ctx } from './state';
@@ -22,12 +23,16 @@ const sec = (id: string, title: string, body: string, extra = ''): string => `<s
 export const ROW_PANEL_HTML = ['<div class="pn-empty-all hint">Оберіть рядок</div>',
   sec('tr', 'Переклад: українська', '<div class="pn-b" id="pn-tr"></div>'),
   sec('sg', 'Пропозиції', '<div class="pn-b" id="pn-sg"></div>'),
-  sec('lk', 'Зв’язані рядки', '<div class="pn-b" id="pn-lk"></div>'),
-  sec('tm', 'Терміни й назви з гри', '<div class="pn-b" id="pn-tm"></div>'),
+  sec('th', 'Нитки: слова, конструкції, назви, однакові рядки', '<div class="pn-b" id="pn-th"></div>'),
   sec('cm', 'Обговорення', `<div class="pn-b" id="pn-cm"><div id="cm-list" class="cm-list"></div>
     <div class="cm-new"><textarea class="cmin" id="cm-in" placeholder="Нове обговорення цього рядка…" aria-label="Новий коментар"></textarea>
     <div class="actions" style="margin-top:0"><button class="btn" id="cm-add">Коментувати</button><span class="hint">Ctrl+Enter</span></div></div></div>`, '<span class="cnt" id="pn-cm-n" hidden>0</span>'),
 ].join('');
+
+/** Which of the two tabs of the panel is open: the row, or its discussion. */
+export type RowTab = 'row' | 'cm';
+let rtab: RowTab = (() => { try { return localStorage.getItem('transly.rtab') === 'cm' ? 'cm' : 'row'; } catch { return 'row'; } })();
+export const setRowTab = (t: RowTab): void => { rtab = t; try { localStorage.setItem('transly.rtab', t); } catch { /* private mode */ } };
 
 /** Sections the translator folded. */
 const folded = new Set<string>();
@@ -64,24 +69,6 @@ function versionCard(ctx: Ctx, u: Unit, e: Entry | undefined): string {
   </div>`;
 }
 
-/** The terms of the row and the names the game defines in it, each opening its card. */
-function termsHtml(ctx: Ctx, u: Unit, target: string): string {
-  const seen = new Set<string>();
-  const terms = sourceTermHits(u.source, termsIn(u.source, ctx.s.saved.terms)).map(h => h.term).filter(t => { if (seen.has(t.en)) return false; seen.add(t.en); return true; });
-  const names = namesOfRow(ctx, u);
-  const rows = [
-    ...terms.map(t => {
-      const used = target ? targetHasTerm(target, t.uk, t.alt) : null;
-      return `<button type="button" class="pn-term" data-hc="term" data-hk="${esc(t.en)}"><span class="pn-term-t"><b>${esc(t.en)}</b><span class="arr" aria-hidden="true">→</span><span>${esc(t.uk)}</span></span>${t.kind ? `<span class="tg k">${esc(t.kind)}</span>` : ''}<span class="pn-mark ${used === false ? 'warn' : used ? 'ok' : ''}" title="${used === null ? 'Переклад ще не написано' : used ? 'Є в перекладі' : 'Немає в перекладі'}">${used === false ? '▲' : used ? '✔' : ''}</span></button>`;
-    }),
-    ...names.map((g, i) => {
-      const tr = ctx.entries(g.file)[g.key]?.target;
-      return `<button type="button" class="pn-term" data-hc="name" data-hk="${i}"><span class="pn-term-t"><b>${esc(g.name)}</b><span class="arr" aria-hidden="true">→</span>${tr ? `<span>${esc(tr)}</span>` : '<i>ще не перекладено</i>'}</span><span class="tg k" title="Файл бази даних гри">${esc(g.file.replace(/\.json$/, ''))}</span></button>`;
-    }),
-  ];
-  return rows.join('') || '<div class="hint">Термінів немає</div>';
-}
-
 /** The proposals: matches of the translation memory and the rows with the same original. */
 function proposalsHtml(ctx: Ctx, u: Unit, target: string): string {
   const r = realOf(ctx, u);
@@ -99,14 +86,19 @@ export function renderRowPanel(ctx: Ctx, u: Unit | undefined, e: Entry | undefin
   });
   const pane = $('#s-pn');
   pane.classList.toggle('no-row', !u);
+  // Two tabs: the row (its translation, versions, proposals, threads) and the discussion.
+  document.querySelectorAll<HTMLElement>('#rp-tabs [data-rt]').forEach(b => { const on = b.dataset.rt === rtab; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; });
+  for (const id of ['tr', 'sg']) document.querySelector<HTMLElement>(`.pn-sec[data-sec="${id}"]`)!.hidden = rtab !== 'row';
+  document.querySelector<HTMLElement>('.pn-sec[data-sec="cm"]')!.hidden = rtab !== 'cm';
   if (!u) return;
   const target = e?.target ?? '';
   $('#pn-tr').innerHTML = `${versionCard(ctx, u, e)}<div class="pn-sub">Попередні версії</div><div class="hist" id="hist-list"></div>`;
   $('#pn-sg').innerHTML = proposalsHtml(ctx, u, target);
-  const lk = linksHtml(ctx, u);
-  $('#pn-lk').innerHTML = lk;
-  document.querySelector<HTMLElement>('.pn-sec[data-sec="lk"]')!.hidden = !lk;
-  $('#pn-tm').innerHTML = termsHtml(ctx, u, target);
+  // The cards of the threads stand under the editor in the editing view; where there is no editor (the table, the scenes) they stand here.
+  if (ctx.s.mode !== 'edit') clearStrands();
+  const th = ctx.s.mode === 'edit' ? '' : strandsHtml(ctx, u, target);
+  $('#pn-th').innerHTML = th;
+  document.querySelector<HTMLElement>('.pn-sec[data-sec="th"]')!.hidden = !th || rtab !== 'row';
   const file = ctx.s.current;
   if (file) renderHistory(ctx, `${file}|${u.key}`, e);
 }
@@ -128,7 +120,7 @@ const approve = (ctx: Ctx, u: Unit): void => { approveOpenRow(ctx, u); };
 
 /** Clicks in the panel's own parts. `setText` writes a text into the row as one change (see `focus.ts`). */
 export function rowPanelClick(ctx: Ctx, t: HTMLElement, setText: (u: Unit, text: string, what: string, kind?: BatchKind) => string | undefined): boolean {
-  if (linksClick(ctx, t)) return true;
+  if (strandsClick(ctx, t) || linksClick(ctx, t)) return true;
   const h = t.closest<HTMLElement>('[data-pn]');
   if (h) { const id = h.dataset.pn!; if (folded.has(id)) folded.delete(id); else folded.add(id); ctx.render(); return true; }
   const a = t.closest<HTMLElement>('[data-pa]');

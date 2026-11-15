@@ -1,4 +1,5 @@
-import { prepareText, termRangesIn } from '../core';
+import { prepareText, sourceTermHits, strandsOf, termRangesIn, termsIn } from '../core';
+import type { Term } from '../core';
 import { esc } from './dom';
 
 const CODE = /\\[A-Za-z]+\[\d+\]|\\[{}.|!><^$]/g;
@@ -26,7 +27,27 @@ export function markup(text: string, termsEn: string[] = []): string {
 }
 
 /** A word of an original that has a card: a glossary term, or a name the game itself defines (`key` is then the name's place in the list the panel keeps). */
-export interface TermMark { start: number; end: number; en: string; missing: boolean; kind?: 'term' | 'name'; key?: string }
+export interface TermMark {
+  start: number; end: number; en: string; missing: boolean; kind?: 'term' | 'name'; key?: string;
+  /** The colour of the entry's thread (see `strandsOf`), and which part of a pattern this is. */
+  ci?: number; part?: number; parts?: number;
+}
+
+/**
+ * Every place of the original where a glossary entry stands, one mark for each part of a pattern, each with the colour of
+ * its thread. `target` says which of them the translation lacks.
+ */
+export function termMarksOf(source: string, target: string, terms: Term[]): TermMark[] {
+  const by = new Map(strandsOf(source, target, terms).map(st => [st.term, st]));
+  const out: TermMark[] = [];
+  for (const h of sourceTermHits(source, termsIn(source, terms))) {
+    const st = by.get(h.term);
+    if (!st) continue;
+    const ps = h.parts ?? [[h.start, h.end] as [number, number]];
+    ps.forEach(([start, end], i) => out.push({ start, end, en: h.term.en, missing: st.state === 'missing', ci: st.ci, part: i, parts: ps.length }));
+  }
+  return out;
+}
 
 /** Control codes of RPG Maker texts, as they stand in a text. */
 export const CODE_RE = CODE;
@@ -39,7 +60,7 @@ export const CODE_RE = CODE;
 export function markupTerms(text: string, hits: TermMark[]): string {
   const marks: { start: number; end: number; cls: string; attrs: string }[] = hits.map(h => h.kind === 'name'
     ? { start: h.start, end: h.end, cls: 'name-hit nh', attrs: ` data-hc="name" data-hk="${esc(h.key ?? '')}" tabindex="0" role="button" title="Назва, яку визначає сама гра"` }
-    : { start: h.start, end: h.end, cls: `term-hit th${h.missing ? ' miss' : ''}`, attrs: ` data-term="${esc(h.en)}" data-hc="term" data-hk="${esc(h.en)}" tabindex="0" role="button" title="${h.missing ? 'Термін глосарію: у перекладі його немає' : 'Термін глосарію'}"` });
+    : { start: h.start, end: h.end, cls: `term-hit th${h.missing ? ' miss' : ''}`, attrs: ` data-term="${esc(h.en)}" data-hc="term" data-hk="${esc(h.en)}"${h.ci === undefined ? '' : ` data-ci="${h.ci}"`}${h.parts && h.parts > 1 ? ` data-part="${h.part ?? 0}" data-parts="${h.parts}"` : ''} tabindex="0" role="button" title="${h.missing ? 'Термін глосарію: у перекладі його немає' : 'Термін глосарію'}"` });
   for (const m of text.matchAll(CODE)) if (!marks.some(x => m.index! < x.end && m.index! + m[0].length > x.start)) marks.push({ start: m.index!, end: m.index! + m[0].length, cls: 'code', attrs: ` data-hc="code" data-hk="${esc(m[0])}" tabindex="0" role="button" title="Керівний код: що він означає"` });
   marks.sort((a, b) => a.start - b.start);
   let out = '', at = 0;

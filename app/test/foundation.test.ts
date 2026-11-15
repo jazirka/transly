@@ -92,7 +92,7 @@ describe('issues', () => {
     const codes = missing.find(i => i.key === 'codes')!;
     expect(codes).toMatchObject({ severity: 'bad', cat: 'error' });
     // the codes go where the original has them (about a quarter of the way in, before a word), not to the end
-    expect(codes.fix?.text).toBe('Візьми \\C[2]\\C[0]ключ до майстра.');
+    expect(codes.fix?.text).toBe('Візьми \\C[2]\\C[0] ключ до майстра.');
     const long = check({ ...u, source: 'x'.repeat(60) }, 'слово '.repeat(20).trim(), { tolerancePct: 500, terms: [], lineLimit: 40 });
     const wrap = long.find(i => i.key === 'wrap')!;
     expect(wrap).toMatchObject({ severity: 'warn', cat: 'style' });

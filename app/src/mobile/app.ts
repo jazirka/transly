@@ -226,7 +226,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const gName = scope === 'group' && gscope ? store.groupsList().find(x => x.id === gscope)?.name : undefined;
     const title = tab === 'files' ? 'Файли гри' : tab === 'rows' ? (gName ? `Група «${gName}»` : store.view()?.label ?? store.file ?? 'Рядки') : tab === 'edit' ? (store.file ?? 'Переклад') : 'Ще';
     let where = '';
-    if (tab === 'edit' && !sub && store.current) { const list = store.rows(), pos = list.findIndex(x => x.key === store.current!.unit.key); if (pos >= 0) where = `Рядок ${pos + 1} з ${list.length} · `; }
+    if (tab === 'edit' && !sub && store.current) { const list = store.rows(), pos = list.findIndex(x => x.key === store.current!.unit.key); if (pos >= 0) { const total = store.view()?.units.length ?? list.length; const no = (store.view()?.units.findIndex(x => x.key === store.current!.unit.key) ?? -1) + 1; where = `Рядок ${pos + 1} з ${list.length}${list.length !== total && no > 0 ? ` (№ ${no} у файлі)` : ''} · `; } }
     else if (tab === 'rows' && !sub && scope === 'file' && store.view()) { const adv = store.adviceCount(); where = `${store.rows().length} з ${store.view()!.units.length} · ${adv ? `поради: ${adv} · ` : ''}`; }
     else if (tab === 'rows' && !sub && scope === 'group' && gscope) where = `${plural(store.groupRowList(gscope).length, ['рядок', 'рядки', 'рядків'])} · `;
     const subline = tab === 'more' || !store.hasGame || sub ? '' : `${where}${tab === 'edit' || tab === 'rows' ? 'проєкт ' : ''}${pct}% · ${store.saveOk ? 'збережено' : 'не збережено!'}`;
@@ -758,7 +758,7 @@ export async function start(root: HTMLElement): Promise<void> {
       <div id="m-prev" class="m-prev"></div>
       ${linksCard(c)}
     </div>
-    <div class="m-actions" id="m-actions"><div class="m-act2"><button class="m-mini" data-sub="scene">${icon('rows')} Сцена</button>${c.entry?.status === 'appr' ? '' : `<button class="m-mini" data-approve>${icon('check')} Вичитати</button>`}${c.entry?.status === 'done' || c.entry?.status === 'appr' ? `<button class="m-mini" data-rework title="Повернути на доопрацювання">${icon('undo')} Повернути</button>` : ''}<button class="m-mini danger" data-clear>Очистити</button></div><div class="m-act1"><button class="m-ic" data-step="-1" aria-label="Попередній рядок" ${store.neighbour(-1) ? '' : 'disabled'}>${icon('prev')}</button><button class="m-ic" data-step="1" aria-label="Наступний рядок" ${store.neighbour(1) ? '' : 'disabled'}>${icon('next')}</button><button class="m-ic" data-queue aria-label="Наступний рядок без перекладу в проєкті" title="Наступний рядок без перекладу в проєкті">${icon('down')}</button>${primaryBtn(c.entry?.status)}</div></div>`;
+    <div class="m-actions" id="m-actions"><div class="m-act2"><button class="m-mini" data-sub="scene">${icon('rows')} Сцена</button>${c.entry?.status === 'appr' ? '' : `<button class="m-mini" data-approve>${icon('check')} Вичитати</button>`}${c.entry?.status === 'done' || c.entry?.status === 'appr' ? `<button class="m-mini" data-rework title="Повернути на доопрацювання">${icon('undo')} Повернути</button>` : ''}<button class="m-mini danger" data-clear>Очистити</button></div><div class="m-act1"><button class="m-ic" data-step="-1" aria-label="Попередній рядок" ${store.neighbour(-1) ? '' : 'disabled'}>${icon('prev')}</button><button class="m-ic" data-step="1" aria-label="Наступний рядок" ${store.neighbour(1) ? '' : 'disabled'}>${icon('next')}</button><button class="m-ic kb-done" data-kbdone aria-label="Сховати клавіатуру">${icon('down')}</button><button class="m-ic" data-queue aria-label="Наступний рядок без перекладу в проєкті" title="Наступний рядок без перекладу в проєкті">${icon('down')}</button>${primaryBtn(c.entry?.status)}</div></div>`;
   }
 
   function screenMore(): string {
@@ -1236,6 +1236,7 @@ export async function start(root: HTMLElement): Promise<void> {
       if (next) { store.select(next.key); saySent(r, 'Надіслано'); render(); $('m-main').scrollTop = 0; showTrField(hadKb); } else { saySent(r, 'Це був останній рядок у списку'); render(); }
       return;
     }
+    if (q('[data-kbdone]')) { (document.activeElement as HTMLElement | null)?.blur(); return; }
     if (q('[data-approve-next]')) {
       const nextBefore = store.neighbour(1);
       const r = store.approve();

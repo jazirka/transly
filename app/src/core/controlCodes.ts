@@ -37,22 +37,30 @@ export function withCodes(source: string, target: string, miss: string[]): strin
   // where each code goes, in the translation as it is (so that the places do not shift each other)
   const places = miss.map((code, idx) => {
     const at = source.indexOf(code);
-    if (at < 0) return { code, idx, pos: target.length };
+    if (at < 0) return { code, text: code, idx, pos: target.length };
     const before = source.slice(0, at), after = source.slice(at + code.length);
-    if (!before.trim() || plain(before) === 0) return { code, idx, pos: 0 };
-    if (!after.trim() || plain(after) === 0) return { code, idx, pos: target.length };
-    let pos = Math.round(target.length * (plain(before) / (plain(before) + plain(after))));
-    // the nearest space, so that a word is not cut; the code stands before the word it belongs to: after the space
-    let l = pos, r = pos;
-    while (l > 0 && target[l - 1] !== ' ') l--;
-    while (r < target.length && target[r] !== ' ') r++;
-    pos = pos - l <= r - pos ? l : r;
-    if (target[pos] === ' ') pos++;
-    return { code, idx, pos };
+    // the spacing the original has around the code is kept: «\N[1] хвилювалися» stays apart, «\C[2]слово» stays together
+    const spaceAfter = /^\s/.test(after), spaceBefore = /\s$/.test(before);
+    let pos: number;
+    if (!before.trim() || plain(before) === 0) pos = 0;
+    else if (!after.trim() || plain(after) === 0) pos = target.length;
+    else {
+      pos = Math.round(target.length * (plain(before) / (plain(before) + plain(after))));
+      // the nearest space, so that a word is not cut; the code stands before the word it belongs to: after the space
+      let l = pos, r = pos;
+      while (l > 0 && target[l - 1] !== ' ') l--;
+      while (r < target.length && target[r] !== ' ') r++;
+      pos = pos - l <= r - pos ? l : r;
+      if (target[pos] === ' ') pos++;
+    }
+    let text = code;
+    if (pos < target.length && spaceAfter && target[pos] !== ' ') text = `${code} `;
+    else if (pos >= target.length && spaceBefore && target.length > 0 && !/\s$/.test(target)) text = ` ${code}`;
+    return { code, text, idx, pos };
   });
   // from the back, and the codes of one place from the last to the first: they come out in the order of the list
   places.sort((a, b) => b.pos - a.pos || b.idx - a.idx);
   let out = target;
-  for (const p of places) out = out.slice(0, p.pos) + p.code + out.slice(p.pos);
+  for (const p of places) out = out.slice(0, p.pos) + p.text + out.slice(p.pos);
   return out;
 }

@@ -653,3 +653,15 @@ textarea::placeholder,input::placeholder{color:#9a9ca3}
 /* a proofread row has a check mark in its dot: it differs from a sent one by shape, not by colour alone */
 .sd-appr{position:relative}
 .sd-appr::after{content:'';position:absolute;left:3.5px;top:1.2px;width:3px;height:6px;border:solid #fff;border-width:0 1.6px 1.6px 0;transform:rotate(45deg)}
+
+/* more findings of the phone audit (round 4) */
+/* the box is as wide as its `--lim` characters PLUS its own padding and border (the last character of a full line was cut off) */
+.m-prevbox{width:calc(var(--lim) * 1ch + 22px)}
+/* the key that puts the keyboard away: shown only while the keyboard is up (the tab bar is hidden then) */
+.kb-done{display:none}
+.kb .kb-done{display:grid}
+/* a landscape screen as short as a keyboard leaves (200 px): the rail of four buttons fits */
+@media (orientation:landscape) and (max-height:300px){
+  .m-nav button{min-height:0;font-size:10px;gap:0;max-height:none}
+  .m-nav button svg{width:18px;height:18px}
+}

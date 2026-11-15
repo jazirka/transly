@@ -76,6 +76,14 @@ const check = (name, ok, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ') 
   const lab3 = (await page.locator('[data-clear]').innerText()).trim();
   check('and is «Очистити» again after the confirmed tap', lab3 === 'Очистити', lab3);
 
+  // ---- the key that puts the keyboard away is there while the field is focused, and the tab bar comes back after it
+  await page.locator('#m-tr').click(); await sleep(300);
+  const kbBtn = await page.locator('.kb-done').isVisible();
+  check('while the field is focused there is a key to put the keyboard away', kbBtn);
+  if (kbBtn) { await page.locator('.kb-done').click(); await sleep(400); }
+  const navBack = await page.evaluate(() => { const n = document.querySelector('.m-nav'); return !!n && getComputedStyle(n).display !== 'none' && !document.getElementById('m-app').classList.contains('kb'); });
+  check('and after it the tab bar is back', navBack);
+
   // ---- the glossary: the word for the number, one tap does not delete
   await page.locator('#m-tr').blur(); await sleep(300);
   await page.locator('[data-menu]').first().click(); await sleep(500);

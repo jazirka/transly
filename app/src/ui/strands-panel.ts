@@ -3,6 +3,7 @@ import type { GlossaryTerm, StrandKind, TermUsage, Unit } from '../core';
 import { esc, plural } from './dom';
 import { namesOfRow, termView } from './hintcards';
 import { linksClick, linksHtml } from './links-panel';
+import { invalidateMined, mineClick, suggestionsForRow } from './mine-panel';
 import { showCard } from './termcard';
 import { realOf } from './hintcards';
 import type { Ctx } from './state';
@@ -20,9 +21,12 @@ const KIND_WORD: Record<StrandKind, string> = { word: 'слово', phrase: 'ф�
 let index: WordIndex | null = null, indexFor: unknown = null, building = false;
 const usageCache = new Map<string, TermUsage>();
 let again: (() => void) | null = null;
+let redrawFn: (() => void) | null = null;
+/** The shell says how the cards are drawn again once the index of the words is ready: only what shows them, never the whole screen. */
+export const wireStrands = (fn: () => void): void => { redrawFn = fn; again = fn; };
 
 /** The translations changed (a row was sent, replaced, restored): the numbers are worked out again. */
-export function invalidateUsage(): void { usageCache.clear(); usageRevision++; }
+export function invalidateUsage(): void { usageCache.clear(); usageRevision++; invalidateMined(); }
 let usageRevision = 0;
 /** Changes whenever the numbers may have changed: a list built from them is worked out again when it differs. */
 export const usageRev = (): number => usageRevision;
@@ -53,7 +57,6 @@ function usageOf(ctx: Ctx, t: GlossaryTerm, row: { file: string; key: string }):
 
 /** How an entry is used across the whole game, or null while the index of the words is still being built. */
 export function usageAll(ctx: Ctx, t: GlossaryTerm): TermUsage | null {
-  if (!again) again = () => ctx.render();
   const id = `${t.en}\u0001*`;
   const hit = usageCache.get(id);
   if (hit) return hit;
@@ -94,7 +97,6 @@ function usageHtml(u: TermUsage | null): string {
 /** The cards of the row, or '' when there is nothing to show. `target` is the translation as it stands now. */
 export function strandsHtml(ctx: Ctx, u: Unit, target: string): string {
   const cards: string[] = [];
-  if (!again) again = () => ctx.render();
   for (const st of strandsOf(u.source, target, ctx.s.saved.terms)) {
     const t = st.term as GlossaryTerm, use = usageOf(ctx, t, realOf(ctx, u));
     const verdict = st.state === 'pending' ? '' : st.state === 'missing' ? '<span class="thc-st warn">▲ немає в перекладі</span>' : st.state === 'alt' ? '<span class="thc-st ok">✔ альтернатива</span>' : '<span class="thc-st ok">✔ є в перекладі</span>';
@@ -111,6 +113,7 @@ export function strandsHtml(ctx: Ctx, u: Unit, target: string): string {
   });
   const r = realOf(ctx, u);
   if (linkView(ctx.s.saved, ctx.links(), r.file, r.key)) cards.push(`<div class="thc rows"><span class="thc-dot" aria-hidden="true"></span><div class="thc-t thc-lk">${linksHtml(ctx, u)}</div></div>`);
+  cards.push(suggestionsForRow(ctx, u.source));
   return cards.join('');
 }
 
@@ -127,7 +130,6 @@ export function clearStrands(): void {
 export function renderStrands(ctx: Ctx, u: Unit | undefined, target: string): void {
   const box = document.getElementById('f-threads'), body = document.getElementById('f-threads-b');
   if (!box || !body) return;
-  again = () => { const cur = ctx.s.cur ? ctx.unit(ctx.s.cur) : undefined; if (ctx.s.mode !== 'edit') ctx.render(); else if (cur) renderStrands(ctx, cur, ctx.s.current ? ctx.entries(ctx.s.current)[cur.key]?.target ?? '' : ''); };
   // Under the editor only in the editing view: elsewhere the cards stand in the right panel.
   const html = u && ctx.s.mode === 'edit' ? strandsHtml(ctx, u, target) : '';
   const chips = document.getElementById('f-thr-chips');
@@ -144,7 +146,7 @@ export function renderStrands(ctx: Ctx, u: Unit | undefined, target: string): vo
 
 /** Clicks on the cards' own buttons. */
 export function strandsClick(ctx: Ctx, t: HTMLElement): boolean {
-  if (linksClick(ctx, t)) return true;
+  if (mineClick(ctx, t) || linksClick(ctx, t)) return true;
   const fix = t.closest<HTMLElement>('[data-th="fix"]');
   if (fix) {
     // The rows where the entry was rendered another way, to be gone through one by one (nothing is changed here: the translator decides row by row).

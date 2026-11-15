@@ -22,7 +22,7 @@ import { SCENES_HTML, renderScenesPanel, scenesClick, wireScenes } from './scene
 import { undoByKey, undoToast } from './undo-toast';
 import { FILES_DRAG, GROUPS_HTML, dragFiles, groupsClick, placeMenuHtml, renderGroupsBlock, wireGroups } from './groups-panel';
 import type { PlaceTarget } from './groups-panel';
-import { GLOSSARY_HTML, editTerm, glossaryClick, renderGlossaryPanel, showTerm, wireGlossary } from './glossary-panel';
+import { GLOSSARY_HTML, editTerm, glossaryClick, newTerm, renderGlossaryPanel, showTerm, wireGlossary } from './glossary-panel';
 import { pickGameFolder, readFiles, reopenHandle } from './folder';
 import type { DirHandle, PickedFile } from './folder';
 import { IdbStore, LoadFailure, loadHandle, saveHandle } from './idb';
@@ -53,7 +53,8 @@ import { describe as describeSync, loadSyncConfig, runSync, syncConfigured } fro
 import { initResize, initRightResize } from './resize';
 import { mountRows, patchRow, reveal } from './chunks';
 import { buildAndRunGame, playInGame } from './play';
-import { invalidateUsage } from './strands-panel';
+import { invalidateUsage, renderStrands, wireStrands } from './strands-panel';
+import { wireMine } from './mine-panel';
 
 const SVG = {
   files: '<svg viewBox="0 0 16 16"><path d="M2 4.5h4l1.2 1.5H14V12.5H2z"/></svg>',
@@ -1902,6 +1903,14 @@ export async function start(root: HTMLElement): Promise<void> {
     edit: en => { s.leftOpen = true; s.leftBoth = false; s.leftTab[s.mode] = 'glossary'; renderAll(); editTerm(ctx, en); },
   });
   wireGlossary(ctx);
+  // a proposal of a new construction opens the form of «Пов’язане» with the pattern filled in. Once the proposals (or the index of the words) are found, only what shows them is drawn again.
+  const redrawThreads = (): void => {
+    if (lp() === 'glossary') renderGlossaryPanel(ctx);
+    if (s.mode === 'edit') { const u = s.cur ? ctx.unit(s.cur) : undefined; if (u) renderStrands(ctx, u, ($('#i-tr') as HTMLTextAreaElement).value); }
+    else renderSidePanel(ctx);
+  };
+  wireStrands(redrawThreads);
+  wireMine((en, uk) => { s.leftOpen = true; s.leftBoth = false; s.leftTab[s.mode] = 'glossary'; renderAll(); newTerm(ctx, en, uk); }, redrawThreads);
   wireScenes(ctx);
   wireGroups(ctx, groupsApi);
   // Right click on a file puts it in a group; a file can also be dragged onto one.

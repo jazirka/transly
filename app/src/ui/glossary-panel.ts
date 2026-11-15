@@ -3,6 +3,7 @@ import type { GlossaryTerm } from '../core';
 import { $, esc, plural, toast } from './dom';
 import { oneLine } from './hintcards';
 import { openLinkRows } from './links-dialog';
+import { mineClick, suggestionsList } from './mine-panel';
 import { entriesWithDifferences, usageAll, usageLine, usageRev } from './strands-panel';
 import { offerTermSync } from './termsync-dialog';
 import type { Ctx } from './state';
@@ -131,9 +132,10 @@ export function renderGlossaryPanel(ctx: Ctx): void {
   const found = pool.map(t => [rank(t, q), t] as const).filter(([r]) => r < 4).sort((a, b) => a[0] - b[0] || a[1].en.localeCompare(b[1].en, 'en')).map(([, t]) => t);
   $('#gl-n').textContent = terms.length ? `${plural(pool.length, ['запис', 'записи', 'записів'])}${q ? ` · знайдено ${found.length}` : ''}` : 'Записів ще немає';
   if (show === 'diff' && (!diffs || diffs.stamp !== stamp)) { list.innerHTML = '<div class="empty-state"><b>Рахую розбіжності…</b><span>Дивлюсь, де запис перекладено не так, як у ньому сказано.</span></div>'; return; }
-  list.innerHTML = found.length
+  const prop = show === 'construction' && !q ? suggestionsList(ctx).html : '';
+  list.innerHTML = prop + (found.length
     ? found.slice(0, SHOWN).map((t, i) => card(ctx, t, i < 30)).join('') + (found.length > SHOWN ? `<div class="grid-note">Показано ${SHOWN} із ${found.length}. Уточніть пошук.</div>` : '')
-    : `<div class="empty-state"><b>${terms.length ? 'Нічого не знайдено' : 'Записів ще немає'}</b><span>${terms.length ? (show === 'diff' ? 'Усі записи перекладено так, як у них сказано.' : 'Спробуйте інше слово або частину слова.') : 'Додайте перший запис кнопкою вище або імпортуйте таблицю в налаштуваннях.'}</span></div>`;
+    : (prop ? '' : `<div class="empty-state"><b>${terms.length ? 'Нічого не знайдено' : 'Записів ще немає'}</b><span>${terms.length ? (show === 'diff' ? 'Усі записи перекладено так, як у них сказано.' : 'Спробуйте інше слово або частину слова.') : 'Додайте перший запис кнопкою вище або імпортуйте таблицю в налаштуваннях.'}</span></div>`));
 }
 
 /** Show the glossary filtered to one word (a result of the global search, or the term in a hint). */
@@ -206,6 +208,7 @@ export function wireGlossary(ctx: Ctx): void {
 /** Clicks in the glossary section. Returns true when handled. */
 export function glossaryClick(ctx: Ctx, t: HTMLElement): boolean {
   if (!t.closest('#lp-gl')) return false;
+  if (mineClick(ctx, t)) return true;
   const chip = t.closest<HTMLElement>('[data-glk]');
   if (chip) { show = (chip.dataset.glk as Show) ?? 'all'; renderGlossaryPanel(ctx); return true; }
   if (t.closest('#gl-new')) { newTerm(ctx); return true; }

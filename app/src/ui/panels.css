@@ -579,3 +579,7 @@ input::placeholder,textarea::placeholder{color:#9a9ea6;opacity:1}
 .thc.name{grid-template-columns:12px minmax(0,1fr)}
 .thc.rows{grid-template-columns:12px minmax(0,1fr);align-items:start}
 .thc.rows .pn-lrow{max-width:560px}
+
+/* a proposal of a new construction: dashed, in the colour of information, apart from the entries that exist */
+.thc.new{--tc:var(--info);border-style:dashed;border-color:#244a6e;background:#16222f}
+.thc.new .thc-dot{background:var(--info)}

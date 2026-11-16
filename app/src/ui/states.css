@@ -21,20 +21,27 @@
 /* what is chosen does not change under the cursor (it is already the strongest it can be in its window) */
 .node.cur:hover,.si.sel:hover,.tgrow.on:hover,.sc-item.cur:hover,.sd-it.on:hover{background:var(--sel)}
 
-/* the choice in the window you work in */
-html[data-pane=left] :is(#strip button.on,#lpanel .node.cur,#lpanel .node.pick,#lpanel .si.sel,#lpanel .tgrow.on,#lpanel .sc-item.cur,#lpanel .chip.on),
+/* the choice in the window you work in: each tool window of the left column is a window of its own, like the centre and the right panel */
+html[data-pane=files] :is(#strip button[data-lp=files].on,#tree .node.cur,#tree .node.pick,#tree .chip.on),
+html[data-pane=rows] :is(#strip button[data-lp=rows].on,#lp-rows .si.sel,#lp-rows .chip.on),
+html[data-pane=scenes] :is(#strip button[data-lp=scenes].on,#lp-sc .sc-item.cur,#lp-sc .chip.on),
+html[data-pane=glossary] :is(#strip button[data-lp=glossary].on,#lp-gl .tgrow.on,#lp-gl .chip.on),
 html[data-pane=centre] :is(#main .tab.on,#main .chip.on),
 html[data-pane=right] :is(#stabs button.on,.fs .tc-tabs button.on,.fs .chip.on){
   background:var(--use)!important;box-shadow:inset 0 0 0 1px var(--use-ring)!important;color:#fff!important;
   border-color:var(--use-ring)!important;border-bottom-color:var(--use-ring)!important;
 }
+/* the row of the table and its cell of the translation: grey, and in colour only when the centre is the window you work in */
+.gr.sel .tr{box-shadow:inset 0 0 0 1px var(--on-ring);background:rgba(255,255,255,.06)}
 html[data-pane=centre] #main .gr.sel{background:var(--use)!important}
+html[data-pane=centre] #main .gr.sel .tr{box-shadow:inset 0 0 0 1px var(--use-ring);background:rgba(var(--accent-rgb),.12)}
+html[data-pane=centre] #main .gr.sel .who{color:#fff}
 /* the parts of a tree row take the colour together with the row */
-html[data-pane=left] #lpanel .node.cur :is(.nm,.nm .lc,.pc:not(.full),.ic,.chev){color:#fff}
-html[data-pane=left] #lpanel .node.cur .mini i:not(.f){background:#fff}
-html[data-pane=left] #lpanel .si.sel .a b,html[data-pane=centre] #main .gr.sel .who{color:#fff}
-/* the window you work in is outlined faintly */
-html[data-pane=left] #lpanel,html[data-pane=centre] #main,html[data-pane=right] .fs .ibody{box-shadow:inset 0 0 0 1px var(--use-ring)}
+html[data-pane=files] #tree .node.cur :is(.nm,.nm .lc,.pc:not(.full),.ic,.chev){color:#fff}
+html[data-pane=files] #tree .node.cur .mini i:not(.f){background:#fff}
+html[data-pane=rows] #lp-rows .si.sel .a b{color:#fff}
+/* the cell you are typing in carries its own ring: no second outline over it */
+.cell-ed:focus-visible{outline:0}
 
 /* menus and popovers: you work in them while they are open, so what is under the cursor or the keyboard is the choice (the colour of the project);
    what is only the current option of a popover stays grey */

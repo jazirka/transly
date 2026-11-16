@@ -1,10 +1,13 @@
 /**
  * «The window you work in», the way tool windows work in an IDE: the last panel you clicked or moved the focus into is the working one
- * (`html[data-pane="left|centre|right"]`), and the choices in it wear the colour of the project, in the others they are grey (see states.css).
+ * (`html[data-pane="files|rows|scenes|glossary|centre|right"]`), and the choices in it wear the colour of the project, in the others they are grey (see states.css).
  * A dialog or the loss of focus of the whole app lights nothing; the top bar, menus and popovers do not change the working window.
  */
 
-const PANES: [string, string][] = [['left', '#lpanel, #strip'], ['centre', '#main'], ['right', '.fs']];
+/** The windows: each tool window of the left column is its own (the files, the rows, the scenes, the related), then the centre and the right panel. */
+const PANES: [string, string][] = [['files', '#tree'], ['rows', '#lp-rows'], ['scenes', '#lp-sc'], ['glossary', '#lp-gl'], ['centre', '#main'], ['right', '.fs']];
+/** A rail button or a narrow-layout tab names the window it opens. */
+const NAMED = '#strip button[data-lp], #mtabs button[data-lt]';
 const MODAL = 'dialog, [role="dialog"], .sd-wrap';
 const OVERLAY = '.pop, #mdd, .cfgpop, .menu, .toast, #toasts';
 
@@ -13,6 +16,8 @@ export function paneOf(target: EventTarget | null): string | null {
   if (!(target instanceof Element)) return null;
   if (target.closest(MODAL)) return '';
   if (target.closest(OVERLAY)) return null;
+  const named = target.closest<HTMLElement>(NAMED);
+  if (named) return named.dataset.lp ?? named.dataset.lt ?? null;
   for (const [name, selector] of PANES) if (target.closest(selector)) return name;
   return null;
 }

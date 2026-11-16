@@ -473,7 +473,7 @@ code{font:13px ui-monospace,Menlo,Consolas,monospace;color:#c9a8ec}
 /* toasts: identical messages merge, an action message carries «Скасувати» */
 .m-toast{display:flex;align-items:center;gap:12px}
 .m-toast .m-tmsg{flex:1;min-width:0}
-.m-toast .m-tundo{pointer-events:auto;flex:none;min-height:36px;padding:0 12px;border:0;border-radius:var(--r2);background:transparent;color:#b7a6ff;font:inherit;font-weight:600;cursor:pointer}
+.m-toast .m-tundo{pointer-events:auto;flex:none;min-height:36px;padding:0 12px;border:0;border-radius:var(--r2);background:transparent;color:var(--accent-text);font:inherit;font-weight:600;cursor:pointer}
 .m-toast .m-tundo:active{background:rgba(183,166,255,.18)}
 
 /* ---------- wave 3: the keyboard ---------- */

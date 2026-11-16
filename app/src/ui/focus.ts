@@ -35,7 +35,7 @@ const I = {
   wrap: '<svg viewBox="0 0 16 16"><path d="M2.5 4h11M2.5 8h8.5a2.5 2.5 0 0 1 0 5H8M9.5 11l-1.7 2 1.7 2M2.5 12h2"/></svg>',
   hint: '<svg viewBox="0 0 16 16"><path d="M8 2.5a4 4 0 0 0-2.2 7.3c.5.4.7.9.7 1.4v.3h3v-.3c0-.5.2-1 .7-1.4A4 4 0 0 0 8 2.5zM6.5 13.5h3"/></svg>',
   chat: '<svg viewBox="0 0 16 16"><path d="M3 3.5h10v7H8.5L6 13v-2.5H3z"/></svg>',
-  row: '<svg viewBox="0 0 16 16"><path d="M3 4.5h10M3 8h10M3 11.5h6"/></svg>',
+  row: '<svg viewBox="0 0 16 16"><path d="M3 4.5h10M3 8h10M5 11.5h6"/></svg>',
   clock: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.2l2 1.3"/></svg>',
   dict: '<svg viewBox="0 0 16 16"><path d="M3.5 2.5h8a1 1 0 0 1 1 1v10H4.5a1 1 0 0 1-1-1z"/><path d="M6 5.5h4M6 8h4"/></svg>',
 };

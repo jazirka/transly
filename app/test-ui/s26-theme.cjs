@@ -51,33 +51,43 @@ async function pcPart(browser) {
   const openFiles = async () => { if (!(await page.locator('.node.cur').first().isVisible())) { await page.locator('.strip [data-lp="files"]').click(); await sleep(200); } };
   await openFiles();
   await click('.node.cur');
-  check('a click in the left panel makes it the working window', (await pane()) === 'left', String(await pane()));
+  check('a click in the left panel makes it the working window', (await pane()) === 'files', String(await pane()));
   let node = await read('.node.cur'); tab = await read('.tab.on');
   check('left: the file in the tree and the rail button are in colour', node.bg === ACC && (await read('.strip button.on')).bg === ACC, JSON.stringify(node));
   check('the choice in the centre is now grey (the window is not in use)', tab.bg === GREY && /rgba\(255, 255, 255, 0\.26\)/.test(tab.sh), JSON.stringify(tab));
   check('and so is the right rail button', (await read('#stabs button.on')).bg === GREY);
+  // two tool windows stacked in the left column are two windows: only the one you work in is lit
+  await page.locator('.gr').nth(1).click(); await sleep(250); // a row is chosen again (opening a file clears the choice)
+  if (!(await page.locator('#lp-rows').isVisible())) { await page.locator('.strip [data-lp="rows"]').click(); await sleep(300); } else { await page.locator('#q2').click(); await sleep(200); }
+  check('the rows window became the working window, and not the files', (await pane()) === 'rows', String(await pane()));
+  const rowsRail = await read('.strip button[data-lp="rows"].on'), filesRail = await read('.strip button[data-lp="files"].on');
+  check('its rail button is in colour and the rail button of the files stays grey', rowsRail && rowsRail.bg === ACC && filesRail && filesRail.bg === GREY, JSON.stringify([rowsRail && rowsRail.bg, filesRail && filesRail.bg]));
+  check('the file in the tree is grey while you work in the rows', (await read('#tree .node.cur')).bg === GREY);
+  check('the chosen row of the table and its cell are grey too (the centre is not in use)', (await read('.gr.sel')).bg === GREY && (await read('.gr.sel .tr')).bg !== ACC);
+  if (await page.locator('#lp-rows').isVisible()) { await page.locator('.strip [data-lp="rows"]').click(); await sleep(200); } // folds the rows window
   await page.locator('#stabs button.on').click(); await sleep(150); // folds the panel
   await page.locator('#stabs [data-p="row"]').click(); await sleep(250);
   check('a click on the right rail makes the right panel the working window', (await pane()) === 'right' && (await read('#stabs button.on')).bg === ACC, String(await pane()));
   check('and the left file turns grey again', (await read('.node.cur')).bg === GREY);
   const rest = page.locator('.seg button:not(.on)').first();
   await rest.hover(); await sleep(150);
+  check('the working window is not outlined', await page.evaluate(() => getComputedStyle(document.querySelector('#lpanel')).boxShadow === 'none' && getComputedStyle(document.querySelector('#main')).boxShadow === 'none'));
   check('a hovered control is the faintest grey', (await rest.evaluate(e => getComputedStyle(e).backgroundColor)) === HOVER);
   await openFiles();
   await click('.node.cur');
   const hv = page.locator('.node.cur').first(); await page.mouse.move(700, 820); await hv.hover(); await sleep(150);
-  check('what is chosen does not change under the cursor', (await pane()) === 'left' && (await read('.node.cur')).bg === ACC);
+  check('what is chosen does not change under the cursor', (await pane()) === 'files' && (await read('.node.cur')).bg === ACC);
   await page.evaluate(() => window.dispatchEvent(new Event('blur'))); await sleep(100);
   check('when the app loses focus nothing is lit', (await pane()) === '' && (await read('.node.cur')).bg === GREY && (await read('.tab.on')).bg === GREY);
   await page.evaluate(() => window.dispatchEvent(new Event('focus'))); await sleep(100);
-  check('and it is lit again when the focus comes back', (await pane()) === 'left' && (await read('.node.cur')).bg === ACC);
+  check('and it is lit again when the focus comes back', (await pane()) === 'files' && (await read('.node.cur')).bg === ACC);
   // a menu: the item under the cursor is the choice
   const fileMenu = async () => { if (!(await page.locator('#menubar').isVisible())) { await page.locator('#hamb').click(); await sleep(300); } await page.locator('#menubar [data-mg="Файл"]').click(); await sleep(200); };
   await fileMenu();
   const mi = page.locator('#mdd .mi').first(); await mi.hover(); await sleep(150);
   const mrow = await mi.evaluate(e => ({ bg: getComputedStyle(e).backgroundColor, col: getComputedStyle(e).color }));
   check('in a menu the item under the cursor wears the colour of the project', mrow.bg === ACC && mrow.col === 'rgb(255, 255, 255)', JSON.stringify(mrow));
-  check('and opening the menu did not change the working window', (await pane()) === 'left');
+  check('and opening the menu did not change the working window', (await pane()) === 'files');
   await page.keyboard.press('Escape'); await sleep(200); await page.keyboard.press('Escape'); await sleep(200);
 
   // the dots of the status chips

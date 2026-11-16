@@ -13,10 +13,9 @@
 .node.cur,.si.sel,.tgrow.on,.sc-item.cur,.sd-it.on{box-shadow:inset 0 0 0 1px var(--on-ring)}
 
 /* tabs: the ring on every side, no underline */
-.tab.on,.tabs .tab.on,.tabs .seg button.on,.tabs .seg button.on[data-m=proof],.stabbar button[aria-selected=true],.itabs button.on,.btabs button.on,.tc-tabs button.on{
+.tab.on,.tabs .tab.on,.tabs .seg button.on,.tabs .seg button.on[data-m=proof],.itabs button.on,.btabs button.on,.tc-tabs button.on{
   background:var(--on-bg);color:#fff;border-color:var(--on-ring);border-bottom-color:var(--on-ring);box-shadow:inset 0 0 0 1px var(--on-ring);
 }
-.stabbar button[aria-selected=true]{border-radius:var(--r2)}
 
 /* what is chosen does not change under the cursor (it is already the strongest it can be in its window) */
 .node.cur:hover,.si.sel:hover,.tgrow.on:hover,.sc-item.cur:hover,.sd-it.on:hover{background:var(--sel)}

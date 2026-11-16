@@ -98,6 +98,7 @@ async function pcPart(browser) {
   // the accent colour in the settings
   await fileMenu();
   await page.locator('#mdd').getByText('Налаштування…').first().click(); await sleep(500);
+  await page.locator('.st-ti[data-p="look"]').click(); await sleep(150);
   const hint0 = await page.locator('#th-hint').innerText();
   check('the settings say the colour comes from the name of the project', /назви проєкту/.test(hint0) && (await page.locator('#th-reset').isDisabled()), hint0);
   await page.locator('#th-hue').evaluate(e => { e.value = '40'; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); });

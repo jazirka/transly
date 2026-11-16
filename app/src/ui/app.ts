@@ -448,15 +448,17 @@ export async function start(root: HTMLElement): Promise<void> {
     const l = lp();
     const over = narrow.matches && !s.phone && s.sideOn.length > 0;
     ide.className = `ide mode-${s.mode === 'table' ? 'table' : 'focus'}${s.mode === 'scene' ? ' scene-mode' : ''} ${l ? 'lp-open' : 'lp-closed'}${s.phone ? ' sz-s' : ''}${s.rightOpen ? ' sheet-open' : ''}${(!s.sideOn.length || over) && !s.phone ? ' rp-collapsed' : ''}${over ? ' rp-over' : ''}${s.compact ? ' compact' : ''}${s.kb ? ' kb' : ''}`;
-    const both = (l === 'files' || l === 'rows') && s.leftBoth && !s.phone;
+    const both = (l === 'files' || l === 'rows' || l === 'scenes') && s.leftBoth && !s.phone;
+    /** With both windows on, the files are above and this one is below: the rows (the default) or the scenes. */
+    const second = both ? (l === 'scenes' ? 'scenes' : 'rows') : null;
     $('#lpanel').classList.toggle('split', both);
     $('#rz-y').hidden = !both;
-    document.querySelectorAll<HTMLElement>('#strip button').forEach(b => { const on = both ? b.dataset.lp === 'files' || b.dataset.lp === 'rows' : b.dataset.lp === l; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+    document.querySelectorAll<HTMLElement>('#strip button').forEach(b => { const on = both ? b.dataset.lp === 'files' || b.dataset.lp === second : b.dataset.lp === l; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
     $('#tree').hidden = !both && l !== 'files';
-    $('#lp-rows').hidden = !both && l !== 'rows';
+    $('#lp-rows').hidden = both ? second !== 'rows' : l !== 'rows';
     $('#lp-gl').hidden = l !== 'glossary';
     $('#lp-sc').hidden = l !== 'scenes';
-    $('#lp-title').innerHTML = both ? 'Файли й рядки' : l === 'rows' ? `Рядки <span class="lt-f">${esc(currentLabel())}</span>` : l === 'glossary' ? 'Пов’язане' : l === 'scenes' ? `Сцени <span class="lt-f">${esc(currentLabel())}</span>` : 'Файли гри';
+    $('#lp-title').innerHTML = both ? (second === 'scenes' ? 'Файли й сцени' : 'Файли й рядки') : l === 'rows' ? `Рядки <span class="lt-f">${esc(currentLabel())}</span>` : l === 'glossary' ? 'Пов’язане' : l === 'scenes' ? `Сцени <span class="lt-f">${esc(currentLabel())}</span>` : 'Файли гри';
     document.querySelectorAll<HTMLElement>('#mtabs [data-lt]').forEach(b => { const on = b.dataset.lt === s.leftTab[s.mode]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
     document.querySelectorAll<HTMLElement>('#seg [data-m]').forEach(b => { const on = b.dataset.m === s.mode; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
     const here = s.rightOpen ? 'help' : s.leftOpen ? s.leftTab[s.mode] : s.mode === 'table' ? 'rows' : 'edit';
@@ -1591,7 +1593,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.closest('#sb-adv')) { s.filter = 'adv'; renderAll(); return; }
     if (t.closest('#sb-qa')) { jump('error', 1); return; }
     if (t.closest('#sb-build')) { doBuild(); return; }
-    if (t.closest('#sb-sync')) { openSettingsDlg('Синхронізація'); return; }
+    if (t.closest('#sb-sync')) { openSettingsDlg('file'); return; }
     if (t.closest('#lp-search,#mt-search')) { openSearch(); return; }
     if (t.closest('#hk')) { toggleKeys(); return; }
     if (t.closest('#hamb')) { mbToggle(); return; }
@@ -1609,20 +1611,33 @@ export async function start(root: HTMLElement): Promise<void> {
     const lt = t.closest<HTMLElement>('#mtabs [data-lt]');
     if (lt) { s.leftTab[s.mode] = (['rows', 'glossary', 'scenes'] as const).find(x => x === lt.dataset.lt) ?? 'files'; renderAll(); return; }
     const hl = t.closest<HTMLElement>('[data-hide-left]');
-    if (hl) { if (hl.dataset.hideLeft === 'glossary' || hl.dataset.hideLeft === 'scenes') s.leftOpen = false; else { s.leftBoth = false; s.leftTab[s.mode] = hl.dataset.hideLeft === 'files' ? 'rows' : 'files'; } renderAll(); return; }
+    if (hl) {
+      const h = hl.dataset.hideLeft;
+      if (h === 'glossary' || (h === 'scenes' && !s.leftBoth)) s.leftOpen = false;
+      else if (h === 'scenes') { s.leftBoth = false; s.leftTab[s.mode] = 'files'; }
+      else { const sc = s.leftTab[s.mode] === 'scenes' && s.leftBoth; s.leftBoth = false; s.leftTab[s.mode] = h === 'files' ? (sc ? 'scenes' : 'rows') : 'files'; }
+      renderAll(); return;
+    }
     const sb = t.closest<HTMLElement>('#strip [data-lp]');
     if (sb) {
-      // Each button switches its own panel on or off; both on = the zone is split between them.
-      const want: LeftTab = (['rows', 'glossary', 'scenes'] as const).find(x => x === sb.dataset.lp) ?? 'files', other = want === 'rows' ? 'files' : 'rows';
+      // Each button switches its own window on or off. The files can share the zone with the rows or with the scenes (the files above,
+      // what is in the chosen file below); the related panel takes the whole zone.
+      const want: LeftTab = (['rows', 'glossary', 'scenes'] as const).find(x => x === sb.dataset.lp) ?? 'files';
       const cur = s.leftTab[s.mode];
-      // The glossary and the scenes are panels of their own: they take the whole zone and never share it with files or rows.
-      const own = (x: string): boolean => x === 'glossary' || x === 'scenes';
-      if (own(want) || own(cur)) { if (s.leftOpen && cur === want) s.leftOpen = false; else { s.leftOpen = true; s.leftTab[s.mode] = want; } s.leftBoth = false; }
-      else if (s.phone) { if (s.leftOpen && cur === want) s.leftOpen = false; else { s.leftOpen = true; s.leftTab[s.mode] = want; } s.leftBoth = false; }
-      else if (!s.leftOpen) { s.leftOpen = true; s.leftBoth = false; s.leftTab[s.mode] = want; }
-      else if (s.leftBoth) { s.leftBoth = false; s.leftTab[s.mode] = other; }
+      const both = s.leftOpen && s.leftBoth && !s.phone && (cur === 'files' || cur === 'rows' || cur === 'scenes');
+      const second: LeftTab = cur === 'scenes' ? 'scenes' : 'rows';
+      const only = (x: LeftTab): void => { s.leftOpen = true; s.leftBoth = false; s.leftTab[s.mode] = x; };
+      if (want === 'glossary' || cur === 'glossary' || s.phone) { if (s.leftOpen && cur === want) s.leftOpen = false; else only(want); s.leftBoth = false; }
+      else if (!s.leftOpen) only(want);
+      else if (both) {
+        if (want === 'files') only(second);
+        else if (want === second) only('files');
+        else { s.leftTab[s.mode] = want === 'scenes' ? 'scenes' : 'files'; }
+      }
       else if (cur === want) s.leftOpen = false;
-      else s.leftBoth = true;
+      else if (cur === 'files') { s.leftBoth = true; s.leftTab[s.mode] = want === 'scenes' ? 'scenes' : 'files'; }
+      else if (want === 'files') s.leftBoth = true;
+      else only(want);
       renderAll(); return;
     }
     if (t.closest('#lp-close')) { s.leftOpen = false; renderAll(); return; }

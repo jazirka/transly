@@ -71,10 +71,10 @@ const stored = () => new Promise((res, rej) => { const o = indexedDB.open('trans
   await page.locator('#hamb').click(); await sleep(300); await page.locator('#menubar [data-mg="Файл"]').click(); await sleep(200); await page.locator('#mdd').getByText('Налаштування…').first().click(); await sleep(500);
   const lab = await page.locator('label[for="st-tol"]').innerText();
   check('the threshold label says the range', /5.*100/.test(lab), lab);
-  await page.locator('#st-tol').fill('300'); await page.locator('#st-close').click(); await sleep(500);
+  await page.locator('#st-tol').fill('300'); await page.locator('#st-save').click(); await sleep(500);
   const st = await page.evaluate(() => ({ open: !!document.querySelector('dialog[open] #st-tol'), inv: document.getElementById('st-tol')?.getAttribute('aria-invalid'), err: document.getElementById('st-tol-err')?.textContent ?? '', focus: document.activeElement?.id }));
   check('a wrong threshold keeps the dialog open, marks the field, explains and focuses it', st.open && st.inv === 'true' && /від 5 до 100/.test(st.err) && st.focus === 'st-tol', JSON.stringify(st));
-  await page.locator('#st-tol').fill('30'); await page.locator('#st-close').click(); await sleep(1200);
+  await page.locator('#st-tol').fill('30'); await page.locator('#st-save').click(); await sleep(1200);
   check('a good value closes it', !(await page.evaluate(() => !!document.querySelector('dialog[open] #st-tol'))), await page.evaluate(() => JSON.stringify({ v: document.getElementById('st-tol')?.value, inv: document.getElementById('st-tol')?.getAttribute('aria-invalid'), err: document.getElementById('st-tol-err')?.textContent })));
 
   // ---- the file dialog starts with what can be chosen, and the transfer instructions are folded

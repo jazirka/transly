@@ -30,8 +30,7 @@ const check = (name, ok, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ') 
   let f = await foot();
   check('the footer says there is no copy outside the browser, and marks it', !f.hidden && /Копії поза браузером ще не було/.test(f.t) && /bad/.test(f.cls ?? ''), JSON.stringify(f));
   await page.click('#settings'); await sleep(400);
-  await page.getByRole('tab', { name: 'Синхронізація' }).click();
-  await page.evaluate(() => { for (const d of document.querySelectorAll('dialog details')) d.open = true; });
+  await page.locator('.st-ti[data-p="file"]').click();
   const dl = page.waitForEvent('download', { timeout: 5000 }).catch(() => null);
   await page.click('#st-export'); await dl; await sleep(800);
   await page.keyboard.press('Escape'); await sleep(400);

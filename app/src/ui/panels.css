@@ -472,7 +472,6 @@ input::placeholder,textarea::placeholder{color:#9a9ea6;opacity:1}
 .keys .kr-l span{display:inline-flex;align-items:center;gap:6px}
 
 /* the settings dialog: «Зміни застосовуються одразу» on the left of «Закрити» */
-.adlg .acts .st-auto{margin-right:auto;align-self:center}
 
 /* ---------- wave 2: search results in groups, the file name in a panel title ---------- */
 .sd-h{padding:8px 16px 2px;font-size:12px;font-weight:600;letter-spacing:.03em;color:var(--mute)}

@@ -742,13 +742,52 @@ input[type=checkbox]{accent-color:var(--accent-solid)}
 }
 .tab .x{color:var(--mute)}
 .tab .x:hover,.tab.on .x{color:var(--text)}
-.stabbar{display:flex;gap:2px;overflow-x:auto;border-bottom:1px solid var(--line);margin:0 0 8px;scrollbar-width:none}
-.stabbar::-webkit-scrollbar{display:none}
-.stabbar button{flex:none;border:0;background:none;color:var(--mute);height:36px;padding:0 14px;border-bottom:2px solid transparent;cursor:pointer;font:inherit}
-.stabbar button:hover{color:var(--text)}
-.stabbar button[aria-selected=true]{color:var(--text)}
-.adlg .tab-off,.adlg details.tab-off[hidden]{display:none!important}
-.adlg.tall form{min-height:min(440px,78vh)}
+/* ---------- settings: a tree of pages, the page, the buttons below (like the settings of an IDE) ----------
+   The frame (the buttons below, the border) is the lighter surface, the tree and the page are the working areas and darker, as in the rest of the app. */
+.adlg.st-dlg[data-app]{width:min(900px,calc(100% - 24px));height:min(640px,calc(100% - var(--tb-h) - 24px));overflow:hidden}
+.adlg.st-dlg form.st{padding:0;gap:0;display:grid;grid-template-columns:236px minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;height:100%}
+.st-nav{grid-row:1;display:flex;flex-direction:column;min-height:0;min-width:0;background:var(--bg);border-right:1px solid var(--line)}
+.st-srch{flex:none;margin:10px;height:30px;display:flex;align-items:center;gap:8px;padding:0 10px;border:1px solid var(--line);border-radius:var(--r2);background:var(--bg);color:var(--mute)}
+.st-srch input{flex:1;min-width:0;height:auto;padding:0;border:0;outline:0;background:none;color:var(--text)}
+.st-srch input:focus-visible{outline:0}
+.st-srch:focus-within{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);color:var(--text)}
+.st-tree{padding:2px 8px 10px;overflow:auto;display:flex;flex-direction:column;gap:1px;min-height:0}
+.st-grp,.st-ti{display:flex;align-items:center;width:100%;border:0;background:none;color:var(--text);font:inherit;text-align:left;cursor:pointer;border-radius:var(--r2)}
+.st-grp{gap:6px;padding:9px 8px 4px;font-weight:600}
+.st-grp .chev{width:10px;height:10px;flex:none;fill:none;stroke:var(--mute);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:transform .12s}
+.st-grp.closed .chev{transform:rotate(-90deg)}
+.st-ti{height:28px;padding:0 10px 0 26px}
+.st-grp:hover,.st-ti:hover{background:var(--hv)}
+.st-ti mark{background:rgba(229,160,75,.35);color:inherit;border-radius:2px}
+/* the page you are on: grey, and the colour of the project while you work in the tree */
+.st-ti[aria-current=page]{background:var(--sel);box-shadow:inset 0 0 0 1px var(--on-ring)}
+.st-nav.use .st-ti[aria-current=page]{background:var(--use);box-shadow:inset 0 0 0 1px var(--use-ring);color:#fff}
+.st-none{padding:8px 10px;margin:0}
+.st-main{grid-row:1;display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg)}
+.st-crumb{flex:none;display:flex;align-items:center;gap:8px;margin:0;padding:14px 20px 10px;font-size:15px;font-weight:600}
+.st-crumb .sep{color:var(--mute);font-weight:400;padding-right:3px}
+.st-page>.st-err{min-height:0;margin:-6px 0 0}
+.st-content{flex:1;min-height:0;overflow:auto;padding:4px 20px 20px}
+.st-page{display:flex;flex-direction:column;gap:12px}
+.st-page[hidden]{display:none}
+.st-sub{display:flex;flex-direction:column;gap:8px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.st-sub:last-child{border-bottom:0}
+.st-sub h3{margin:0;font-size:13px;font-weight:600}
+.st-bar{grid-column:1/-1;grid-row:2;display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:10px 16px;border-top:1px solid var(--line)}
+.st-dirty{margin-right:auto;color:var(--warn);font-size:12px}
+.st-dirty.flash{animation:st-flash .5s ease 2}
+@keyframes st-flash{50%{opacity:.25}}
+.st-bar .btn{height:30px;padding:0 18px}
+.st-bar .btn:disabled{color:var(--dim);cursor:default}
+.btn.bad{border-color:rgba(247,84,100,.6);color:#ff9aa5}
+/* a warning is a banner you cannot miss: its own colour, an icon and a bold first line */
+.st-warn{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border-radius:var(--r3);background:rgba(229,160,75,.14);border:1px solid rgba(229,160,75,.6);box-shadow:inset 3px 0 0 var(--warn)}
+.st-warn .wi{flex:none;width:22px;height:22px;border-radius:50%;background:var(--warn);color:#1b1c1f;font-weight:800;display:grid;place-items:center;font-size:14px}
+.st-warn b{display:block;font-weight:700;color:#fff}
+.st-warn span:not(.wi){color:var(--text)}
+.st-warn.bad{background:rgba(247,84,100,.13);border-color:rgba(247,84,100,.6);box-shadow:inset 3px 0 0 var(--bad)}
+.st-warn.bad .wi{background:var(--bad)}
+@media (max-width:700px){.adlg.st-dlg form.st{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr) auto}.st-nav{grid-row:1;max-height:34vh;border-right:0;border-bottom:1px solid var(--line)}.st-main{grid-row:2}.st-bar{grid-row:3}}
 .grid.no-who .who,.grid.no-who .gh>div:nth-child(4){display:none}
 .gr.sel{background:var(--on-bg)!important}
 .gr.sel .tr{box-shadow:inset 0 0 0 1px var(--accent);background:rgba(var(--accent-rgb),.16)}
@@ -761,8 +800,8 @@ input[type=checkbox]{accent-color:var(--accent-solid)}
 .tree.split{display:flex;flex-direction:column}
 .tree.split .ph{flex:none}
 .tree.split #tree{flex:1 1 50%;min-height:0;overflow:auto}
-.tree.split #lp-rows{flex:1 1 50%;min-height:0;border-top:2px solid var(--line)}
-.tree.split #lp-rows .sl-body{overflow:auto}
+.tree.split :is(#lp-rows,#lp-sc){flex:1 1 50%;min-height:0;border-top:2px solid var(--line)}
+.tree.split :is(#lp-rows,#lp-sc) .sl-body{overflow:auto}
 .tree.split .treebody[hidden],.tree.split .slist[hidden]{display:none}
 /* resizable left panel */
 .ide:not(.sz-s).lp-open .main,.ide:not(.sz-s).lp-open.mode-table .main,.ide:not(.sz-s).lp-open.mode-focus .main{grid-template-columns:40px var(--lpw-eff) minmax(0,1fr)}
@@ -775,7 +814,7 @@ input[type=checkbox]{accent-color:var(--accent-solid)}
 .rz-y:hover,.rz-y.drag,.rz-y:focus-visible{background:rgba(139,108,240,.35)}
 body.resizing{user-select:none;cursor:col-resize}
 .tree.split #tree{flex:var(--split,.5) 1 0}
-.tree.split #lp-rows{flex:calc(1 - var(--split,.5)) 1 0;border-top:0}
+.tree.split :is(#lp-rows,#lp-sc){flex:calc(1 - var(--split,.5)) 1 0;border-top:0}
 .sz-s .rz{display:none}
 /* right zone mirrors the left one: rail on the outer edge, stackable panes, resizable, foldable */
 .ide:not(.sz-s) #v-focus{grid-template-columns:minmax(0,1fr) var(--rpw-eff)!important}
@@ -974,7 +1013,7 @@ body.resizing{user-select:none;cursor:col-resize}
 .card-ph{display:none}
 .tree.split .card-ph,.ide:not(.sz-s) .fs.stack .card-ph{display:flex;flex:none;height:34px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:3}
 .ide:not(.sz-s) .fs.stack .card-ph{margin:0 -12px}
-.tree.split #tree:hover .card-ph .ico,.tree.split #lp-rows:hover .card-ph .ico,.fs.stack .pane:hover .card-ph .ico,.card-ph .ico:focus-visible,.tree.split #tree:focus-within .card-ph .ico,.tree.split #lp-rows:focus-within .card-ph .ico,.fs.stack .pane:focus-within .card-ph .ico{opacity:1}
+.tree.split #tree:hover .card-ph .ico,.tree.split #lp-rows:hover .card-ph .ico,.tree.split #lp-sc:hover .card-ph .ico,.fs.stack .pane:hover .card-ph .ico,.card-ph .ico:focus-visible,.tree.split #tree:focus-within .card-ph .ico,.tree.split #lp-rows:focus-within .card-ph .ico,.fs.stack .pane:focus-within .card-ph .ico{opacity:1}
 .card-ph .ico{opacity:0;transition:opacity .12s;cursor:pointer}
 @media (pointer:coarse){.card-ph .ico{opacity:1}}
 

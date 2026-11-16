@@ -58,8 +58,8 @@ const check = (name, ok, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ') 
   // ---- the settings tabs do not change the height of the dialog (ux-a-13)
   await page.locator('#hamb').click(); await sleep(300); await page.locator('#menubar [data-mg="Файл"]').click(); await sleep(200); await page.locator('#mdd').getByText('Налаштування…').first().click(); await sleep(500);
   const heights = [];
-  for (const name of ['Загальні', 'Гра і мови', 'Синхронізація', 'Застосунок']) { await page.locator('.stabbar').getByRole('tab', { name }).click(); await sleep(150); heights.push(await page.evaluate(() => Math.round(document.querySelector('dialog[open]').getBoundingClientRect().height))); }
-  check('the settings dialog is as tall on every tab', Math.max(...heights) - Math.min(...heights) <= 1, JSON.stringify(heights));
+  for (const id of ['general', 'lang', 'github', 'danger']) { await page.locator(`.st-ti[data-p="${id}"]`).click(); await sleep(150); heights.push(await page.evaluate(() => Math.round(document.querySelector('dialog[open]').getBoundingClientRect().height))); }
+  check('the settings dialog is as tall on every page', Math.max(...heights) - Math.min(...heights) <= 1, JSON.stringify(heights));
   await page.keyboard.press('Escape'); await sleep(300);
 
   // ---- a repeated line does not fill the panel with twins (ux-a-09)

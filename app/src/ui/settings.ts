@@ -1,4 +1,4 @@
-import { syncTheme, themeHue, themeTokens, touchTerms, stamp, DEFAULT_SETTINGS, emptyProject, linkModeOf, parseDelimited, parseHtmlTable, parseTerms, referenceSets, serialize, termsFromTable, withoutReference } from '../core';
+import { applyTheme, themeHue, themeTokens, touchTerms, stamp, DEFAULT_SETTINGS, emptyProject, linkModeOf, parseDelimited, parseHtmlTable, parseTerms, referenceSets, serialize, termsFromTable, withoutReference } from '../core';
 import type { GlossaryTerm, LinkMode } from '../core';
 import { $, el, esc, plural, toast } from './dom';
 import { isDesktop } from './desktop';
@@ -10,7 +10,7 @@ import { DEFAULT_API, describeGithub, loadGithubConfig, runGithubSync, saveGithu
 import { importProjectText } from './import-dialog';
 import { importReference } from './reference';
 import { saveFile } from './save';
-import { loadUpdateConfig, updateSectionHtml, wireUpdateSection } from './updates';
+import { loadUpdateConfig, updatePlatform, updateSectionHtml, wireUpdateSection } from './updates';
 import { openSpeakers } from './speakers-dialog';
 import { describe, loadSyncConfig, runSync, saveSyncConfig, syncConfigured, syncUrlProblem } from './sync';
 
@@ -26,159 +26,292 @@ export function dialog(html: string, labelId: string): HTMLDialogElement {
   return dlg;
 }
 
-let lastSettingsTab = 0;
 
 /** Things the settings dialog starts but the shell owns. */
 export interface SettingsActions { reset: () => void; adopt: () => void; plugins: () => void; wrap: () => void; qa: () => void; importFiles: () => void; folder: { text: () => string; change: () => void; forget: () => void } }
 
-/** The tab to open first (by name), or the one that was open last. */
-export type SettingsTab = 'Загальні' | 'Пов’язане й пам’ять' | 'Гра і мови' | 'Синхронізація' | 'Застосунок';
+/** The pages of the settings, as the tree on the left lists them. */
+export type SettingsTab = 'general' | 'look' | 'folder' | 'lang' | 'terms' | 'tm' | 'qa' | 'wrap' | 'claude' | 'github' | 'server' | 'file' | 'update' | 'danger';
 
+const TITLES: Record<SettingsTab, string> = {
+  general: 'Загальні', look: 'Вигляд', folder: 'Папка гри', lang: 'Гра і мови', terms: 'Імпорт глосарію', tm: 'Імпорт пам’яті перекладів',
+  qa: 'Правила QA', wrap: 'Перенесення рядків', claude: 'Claude', github: 'GitHub', server: 'Власний сервер', file: 'Файл', update: 'Оновлення застосунку', danger: 'Небезпечна зона',
+};
+const GROUPS: [string, SettingsTab[]][] = [
+  ['Проєкт', ['general', 'look', 'folder', 'lang']],
+  ['Пов’язане й пам’ять', ['terms', 'tm']],
+  ['Перевірка', ['qa', 'wrap']],
+  ['Синхронізація', ['claude', 'github', 'server', 'file']],
+  ['Застосунок', ['update', 'danger']],
+];
+const EVERY = [[0, 'Лише за кліком'], [30, 'Кожні 30 хвилин'], [180, 'Кожні 3 години'], [360, 'Кожні 6 годин']] as const;
+const CHEV = '<svg class="chev" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5l3 3 3-3"/></svg>';
+
+let lastPage: SettingsTab = 'general';
+/** Groups the translator has folded, kept for the next time the dialog is opened. */
+const folded = new Set<string>();
+
+/** A warning that cannot be missed: a coloured banner with its icon and a bold first line. */
+const warn = (title: string, text: string, bad = false): string => `<div class="st-warn${bad ? ' bad' : ''}" role="note"><span class="wi" aria-hidden="true">!</span><div><b>${title}</b><span>${text}</span></div></div>`;
+
+/** The text of `t` with the part that matches the search `s` (lower case) marked. */
+const mark = (t: string, s: string): string => {
+  const i = s ? t.toLowerCase().indexOf(s) : -1;
+  return i < 0 ? esc(t) : `${esc(t.slice(0, i))}<mark>${esc(t.slice(i, i + s.length))}</mark>${esc(t.slice(i + s.length))}`;
+};
+
+/**
+ * The settings: a tree of pages on the left (with a search and groups that fold), the page on the right, and «Зберегти / Застосувати / Скасувати»
+ * below. What is typed waits until it is applied (the accent colour is tried on the whole app at once and goes back if it is cancelled); the buttons
+ * that do something (imports, saving to a file, reset, checking for an update) act at once.
+ */
 export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugins: onPlugins, wrap: onWrap, qa: onQa, importFiles: onFiles, folder: onFolder }: SettingsActions, tab?: SettingsTab): void {
   const st = ctx.s.saved.settings;
-  const sync = loadSyncConfig();
   const gh = loadGithubConfig();
+  const sync = loadSyncConfig();
   const cl = loadClaudeConfig();
-  const dlg = dialog(`<form method="dialog"><h2 id="st-t">Налаштування</h2>
-    ${isDesktop() ? `<div class="folder-set"><label for="st-folder">Папка гри цього проєкту</label><div class="folder-row"><span id="st-folder" class="path" tabindex="0"></span><button class="btn" type="button" id="st-folder-change">Змінити…</button><button class="btn" type="button" id="st-folder-forget">Забути</button></div>
-      <p class="hint">Папка запам’ятовується для проєкту й відновлюється під час запуску. Якщо її перенесено чи видалено, програма покаже банер із вибором нової, а переклад і оригінали в проєкті збережуться.</p>
-      <label class="achk"><input type="checkbox" id="st-sysbar" ${nativeChrome() ? 'checked' : ''}> Системний заголовок вікна</label>
-      <p class="hint">Запасний варіант: якщо власного заголовка не видно або його кнопки не працюють. Застосовується одразу.</p></div>` : ''}
-    <div class="grid"><label for="st-tol">Радити, коли переклад відрізняється від оригіналу понад, % (від 5 до 100)</label><input id="st-tol" type="number" min="5" max="100" step="5" value="${esc(String(st.tolerancePct))}" aria-describedby="st-tol-err">
+  const where = isDesktop() ? 'на цьому пристрої' : 'у цьому браузері';
+  const page = (id: SettingsTab, attrs: string, html: string): string => `<section class="st-page" id="stp-${id}" data-page="${id}" ${attrs} hidden>${html}</section>`;
+  const every = (cur: number): string => EVERY.map(([v, l]) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${l}</option>`).join('');
+  const dlg = dialog(`<form method="dialog" class="st">
+    <nav class="st-nav" id="st-nav" aria-label="Розділи налаштувань">
+      <label class="st-srch"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg><input id="st-q" type="search" autocomplete="off" placeholder="Пошук налаштувань" aria-label="Пошук налаштувань"></label>
+      <div class="st-tree" id="st-tree"></div>
+    </nav>
+    <div class="st-main" id="st-main">
+      <h2 id="st-t" class="st-crumb"></h2>
+      <div class="st-content">
+    ${page('general', 'data-sec="gen"', `<div class="grid"><label for="st-tol">Радити, коли переклад відрізняється від оригіналу понад, % (від 5 до 100)</label><input id="st-tol" type="number" min="5" max="100" step="5" value="${esc(String(st.tolerancePct))}" aria-describedby="st-tol-err">
       <label for="st-who">Ваше ім’я в коментарях та історії</label><input id="st-who" maxlength="40" value="${esc(String(st.who))}"></div>
     <p class="hint bad st-err" id="st-tol-err" role="alert"></p>
-    <div class="theme-set"><div class="grid"><label for="th-hue">Колір акценту</label><input id="th-hue" type="range" min="0" max="359" step="1" aria-describedby="th-hint"></div>
-      <div class="th-row"><span class="th-sw" id="th-sw" aria-hidden="true" style="background:${themeTokens(themeHue(ctx.s.saved.name, st.hue))['--accent']}"></span><span class="hint" id="th-hint" role="status">${st.hue === undefined ? `Колір береться з назви проєкту: ${themeHue(ctx.s.saved.name, st.hue)}°` : `Обрано вручну: ${themeHue(ctx.s.saved.name, st.hue)}°`}</span><button class="btn" type="button" id="th-reset"${st.hue === undefined ? ' disabled' : ''}>Взяти з назви проєкту</button></div>
-      <div class="th-pre" id="th-pre" role="group" aria-label="Готові кольори">${[185, 215, 245, 275, 305, 335].map(h => `<button type="button" data-h="${h}" aria-label="Відтінок ${h}°" aria-pressed="${h === themeHue(ctx.s.saved.name, st.hue)}" style="background:${themeTokens(h)['--accent']}"></button>`).join('')}</div></div>
     <label class="achk"><input type="checkbox" id="st-block" ${st.blockErrors ? 'checked' : ''}> Не надсилати рядок із помилкою QA</label>
     <div class="grid"><label for="st-link">Автозаповнення однакових рядків після «Надіслати»</label><select id="st-link"><option value="ask" ${linkModeOf(st) === 'ask' ? 'selected' : ''}>заповнювати порожні чернетками, про різні питати (рекомендовано)</option><option value="auto" ${linkModeOf(st) === 'auto' ? 'selected' : ''}>заповнювати порожні й самому оновлювати різні (вичитані не чіпає)</option><option value="off" ${linkModeOf(st) === 'off' ? 'selected' : ''}>не заповнювати</option></select></div>
-    <p class="hint">Порожні зв’язані рядки заповнюються одразу після надсилання чернетками з позначкою «авто» (цю дію можна відмінити в повідомленні). Вичитаний рядок і рядок, який ви змінили пізніше, не перезаписуються без вашого вибору.</p>
-    <div class="grid"><label for="st-wrap">Перенесення рядків у повідомленнях гри</label><button class="btn" type="button" id="st-wrap">Налаштувати…</button></div>
-    <div class="grid"><label for="st-qa">Правила перевірки тексту (літери, пробіли, апостроф, коди)</label><button class="btn" type="button" id="st-qa">Налаштувати…</button></div>
-    <p class="hint">Коли й за якою шириною рядки розбиваються, чи переносяться слова з дефісом, коли попереджати про четвертий рядок. Довжина тексту не обмежується: застосунок лише радить.</p>
-    <details><summary>Тексти плагінів</summary><p class="hint">Частина ігор показує текст командами плагінів, а не вікнами повідомлень. ${st.pluginCommands.length ? `Зараз увімкнено: ${esc(st.pluginCommands.join(', '))}.` : 'Поки нічого не увімкнено.'}</p><div class="acts l"><button class="btn" type="button" id="st-plug">Обрати команди з текстом…</button></div></details>
-    <details><summary>Імпорт глосарію</summary>
-      <p class="hint">З файлу: таблиця Google Sheets, збережена як веб-сторінка (.html), або .csv / .tsv із колонками «Оригінал», «Переклад 1…», «Опис», «Розділ».</p>
-      <label class="achk"><input type="checkbox" id="st-terms-qa"> Перевіряти ці терміни в QA (для великого глосарію краще вимкнути: він лише підказує)</label>
-      <div class="acts l"><button class="btn" type="button" id="st-terms-file-btn">Імпортувати з файлу…</button></div><input type="file" id="st-terms-file" accept=".html,.htm,.csv,.tsv,.txt,text/html,text/csv,text/plain" hidden>
-      <p class="hint">Або вставте рядки «англійською, табуляція, українською»:</p><textarea id="st-terms" rows="4" aria-label="Терміни для імпорту"></textarea><button class="btn" type="button" id="st-terms-go">Імпортувати вставлені терміни</button></details>
-    <details><summary>Імпорт пам’яті перекладів</summary><p class="hint">Рядки «оригінал, табуляція, переклад».</p><textarea id="st-tm" rows="5" aria-label="Пари для імпорту"></textarea><button class="btn" type="button" id="st-tm-go">Імпортувати пари</button></details>
-    <details><summary>Мовці</summary><p class="hint">Імен мовців у грі на RPG Maker MV немає. Їх можна визначити за обличчям персонажа й подією.</p><div class="acts l"><button class="btn" type="button" id="st-spk">Визначити мовців…</button></div></details>
-    <details><summary>Довідкові мови</summary><p class="hint">Додайте ту саму гру іншими мовами (наприклад, російською, польською): кожна з’явиться під оригіналом як підказка. Мов можна додати скільки завгодно. Рядки вирівнюються автоматично, навіть якщо в тій версії є додані чи прибрані репліки.</p>
+    <p class="hint">Порожні зв’язані рядки заповнюються одразу після надсилання чернетками з позначкою «авто» (цю дію можна відмінити в повідомленні). Вичитаний рядок і рядок, який ви змінили пізніше, не перезаписуються без вашого вибору.</p>`)}
+    ${page('look', '', `<div class="theme-set" data-sec="hue"><div class="grid"><label for="th-hue">Колір акценту</label><input id="th-hue" type="range" min="0" max="359" step="1" aria-describedby="th-hint"></div>
+      <div class="th-row"><span class="th-sw" id="th-sw" aria-hidden="true" style="background:${themeTokens(themeHue(ctx.s.saved.name, st.hue))['--accent']}"></span><span class="hint" id="th-hint" role="status">${st.hue === undefined ? `Колір береться з назви проєкту: ${themeHue(ctx.s.saved.name, st.hue)}°` : `Обрано вручну: ${themeHue(ctx.s.saved.name, st.hue)}°`}</span><button class="btn" type="button" id="th-reset"${st.hue === undefined ? ' disabled' : ''}>Взяти з назви проєкту</button></div>
+      <div class="th-pre" id="th-pre" role="group" aria-label="Готові кольори">${[185, 215, 245, 275, 305, 335].map(h => `<button type="button" data-h="${h}" aria-label="Відтінок ${h}°" aria-pressed="${h === themeHue(ctx.s.saved.name, st.hue)}" style="background:${themeTokens(h)['--accent']}"></button>`).join('')}</div></div>
+    <p class="hint">Колір береться з холодної частини кола, щоб його не сплутати зі статусами. Спробувати можна одразу: він міняється в усьому застосунку, а зберігається разом із проєктом лише після «Застосувати».</p>
+    ${isDesktop() ? `<div data-now><label class="achk"><input type="checkbox" id="st-sysbar" ${nativeChrome() ? 'checked' : ''}> Системний заголовок вікна</label>
+      <p class="hint">Запасний варіант: якщо власного заголовка не видно або його кнопки не працюють. Застосовується одразу.</p></div>` : ''}`)}
+    ${isDesktop() ? page('folder', '', `<div class="folder-set"><label for="st-folder">Папка гри цього проєкту</label><div class="folder-row"><span id="st-folder" class="path" tabindex="0"></span><button class="btn" type="button" id="st-folder-change">Змінити…</button><button class="btn" type="button" id="st-folder-forget">Забути</button></div>
+      <p class="hint">Папка запам’ятовується для проєкту й відновлюється під час запуску. Якщо її перенесено чи видалено, програма покаже банер із вибором нової, а переклад і оригінали в проєкті збережуться.</p></div>`) : ''}
+    ${page('lang', '', `<div class="st-sub"><h3>Тексти плагінів</h3><p class="hint">Частина ігор показує текст командами плагінів, а не вікнами повідомлень. ${st.pluginCommands.length ? `Зараз увімкнено: ${esc(st.pluginCommands.join(', '))}.` : 'Поки нічого не увімкнено.'}</p><div class="acts l"><button class="btn" type="button" id="st-plug">Обрати команди з текстом…</button></div></div>
+    <div class="st-sub"><h3>Мовці</h3><p class="hint">Імен мовців у грі на RPG Maker MV немає. Їх можна визначити за обличчям персонажа й подією.</p><div class="acts l"><button class="btn" type="button" id="st-spk">Визначити мовців…</button></div></div>
+    <div class="st-sub"><h3>Довідкові мови</h3><p class="hint">Додайте ту саму гру іншими мовами (наприклад, російською, польською): кожна з’явиться під оригіналом як підказка. Мов можна додати скільки завгодно. Рядки вирівнюються автоматично, навіть якщо в тій версії є додані чи прибрані репліки.</p>
       <div id="rf-state" class="acts l">${referenceSets(ctx.s.saved.reference).map(r => `<span class="chip on">${esc(r.lang.toUpperCase())} <span class="hint">${plural(Object.keys(r.texts).length, ['файл', 'файли', 'файлів'])}</span></span><button class="btn" type="button" data-rf-del="${esc(r.lang)}" aria-label="Прибрати довідку ${esc(r.lang)}">Прибрати ${esc(r.lang.toUpperCase())}</button>`).join('') || '<span class="hint">Довідок ще немає</span>'}</div>
       <div class="grid"><label for="rf-lang">Код мови</label><input id="rf-lang" maxlength="8" value="${ctx.s.saved.reference ? '' : 'ru'}" placeholder="ru, pl, fr…"></div>
-      <div class="acts l"><button class="btn" type="button" id="rf-go">Додати мову: обрати папку довідкової версії…</button></div></details>
-    ${updateSectionHtml(loadUpdateConfig())}
-    <details id="cl-sec" hidden><summary>Синхронізація через Claude (між вашими пристроями)</summary>
-      <p class="hint">Спільна база цього артефакта працює на всіх ваших пристроях, де відкрито цей самий артефакт: ПК, телефон. Не потрібні ні файли, ні свій сервер, ні GitHub. Натисніть «Синхронізувати» тут, потім відкрийте артефакт на іншому пристрої й натисніть там те саме: приїдуть переклад, глосарій, пам’ять та оригінальні рядки гри.</p>
-      <div class="grid"><label for="cl-every">Автоматично</label><select id="cl-every">${[[0, 'Лише за кліком'], [30, 'Кожні 30 хвилин'], [180, 'Кожні 3 години'], [360, 'Кожні 6 годин']].map(([v, l]) => `<option value="${v}" ${cl.everyMin === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div class="acts l"><button class="btn" type="button" id="rf-go">Додати мову: обрати папку довідкової версії…</button></div></div>`)}
+    ${page('terms', '', `<p class="hint">З файлу: таблиця Google Sheets, збережена як веб-сторінка (.html), або .csv / .tsv із колонками «Оригінал», «Переклад 1…», «Опис», «Розділ».</p>
+      <label class="achk"><input type="checkbox" id="st-terms-qa"> Перевіряти ці терміни в QA (для великого глосарію краще вимкнути: він лише підказує)</label>
+      <div class="acts l"><button class="btn" type="button" id="st-terms-file-btn">Імпортувати з файлу…</button></div><input type="file" id="st-terms-file" accept=".html,.htm,.csv,.tsv,.txt,text/html,text/csv,text/plain" hidden>
+      <p class="hint">Або вставте рядки «англійською, табуляція, українською»:</p><textarea id="st-terms" rows="4" aria-label="Терміни для імпорту"></textarea><div class="acts l"><button class="btn" type="button" id="st-terms-go">Імпортувати вставлені терміни</button></div>`)}
+    ${page('tm', '', `<p class="hint">Рядки «оригінал, табуляція, переклад».</p><textarea id="st-tm" rows="7" aria-label="Пари для імпорту"></textarea><div class="acts l"><button class="btn" type="button" id="st-tm-go">Імпортувати пари</button></div>`)}
+    ${page('qa', '', `<div class="grid"><label for="st-qa">Правила перевірки тексту (літери, пробіли, апостроф, коди)</label><button class="btn" type="button" id="st-qa">Налаштувати…</button></div>
+    <p class="hint">Які перевірки ввімкнено й що вони вважають помилкою чи порадою. Довжина тексту не обмежується: застосунок лише радить.</p>`)}
+    ${page('wrap', '', `<div class="grid"><label for="st-wrap">Перенесення рядків у повідомленнях гри</label><button class="btn" type="button" id="st-wrap">Налаштувати…</button></div>
+    <p class="hint">Коли й за якою шириною рядки розбиваються, чи переносяться слова з дефісом, коли попереджати про четвертий рядок.</p>`)}
+    ${page('claude', 'data-sec="cl"', `<p class="hint">Спільна база цього артефакта працює на всіх ваших пристроях, де відкрито цей самий артефакт: ПК, телефон. Не потрібні ні файли, ні свій сервер, ні GitHub. Натисніть «Синхронізувати» тут, потім відкрийте артефакт на іншому пристрої й натисніть там те саме: приїдуть переклад, глосарій, пам’ять та оригінальні рядки гри.</p>
+      <div class="grid"><label for="cl-every">Автоматично</label><select id="cl-every">${every(cl.everyMin)}</select></div>
       <div class="acts l"><button class="btn p" type="button" id="cl-go">Синхронізувати через Claude зараз</button></div>
-      <p class="hint" id="cl-state" role="status">${cl.last ? 'Остання синхронізація: ' + new Date(cl.last).toLocaleString('uk-UA') : 'Ще не синхронізовано'}</p></details>
-    <details><summary>Синхронізація через GitHub</summary>
-      <p class="hint">Переклад зберігається у вашому репозиторії GitHub (краще приватному) звичайними файлами, а історія комітів показує, що й коли змінилося. Створіть репозиторій із файлом README, потім токен: GitHub → Settings → Developer settings → Fine-grained tokens, доступ лише до цього репозиторію, право «Contents: Read and write». Токен лишається тільки ${isDesktop() ? 'на цьому пристрої' : 'у цьому браузері'} й не потрапляє у файл проєкту.</p>
+      <p class="hint" id="cl-state" role="status">${cl.last ? 'Остання синхронізація: ' + new Date(cl.last).toLocaleString('uk-UA') : 'Ще не синхронізовано'}</p>`)}
+    ${page('github', 'data-sec="gh"', `${warn(`Токен лишається тільки ${where}`, 'Дайте йому доступ лише до репозиторію з перекладом (право «Contents: Read and write»). Він не потрапляє у файл проєкту.')}
+      <p class="hint">Переклад зберігається у вашому репозиторії GitHub (краще приватному) звичайними файлами, а історія комітів показує, що й коли змінилося. Створіть репозиторій із файлом README, потім токен: GitHub → Settings → Developer settings → Fine-grained tokens.</p>
       <div class="grid"><label for="gh-repo">Репозиторій (власник/назва)</label><input id="gh-repo" placeholder="ivan/my-translation" autocomplete="off" spellcheck="false" value="${esc(gh.repo)}">
         <label for="gh-token">Токен доступу</label><input id="gh-token" type="password" autocomplete="off" value="${esc(gh.token)}">
         <label for="gh-branch">Гілка (необов’язково)</label><input id="gh-branch" placeholder="основна гілка репозиторію" autocomplete="off" spellcheck="false" value="${esc(gh.branch)}">
         <label for="gh-dir">Папка в репозиторії (необов’язково)</label><input id="gh-dir" placeholder="корінь репозиторію" autocomplete="off" spellcheck="false" value="${esc(gh.dir)}">
-        <label for="gh-every">Автоматично</label><select id="gh-every">${[[0, 'Лише за кліком'], [30, 'Кожні 30 хвилин'], [180, 'Кожні 3 години'], [360, 'Кожні 6 годин']].map(([v, l]) => `<option value="${v}" ${gh.everyMin === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+        <label for="gh-every">Автоматично</label><select id="gh-every">${every(gh.everyMin)}</select></div>
       <label class="achk"><input type="checkbox" id="gh-orig" ${gh.originals ? 'checked' : ''}> Зберігати в репозиторії оригінальні рядки гри (лише для приватного; без них пристрій без гри, наприклад телефон, не покаже оригінал)</label>
       <details><summary>Додатково</summary><div class="grid"><label for="gh-api">Адреса API (для GitHub Enterprise)</label><input id="gh-api" type="url" autocomplete="off" spellcheck="false" value="${esc(gh.api)}"></div></details>
       <div class="acts l"><button class="btn p" type="button" id="gh-go">Синхронізувати з GitHub зараз</button></div>
       <p class="hint" id="gh-state" role="status">${gh.last ? 'Остання синхронізація: ' + new Date(gh.last).toLocaleString('uk-UA') : 'Ще не синхронізовано'}</p>
-      ${isDesktop() ? '' : '<p class="hint">Якщо пише, що немає з’єднання, а інтернет є: сторінка, у якій відкрито застосунок, може забороняти запити до GitHub (так працює вбудований перегляд). Користуйтеся застосунком як сайтом або настільною версією.</p>'}</details>
-    <details><summary>Синхронізація через власний сервер</summary><p class="hint">Через ваш власний проміжний сервер (<code>node server/relay.ts</code>): він лише передає зашифровані дані й забуває їх. Без чужих хмар. Дані шифруються паролем на пристроях. Для адреси в інтернеті потрібен https.</p>
+      ${isDesktop() ? '' : '<p class="hint">Якщо пише, що немає з’єднання, а інтернет є: сторінка, у якій відкрито застосунок, може забороняти запити до GitHub (так працює вбудований перегляд). Користуйтеся застосунком як сайтом або настільною версією.</p>'}`)}
+    ${page('server', 'data-sec="sy"', `${warn('Для адреси в інтернеті потрібен https', 'Дані шифруються паролем на пристроях: сервер лише передає їх і забуває. Адреса в домашній мережі може бути й http.')}
+      <p class="hint">Через ваш власний проміжний сервер (<code>node server/relay.ts</code>). Без чужих хмар.</p>
       <div class="grid"><label for="sy-url">Адреса сервера</label><input id="sy-url" type="url" placeholder="https://sync.example.com або http://192.168.0.14:7421" value="${esc(sync.url)}">
         <label for="sy-pass">Пароль синхронізації (однаковий на всіх пристроях)</label><input id="sy-pass" type="password" autocomplete="off" minlength="8" value="${esc(sync.passphrase)}">
-        <label for="sy-every">Автоматично</label><select id="sy-every">${[[0, 'Лише за кліком'], [30, 'Кожні 30 хвилин'], [180, 'Кожні 3 години'], [360, 'Кожні 6 годин']].map(([v, l]) => `<option value="${v}" ${sync.everyMin === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
-      <div class="acts l"><button class="btn p" type="button" id="sy-go">Синхронізувати зараз</button></div><p class="hint" id="sy-state" role="status">${sync.last ? 'Остання синхронізація: ' + new Date(sync.last).toLocaleString('uk-UA') : 'Ще не синхронізовано'}</p></details>
-    <details><summary>Обмін проєктом через файл</summary><p class="hint">Файл містить переклад, глосарій, пам’ять і оригінальні рядки, без файлів гри. Імпорт зливає зміни по рядках: лишається новіша правка.</p>
-      <div class="acts l"><button class="btn" type="button" id="st-export">Зберегти проєкт у файл</button><button class="btn" type="button" id="st-import">Імпортувати з файлу…</button><button class="btn" type="button" id="st-files">Відкрити файли або вставити JSON…</button></div><input type="file" id="st-file" accept="application/json,.json" hidden></details>
-    <details><summary>Небезпечна зона</summary><p class="hint">Видаляє весь переклад, глосарій та імпортовану пам’ять ${isDesktop() ? 'у цьому застосунку' : 'у цьому браузері'}. Файли гри не змінюються.</p><button class="btn" type="button" id="st-reset">Скинути проєкт…</button></details>
-    <div class="acts"><span class="hint st-auto">Зміни застосовуються одразу.</span><button class="btn p" type="button" id="st-close">Закрити</button></div></form>`, 'st-t');
-  dlg.classList.add('tall');
-  /* Sections live on tabs so nobody scrolls through everything to reach one setting. */
-  const TABS: [string, string[]][] = [
-    ['Загальні', []],
-    ['Пов’язане й пам’ять', ['Імпорт глосарію', 'Імпорт пам’яті перекладів']],
-    ['Гра і мови', ['Мовці', 'Довідкові мови', 'Тексти плагінів']],
-    ['Синхронізація', ['Синхронізація через Claude', 'Синхронізація через GitHub', 'Синхронізація через власний сервер', 'Обмін проєктом через файл']],
-    ['Застосунок', ['Оновлення застосунку', 'Небезпечна зона']],
-  ];
-  const form = dlg.querySelector('form')!;
-  const bar = el('div', 'stabbar'); bar.setAttribute('role', 'tablist');
-  const items = [...form.children].filter(c => c.tagName !== 'H2' && !c.classList.contains('acts') || c.matches('details'));
-  const tabOf = (c: Element): number => {
-    const sum = c.matches('details') ? c.querySelector(':scope > summary')?.textContent ?? '' : '';
-    const i = TABS.findIndex(([, names]) => names.some(n => sum.startsWith(n)));
-    return i < 0 ? 0 : i;
+        <label for="sy-every">Автоматично</label><select id="sy-every">${every(sync.everyMin)}</select></div>
+      <div class="acts l"><button class="btn p" type="button" id="sy-go">Синхронізувати зараз</button></div><p class="hint" id="sy-state" role="status">${sync.last ? 'Остання синхронізація: ' + new Date(sync.last).toLocaleString('uk-UA') : 'Ще не синхронізовано'}</p>`)}
+    ${page('file', '', `<p class="hint">Файл містить переклад, глосарій, пам’ять і оригінальні рядки, без файлів гри. Імпорт зливає зміни по рядках: лишається новіша правка.</p>
+      <div class="acts l"><button class="btn" type="button" id="st-export">Зберегти проєкт у файл</button><button class="btn" type="button" id="st-import">Імпортувати з файлу…</button><button class="btn" type="button" id="st-files">Відкрити файли або вставити JSON…</button></div><input type="file" id="st-file" accept="application/json,.json" hidden>`)}
+    ${page('update', 'data-sec="up"', updateSectionHtml(loadUpdateConfig()))}
+    ${page('danger', '', `${warn('Скинути проєкт', `Видаляє весь переклад, глосарій та імпортовану пам’ять ${isDesktop() ? 'у цьому застосунку' : 'у цьому браузері'}. Файли гри не змінюються.`, true)}
+      <div class="acts l"><button class="btn bad" type="button" id="st-reset">Скинути проєкт…</button></div>`)}
+      </div>
+    </div>
+    <div class="st-bar"><span class="st-dirty" id="st-dirty" role="status" hidden>Є незастосовані зміни</span>
+      <button class="btn p" type="button" id="st-save">Зберегти</button><button class="btn" type="button" id="st-apply" disabled>Застосувати</button><button class="btn" type="button" id="st-cancel">Скасувати</button></div></form>`, 'st-t');
+  dlg.classList.add('st-dlg');
+  const nav = $('#st-nav', dlg), tree = $('#st-tree', dlg), crumb = $('#st-t', dlg), q = $('#st-q', dlg) as HTMLInputElement;
+  const saveBtn = $('#st-save', dlg) as HTMLButtonElement, applyBtn = $('#st-apply', dlg) as HTMLButtonElement, dirtyEl = $('#st-dirty', dlg);
+
+  /* ---- the tree of pages ---- */
+  const groupOf = (id: SettingsTab): string => GROUPS.find(([, ids]) => ids.includes(id))![0];
+  const off = new Set<SettingsTab>();
+  if (!isDesktop()) off.add('folder');
+  if (!updatePlatform()) off.add('update');
+  off.add('claude');   // shown once the page knows it is inside an artifact (below)
+  const pages = new Map<SettingsTab, HTMLElement>();
+  dlg.querySelectorAll<HTMLElement>('.st-page').forEach(p => pages.set(p.dataset.page as SettingsTab, p));
+  const hay = new Map<SettingsTab, string>();
+  for (const [id, p] of pages) hay.set(id, `${TITLES[id]} ${groupOf(id)} ${p.textContent ?? ''}`.toLowerCase());
+  const has = (id: SettingsTab): boolean => pages.has(id) && !off.has(id);
+  const hits = (id: SettingsTab, s: string): boolean => !s || hay.get(id)!.includes(s);
+  let cur: SettingsTab = 'general';
+  const drawTree = (): void => {
+    const s = q.value.trim().toLowerCase();
+    const html = GROUPS.map(([g, ids]) => {
+      const its = ids.filter(id => has(id) && hits(id, s));
+      if (!its.length) return '';
+      const shut = !s && folded.has(g) && !its.includes(cur);
+      return `<button type="button" class="st-grp${shut ? ' closed' : ''}" data-g="${esc(g)}" aria-expanded="${!shut}">${CHEV}${esc(g)}</button>`
+        + (shut ? '' : its.map(id => `<button type="button" class="st-ti" data-p="${id}"${id === cur ? ' aria-current="page"' : ''}>${mark(TITLES[id], s)}</button>`).join(''));
+    }).join('');
+    tree.innerHTML = html || '<p class="hint st-none">Нічого не знайдено</p>';
   };
-  items.forEach(c => c.setAttribute('data-stab', String(tabOf(c))));
-  let shown = tab ? Math.max(0, TABS.findIndex(([n]) => n === tab)) : lastSettingsTab;
-  const show = (i: number): void => {
-    shown = lastSettingsTab = i;
-    items.forEach(c => c.classList.toggle('tab-off', c.getAttribute('data-stab') !== String(i)));
-    bar.querySelectorAll('button').forEach((b, k) => { b.setAttribute('aria-selected', String(k === i)); b.tabIndex = k === i ? 0 : -1; });
+  const show = (id: SettingsTab, focus = false): void => {
+    if (!has(id)) id = 'general';
+    cur = lastPage = id;
+    for (const [pid, p] of pages) p.hidden = pid !== id;
+    crumb.innerHTML = `<span class="vh">Налаштування: </span><span>${esc(groupOf(id))}</span><span class="sep" aria-hidden="true">›</span><span>${esc(TITLES[id])}</span>`;
+    drawTree();
+    if (focus) tree.querySelector<HTMLElement>('.st-ti[aria-current=page]')?.focus();
   };
-  TABS.forEach(([name], i) => { const b = el('button'); b.type = 'button'; b.setAttribute('role', 'tab'); b.textContent = name; b.addEventListener('click', () => show(i)); bar.appendChild(b); });
-  form.querySelector('h2')!.after(bar);
-  show(shown);
-  // The dialog is as tall for every tab as for the tallest one, so the tab bar does not jump when the tab changes.
-  if (dlg.open) { const start = shown; let tallest = 0; for (let i = 0; i < TABS.length; i++) { show(i); tallest = Math.max(tallest, dlg.offsetHeight); } show(start); dlg.style.minHeight = `min(${tallest}px, 88vh)`; }
-  $('#st-wrap', dlg).addEventListener('click', () => { dlg.close(); onWrap(); });
-  $('#st-qa', dlg).addEventListener('click', () => { dlg.close(); onQa(); });
-  $('#st-plug', dlg).addEventListener('click', () => { dlg.close(); onPlugins(); });
-  $('#st-files', dlg).addEventListener('click', () => { dlg.close(); onFiles(); });
-  /* The general settings are applied as they change (like the sync ones below), so there is nothing to save and «Закрити» loses nothing. */
-  const applyGeneral = (): boolean => {
+  tree.addEventListener('click', e => {
+    const t = (e.target as HTMLElement).closest<HTMLElement>('button');
+    if (!t) return;
+    if (t.classList.contains('st-grp')) { const g = t.dataset.g!; if (folded.has(g)) folded.delete(g); else folded.add(g); drawTree(); [...tree.querySelectorAll<HTMLElement>('.st-grp')].find(b => b.dataset.g === g)?.focus(); return; }
+    show(t.dataset.p as SettingsTab, true);
+  });
+  tree.addEventListener('keydown', e => {
+    const rows = [...tree.querySelectorAll<HTMLElement>('.st-grp,.st-ti')];
+    const i = rows.indexOf(document.activeElement as HTMLElement), row = rows[i];
+    if (!row) return;
+    if (e.key === 'ArrowDown') { rows[i + 1]?.focus(); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { if (i > 0) rows[i - 1]!.focus(); else q.focus(); e.preventDefault(); }
+    else if (row.classList.contains('st-grp') && ((e.key === 'ArrowLeft' && row.getAttribute('aria-expanded') === 'true') || (e.key === 'ArrowRight' && row.getAttribute('aria-expanded') === 'false'))) { e.preventDefault(); row.click(); }
+  });
+  q.addEventListener('input', () => {
+    const s = q.value.trim().toLowerCase();
+    // the page on the right follows the search: the first page that has the words, unless the one open has them too
+    if (s && !hits(cur, s)) { const first = GROUPS.flatMap(([, ids]) => ids).find(id => has(id) && hits(id, s)); if (first) { show(first); return; } }
+    drawTree();
+  });
+  q.addEventListener('keydown', e => { if (e.key === 'ArrowDown') { tree.querySelector<HTMLElement>('.st-ti,.st-grp')?.focus(); e.preventDefault(); } });
+  /* The part you work in wears the colour of the project; the other one is grey (the same logic as the tool windows of the app). */
+  const useNav = (on: boolean): void => { nav.classList.toggle('use', on); };
+  nav.addEventListener('pointerdown', () => useNav(true)); nav.addEventListener('focusin', () => useNav(true));
+  $('#st-main', dlg).addEventListener('pointerdown', () => useNav(false)); $('#st-main', dlg).addEventListener('focusin', () => useNav(false));
+  useNav(true);
+  void artifactDb().then(db => { if (db) { off.delete('claude'); drawTree(); } });
+
+  /* ---- what waits to be applied ---- */
+  const touched = new Set<string>();
+  let dirty = false, escAt = 0;
+  const setDirty = (d: boolean): void => { dirty = d; applyBtn.disabled = !d; dirtyEl.hidden = !d; dirtyEl.textContent = 'Є незастосовані зміни'; if (!d) touched.clear(); };
+  dlg.querySelector('.st-content')!.addEventListener('input', onEdit);
+  dlg.querySelector('.st-content')!.addEventListener('change', onEdit);
+  function onEdit(e: Event): void {
+    const t = e.target as HTMLElement;
+    if (t.closest('[data-now]')) return;
+    const sec = t.closest<HTMLElement>('[data-sec]')?.dataset.sec;
+    if (!sec) return;
+    touched.add(sec); setDirty(true);
+  }
+  const readGeneral = (): boolean => {
     const tol = $('#st-tol', dlg) as HTMLInputElement, tolErr = $('#st-tol-err', dlg);
     const v = Number(tol.value);
     // the refusal is written next to the field (and the field is marked and focused), not only in a message that is gone in three seconds
     const ok = tol.value.trim() !== '' && v >= 5 && v <= 100;
     tol.setAttribute('aria-invalid', String(!ok));
     tolErr.textContent = ok ? '' : 'Відсоток має бути від 5 до 100. Поки значення не виправлено, налаштування не застосовуються.';
-    if (!ok) { tol.focus(); return false; }
+    if (!ok) { show('general'); tol.focus(); return false; }
     st.tolerancePct = v;
     st.blockErrors = ($('#st-block', dlg) as HTMLInputElement).checked;
     st.linkMode = ($('#st-link', dlg) as HTMLSelectElement).value as LinkMode;
     st.propagate = st.linkMode !== 'off';
     st.who = ($('#st-who', dlg) as HTMLInputElement).value.trim() || DEFAULT_SETTINGS.who;
-    ctx.s.saved.settingsAt = Date.now();
     ctx.s.who = st.who;
-    ctx.persist(); ctx.render();
     return true;
   };
-  for (const id of ['#st-tol', '#st-who', '#st-block', '#st-link']) $(id, dlg).addEventListener('change', applyGeneral);
-  /* The accent colour: the hue of the project's name, or one picked by hand. It is applied at once, everywhere (see core/theme.ts). */
+  /* The accent colour: the hue of the project's name, or one picked by hand. It is tried on the whole app at once (see core/theme.ts)
+     and kept only when it is applied; closing the dialog any other way puts the saved colour back. */
+  let hue: number | undefined = st.hue;
   const hueSlider = $('#th-hue', dlg) as HTMLInputElement, hueReset = $('#th-reset', dlg) as HTMLButtonElement, hueSwatches = $('#th-pre', dlg);
   const paintTheme = (): void => {
-    const h = themeHue(ctx.s.saved.name, st.hue);
+    const h = themeHue(ctx.s.saved.name, hue);
     hueSlider.value = String(h);
     $('#th-sw', dlg).style.background = themeTokens(h)['--accent']!;
-    $('#th-hint', dlg).textContent = st.hue === undefined ? `Колір береться з назви проєкту: ${h}°` : `Обрано вручну: ${h}°`;
-    hueReset.disabled = st.hue === undefined;
+    $('#th-hint', dlg).textContent = hue === undefined ? `Колір береться з назви проєкту: ${h}°` : `Обрано вручну: ${h}°`;
+    hueReset.disabled = hue === undefined;
     hueSwatches.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.h) === h)));
   };
-  const setHue = (h: number | undefined, keep: boolean): void => {
-    if (h === undefined) delete st.hue; else st.hue = h;
-    syncTheme(document.documentElement, ctx.s.saved);
+  const setHue = (h: number | undefined): void => {
+    hue = h;
+    applyTheme(document.documentElement, themeHue(ctx.s.saved.name, hue));
     paintTheme();
-    if (keep) { ctx.s.saved.settingsAt = Date.now(); ctx.persist(); }
+    touched.add('hue'); setDirty(true);
   };
-  hueSwatches.querySelectorAll('button').forEach(b => b.addEventListener('click', () => setHue(Number((b as HTMLElement).dataset.h), true)));
-  hueSlider.addEventListener('input', () => setHue(Number(hueSlider.value), false));
-  hueSlider.addEventListener('change', () => setHue(Number(hueSlider.value), true));
-  hueReset.addEventListener('click', () => setHue(undefined, true));
+  hueSwatches.querySelectorAll('button').forEach(b => b.addEventListener('click', () => setHue(Number((b as HTMLElement).dataset.h))));
+  hueSlider.addEventListener('input', () => setHue(Number(hueSlider.value)));
+  hueReset.addEventListener('click', () => setHue(undefined));
   paintTheme();
-  $('#st-close', dlg).addEventListener('click', () => { if (applyGeneral()) dlg.close(); });
+
+  /* Sync settings are read from the form when they are applied, over what is stored (the last-sync marks of a run that went on meanwhile stay). */
+  const saveGh = () => {
+    const base = loadGithubConfig();
+    const c = { ...base, repo: ($('#gh-repo', dlg) as HTMLInputElement).value.trim(), token: ($('#gh-token', dlg) as HTMLInputElement).value.trim(), branch: ($('#gh-branch', dlg) as HTMLInputElement).value.trim(), dir: ($('#gh-dir', dlg) as HTMLInputElement).value.trim(), everyMin: Number(($('#gh-every', dlg) as HTMLSelectElement).value), originals: ($('#gh-orig', dlg) as HTMLInputElement).checked, api: ($('#gh-api', dlg) as HTMLInputElement).value.trim() || DEFAULT_API };
+    if (c.repo !== base.repo || c.branch !== base.branch || c.dir !== base.dir || c.api !== base.api) c.state = { shas: {}, commit: '', assetsRev: 0 };
+    saveGithubConfig(c);
+    return c;
+  };
+  const saveSy = () => { const c = { ...loadSyncConfig(), url: ($('#sy-url', dlg) as HTMLInputElement).value.trim(), passphrase: ($('#sy-pass', dlg) as HTMLInputElement).value, everyMin: Number(($('#sy-every', dlg) as HTMLSelectElement).value) }; saveSyncConfig(c); return c; };
+  const saveCl = () => { const c = { ...loadClaudeConfig(), everyMin: Number(($('#cl-every', dlg) as HTMLSelectElement).value) }; saveClaudeConfig(c); return c; };
+  const updates = wireUpdateSection(dlg);
+  /** Applies what waits. False (and the page with the mistake in front) when something is wrong. */
+  const commit = (): boolean => {
+    if (touched.has('gen') && !readGeneral()) return false;
+    if (touched.has('hue')) { if (hue === undefined) delete st.hue; else st.hue = hue; }
+    if (touched.has('gen') || touched.has('hue')) { ctx.s.saved.settingsAt = Date.now(); ctx.persist(); ctx.render(); }
+    if (touched.has('gh')) saveGh();
+    if (touched.has('sy')) saveSy();
+    if (touched.has('cl')) saveCl();
+    if (touched.has('up')) updates.save();
+    setDirty(false);
+    return true;
+  };
+  const flush = (): boolean => !dirty || commit();
+  /** Leave the dialog for another window: what is typed is applied first, so nothing is lost on the way. */
+  const away = (fn: () => void): void => { if (!flush()) return; dlg.close(); fn(); };
+  saveBtn.addEventListener('click', () => { if (commit()) dlg.close(); });
+  applyBtn.addEventListener('click', () => { if (commit()) toast('Налаштування застосовано'); });
+  $('#st-cancel', dlg).addEventListener('click', () => { setDirty(false); dlg.close(); });
+  // Esc: clears the search first; with changes waiting the first Esc only says so, the second one throws them away
+  dlg.addEventListener('cancel', e => {
+    if (q.value && document.activeElement === q) { e.preventDefault(); q.value = ''; drawTree(); return; }
+    if (!dirty) return;
+    if (Date.now() - escAt < 4000) return;
+    e.preventDefault(); escAt = Date.now();
+    dirtyEl.textContent = 'Є незастосовані зміни: Esc ще раз скасує їх'; dirtyEl.classList.remove('flash'); void dirtyEl.offsetWidth; dirtyEl.classList.add('flash');
+  });
+  // however the dialog is closed, the page shows the saved colour (the one tried on it is gone)
+  dlg.addEventListener('close', () => { applyTheme(document.documentElement, themeHue(ctx.s.saved.name, ctx.s.saved.settings.hue)); });
+
+  $('#st-wrap', dlg).addEventListener('click', () => away(onWrap));
+  $('#st-qa', dlg).addEventListener('click', () => away(onQa));
+  $('#st-plug', dlg).addEventListener('click', () => away(onPlugins));
+  $('#st-files', dlg).addEventListener('click', () => away(onFiles));
+  $('#st-spk', dlg).addEventListener('click', () => away(() => openSpeakers(ctx)));
+
   const addTerms = (terms: GlossaryTerm[]): { added: number; merged: number } => {
     let added = 0, merged = 0;
     const have = new Map(ctx.s.saved.terms.map(t => [t.en.toLowerCase(), t]));
     for (const t of terms) {
-      const cur = have.get(t.en.toLowerCase());
-      if (!cur) { ctx.s.saved.terms.push(t); have.set(t.en.toLowerCase(), t); added++; continue; }
-      const known = new Set([cur.uk, ...(cur.alt ?? [])].map(x => x.toLowerCase()));
+      const cur0 = have.get(t.en.toLowerCase());
+      if (!cur0) { ctx.s.saved.terms.push(t); have.set(t.en.toLowerCase(), t); added++; continue; }
+      const known = new Set([cur0.uk, ...(cur0.alt ?? [])].map(x => x.toLowerCase()));
       const more = [t.uk, ...(t.alt ?? [])].filter(x => !known.has(x.toLowerCase()));
-      if (more.length) { cur.alt = [...(cur.alt ?? []), ...more]; cur.mt = Date.now(); merged++; }
+      if (more.length) { cur0.alt = [...(cur0.alt ?? []), ...more]; cur0.mt = Date.now(); merged++; }
     }
     touchTerms(ctx.s.saved.terms);
     ctx.persist(); ctx.render();
@@ -186,7 +319,7 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
   };
   const showFolder = (): void => { const el0 = dlg.querySelector<HTMLElement>('#st-folder'); if (el0) { el0.textContent = onFolder.text(); el0.title = el0.textContent; } };
   showFolder();
-  dlg.querySelector('#st-folder-change')?.addEventListener('click', () => { dlg.close(); onFolder.change(); });
+  dlg.querySelector('#st-folder-change')?.addEventListener('click', () => away(onFolder.change));
   dlg.querySelector('#st-sysbar')?.addEventListener('change', e => { setNativeChrome((e.target as HTMLInputElement).checked); });
   dlg.querySelector('#st-folder-forget')?.addEventListener('click', () => { onFolder.forget(); showFolder(); toast('Папку гри забуто. Переклад лишився; збірка й запуск гри недоступні, поки папку не вказано'); });
   const termsFile = $('#st-terms-file', dlg) as HTMLInputElement;
@@ -231,45 +364,37 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
     ctx.invalidateTm(); ctx.persist(); ctx.render();
     toast(`Імпортовано ${plural(added, ['пару', 'пари', 'пар'])}${rejected ? `, пропущено рядків без табуляції: ${rejected}` : ''}`);
   });
-  $('#st-spk', dlg).addEventListener('click', () => { dlg.close(); openSpeakers(ctx); });
   $('#rf-go', dlg).addEventListener('click', async () => {
     const lang = ($('#rf-lang', dlg) as HTMLInputElement).value.trim().toLowerCase();
     if (!lang) { toast('Вкажіть код мови, наприклад ru або pl'); return; }
+    if (!flush()) return;
     try { if (await importReference(ctx, lang)) { ctx.render(); dlg.close(); } } catch (err) { toast(err instanceof Error ? err.message : 'Не вдалося прочитати папку'); }
   });
   dlg.querySelectorAll<HTMLElement>('[data-rf-del]').forEach(b => b.addEventListener('click', () => {
+    if (!flush()) return;
     const next = withoutReference(ctx.s.saved.reference, b.dataset.rfDel!);
     if (next) ctx.s.saved.reference = next; else delete ctx.s.saved.reference;
     ctx.s.saved.assetsRev = Date.now(); ctx.persist(); ctx.render(); toast(`Довідку ${b.dataset.rfDel!.toUpperCase()} прибрано`); dlg.close();
   }));
-  // The shared database exists only inside an artifact: show the section once the page knows it is there.
-  void artifactDb().then(db => { if (db) $('#cl-sec', dlg).hidden = false; });
-  $('#cl-every', dlg).addEventListener('change', e => { cl.everyMin = Number((e.target as HTMLSelectElement).value); saveClaudeConfig(cl); });
   $('#cl-go', dlg).addEventListener('click', async () => {
     const state = $('#cl-state', dlg), btn = $('#cl-go', dlg) as HTMLButtonElement;
+    const c = saveCl();
     btn.disabled = true; state.textContent = 'Синхронізую…';
-    try { const rep = await runClaudeSync(ctx, cl, onImport); state.textContent = describeClaude(rep); toast(describeClaude(rep)); }
+    try { const rep = await runClaudeSync(ctx, c, onImport); state.textContent = describeClaude(rep); toast(describeClaude(rep)); }
     catch (err) { state.textContent = err instanceof Error ? err.message : 'Не вдалося синхронізувати'; }
     btn.disabled = false;
   });
-  wireUpdateSection(dlg);
-  const readGh = () => ({ ...gh, repo: ($('#gh-repo', dlg) as HTMLInputElement).value.trim(), token: ($('#gh-token', dlg) as HTMLInputElement).value.trim(), branch: ($('#gh-branch', dlg) as HTMLInputElement).value.trim(), dir: ($('#gh-dir', dlg) as HTMLInputElement).value.trim(), everyMin: Number(($('#gh-every', dlg) as HTMLSelectElement).value), originals: ($('#gh-orig', dlg) as HTMLInputElement).checked, api: ($('#gh-api', dlg) as HTMLInputElement).value.trim() || DEFAULT_API });
-  // Everything typed here is kept at once, so closing the dialog does not lose a pasted token.
-  dlg.querySelector('details:has(#gh-repo)')?.addEventListener('change', () => { const c = readGh(); if (c.repo !== gh.repo || c.branch !== gh.branch || c.dir !== gh.dir || c.api !== gh.api) c.state = { shas: {}, commit: '', assetsRev: 0 }; Object.assign(gh, c); saveGithubConfig(gh); });
   $('#gh-go', dlg).addEventListener('click', async () => {
-    Object.assign(gh, readGh()); saveGithubConfig(gh);
+    const c = saveGh();
     const state = $('#gh-state', dlg), btn = $('#gh-go', dlg) as HTMLButtonElement;
-    if (!gh.repo || !gh.token) { state.textContent = 'Вкажіть репозиторій і токен доступу'; return; }
+    if (!c.repo || !c.token) { state.textContent = 'Вкажіть репозиторій і токен доступу'; return; }
     btn.disabled = true; state.textContent = 'Синхронізую…';
-    try { const rep = await runGithubSync(ctx, gh, onImport); state.textContent = describeGithub(rep); toast(describeGithub(rep)); }
+    try { const rep = await runGithubSync(ctx, c, onImport); state.textContent = describeGithub(rep); toast(describeGithub(rep)); }
     catch (err) { state.textContent = err instanceof Error ? err.message : 'Не вдалося синхронізувати'; }
     btn.disabled = false;
   });
-  const readSync = () => ({ ...sync, url: ($('#sy-url', dlg) as HTMLInputElement).value.trim(), passphrase: ($('#sy-pass', dlg) as HTMLInputElement).value, everyMin: Number(($('#sy-every', dlg) as HTMLSelectElement).value) });
-  $('#sy-every', dlg).addEventListener('change', () => { saveSyncConfig(readSync()); toast('Налаштування синхронізації збережено'); });
   $('#sy-go', dlg).addEventListener('click', async () => {
-    const cfg = readSync();
-    saveSyncConfig(cfg);
+    const cfg = saveSy();
     const state = $('#sy-state', dlg), btn = $('#sy-go', dlg) as HTMLButtonElement;
     const bad = syncUrlProblem(cfg.url);
     if (bad) { state.textContent = bad; $('#sy-url', dlg).focus(); return; }
@@ -296,6 +421,7 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
   file.addEventListener('change', async () => {
     const f = file.files?.[0];
     if (!f) return;
+    if (!flush()) return;
     try {
       const conflicts = importProjectText(ctx, await f.text(), onImport);
       toast(conflicts ? `Проєкт злито. Конфліктів: ${conflicts}: лишилась новіша правка` : 'Проєкт злито');
@@ -313,7 +439,10 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
     if (Date.now() - armedAt < 1200) return;
     const keep = ctx.s.saved.resetEpoch;
     ctx.s.saved = { ...emptyProject(ctx.s.saved.name), resetEpoch: Math.max(keep, Date.now()) };
-    ctx.invalidateTm(); onReset(); dlg.close();
+    ctx.invalidateTm(); onReset(); setDirty(false); dlg.close();
     toast('Проєкт скинуто');
   });
+
+  show(tab ?? lastPage);
+  q.focus();
 }

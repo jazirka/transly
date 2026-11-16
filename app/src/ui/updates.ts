@@ -3,7 +3,7 @@ import { RELEASE_TAG, parseRelease, pickAsset, platformOf, updateAvailable, with
 import type { Platform, ReleaseAsset, ReleaseInfo } from '../core';
 import { androidBridge } from './android';
 import { isDesktop } from './desktop';
-import { $, toast } from './dom';
+import { $, esc, toast } from './dom';
 import { dialog } from './settings';
 
 /** Updates of the Android and desktop apps: the latest release of the (private) repository, read with the user's token. */
@@ -91,21 +91,24 @@ export async function autoCheck(): Promise<void> {
 
 /** Settings: the section's markup and wiring. Hidden where updates do not apply. */
 export function updateSectionHtml(cfg: UpdateConfig): string {
-  return `<details id="up-sec" ${updatePlatform() ? '' : 'hidden'}><summary>Оновлення застосунку</summary>
-    <p class="hint">Застосунок може сам знаходити нову збірку в релізах приватного репозиторію. Потрібен токен лише для читання: GitHub → Settings → Developer settings → Fine-grained tokens → доступ до репозиторію <b>${cfg.repo}</b>, право «Contents: Read-only». Токен лишається на цьому пристрої.</p>
-    <div class="grid"><label for="up-repo">Репозиторій зі збірками</label><input id="up-repo" autocomplete="off" spellcheck="false" value="${cfg.repo}">
-      <label for="up-token">Токен (лише читання)</label><input id="up-token" type="password" autocomplete="off" value="${cfg.token}"></div>
+  return `<div id="up-sec">
+    <p class="hint">Застосунок може сам знаходити нову збірку в релізах приватного репозиторію. Потрібен токен лише для читання: GitHub → Settings → Developer settings → Fine-grained tokens → доступ до репозиторію <b>${esc(cfg.repo)}</b>, право «Contents: Read-only». Токен лишається на цьому пристрої.</p>
+    <div class="grid"><label for="up-repo">Репозиторій зі збірками</label><input id="up-repo" autocomplete="off" spellcheck="false" value="${esc(cfg.repo)}">
+      <label for="up-token">Токен (лише читання)</label><input id="up-token" type="password" autocomplete="off" value="${esc(cfg.token)}"></div>
     <label class="achk"><input type="checkbox" id="up-auto" ${cfg.auto ? 'checked' : ''}> Шукати оновлення під час запуску</label>
     <div class="acts l"><button class="btn p" type="button" id="up-check">Перевірити оновлення зараз</button></div>
-    <p class="hint" id="up-status" role="status">Версія збірки: ${__BUILD_ID__ === 'dev' ? 'локальна' : __BUILD_ID__.slice(0, 7)}</p></details>`;
+    <p class="hint" id="up-status" role="status">Версія збірки: ${__BUILD_ID__ === 'dev' ? 'локальна' : __BUILD_ID__.slice(0, 7)}</p></div>`;
 }
 
-export function wireUpdateSection(dlg: HTMLDialogElement): void {
-  const cfg = loadUpdateConfig();
-  const read = (): UpdateConfig => ({ ...cfg, repo: ($('#up-repo', dlg) as HTMLInputElement).value.trim(), token: ($('#up-token', dlg) as HTMLInputElement).value.trim(), auto: ($('#up-auto', dlg) as HTMLInputElement).checked });
-  dlg.querySelector('#up-sec')?.addEventListener('change', () => { Object.assign(cfg, read()); saveUpdateConfig(cfg); });
+/** Wires the update section of the settings; `save()` writes what is typed there (the settings dialog calls it when they are applied). */
+export function wireUpdateSection(dlg: HTMLDialogElement): { save: () => UpdateConfig } {
+  const save = (): UpdateConfig => {
+    const cfg = { ...loadUpdateConfig(), repo: ($('#up-repo', dlg) as HTMLInputElement).value.trim(), token: ($('#up-token', dlg) as HTMLInputElement).value.trim(), auto: ($('#up-auto', dlg) as HTMLInputElement).checked };
+    saveUpdateConfig(cfg);
+    return cfg;
+  };
   dlg.querySelector('#up-check')?.addEventListener('click', async () => {
-    Object.assign(cfg, read(), { skipped: '' }); saveUpdateConfig(cfg);
+    const cfg = save(); cfg.skipped = ''; saveUpdateConfig(cfg);
     const status = $('#up-status', dlg);
     status.textContent = 'Перевіряю…';
     try {
@@ -114,4 +117,5 @@ export function wireUpdateSection(dlg: HTMLDialogElement): void {
       else { status.textContent = 'У вас остання версія.'; toast('У вас остання версія'); }
     } catch (e) { status.textContent = e instanceof Error ? e.message : 'Не вдалося перевірити'; }
   });
+  return { save };
 }

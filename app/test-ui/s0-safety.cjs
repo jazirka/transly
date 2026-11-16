@@ -79,8 +79,7 @@ async function fresh(browser, url, viewport, extra = {}) {
     await page.evaluate(rawPut, { project: p, withSnapshot: true });
     await page.reload(); await page.waitForTimeout(1500);
     await page.click('#settings'); await page.waitForTimeout(500);
-    await page.getByRole('tab', { name: 'Застосунок' }).click();
-    await page.evaluate(() => { for (const d of document.querySelectorAll('dialog details')) if (/Небезпечна/.test(d.textContent)) d.open = true; });
+    await page.locator('.st-ti[data-p="danger"]').click();
     const btn = page.locator('#st-reset');
     await btn.dblclick(); await page.waitForTimeout(300);
     let stored = JSON.parse(await page.evaluate(rawGet, 'projects') || 'null');

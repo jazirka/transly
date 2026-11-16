@@ -39,6 +39,7 @@ import { openActivity, openAutofill } from './activity-dialog';
 import { askAnotherGame, openIngestReport } from './ingest-dialog';
 import { markup } from './markup';
 import { trackActivePane } from './activepane';
+import { loadRowMemo, rowNumber, saveRowMemo } from './rowmemo';
 import { openSettings } from './settings';
 import type { SettingsTab } from './settings';
 import { openSpeakers } from './speakers-dialog';
@@ -203,7 +204,7 @@ export async function start(root: HTMLElement): Promise<void> {
   /** A window too narrow for three columns: the right panel is folded by itself and, when opened, lies over the centre. */
   const narrow = matchMedia('(min-width: 761px) and (max-width: 1180px)');
   const s: State = {
-    views: [], game: [], saved, current: null, open: [], group: null, groupSel: null, picked: new Set(), cur: null, scene: null, mode: mq.matches ? 'edit' : 'table', filter: 'all', q: '', speaker: null, lenFilter: 'all', sort: 'order', compact: ls('transly.compact') === '1', kb: false,
+    views: [], game: [], saved, current: null, open: [], rowAt: {}, rowAtFor: '', group: null, groupSel: null, picked: new Set(), cur: null, scene: null, mode: mq.matches ? 'edit' : 'table', filter: 'all', q: '', speaker: null, lenFilter: 'all', sort: 'order', compact: ls('transly.compact') === '1', kb: false,
     checked: new Set(), sideTab: 'panel', sideOn: ['panel'], saveOk: true, savedAt: null, who: saved.settings.who, phone: mq.matches,
     leftTab: { table: 'files', edit: 'rows', scene: 'scenes' }, leftOpen: !mq.matches, leftBoth: false, rightOpen: false, collapsed: new Set(), sess: { n: 0, t0: Date.now(), seen: new Set() }, lastBuild: null,
   };
@@ -616,6 +617,8 @@ export async function start(root: HTMLElement): Promise<void> {
   }
 
 
+  /** The number of the row a file was left on (0 when there is none), for the title of its tab. */
+  const leftAt = (name: string, units: readonly { key: string }[]): number => rowNumber(units, rowMemo()[name]);
   function renderTabs(): void {
     const tabOpts = qaOpts();
     $('#tabs-host').innerHTML = s.open.map(n => {
@@ -628,7 +631,7 @@ export async function start(root: HTMLElement): Promise<void> {
       const on = n === s.current;
       // A tab is short: the game's label (or the file's name); when two open tabs would read the same, the full name.
       const short = v.label || baseName(n), twin = s.open.some(o => o !== n && (s.views.find(x => x.name === o)?.label || baseName(o)) === short);
-      return `<div class="tab ${on ? 'on' : ''}"><button class="tb" data-tab="${esc(n)}" aria-current="${on}" title="${esc(fileTitle(n) + (n.includes('/') ? ' · ' + n : ''))}"><span class="tico ${ic === 'map' ? '' : 'j'}">${lab}</span>${esc(twin ? fileTitle(n) : short)}${qa ? `<span class="badge" title="Проблеми QA у файлі">${qa}</span>` : ''}</button><button class="x" data-closetab="${esc(n)}" aria-label="Закрити вкладку ${esc(n)}">✕</button></div>`;
+      return `<div class="tab ${on ? 'on' : ''}"><button class="tb" data-tab="${esc(n)}" aria-current="${on}" title="${esc(fileTitle(n) + (n.includes('/') ? ' · ' + n : '') + (leftAt(n, v.units) ? ` · ви зупинилися на рядку ${leftAt(n, v.units)}` : ''))}"><span class="tico ${ic === 'map' ? '' : 'j'}">${lab}</span>${esc(twin ? fileTitle(n) : short)}${qa ? `<span class="badge" title="Проблеми QA у файлі">${qa}</span>` : ''}</button><button class="x" data-closetab="${esc(n)}" aria-label="Закрити вкладку ${esc(n)}">✕</button></div>`;
     }).join('') + (s.group ? `<div class="tab ${s.current === GROUP ? 'on' : ''}"><button class="tb" data-tab="${GROUP}" aria-current="${s.current === GROUP}" title="${esc(s.group.join(', '))}"><span class="tico j">▦</span>${esc(groupTitle())}</button><button class="x" data-closetab="${GROUP}" aria-label="Закрити групу">✕</button></div>` : '');
     document.querySelector<HTMLElement>('#tabs-host .tab.on')?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
   }
@@ -738,6 +741,7 @@ export async function start(root: HTMLElement): Promise<void> {
   }
 
   function renderStatus(): void {
+    noteRow();
     const v = ctx.view();
     const ents = v ? ctx.entries(v.name) : {};
     let qa = 0, adv = 0;
@@ -801,6 +805,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (s.mode === 'table') renderTable(); else if (s.mode === 'scene') renderSceneView(ctx); else renderFocus(ctx, isDesktop());
     renderSidePanel(ctx);
     renderStatus();
+    showPendingRow();
   }
 
   /* ---------- actions ---------- */
@@ -823,7 +828,35 @@ export async function start(root: HTMLElement): Promise<void> {
     s.current = name; s.q = ''; s.lenFilter = 'all'; s.checked.clear();
     s.filter = 'all';
     unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u]));
-    s.cur = s.mode === 'table' ? null : ctx.visible()[0]?.key ?? null;
+    // a file opens on the row it was left on
+    const left = rowMemo()[name];
+    if (left && unitMap.has(left)) { s.cur = left; showRowAfterDraw = left; }
+    else s.cur = s.mode === 'table' ? null : ctx.visible()[0]?.key ?? null;
+  }
+
+  /** The rows the files were left on (loaded for the open project), see rowmemo.ts. */
+  function rowMemo(): Record<string, string> {
+    if (s.rowAtFor !== s.saved.name) { s.rowAt = loadRowMemo(s.saved.name); s.rowAtFor = s.saved.name; }
+    return s.rowAt;
+  }
+  let memoTimer = 0;
+  /** Remember the row of the open file (called whenever the status is drawn: that is whenever the choice of a row changes). */
+  function noteRow(): void {
+    const f = s.current;
+    if (!f || f === GROUP || !s.cur) return;
+    const memo = rowMemo();
+    if (memo[f] === s.cur) return;
+    memo[f] = s.cur;
+    clearTimeout(memoTimer); memoTimer = window.setTimeout(() => saveRowMemo(s.saved.name, memo), 400);
+  }
+  /** The row a tab was opened on is brought into view once the file is drawn. */
+  let showRowAfterDraw: string | null = null;
+  function showPendingRow(): void {
+    const key = showRowAfterDraw;
+    showRowAfterDraw = null;
+    if (!key) return;
+    if (s.mode === 'table') { reveal('grid', key); document.querySelector<HTMLElement>(`.gr[data-key="${CSS.escape(key)}"]`)?.scrollIntoView({ block: 'nearest' }); }
+    else if (s.mode === 'edit') { reveal('slist', key); document.querySelector<HTMLElement>(`.si[data-key="${CSS.escape(key)}"]`)?.scrollIntoView({ block: 'nearest' }); }
   }
 
   /** Show the rows of several files in one table (a group keeps its tab until it is closed). */

@@ -30,6 +30,10 @@ export interface State {
   current: string | null;
   /** Files open as tabs, in the order they were opened. */
   open: string[];
+  /** The row each file was left on (file name -> row key), restored when its tab is opened again; see rowmemo.ts. */
+  rowAt: Record<string, string>;
+  /** The project `rowAt` was loaded for. */
+  rowAtFor: string;
   /** Files shown together in one table (`current` is then GROUP); null when no group is open. */
   group: string[] | null;
   /** When the group shows only some rows of its files (a group of the translator's, a speaker, a scene): the title and which keys of each file; `gid` is the translator's group it follows. */

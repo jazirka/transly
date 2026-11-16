@@ -9,7 +9,7 @@ import { openBuild } from './build-dialog';
 import { dataDirOf, forgetGameDir, isDesktop, rememberedGameDir, reopenGameDir, reopenGameDirDesktop, setProject } from './desktop';
 import { classifyFolder, folderBanner, folderLine } from './folder-service';
 import type { FolderState } from './folder-service';
-import { $, el, esc, plural, toast } from './dom';
+import { $, CRUMB, el, esc, plural, toast } from './dom';
 import { focusFirst, menuKeys, rememberOpener, restoreOpener, roveTree, setUnavailable, treeKeys } from './keynav';
 import { FOCUS_HTML, SIDE_HTML, qaClick, focusClick, closeTyping, focusInput, insertText, renderFocus, renderSidePanel, afterSendFollowUp, send, sideClick, step } from './focus';
 import { wireDiscuss } from './discuss';
@@ -130,10 +130,10 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     <aside class="tree" id="lpanel" aria-label="Бічна панель: файли й рядки">
       <div class="mtabs" id="mtabs" role="group" aria-label="Бічна панель"><button data-lt="files">Файли</button><button data-lt="rows">Рядки</button><button data-lt="scenes">Сцени</button><button data-lt="glossary">Пов’язане</button><button class="ab-ic" id="mt-open" aria-label="Відкрити файли або вставити JSON" title="Відкрити файли або вставити JSON">${SVG.import}</button><button class="ab-ic" id="mt-search" aria-label="Пошук скрізь">${SVG.searchBig}</button></div>
       <div class="ph"><span class="grow" id="lp-title">Файли гри</span><button class="ico ico-btn" id="lp-search" type="button" aria-label="Знайти скрізь (Ctrl+K)" title="Знайти скрізь (Ctrl+K або двічі Shift)">${SVG.search}</button><span class="ico" id="lp-close" title="Сховати панель" role="button" aria-label="Сховати панель">—</span></div>
-      <div class="treebody" id="tree"><div class="ph card-ph" data-card="files"><span class="grow"><span class="step" aria-hidden="true">1</span>Файли гри</span><span class="ico" data-hide-left="files" role="button" tabindex="0" aria-label="Сховати панель «Файли гри»" title="Сховати">—</span></div><div class="tree-q"><div class="fin">${SVG.search}<input class="qin" id="fq" placeholder="Пошук у файлах гри" aria-label="Пошук у файлах гри" autocomplete="off" spellcheck="false"></div></div><div class="tree-act" id="tree-act"></div>${GROUPS_HTML}<div id="tree-list" role="tree" aria-label="Файли гри"></div></div>
+      <div class="treebody" id="tree"><div class="ph card-ph" data-card="files"><span class="grow">Файли гри</span><span class="ico" data-hide-left="files" role="button" tabindex="0" aria-label="Сховати панель «Файли гри»" title="Сховати">—</span></div><div class="tree-q"><div class="fin">${SVG.search}<input class="qin" id="fq" placeholder="Пошук у файлах гри" aria-label="Пошук у файлах гри" autocomplete="off" spellcheck="false"></div></div><div class="tree-act" id="tree-act"></div>${GROUPS_HTML}<div id="tree-list" role="tree" aria-label="Файли гри"></div></div>
       <div class="rz rz-y" id="rz-y" role="separator" aria-orientation="horizontal" aria-label="Розділ між файлами й рядками" aria-valuemin="15" aria-valuemax="85" tabindex="0" title="Потягніть, щоб змінити співвідношення (подвійний клік — навпіл)" hidden></div>
       <div class="slist" id="lp-rows" hidden>
-        <div class="ph card-ph" data-card="rows"><span class="grow"><span class="step" aria-hidden="true">2</span>Рядки файлу<span class="fchip" data-fchip></span></span><span class="ico" data-hide-left="rows" role="button" tabindex="0" aria-label="Сховати панель «Рядки файлу»" title="Сховати">—</span></div>
+        <div class="ph card-ph" data-card="rows"><span class="grow"><span class="fchip" data-fchip></span>${CRUMB}Рядки</span><span class="ico" data-hide-left="rows" role="button" tabindex="0" aria-label="Сховати панель «Рядки файлу»" title="Сховати">—</span></div>
         <div class="fh"><div class="fin">${SVG.search}<input class="qin" id="q2" placeholder="Пошук рядків" aria-label="Пошук рядків"></div><div class="chips2"><button class="chip" id="sortbtn" aria-haspopup="menu">↕ За порядком</button><span class="chipsHost" id="chips2"></span></div></div>
         <div class="sl-body" id="slist"></div>
       </div>
@@ -526,7 +526,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const box = $('#tree-list');
     const had = box.contains(document.activeElement) ? (document.activeElement as HTMLElement) : null;
     const hadId = had ? { file: had.dataset.file, dir: had.dataset.dir } : null;
-    $('#tree-act').innerHTML = s.views.length > 1 ? `<button class="btn" data-act="group-all" title="Усі рядки всіх файлів в одній таблиці">Усі файли разом</button>${s.picked.size ? `<button class="btn p" data-act="group-picked">Відкрити вибрані (${s.picked.size})</button><button class="btn" id="tree-grp" aria-haspopup="menu" title="Додати вибрані файли до групи">У групу ▾</button><button class="btn" data-act="group-clear" title="Зняти позначки">✕</button>` : '<span class="hint">Ctrl+клік: вибрати кілька файлів</span>'}` : '';
+    $('#tree-act').innerHTML = s.views.length > 1 ? `<button class="btn" data-act="group-all" title="Усі рядки всіх файлів в одній таблиці">Усі файли разом</button>${s.picked.size ? `<button class="btn p" data-act="group-picked">Відкрити вибрані (${s.picked.size})</button><button class="btn" id="tree-grp" aria-haspopup="menu" title="Додати вибрані файли до групи">У групу ▾</button><button class="btn" data-act="group-clear" title="Зняти позначки">✕</button>` : `<button class="btn" id="gr-add" type="button" aria-label="Нова група" title="Нова група. Файли в групу: Ctrl+клік по файлах, потім «У групу» (або перетягніть файл на групу)">+ Група</button>`}` : '';
     // a tree with nothing in it is no tree: the message stands alone until there are files
     if (!s.views.length) { box.removeAttribute('role'); box.innerHTML = '<div class="msg-empty">Папку гри ще не відкрито</div>'; return; }
     box.setAttribute('role', 'tree');
@@ -543,7 +543,7 @@ export async function start(root: HTMLElement): Promise<void> {
       });
       if (!nodes.length) { box.innerHTML = '<div class="msg-empty">Нічого не знайдено</div>'; return; }
     }
-    box.innerHTML = (s.leftBoth && !s.phone && !coachSeen() ? `<div class="coach" role="note"><span>${ctx.view() ? '<b>Порядок:</b> ① файл → ② рядок → ③ переклад' : '<b>① Оберіть файл.</b> Потім — рядок у вікні ②.'}</span><button class="btn" type="button" data-coach-ok>Зрозуміло</button></div>` : '') + nodes.map(n => {
+    box.innerHTML = (s.leftBoth && !s.phone && !coachSeen() ? `<div class="coach" role="note"><span>${ctx.view() ? '<b>Порядок:</b> файл › рядок › переклад' : '<b>Оберіть файл.</b> Потім — рядок у вікні нижче.'}</span><button class="btn" type="button" data-coach-ok>Зрозуміло</button></div>` : '') + nodes.map(n => {
       if (!q && skip !== null && n.d > skip) return '';
       skip = null;
       if (n.t === 'd') {
@@ -558,6 +558,8 @@ export async function start(root: HTMLElement): Promise<void> {
       const cur = n.name === s.current;
       return `<div class="node ${cur ? 'cur' : ''} ${s.picked.has(n.name) ? 'pick' : ''} ${!st.translated ? 'idle' : ''}" style="--d:${n.d}" data-file="${esc(n.name)}" draggable="true" role="treeitem" tabindex="-1" aria-level="${n.d + 1}" aria-selected="${cur}" title="${cur ? 'Відкрито · ' : ''}${v.label ? esc(v.label) + ' · ' : ''}Перекладено ${pc}% · вичитано ${pcA}%"><span class="chev"></span><span class="ic ${ic}">${lab}</span><span class="nm">${fileGroupDot(n.name)}${v.label ? `${esc(v.label)}<span class="lc">${esc(n.label.replace(/\.json$/, ''))}</span>` : esc(n.label)}</span>${rowMemo()[n.name] && leftAt(n.name, v.units) ? `<span class="mem" title="Ви зупинилися на рядку ${leftAt(n.name, v.units)}">↩ ${leftAt(n.name, v.units)}</span>` : ''}<span class="mini"><i class="${full ? 'f' : ''}" style="width:${pc}%"></i></span><span class="pc ${full ? 'full' : ''}">${pc}%</span></div>`;
     }).join('');
+    // Picked files that stand one after another share one outline: only the first has its top corners rounded, only the last its bottom ones.
+    box.querySelectorAll<HTMLElement>('.node.pick').forEach(n => { n.classList.toggle('pk-top', !n.previousElementSibling?.classList.contains('pick')); n.classList.toggle('pk-bot', !n.nextElementSibling?.classList.contains('pick')); });
     // One tab stop for the whole tree; the node that had the focus keeps it after the redraw.
     const mine = hadId ? [...box.querySelectorAll<HTMLElement>('.node')].find(n => hadId.file ? n.dataset.file === hadId.file : n.dataset.dir === hadId.dir) : undefined;
     roveTree(box, mine);
@@ -582,11 +584,12 @@ export async function start(root: HTMLElement): Promise<void> {
    * The statuses that are chosen show as chips (a click drops one); the rest is in «Ще ▾», so no row of chips takes the room of the rows
    * and nothing moves when a filter is switched on. `host` tells the two places apart (the table's bar and the rows window).
    */
-  function chipsHtml(host: string): string {
+  function chipsHtml(host: string, lead = ''): string {
     if (!ctx.view()) return '';
     const n = filterCounts();
     const chips = s.filters.map(f => { const l = FILTERS.find(x => x[0] === f)?.[1] ?? f; return `<button class="chip on" data-filter="${f}" aria-pressed="true" title="Прибрати фільтр «${l}»">${filterDot(f)}${l} <span class="n">${(n.get(f) ?? 0).toLocaleString('uk-UA')}</span><span class="x" aria-hidden="true">✕</span></button>`; }).join('');
-    return `${chips}<button class="chip more${s.filters.length ? ' on' : ''}" id="more-${host}" data-more aria-haspopup="true" aria-expanded="false">Ще ▾</button>${s.filters.length ? '<button class="chip" data-reset title="Скинути всі фільтри">Скинути</button>' : ''}`;
+    // «Ще ▾» comes first, where the eye looks for it; the chosen ones (the speaker, the statuses) follow it
+    return `<button class="chip more${s.filters.length ? ' on' : ''}" id="more-${host}" data-more aria-haspopup="true" aria-expanded="false">Ще ▾</button>${lead}${chips}${s.filters.length ? '<button class="chip" data-reset title="Скинути всі фільтри">Скинути</button>' : ''}`;
   }
   /** The popover «Ще ▾»: a box for each status with how many rows have it; the boxes can be mixed. */
   function moreHtml(): string {
@@ -643,7 +646,7 @@ export async function start(root: HTMLElement): Promise<void> {
 
   const SORT_LABEL: Record<SortMode, string> = { order: 'За порядком', new: 'Без перекладу спершу', qa: 'Помилки спершу', long: 'Найдовші спершу' };
   function renderRowsList(): void {
-    $('#chips2').innerHTML = (s.speaker !== null ? `<button class="chip on" data-clear="speaker" title="Скинути фільтр за мовцем">${esc(s.speaker || 'Без мовця')} ✕</button>` : '') + chipsHtml('2');
+    $('#chips2').innerHTML = chipsHtml('2', s.speaker !== null ? `<button class="chip on" data-clear="speaker" title="Скинути фільтр за мовцем">${esc(s.speaker || 'Без мовця')} ✕</button>` : '');
     $('#sortbtn').textContent = 'Вигляд ▾';
     $('#sortbtn').title = $('#sortbtn').ariaLabel = `Вигляд: порядок «${SORT_LABEL[s.sort]}»`;
     $('#sortbtn').classList.toggle('on', s.sort !== 'order');

@@ -4,8 +4,8 @@
  * over the edge of the area under the pointer: it appears when you point at a scrolling area (or while it scrolls), goes when you leave, and
  * can be dragged. Wheel, touch, keyboard and `scrollTo` still scroll the area itself, so nothing else depends on it.
  */
-const SIZE = 8;       // the thickness of the thumb
-const EDGE = 2;       // its distance from the edge of the area
+const SIZE = 6;       // the thickness of the thumb
+const EDGE = 4;       // its distance from the edge of the area
 const MIN = 28;       // the shortest thumb
 const LINGER = 700;   // how long it stays after the area scrolled without the pointer on it
 

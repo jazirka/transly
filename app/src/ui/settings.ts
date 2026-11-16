@@ -1,6 +1,6 @@
 import { applyTheme, themeHue, themeTokens, touchTerms, stamp, DEFAULT_SETTINGS, emptyProject, linkModeOf, parseDelimited, parseHtmlTable, parseTerms, referenceSets, serialize, termsFromTable, withoutReference } from '../core';
 import type { GlossaryTerm, LinkMode } from '../core';
-import { $, el, esc, plural, toast } from './dom';
+import { $, CRUMB, el, esc, plural, toast } from './dom';
 import { isDesktop } from './desktop';
 import { showDialog } from './modal';
 import { nativeChrome, setNativeChrome } from './winctl';
@@ -173,7 +173,7 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
     if (!has(id)) id = 'general';
     cur = lastPage = id;
     for (const [pid, p] of pages) p.hidden = pid !== id;
-    crumb.innerHTML = `<span class="vh">Налаштування: </span><span>${esc(groupOf(id))}</span><span class="sep" aria-hidden="true">›</span><span>${esc(TITLES[id])}</span>`;
+    crumb.innerHTML = `<span class="vh">Налаштування: </span><span>${esc(groupOf(id))}</span>${CRUMB}<span>${esc(TITLES[id])}</span>`;
     drawTree();
     if (focus) tree.querySelector<HTMLElement>('.st-ti[aria-current=page]')?.focus();
   };

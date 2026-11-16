@@ -764,7 +764,6 @@ input[type=checkbox]{accent-color:var(--accent-solid)}
 .st-none{padding:8px 10px;margin:0}
 .st-main{grid-row:1;display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg)}
 .st-crumb{flex:none;display:flex;align-items:center;gap:8px;margin:0;padding:14px 20px 10px;font-size:15px;font-weight:600}
-.st-crumb .sep{color:var(--mute);font-weight:400;padding-right:3px}
 .st-page>.st-err{min-height:0;margin:-6px 0 0}
 .st-content{flex:1;min-height:0;overflow:auto;padding:4px 20px 20px}
 .st-page{display:flex;flex-direction:column;gap:12px}
@@ -986,9 +985,9 @@ body.resizing{user-select:none;cursor:col-resize}
    (the table and the lists reach their edge) and it shows only while you hover the area */
 html.ovsb,html.ovsb *{scrollbar-width:none}
 html.ovsb ::-webkit-scrollbar{display:none}
-.ovs{position:fixed;z-index:2147483000;border-radius:4px;background:rgba(255,255,255,.3);opacity:0;pointer-events:none;transition:opacity .15s ease,background .12s}
+.ovs{position:fixed;z-index:2147483000;border-radius:3px;background:rgba(255,255,255,.24);opacity:0;pointer-events:none;transition:opacity .15s ease,background .12s}
 .ovs.on{opacity:1;pointer-events:auto}
-.ovs:hover,.ovs.drag{background:rgba(255,255,255,.5)}
+.ovs:hover,.ovs.drag{background:rgba(255,255,255,.42)}
 /* filter chips wrap onto a second line instead of being cut off */
 .filters{height:auto;min-height:36px;flex-wrap:wrap;overflow:visible;padding:4px 10px;row-gap:4px}
 .filters .fin{flex:0 1 200px;min-width:140px}
@@ -1073,19 +1072,17 @@ html.ovsb ::-webkit-scrollbar{display:none}
 .filters .chip{padding-left:8px;padding-right:8px}
 
 /* file → rows / scenes: the windows below the files are numbered in the order you use them, and say which file they show */
-.step{display:none;place-items:center;width:18px;height:18px;margin-right:8px;border-radius:50%;background:var(--on-bg);box-shadow:inset 0 0 0 1px var(--on-ring);color:#fff;font:600 11px var(--ui);letter-spacing:0;text-transform:none;flex:none}
-.tree.split .step,.ide:has(.tree.split) #f-trlbl .step{display:inline-grid}
 #f-trlbl{display:inline-flex;align-items:center}
 .card-ph .grow{display:flex;align-items:center;white-space:nowrap;min-width:0}
-.fchip{display:inline-flex;align-items:center;gap:6px;height:20px;max-width:60%;margin-left:8px;padding:0 8px;border-radius:10px;background:var(--on-bg);box-shadow:inset 0 0 0 1px var(--on-ring);color:var(--text);font:500 11.5px var(--ui);text-transform:none;letter-spacing:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fchip{display:inline-flex;align-items:center;gap:6px;min-width:0;max-width:60%;color:var(--text);font-weight:500;text-transform:none;letter-spacing:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.crumb-sep{flex:none;width:8px;height:12px;margin:0 6px;fill:none;stroke:var(--mute);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 .fchip:empty{display:none}
-.fchip.none{background:none;box-shadow:none;border:1px dashed var(--dim);color:var(--mute)}
+.fchip.none{color:var(--mute);font-weight:400;font-style:italic}
 .fchip .ic{flex:none}
 .mem{margin-right:6px;color:var(--mute);font:10.5px var(--mono);white-space:nowrap}
 .emptybox{margin:18px 14px;padding:16px;border:1px dashed var(--dim);border-radius:10px;color:var(--mute);text-align:center;line-height:1.5}
 .emptybox b{display:block;color:var(--text);font-weight:600;margin-bottom:4px}
 /* the number of the window you work in is in colour, the others are grey (the same logic as the windows themselves) */
-html[data-pane=files] [data-card=files] .step,html[data-pane=rows] [data-card=rows] .step,html[data-pane=scenes] [data-card=scenes] .step,html[data-pane=centre] #f-trlbl .step,html[data-pane=right] #f-trlbl .step{background:var(--accent-solid);box-shadow:none}
 .coach{display:flex;align-items:center;gap:10px;margin:8px 10px;padding:7px 8px 7px 12px;border-radius:10px;background:var(--accent-solid);color:var(--on-accent);line-height:1.4;font-size:12.5px}
 .coach span{flex:1;min-width:0}
 .coach .btn{flex:none;height:24px;padding:0 10px;background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.3);color:#fff}
@@ -1112,3 +1109,35 @@ html[data-pane=files] [data-card=files] .step,html[data-pane=rows] [data-card=ro
 .chip .x{margin-left:6px;color:var(--mute)}
 .chip.on .x{color:inherit;opacity:.7}
 .chip.more{color:var(--text)}
+
+/* the searches of the windows are one: the field on the card, no strip of its own and no divider under it */
+.tree-q,.slist .fh{background:none;border:0;padding:8px 10px 4px}
+.tree-q .fin,.slist .fh .fin{height:28px;border-radius:var(--r2);background:var(--bg)}
+/* the actions of the files: one row (the hint is in the tooltip) */
+.tree-act{padding:4px 10px 2px;gap:6px}
+/* the groups have no title of their own: compact rows, no divider between them and the tree */
+/* the tree: the same inset on both sides, a rounded highlight inside it, a child under the icon of its parent */
+#tree-list{padding:4px 6px}
+.node{padding:0 8px 0 calc(6px + var(--d,0) * 20px);border-radius:8px}
+.node .chev{width:14px;font-size:11px}
+.node[data-file] .chev{display:none}
+/* picked files share one outline: no lines between them, rounded corners only at the ends of the run */
+.node.pick{border-radius:0;background:var(--on-bg);--rg:var(--on-ring);box-shadow:inset 1px 0 var(--rg),inset -1px 0 var(--rg)}
+.node.pick.pk-top{border-radius:8px 8px 0 0;box-shadow:inset 1px 0 var(--rg),inset -1px 0 var(--rg),inset 0 1px var(--rg)}
+.node.pick.pk-bot{border-radius:0 0 8px 8px;box-shadow:inset 1px 0 var(--rg),inset -1px 0 var(--rg),inset 0 -1px var(--rg)}
+.node.pick.pk-top.pk-bot{border-radius:8px;box-shadow:inset 0 0 0 1px var(--rg)}
+
+/* the buttons that open a menu (the view, the statuses, the speaker, the length) look like the buttons of the files: one height, one fill, one gap */
+#sortbtn,.chip.more,#spkbtn,#lenbtn{height:24px;padding:0 9px;border:1px solid var(--line);border-radius:var(--r2);background:#34363a;color:var(--text);font-size:12px}
+#sortbtn:hover,.chip.more:hover,#spkbtn:hover,#lenbtn:hover{background:#3b3d42}
+#sortbtn.on,.chip.more.on,#spkbtn.on,#lenbtn.on{border-color:transparent;box-shadow:inset 0 0 0 1px var(--on-ring);background:var(--on-bg)}
+/* in the rows window they stand in one row (the chosen filters wrap under them), with the same gap as the buttons of the files */
+.slist .fh{gap:6px}
+.slist .fh .chips2{gap:6px;align-items:center}
+.slist .chipsHost{display:contents}
+.slist .chip{height:24px;padding:0 9px}
+.slist .fh{padding:8px 10px}
+
+/* the last column of the table keeps clear of the thumb of the scrollbar: its numbers (and its header) stand the same distance from the edge as the files in the tree */
+.gr .len{padding-right:14px}
+.gh>div:last-child{padding-right:14px;justify-content:flex-end}

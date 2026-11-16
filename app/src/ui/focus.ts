@@ -47,7 +47,7 @@ export const FOCUS_HTML = `<div class="fc"><div class="fc-in"><div class="te-lin
   <div><div class="lbl">Оригінал · EN<span class="thr-chips" id="f-thr-chips"></span></div><div class="srcbox" id="f-src" lang="en"></div><div class="pics" id="f-pics" hidden></div></div>
   <div id="f-refbox" hidden></div>
   <div class="trblock">
-    <div class="lbl"><span id="f-trlbl"><span class="step" aria-hidden="true">3</span>Переклад · UK</span></div>
+    <div class="lbl"><span id="f-trlbl">Переклад · UK</span></div>
     <div class="te"><div class="te-layer" id="te-layer" aria-hidden="true"></div><textarea class="tr-in" id="i-tr" spellcheck="false" aria-label="Переклад"></textarea></div>
     <div class="edbar">
       <button class="ib lab" id="b-compact" title="Лише текст: сховати контекст і примітки" aria-label="Режим лише тексту">${I.compact}<span class="tl">Лише текст</span></button>

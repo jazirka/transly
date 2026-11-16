@@ -40,9 +40,9 @@ const stored = page => page.evaluate(() => new Promise((res, rej) => { const o =
   check('the tree has the groups of the settings', JSON.stringify(groups.map(g => g.trim())) === JSON.stringify(['Проєкт', 'Пов’язане й пам’ять', 'Перевірка', 'Синхронізація', 'Застосунок']), JSON.stringify(groups));
   const sync = await page.evaluate(() => { const g = [...document.querySelectorAll('.st-grp')].find(b => b.textContent.trim() === 'Синхронізація'); const items = []; for (let e = g.nextElementSibling; e && e.classList.contains('st-ti'); e = e.nextElementSibling) items.push(e.textContent.trim()); return items; });
   check('git and the other ways to sync are pages of the tree, not tabs', sync.includes('GitHub') && sync.includes('Власний сервер') && sync.includes('Файл') && (await page.locator('dialog[open] [role=tab]').count()) === 0, JSON.stringify(sync));
-  check('the crumbs name the group and the page (no arrows)', /Проєкт\s*›\s*Загальні/.test((await page.locator('#st-t').innerText()).replace(/\s+/g, ' ')), await page.locator('#st-t').innerText());
+  check('the crumbs name the group and the page (an arrow between them)', /Проєкт\s+Загальні/.test((await page.locator('#st-t').innerText()).replace(/\s+/g, ' ')), await page.locator('#st-t').innerText());
   await page.locator('.st-ti[data-p="github"]').click(); await sleep(150);
-  check('a page opens from the tree', /Синхронізація\s*›\s*GitHub/.test((await page.locator('#st-t').innerText()).replace(/\s+/g, ' ')) && await page.locator('#gh-repo').isVisible() && !(await page.locator('#st-tol').isVisible()));
+  check('a page opens from the tree', /Синхронізація\s+GitHub/.test((await page.locator('#st-t').innerText()).replace(/\s+/g, ' ')) && await page.locator('#gh-repo').isVisible() && !(await page.locator('#st-tol').isVisible()));
   const banner = await page.evaluate(() => { const w = document.querySelector('#stp-github .st-warn'); if (!w) return null; const c = getComputedStyle(w); return { bg: c.backgroundColor, bold: getComputedStyle(w.querySelector('b')).fontWeight }; });
   check('the warning of the token page is a coloured banner with a bold first line', !!banner && /rgba\(229, 160, 75/.test(banner.bg) && Number(banner.bold) >= 600, JSON.stringify(banner));
   await page.locator('.st-ti[data-p="danger"]').click(); await sleep(150);
@@ -108,7 +108,7 @@ const stored = page => page.evaluate(() => new Promise((res, rej) => { const o =
   await page.keyboard.press('Escape'); await sleep(300);
   check('the second Esc closes it without the change', !(await page.evaluate(() => !!document.querySelector('dialog[open]'))));
   await open();
-  check('the settings are shown as they were saved', /Проєкт\s*›\s*Загальні/.test((await page.locator('#st-t').innerText()).replace(/\s+/g, ' ')) && (await page.locator('#st-who').inputValue()) === 'Тестер');
+  check('the settings are shown as they were saved', /Проєкт\s+Загальні/.test((await page.locator('#st-t').innerText()).replace(/\s+/g, ' ')) && (await page.locator('#st-who').inputValue()) === 'Тестер');
   // «Зберегти» applies and closes; a wrong value stays on its page
   await page.locator('#st-tol').fill('500');
   await page.locator('.st-ti[data-p="look"]').click(); await sleep(100);

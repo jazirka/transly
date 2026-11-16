@@ -21,7 +21,7 @@
 .node.cur:hover,.si.sel:hover,.tgrow.on:hover,.sc-item.cur:hover,.sd-it.on:hover{background:var(--sel)}
 
 /* the choice in the window you work in: each tool window of the left column is a window of its own, like the centre and the right panel */
-html[data-pane=files] :is(#strip button[data-lp=files].on,#tree .node.cur,#tree .node.pick,#tree .chip.on),
+html[data-pane=files] :is(#strip button[data-lp=files].on,#tree .node.cur,#tree .chip.on),
 html[data-pane=rows] :is(#strip button[data-lp=rows].on,#lp-rows .si.sel,#lp-rows .chip.on),
 html[data-pane=scenes] :is(#strip button[data-lp=scenes].on,#lp-sc .sc-item.cur,#lp-sc .chip.on),
 html[data-pane=glossary] :is(#strip button[data-lp=glossary].on,#lp-gl .tgrow.on,#lp-gl .chip.on),
@@ -59,3 +59,6 @@ html:not([data-pane=centre]) #main .saveb:hover,
 html:not([data-pane=right]) .fs .saveb:hover{background:rgba(255,255,255,.22)}
 /* the section of the search you are in (the search is a window you work in while it is open) */
 .sd-wrap .sd-tabs button[aria-selected=true]{background:var(--use);box-shadow:inset 0 0 0 1px var(--use-ring);color:#fff}
+/* picked files: the colour of the project while you work in the files, one outline for a run of them (see .pk-top / .pk-bot in theme.css) */
+html[data-pane=files] #tree .node.pick{--rg:var(--use-ring);background:var(--use);color:#fff}
+html[data-pane=files] #tree .node.pick .nm{color:#fff}

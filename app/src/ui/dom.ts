@@ -1,3 +1,5 @@
+/** The arrow between the parts of a path (a window header, the title of the settings): drawn, so its spacing does not depend on the font. */
+export const CRUMB = '<svg class="crumb-sep" viewBox="0 0 8 12" aria-hidden="true"><path d="M2 2l4 4-4 4"/></svg>';
 export const esc = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 

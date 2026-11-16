@@ -33,18 +33,18 @@ const mapOf = (name, n) => ({ displayName: name, events: [null, { id: 1, name: '
 
   // the first run: the hint over the list teaches the order; with no file open the window below asks for one
   const hint = await page.evaluate(() => document.querySelector('#tree-list .coach')?.textContent ?? '');
-  check('the list of files teaches the order file → row → translation', /①/.test(hint) && /②/.test(hint) && /③/.test(hint), hint);
+  check('the list of files teaches the order file › row › translation', /файл › рядок › переклад/.test(hint), hint);
   await page.locator('#tabs-host .tab .x, #tabs-host .tab [data-close]').first().click({ timeout: 3000 }).catch(() => {});
   await sleep(500);
   const empty = await page.evaluate(() => ({ ask: document.querySelector('#slist .emptybox')?.textContent ?? '', chip: document.querySelector('[data-card="rows"] [data-fchip]')?.textContent ?? '', none: document.querySelector('[data-card="rows"] [data-fchip]')?.classList.contains('none'), coach: document.querySelector('#tree-list .coach')?.textContent ?? '' }));
   check('while no file is open the rows window says «Спершу оберіть файл угорі»', /Спершу оберіть файл угорі/.test(empty.ask), JSON.stringify(empty));
   check('its chip says that no file is chosen', /файл не вибрано/.test(empty.chip) && empty.none, JSON.stringify(empty));
-  check('and the hint over the files asks for a file', /Оберіть файл/.test(empty.coach) && /②/.test(empty.coach), empty.coach);
+  check('and the hint over the files asks for a file', /Оберіть файл/.test(empty.coach), empty.coach);
 
   // the file is chosen: the windows are numbered, the chip names the file, the hint is gone for good
   await page.locator('#tree .node[data-file="Map001.json"]').click(); await sleep(600);
-  const steps = await page.evaluate(() => { const vis = e => !!e && getComputedStyle(e).display !== 'none'; return { s1: vis(document.querySelector('[data-card="files"] .step')), s2: vis(document.querySelector('[data-card="rows"] .step')), s3: vis(document.querySelector('#f-trlbl .step')), t: ['[data-card="files"] .step', '[data-card="rows"] .step', '#f-trlbl .step'].map(q => document.querySelector(q)?.textContent) }; });
-  check('the three windows are numbered 1, 2, 3', steps.s1 && steps.s2 && steps.s3 && steps.t.join('') === '123', JSON.stringify(steps));
+  const heads = await page.evaluate(() => ({ files: document.querySelector('[data-card="files"] .grow')?.textContent.trim(), rows: document.querySelector('[data-card="rows"] .grow')?.textContent.replace(/\s+/g, ' ').trim(), sep: !!document.querySelector('[data-card="rows"] .crumb-sep') }));
+  check('the rows window reads as a path: the file › Рядки', /Рядки$/.test(heads.rows) && heads.sep && /^Файли гри$/.test(heads.files), JSON.stringify(heads));
   const chip = await page.evaluate(() => ({ t: document.querySelector('[data-card="rows"] [data-fchip]').textContent, none: document.querySelector('[data-card="rows"] [data-fchip]').classList.contains('none') }));
   check('the chip of the rows window names the file', /^MAP\s*Town$/.test(chip.t.trim()) && !chip.none, JSON.stringify(chip));
   check('the hint over the files goes when a file is opened from the list, and stays gone', (await page.locator('#tree-list .coach').count()) === 0 && (await page.evaluate(() => localStorage.getItem('transly.coach.files'))) === '1');
@@ -53,13 +53,6 @@ const mapOf = (name, n) => ({ displayName: name, events: [null, { id: 1, name: '
   await page.locator('#lp-rows .si').nth(2).click(); await sleep(500);
   const st = await page.locator('#st-sel').innerText();
   check('the status bar says the file, the row and how many there are', /^Файл: Town › рядок 3 з \d+ · /.test(st), st);
-
-  // the number of the window you work in is in colour
-  const stepBg = q => page.evaluate(q => getComputedStyle(document.querySelector(q)).backgroundColor, q);
-  const accent = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent-solid').trim());
-  const hex = h => { const m = /^#(..)(..)(..)$/.exec(h); return m ? `rgb(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)})` : h; };
-  await page.locator('#tree .node[data-file="Map001.json"]').click(); await sleep(400);
-  check('the number of the window you work in is in the colour of the project, the others are grey', (await stepBg('[data-card="files"] .step')) === hex(accent) && (await stepBg('[data-card="rows"] .step')) !== hex(accent));
 
   // the row a file was left on shows beside its name
   await page.locator('#lp-rows .si').nth(4).click(); await sleep(700);

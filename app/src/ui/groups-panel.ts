@@ -13,7 +13,6 @@ import type { Ctx } from './state';
  */
 
 export const GROUPS_HTML = `<div class="grp" id="tree-groups">
-  <div class="grp-head"><span class="grp-title">Групи файлів</span><button class="grp-add" id="gr-add" type="button" aria-label="Нова група" title="Нова група. Файли в групу: Ctrl+клік по файлах, потім «У групу» (або перетягніть файл на групу)">＋</button></div>
   <form class="grp-form" id="gr-form" hidden autocomplete="off"><input id="gr-name" aria-label="Назва нової групи" placeholder="Назва групи" maxlength="60"><button class="btn p" type="submit">Створити</button></form>
   <div id="gr-list"></div>
 </div>`;
@@ -239,8 +238,8 @@ export function groupsClick(ctx: Ctx, t: HTMLElement, api: GroupsApi): boolean {
     }
     return true;
   }
-  if (!t.closest('#tree-groups')) return false;
   if (t.closest('#gr-add')) { creating = !creating; renderGroupsBlock(ctx); if (creating) ($('#gr-name') as HTMLInputElement).focus(); return true; }
+  if (!t.closest('#tree-groups')) return false;
   const menu = t.closest<HTMLElement>('[data-gmenu]');
   if (menu) { const g = ctx.s.saved.groups?.[menu.dataset.gmenu!]; if (g) { confirmDel = null; api.pop(menu, groupMenuHtml(ctx, g, filesByGroup(ctx).get(g.id) ?? [])); } return true; }
   const fold = t.closest<HTMLElement>('[data-gfold]');

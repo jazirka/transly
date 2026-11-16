@@ -7,7 +7,7 @@ const files = DIRS.flatMap(d => readdirSync(d).filter(f => f.endsWith('.css')).m
 
 describe('the stylesheets follow the theme', () => {
   it('no hard-coded brand blue or purple of the old look is left (they must be theme tokens)', () => {
-    const banned = ['#8fb2f7', '#b7a6ff', '#8d78e4', '#7a62d8', '#8b72e8', '#9a85ee', '#8b6cf0', '#6a50d0', '#7157d8', '#3a3170', '#2f2a58', '#5a4a9a'];
+    const banned = ['#8fb2f7', '#b7a6ff', '#8d78e4', '#7a62d8', '#8b72e8', '#9a85ee', '#8b6cf0', '#6a50d0', '#7157d8', '#3a3170', '#2f2a58', '#5a4a9a', '#5a40c0', '#6a58b8', '#3d3472', '#4a3f8a', '#2a2540', 'rgba(139,108,240', 'rgba(181,137,214,.16)'];
     for (const f of files) {
       const css = readFileSync(f, 'utf8').toLowerCase();
       for (const c of banned) expect({ f: f.split('/').slice(-2).join('/'), c, found: css.includes(c) }).toEqual({ f: f.split('/').slice(-2).join('/'), c, found: false });
@@ -17,5 +17,6 @@ describe('the stylesheets follow the theme', () => {
     const theme = readFileSync(join(__dirname, '../src/ui/theme.css'), 'utf8');
     expect(theme).toMatch(/:focus-visible\{outline:2px solid var\(--accent\)/);
     expect(theme).not.toMatch(/\.saveb:hover\{background:#/);
+    expect(theme).not.toMatch(/\.btn\.p:hover\{background:#/);
   });
 });

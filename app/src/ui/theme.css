@@ -105,8 +105,8 @@ button{cursor:pointer}
 .filters .r{margin-left:auto;display:flex;gap:12px;align-items:center;color:var(--mute);white-space:nowrap;flex:none}
 .bulk{display:none;align-items:center;gap:8px;height:30px;padding:0 12px;background:var(--accent-soft);border-bottom:1px solid var(--accent-ring);flex:none;color:var(--accent-text)}
 .bulk.show{display:flex}
-.bulk button{height:22px;padding:0 9px;border:1px solid #6a58b8;border-radius:var(--r1);background:#3d3472;color:#ece6ff}
-.bulk button:hover{background:#4a3f8a}
+.bulk button{height:22px;padding:0 9px;border:1px solid var(--accent-ring);border-radius:var(--r1);background:var(--accent-soft);color:var(--text)}
+.bulk button:hover{background:rgba(var(--accent-rgb),.3)}
 
 .gridwrap{flex:1;min-height:0;overflow:auto;position:relative;scrollbar-gutter:stable}
 .grid{--cols:34px 22px 150px 92px minmax(190px,1fr) minmax(190px,1fr) 66px;min-width:780px}
@@ -227,7 +227,7 @@ textarea.tr-in{width:100%;min-height:96px;resize:vertical;background:var(--bg);b
 table{font-size:inherit;border-collapse:collapse;width:100%}
 th{position:sticky;top:0;background:var(--panel);text-align:left;font-weight:400;color:var(--mute);font-size:12px;padding:4px 10px;border-bottom:1px solid var(--line);border-right:1px solid #33353a}
 td{padding:4px 10px;border-bottom:1px solid #2f3134;border-right:1px solid #2f3134;white-space:nowrap}
-tr.hl td{background:#2a2540}
+tr.hl td{background:var(--accent-soft)}
 td.m{font-family:var(--mono);font-size:12px;color:var(--mute)}
 td .term{color:#d9c3ee}
 .ents{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:10px}
@@ -302,7 +302,7 @@ td .term{color:#d9c3ee}
 .fs .ibody .pane{padding:12px}
 .gt{width:100%}
 .gt td{padding:5px 6px;white-space:normal}
-.gt tr.hl td{background:#2a2540}
+.gt tr.hl td{background:var(--accent-soft)}
 .ln span{cursor:pointer}
 .ln span:hover{color:var(--text)}
 .src .term-hit,.tr .term-hit{display:inline}
@@ -360,7 +360,7 @@ td .term{color:#d9c3ee}
 .strip button.on::before{content:"";position:absolute;left:-5px;right:auto;top:7px;bottom:7px;width:3px;height:auto;border-radius:var(--r1);background:var(--accent)}
 /* ===== top bar & editor bar ===== */
 .menubar,.toolbar{display:none}
-.topbar{display:flex;align-items:center;gap:4px;height:40px;padding:0 0 0 10px;background:linear-gradient(90deg,rgba(181,137,214,.16),rgba(181,137,214,0) 32%),var(--panel);border-bottom:1px solid var(--line);flex:none}
+.topbar{display:flex;align-items:center;gap:4px;height:40px;padding:0 0 0 10px;background:linear-gradient(90deg,rgba(var(--accent-rgb),.16),rgba(var(--accent-rgb),0) 32%),var(--panel);border-bottom:1px solid var(--line);flex:none}
 .topbar .logo{width:20px;height:20px;border-radius:var(--r2);background:linear-gradient(135deg,var(--accent-solid),var(--accent));display:grid;place-items:center;font:600 11px var(--mono);color:#fff;margin-right:6px}
 .topbar .grow,.edbar .grow{flex:1}
 .tb-ic{width:32px;height:30px;border:0;border-radius:var(--r2);background:none;color:#c7cad1;display:grid;place-items:center;position:relative}
@@ -479,7 +479,7 @@ td .term{color:#d9c3ee}
 .lbl-btn{margin-left:auto;border:0;background:none;color:var(--mute);font:inherit;text-transform:none;letter-spacing:0;cursor:pointer;padding:0}
 .lbl-btn:hover{color:var(--text)}
 .bulk .ghost{margin-left:auto;background:none;border-color:transparent;color:var(--accent-text)}
-.bulk .ghost:hover{background:#3d3472}
+.bulk .ghost:hover{background:var(--accent-soft)}
 .node.dir{cursor:pointer}
 .status .bad{color:var(--bad)}.status .ok{color:var(--ok)}
 .hist .h{color:var(--mute)}
@@ -525,7 +525,6 @@ td .term{color:#d9c3ee}
 .tgrow .tt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tags{min-width:0}
 .tg .tx{display:inline-block;padding:4px 6px;margin:-4px -6px -4px 0}
-.btn.p:hover{background:#5a40c0}
 .pop .group{color:var(--mute)}
 .ctx .me span:first-child{color:var(--mute)}
 .cm p{white-space:pre-wrap;overflow-wrap:anywhere}
@@ -810,8 +809,8 @@ input[type=checkbox]{accent-color:var(--accent-solid)}
 .rz-x{top:0;bottom:0;right:0;width:6px;cursor:col-resize}
 .rz-y{position:static;flex:none;height:7px;cursor:row-resize;border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:rgba(255,255,255,.03)}
 .rz-y[hidden]{display:none}
-.rz:hover,.rz.drag,.rz:focus-visible{background:rgba(139,108,240,.55)}
-.rz-y:hover,.rz-y.drag,.rz-y:focus-visible{background:rgba(139,108,240,.35)}
+.rz:hover,.rz.drag,.rz:focus-visible{background:rgba(var(--accent-rgb),.55)}
+.rz-y:hover,.rz-y.drag,.rz-y:focus-visible{background:rgba(var(--accent-rgb),.35)}
 body.resizing{user-select:none;cursor:col-resize}
 .tree.split #tree{flex:var(--split,.5) 1 0}
 .tree.split :is(#lp-rows,#lp-sc){flex:calc(1 - var(--split,.5)) 1 0;border-top:0}
@@ -834,7 +833,7 @@ body.resizing{user-select:none;cursor:col-resize}
 .rz-r{top:0;bottom:0;left:0;width:6px;cursor:col-resize}
 .rz-p{position:static;flex:none;height:7px;cursor:row-resize;border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:rgba(255,255,255,.03)}
 .rz-p[hidden]{display:none}
-.rz-p:hover,.rz-p.drag,.rz-p:focus-visible{background:rgba(139,108,240,.35)}
+.rz-p:hover,.rz-p.drag,.rz-p:focus-visible{background:rgba(var(--accent-rgb),.35)}
 .fs.stack .ibody{overflow:hidden}
 .fs.stack .pane{overflow:auto;min-height:0}
 
@@ -870,22 +869,22 @@ body.resizing{user-select:none;cursor:col-resize}
 /* splitters are the gaps between panels, as in IntelliJ: no visible bar, only the resize cursor */
 .rz{background:transparent!important}
 .rz:hover,.rz.drag,.rz:focus-visible{background:transparent!important}
-.rz.drag{background:rgba(139,108,240,.22)!important}
-.rz:focus-visible{outline:none;box-shadow:0 0 0 1px rgba(139,108,240,.6) inset}
+.rz.drag{background:rgba(var(--accent-rgb),.22)!important}
+.rz:focus-visible{outline:none;box-shadow:0 0 0 1px rgba(var(--accent-rgb),.6) inset}
 .ide:not(.sz-s) .rz-x{position:absolute;top:0;bottom:6px;left:calc(46px + var(--lpw-eff));right:auto;width:6px;cursor:col-resize}
 .ide:not(.sz-s).lp-closed .rz-x{display:none}
 .ide:not(.sz-s) .rz-r{right:calc(46px + var(--rpw-eff));width:6px}
 .rz-y,.rz-p{height:7px;border:0;background:linear-gradient(var(--line),var(--line)) center/100% 1px no-repeat!important}
-.rz-y.drag,.rz-p.drag{background:rgba(139,108,240,.22)!important}
+.rz-y.drag,.rz-p.drag{background:rgba(var(--accent-rgb),.22)!important}
 /* rails sit on the window background, not as a separate strip */
 .ide:not(.sz-s) .strip,.ide:not(.sz-s) .fs .itabs{background:transparent;border:0}
 .ide:not(.sz-s) .strip button.on::before{left:-3px}
 /* stacked panels are separate cards with a gap between them (the gap is the splitter), like tool windows in IntelliJ */
 .tree.split{background:transparent!important;border:0!important;border-radius:0;overflow:visible}
 .tree.split>.ph{display:none}
-.tree.split #tree,.tree.split #lp-rows{border:1px solid rgba(255,255,255,.16);border-radius:var(--r3);background:var(--bg);overflow:hidden;min-height:0}
+.tree.split :is(#tree,#lp-rows,#lp-sc){border:1px solid rgba(255,255,255,.16);border-radius:var(--r3);background:var(--bg);overflow:hidden;min-height:0}
 .tree.split #tree{overflow:auto}
-.tree.split #lp-rows{border-top:1px solid rgba(255,255,255,.16)}
+.tree.split :is(#lp-rows,#lp-sc){border-top:1px solid rgba(255,255,255,.16)}
 .tree.split .rz-y,.rz-y{height:6px;background:transparent!important}
 .ide:not(.sz-s) .fs.stack .ibody{background:transparent;border:0;border-radius:0;overflow:visible}
 .ide:not(.sz-s) .fs.stack .ibody>.ph{display:none}
@@ -972,6 +971,9 @@ body.resizing{user-select:none;cursor:col-resize}
 .tabs-host{transform:none;scrollbar-width:none}
 .tabs-host>*{transform:none}
 .tabs-host::-webkit-scrollbar{display:none}
+.tabs-host.fade-l{-webkit-mask-image:linear-gradient(90deg,transparent,#000 32px);mask-image:linear-gradient(90deg,transparent,#000 32px)}
+.tabs-host.fade-r{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 32px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 32px),transparent)}
+.tabs-host.fade-l.fade-r{-webkit-mask-image:linear-gradient(90deg,transparent,#000 32px,#000 calc(100% - 32px),transparent);mask-image:linear-gradient(90deg,transparent,#000 32px,#000 calc(100% - 32px),transparent)}
 .tabs-track{position:absolute;left:0;right:0;top:0;height:6px;z-index:6}
 .tabs-track[hidden]{display:none}
 .tabs-thumb{display:block;height:3px;margin-top:0;border-radius:2px;background:rgba(255,255,255,.14);transition:background .15s,height .12s,margin .12s}
@@ -980,6 +982,13 @@ body.resizing{user-select:none;cursor:col-resize}
 .tabs-track:hover .tabs-thumb,.tabs-thumb.drag{background:rgba(255,255,255,.5);height:5px}
 /* the other scrollbars are slim and see-through as well */
 ::-webkit-scrollbar{width:8px;height:8px}
+/* with a pointer the browser's bars are hidden: ui/scrollbars.ts draws a thin thumb over the edge of the area you point at, so no bar takes room of its own
+   (the table and the lists reach their edge) and it shows only while you hover the area */
+html.ovsb,html.ovsb *{scrollbar-width:none}
+html.ovsb ::-webkit-scrollbar{display:none}
+.ovs{position:fixed;z-index:2147483000;border-radius:4px;background:rgba(255,255,255,.3);opacity:0;pointer-events:none;transition:opacity .15s ease,background .12s}
+.ovs.on{opacity:1;pointer-events:auto}
+.ovs:hover,.ovs.drag{background:rgba(255,255,255,.5)}
 /* filter chips wrap onto a second line instead of being cut off */
 .filters{height:auto;min-height:36px;flex-wrap:wrap;overflow:visible;padding:4px 10px;row-gap:4px}
 .filters .fin{flex:0 1 200px;min-width:140px}
@@ -1062,3 +1071,25 @@ body.resizing{user-select:none;cursor:col-resize}
 .seg button:focus-visible{outline-offset:-2px}
 /* the filter chips are a little tighter, so the nine of them take two lines, not three */
 .filters .chip{padding-left:8px;padding-right:8px}
+
+/* file → rows / scenes: the windows below the files are numbered in the order you use them, and say which file they show */
+.step{display:none;place-items:center;width:18px;height:18px;margin-right:8px;border-radius:50%;background:var(--on-bg);box-shadow:inset 0 0 0 1px var(--on-ring);color:#fff;font:600 11px var(--ui);letter-spacing:0;text-transform:none;flex:none}
+.tree.split .step,.ide:has(.tree.split) #f-trlbl .step{display:inline-grid}
+#f-trlbl{display:inline-flex;align-items:center}
+.card-ph .grow{display:flex;align-items:center;white-space:nowrap;min-width:0}
+.fchip{display:inline-flex;align-items:center;gap:6px;height:20px;max-width:60%;margin-left:8px;padding:0 8px;border-radius:10px;background:var(--on-bg);box-shadow:inset 0 0 0 1px var(--on-ring);color:var(--text);font:500 11.5px var(--ui);text-transform:none;letter-spacing:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fchip:empty{display:none}
+.fchip.none{background:none;box-shadow:none;border:1px dashed var(--dim);color:var(--mute)}
+.fchip .ic{flex:none}
+.mem{margin-right:6px;color:var(--mute);font:10.5px var(--mono);white-space:nowrap}
+.emptybox{margin:18px 14px;padding:16px;border:1px dashed var(--dim);border-radius:10px;color:var(--mute);text-align:center;line-height:1.5}
+.emptybox b{display:block;color:var(--text);font-weight:600;margin-bottom:4px}
+/* the number of the window you work in is in colour, the others are grey (the same logic as the windows themselves) */
+html[data-pane=files] [data-card=files] .step,html[data-pane=rows] [data-card=rows] .step,html[data-pane=scenes] [data-card=scenes] .step,html[data-pane=centre] #f-trlbl .step,html[data-pane=right] #f-trlbl .step{background:var(--accent-solid);box-shadow:none}
+.coach{display:flex;align-items:center;gap:10px;margin:8px 10px;padding:7px 8px 7px 12px;border-radius:10px;background:var(--accent-solid);color:var(--on-accent);line-height:1.4;font-size:12.5px}
+.coach span{flex:1;min-width:0}
+.coach .btn{flex:none;height:24px;padding:0 10px;background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.3);color:#fff}
+.slist .fh[hidden]{display:none}
+.cfg-t{display:flex;align-items:center}
+.cfg-i{width:16px;height:16px;margin-right:8px;flex:none;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+.cfgpop button small{padding-left:24px}

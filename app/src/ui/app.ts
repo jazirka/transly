@@ -41,6 +41,7 @@ import { markup } from './markup';
 import { trackActivePane } from './activepane';
 import { loadRowMemo, rowNumber, saveRowMemo } from './rowmemo';
 import { openSettings } from './settings';
+import { overlayScrollbars } from './scrollbars';
 import type { SettingsTab } from './settings';
 import { openSpeakers } from './speakers-dialog';
 import { initMobile } from './mobile';
@@ -129,10 +130,10 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     <aside class="tree" id="lpanel" aria-label="Бічна панель: файли й рядки">
       <div class="mtabs" id="mtabs" role="group" aria-label="Бічна панель"><button data-lt="files">Файли</button><button data-lt="rows">Рядки</button><button data-lt="scenes">Сцени</button><button data-lt="glossary">Пов’язане</button><button class="ab-ic" id="mt-open" aria-label="Відкрити файли або вставити JSON" title="Відкрити файли або вставити JSON">${SVG.import}</button><button class="ab-ic" id="mt-search" aria-label="Пошук скрізь">${SVG.searchBig}</button></div>
       <div class="ph"><span class="grow" id="lp-title">Файли гри</span><button class="ico ico-btn" id="lp-search" type="button" aria-label="Знайти скрізь (Ctrl+K)" title="Знайти скрізь (Ctrl+K або двічі Shift)">${SVG.search}</button><span class="ico" id="lp-close" title="Сховати панель" role="button" aria-label="Сховати панель">—</span></div>
-      <div class="treebody" id="tree"><div class="ph card-ph" data-card="files"><span class="grow">Файли гри</span><span class="ico" data-hide-left="files" role="button" tabindex="0" aria-label="Сховати панель «Файли гри»" title="Сховати">—</span></div><div class="tree-q"><div class="fin">${SVG.search}<input class="qin" id="fq" placeholder="Пошук у файлах гри" aria-label="Пошук у файлах гри" autocomplete="off" spellcheck="false"></div></div><div class="tree-act" id="tree-act"></div>${GROUPS_HTML}<div id="tree-list" role="tree" aria-label="Файли гри"></div></div>
+      <div class="treebody" id="tree"><div class="ph card-ph" data-card="files"><span class="grow"><span class="step" aria-hidden="true">1</span>Файли гри</span><span class="ico" data-hide-left="files" role="button" tabindex="0" aria-label="Сховати панель «Файли гри»" title="Сховати">—</span></div><div class="tree-q"><div class="fin">${SVG.search}<input class="qin" id="fq" placeholder="Пошук у файлах гри" aria-label="Пошук у файлах гри" autocomplete="off" spellcheck="false"></div></div><div class="tree-act" id="tree-act"></div>${GROUPS_HTML}<div id="tree-list" role="tree" aria-label="Файли гри"></div></div>
       <div class="rz rz-y" id="rz-y" role="separator" aria-orientation="horizontal" aria-label="Розділ між файлами й рядками" aria-valuemin="15" aria-valuemax="85" tabindex="0" title="Потягніть, щоб змінити співвідношення (подвійний клік — навпіл)" hidden></div>
       <div class="slist" id="lp-rows" hidden>
-        <div class="ph card-ph" data-card="rows"><span class="grow">Рядки файлу</span><span class="ico" data-hide-left="rows" role="button" tabindex="0" aria-label="Сховати панель «Рядки файлу»" title="Сховати">—</span></div>
+        <div class="ph card-ph" data-card="rows"><span class="grow"><span class="step" aria-hidden="true">2</span>Рядки файлу<span class="fchip" data-fchip></span></span><span class="ico" data-hide-left="rows" role="button" tabindex="0" aria-label="Сховати панель «Рядки файлу»" title="Сховати">—</span></div>
         <div class="fh"><div class="fin">${SVG.search}<input class="qin" id="q2" placeholder="Пошук рядків" aria-label="Пошук рядків"></div><div class="chips2"><button class="chip" id="sortbtn" aria-haspopup="menu">↕ За порядком</button><span class="chipsHost" id="chips2"></span></div></div>
         <div class="sl-body" id="slist"></div>
       </div>
@@ -343,6 +344,8 @@ export async function start(root: HTMLElement): Promise<void> {
   const baseName = (name: string): string => (name.split('/').pop() ?? name).replace(/\.json$/i, '');
   const fileTitle = (name: string): string => { const label = s.views.find(v => v.name === name)?.label; return label ? `${label} · ${baseName(name)}` : baseName(name); };
   const currentLabel = (): string => (s.current === GROUP ? groupTitle() : s.current ? fileTitle(s.current) : '');
+  /** The short name of the open file (`Town`, not `Town · Map001`), for the chip of the windows below the files and for the status bar. */
+  const shortLabel = (): string => (s.current === GROUP ? groupTitle() : ctx.view()?.label || currentLabel());
   const groupTitle = (): string => s.groupSel?.title ?? (s.group && s.group.length === s.views.length ? 'Усі файли разом' : `Група з ${s.group?.length ?? 0} файлів`);
   /** Short key for the table: `msg[5]` for text, `choice[5.2]` for choice options, database keys as they are; in a group the file comes first. */
   const shortKey = (full: string): string => {
@@ -458,11 +461,25 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#lp-rows').hidden = both ? second !== 'rows' : l !== 'rows';
     $('#lp-gl').hidden = l !== 'glossary';
     $('#lp-sc').hidden = l !== 'scenes';
+    renderFileChips();
     $('#lp-title').innerHTML = both ? (second === 'scenes' ? 'Файли й сцени' : 'Файли й рядки') : l === 'rows' ? `Рядки <span class="lt-f">${esc(currentLabel())}</span>` : l === 'glossary' ? 'Пов’язане' : l === 'scenes' ? `Сцени <span class="lt-f">${esc(currentLabel())}</span>` : 'Файли гри';
     document.querySelectorAll<HTMLElement>('#mtabs [data-lt]').forEach(b => { const on = b.dataset.lt === s.leftTab[s.mode]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
     document.querySelectorAll<HTMLElement>('#seg [data-m]').forEach(b => { const on = b.dataset.m === s.mode; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
     const here = s.rightOpen ? 'help' : s.leftOpen ? s.leftTab[s.mode] : s.mode === 'table' ? 'rows' : 'edit';
     document.querySelectorAll<HTMLElement>('#bnav [data-bn]').forEach(b => { const on = b.dataset.bn === here; b.classList.toggle('on', on); b.setAttribute('aria-current', String(on)); });
+  }
+
+  /** The windows below the files say which file they show (the file → rows / scenes order), and ask for a file while none is open. */
+  function renderFileChips(): void {
+    const v = ctx.view();
+    const html = v ? (s.current === GROUP ? esc(currentLabel()) : `<span class="ic ${fileIcon(s.current!)[0]}">${fileIcon(s.current!)[1]}</span>${esc(shortLabel())}`) : 'файл не вибрано';
+    document.querySelectorAll<HTMLElement>('[data-fchip]').forEach(c => { c.innerHTML = html; c.classList.toggle('none', !v); });
+    document.querySelectorAll<HTMLElement>('#lp-rows .fh, #lp-sc .fh').forEach(f => { f.hidden = !v; });
+    if (!v) {
+      const ask = (what: string): string => `<div class="emptybox"><b>Спершу оберіть файл угорі</b>Тут з’являться ${what} вибраного файлу.</div>`;
+      $('#slist').innerHTML = ask('рядки');
+      $('#sc-list').innerHTML = ask('сцени');
+    }
   }
 
   function treeNodes(): { t: 'd' | 'f'; d: number; name: string; label: string }[] {
@@ -522,7 +539,7 @@ export async function start(root: HTMLElement): Promise<void> {
       });
       if (!nodes.length) { box.innerHTML = '<div class="msg-empty">Нічого не знайдено</div>'; return; }
     }
-    box.innerHTML = nodes.map(n => {
+    box.innerHTML = (s.leftBoth && !s.phone && !coachSeen() ? `<div class="coach" role="note"><span>${ctx.view() ? '<b>Порядок:</b> ① файл → ② рядок → ③ переклад' : '<b>① Оберіть файл.</b> Потім — рядок у вікні ②.'}</span><button class="btn" type="button" data-coach-ok>Зрозуміло</button></div>` : '') + nodes.map(n => {
       if (!q && skip !== null && n.d > skip) return '';
       skip = null;
       if (n.t === 'd') {
@@ -535,7 +552,7 @@ export async function start(root: HTMLElement): Promise<void> {
       const pc = pct(st.translated, st.total), pcA = pct(st.approved, st.total), full = st.total > 0 && st.approved === st.total;
       const [ic, lab] = fileIcon(n.name);
       const cur = n.name === s.current;
-      return `<div class="node ${cur ? 'cur' : ''} ${s.picked.has(n.name) ? 'pick' : ''} ${!st.translated ? 'idle' : ''}" style="--d:${n.d}" data-file="${esc(n.name)}" draggable="true" role="treeitem" tabindex="-1" aria-level="${n.d + 1}" aria-selected="${cur}" title="${cur ? 'Відкрито · ' : ''}${v.label ? esc(v.label) + ' · ' : ''}Перекладено ${pc}% · вичитано ${pcA}%"><span class="chev"></span><span class="ic ${ic}">${lab}</span><span class="nm">${fileGroupDot(n.name)}${v.label ? `${esc(v.label)}<span class="lc">${esc(n.label.replace(/\.json$/, ''))}</span>` : esc(n.label)}</span><span class="mini"><i class="${full ? 'f' : ''}" style="width:${pc}%"></i></span><span class="pc ${full ? 'full' : ''}">${pc}%</span></div>`;
+      return `<div class="node ${cur ? 'cur' : ''} ${s.picked.has(n.name) ? 'pick' : ''} ${!st.translated ? 'idle' : ''}" style="--d:${n.d}" data-file="${esc(n.name)}" draggable="true" role="treeitem" tabindex="-1" aria-level="${n.d + 1}" aria-selected="${cur}" title="${cur ? 'Відкрито · ' : ''}${v.label ? esc(v.label) + ' · ' : ''}Перекладено ${pc}% · вичитано ${pcA}%"><span class="chev"></span><span class="ic ${ic}">${lab}</span><span class="nm">${fileGroupDot(n.name)}${v.label ? `${esc(v.label)}<span class="lc">${esc(n.label.replace(/\.json$/, ''))}</span>` : esc(n.label)}</span>${rowMemo()[n.name] && leftAt(n.name, v.units) ? `<span class="mem" title="Ви зупинилися на рядку ${leftAt(n.name, v.units)}">↩ ${leftAt(n.name, v.units)}</span>` : ''}<span class="mini"><i class="${full ? 'f' : ''}" style="width:${pc}%"></i></span><span class="pc ${full ? 'full' : ''}">${pc}%</span></div>`;
     }).join('');
     // One tab stop for the whole tree; the node that had the focus keeps it after the redraw.
     const mine = hadId ? [...box.querySelectorAll<HTMLElement>('.node')].find(n => hadId.file ? n.dataset.file === hadId.file : n.dataset.dir === hadId.dir) : undefined;
@@ -610,7 +627,7 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#sortbtn').textContent = `↕ ${SORT_LABEL[s.sort]}`;
     $('#sortbtn').classList.toggle('on', s.sort !== 'order');
     const v = ctx.view();
-    if (!v) { $('#slist').innerHTML = '<div class="msg-empty">Оберіть файл</div>'; return; }
+    if (!v) { $('#slist').innerHTML = '<div class="emptybox"><b>Спершу оберіть файл угорі</b>Тут з’являться рядки вибраного файлу.</div>'; return; }
     const idx = new Map(v.units.map((u, i) => [u.key, i + 1]));
     const list = visibleUnits(true);
     const box = $('#slist');
@@ -759,7 +776,7 @@ export async function start(root: HTMLElement): Promise<void> {
     ab.hidden = !adv;
     ab.textContent = adv ? `Поради: ${adv}` : '';
     const u = s.cur ? ctx.unit(s.cur) : undefined;
-    $('#st-sel').textContent = u && v ? `Рядок ${v.units.indexOf(u) + 1} · ${STATUS_LABEL[shownStatus(ctx, u, entryOf(u))]}` : '';
+    $('#st-sel').textContent = u && v ? `${s.current === GROUP ? 'Група' : 'Файл'}: ${shortLabel()} › рядок ${v.units.indexOf(u) + 1} з ${v.units.length} · ${STATUS_LABEL[shownStatus(ctx, u, entryOf(u))]}` : '';
     if (v) {
       const st = statsOf(v.units, ents);
       $('#sb-file').textContent = `${s.current === GROUP ? 'Група' : 'Файл'}: ${st.approved} / ${st.total} вичитано · ${st.done} ${st.done % 10 === 1 && st.done % 100 !== 11 ? 'чекає' : 'чекають'} вичитки`;
@@ -824,6 +841,9 @@ export async function start(root: HTMLElement): Promise<void> {
     if (rerender) { renderAll(); if (m === 'edit' && s.cur) $('#i-tr').focus(); else if (m === 'scene' && s.cur) focusCard(s.cur); }
   }
 
+  /** The hint over the list of files (the order file → row → translation) is shown until it is dismissed or the translator opens a file from the list. */
+  const coachSeen = (): boolean => { try { return localStorage.getItem('transly.coach.files') === '1'; } catch { return true; } };
+  const coachDone = (): void => { try { localStorage.setItem('transly.coach.files', '1'); } catch { /* the hint comes back next time, that is all */ } };
   function openFile(name: string): void {
     if (!s.views.some(v => v.name === name)) return;
     if (!s.open.includes(name)) s.open.push(name);
@@ -1116,6 +1136,12 @@ export async function start(root: HTMLElement): Promise<void> {
     game: { name: 'Збірка (гра)', sub: 'Записати переклад із чернетками й запустити гру для тестування', desk: true },
     scene: { name: 'Поточна сцена', sub: 'Те саме, але гра починається зі сцени вибраного рядка', desk: true },
   };
+  /** One icon for each of the three, so that they are told apart at a glance: a box (a file), a screen with ▶ (the game), a flag (the start from here). */
+  const CFG_ICON: Record<RunCfg, string> = {
+    file: '<path d="M2.5 5h11v8h-11z"/><path d="M2.5 5l1.5-2h8l1.5 2M6.5 8h3"/>',
+    game: '<rect x="2" y="3" width="12" height="8.5" rx="1.5"/><path d="M6.7 5.4l3 1.85-3 1.85z"/><path d="M5.5 13.5h5"/>',
+    scene: '<path d="M4 14V2.5M4 3h8.5l-2.2 2.6 2.2 2.6H4"/>',
+  };
   const loadCfg = (): RunCfg => { try { const v = localStorage.getItem('transly.runcfg'); return (v === 'game' || v === 'scene') && isDesktop() ? v : 'file'; } catch { return 'file'; } };
   let runCfg: RunCfg = loadCfg();
   function renderRunCfg(): void {
@@ -1130,7 +1156,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!pop.hidden) { pop.hidden = true; btn.setAttribute('aria-expanded', 'false'); return; }
     pop.innerHTML = (Object.keys(CFG) as RunCfg[]).map(k => {
       const off = CFG[k].desk && !isDesktop();
-      return `<div class="cfg-row ${k === runCfg ? 'on' : ''}"><button role="menuitemradio" aria-checked="${k === runCfg}" data-cfg="${k}" ${off ? 'disabled' : ''}><span class="cfg-t">${CFG[k].name}</span><small>${off ? 'Лише в застосунку на ПК' : CFG[k].sub}</small></button>${off ? '' : `<button class="cfg-go" data-cfg-run="${k}" title="Запустити «${CFG[k].name}»" aria-label="Запустити «${CFG[k].name}»">${SVG.play}</button>`}</div>`;
+      return `<div class="cfg-row ${k === runCfg ? 'on' : ''}"><button role="menuitemradio" aria-checked="${k === runCfg}" data-cfg="${k}" ${off ? 'disabled' : ''}><span class="cfg-t"><svg class="cfg-i" viewBox="0 0 16 16" aria-hidden="true">${CFG_ICON[k]}</svg>${CFG[k].name}</span><small>${off ? 'Лише в застосунку на ПК' : CFG[k].sub}</small></button>${off ? '' : `<button class="cfg-go" data-cfg-run="${k}" title="Запустити «${CFG[k].name}»" aria-label="Запустити «${CFG[k].name}»">${SVG.play}</button>`}</div>`;
     }).join('') + `<hr><button role="menuitem" data-cfg-edit><span class="cfg-t">Налаштувати збірку…</span></button>`;
     const r = btn.getBoundingClientRect();
     pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 300))}px`; pop.style.top = `${r.bottom + 6}px`;
@@ -1659,7 +1685,8 @@ export async function start(root: HTMLElement): Promise<void> {
     if (dir) { const n = dir.dataset.dir!; s.collapsed.has(n) ? s.collapsed.delete(n) : s.collapsed.add(n); renderTree(); return; }
     const f = t.closest<HTMLElement>('.node[data-file]');
     if (f && (e.ctrlKey || e.metaKey)) { const n = f.dataset.file!; s.picked.has(n) ? s.picked.delete(n) : s.picked.add(n); renderTree(); return; }
-    if (f) { openFile(f.dataset.file!); if (s.phone) s.leftTab[s.mode] = 'rows'; renderAll(); return; }
+    if (t.closest('[data-coach-ok]')) { coachDone(); renderTree(); return; }
+    if (f) { coachDone(); openFile(f.dataset.file!); if (s.phone) s.leftTab[s.mode] = 'rows'; renderAll(); return; }
     const ch = t.closest<HTMLElement>('[data-filter]');
     if (ch) { s.filter = ch.dataset.filter as Filter; if (s.mode !== 'table' && !ctx.visible().some(u => u.key === s.cur)) s.cur = ctx.visible()[0]?.key ?? null; renderAll(); return; }
     const clr = t.closest<HTMLElement>('[data-clear]');
@@ -1723,6 +1750,9 @@ export async function start(root: HTMLElement): Promise<void> {
     const sync = (): void => {
       const over = host.scrollWidth - host.clientWidth;
       track.hidden = over <= 1;
+      // the tabs fade out at the edge that has more of them behind it
+      host.classList.toggle('fade-l', over > 1 && host.scrollLeft > 1);
+      host.classList.toggle('fade-r', over > 1 && host.scrollLeft < over - 1);
       if (over <= 1) return;
       const w = Math.max(28, (host.clientWidth / host.scrollWidth) * track.clientWidth);
       thumb.style.width = `${w}px`;
@@ -1935,6 +1965,7 @@ export async function start(root: HTMLElement): Promise<void> {
   if (s.current) { unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u])); if (s.mode !== 'table') s.cur = ctx.visible()[0]?.key ?? null; }
   restoreUi();
   trackActivePane();
+  overlayScrollbars();
   wireDiscuss(ctx);
   wireLinks(ctx);
   wireTermCard(ctx, {

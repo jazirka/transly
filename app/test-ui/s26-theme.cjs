@@ -91,9 +91,11 @@ async function pcPart(browser) {
   await page.keyboard.press('Escape'); await sleep(200); await page.keyboard.press('Escape'); await sleep(200);
 
   // the dots of the status chips
-  const dots = await page.evaluate(() => Object.fromEntries([...document.querySelectorAll('.chip[data-filter]')].map(c => [c.dataset.filter, c.querySelector('.sd')?.className ?? ''])));
-  check('the status chips wear the dot of their status', dots.new === 'sd new' && dots.draft === 'sd draft' && dots.done === 'sd done' && dots.appr === 'sd appr' && dots.qa === 'sd qa' && dots.auto === 'sd draft auto', JSON.stringify(dots));
-  check('«Усі» has no dot', dots.all === '');
+  await page.locator('[data-more]:visible').first().click(); await sleep(250);
+  const dots = await page.evaluate(() => Object.fromEntries([...document.querySelectorAll('#fpop .fi[data-filter]')].map(c => [c.dataset.filter, c.querySelector('.sd')?.className ?? ''])));
+  await page.keyboard.press('Escape'); await sleep(150);
+  check('the statuses of «Ще ▾» wear the dot of their status', dots.new === 'sd new' && dots.draft === 'sd draft' && dots.done === 'sd done' && dots.appr === 'sd appr' && dots.qa === 'sd qa' && dots.auto === 'sd draft auto', JSON.stringify(dots));
+  check('the extra filters (advice, comments) have no dot', dots.adv === '' && dots.cm === '', JSON.stringify(dots));
 
   // the accent colour in the settings
   await fileMenu();

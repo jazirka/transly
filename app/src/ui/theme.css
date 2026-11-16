@@ -1093,3 +1093,22 @@ html[data-pane=files] [data-card=files] .step,html[data-pane=rows] [data-card=ro
 .cfg-t{display:flex;align-items:center}
 .cfg-i{width:16px;height:16px;margin-right:8px;flex:none;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
 .cfgpop button small{padding-left:24px}
+
+/* the search over everything: sections, and the keys at the bottom */
+.sd-tabs{display:flex;gap:4px;padding:8px 10px 0}
+.sd-tabs button{height:26px;padding:0 12px;border:1px solid transparent;border-radius:var(--r2);background:none;color:var(--mute);font:inherit;cursor:pointer}
+.sd-tabs button:hover{background:var(--hv);color:var(--text)}
+.sd-tabs button[aria-selected=true]{background:var(--on-bg);box-shadow:inset 0 0 0 1px var(--on-ring);color:#fff}
+.sd-foot{display:flex;gap:14px;align-items:center}
+.sd-foot kbd{display:inline-block;min-width:18px;padding:0 5px;margin-right:4px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--text);font:11px var(--mono);text-align:center}
+.sd-n{margin-left:auto}
+/* «Ще ▾»: the statuses are boxes with a dot and how many rows have them */
+.pop .fi{display:flex;align-items:center;gap:8px;width:100%}
+.pop .fi .cb{flex:none;display:grid;place-items:center;width:14px;height:14px;border-radius:4px;border:1.5px solid var(--dim);font-size:10px;line-height:1;color:#fff}
+.pop .fi.on .cb{background:var(--accent-solid);border-color:var(--accent-solid)}
+.pop .fi .fl{flex:1;text-align:left}
+.pop .fi .n{color:var(--mute);font:11px var(--mono)}
+.pop .fi.idle{opacity:.45;cursor:default}
+.chip .x{margin-left:6px;color:var(--mute)}
+.chip.on .x{color:inherit;opacity:.7}
+.chip.more{color:var(--text)}

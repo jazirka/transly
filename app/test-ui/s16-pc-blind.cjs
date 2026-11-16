@@ -59,12 +59,14 @@ const stored = () => new Promise((res, rej) => { const o = indexedDB.open('trans
   // ---- the filter bar keeps its height when a new kind of row appears
   {
     const h0 = await page.locator('.filters').first().evaluate(e => Math.round(e.getBoundingClientRect().height));
-    const chips = await page.$$eval('.chip[data-filter]', cs => cs.map(c => c.textContent.trim().replace(/\s+/g, ' ')));
     await cell(0).click(); await page.keyboard.type('Новий'); await page.keyboard.press('Control+Enter'); await sleep(700); await page.keyboard.press('Escape');
     const h1 = await page.locator('.filters').first().evaluate(e => Math.round(e.getBoundingClientRect().height));
-    check('the filter bar does not change height when a new kind of row appears', h0 === h1 && chips.length >= 9, `${h0} -> ${h1}, ${chips.length} chips`);
-    const idle = await page.$$eval('.chip.idle', cs => cs.every(c => c.disabled));
-    check('a filter with nothing in it is dimmed and cannot be pressed', idle);
+    check('the filter bar does not change height when a new kind of row appears', h0 === h1, `${h0} -> ${h1}`);
+    await page.locator('.filters [data-more]').first().click(); await sleep(250);
+    const pop = await page.$$eval('#fpop .fi', cs => cs.map(c => ({ t: c.textContent.trim().replace(/\s+/g, ' '), off: c.disabled })));
+    check('«Ще ▾» offers every status with its count (eight boxes)', pop.length === 8 && pop.every(p => /\d$/.test(p.t)), JSON.stringify(pop));
+    check('a filter with nothing in it is dimmed and cannot be pressed', pop.some(p => p.off) && pop.filter(p => p.off).every(p => /\b0$/.test(p.t)), JSON.stringify(pop));
+    await page.keyboard.press('Escape'); await sleep(150);
   }
 
   // ---- settings: a threshold out of range is explained next to the field

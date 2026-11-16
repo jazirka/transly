@@ -183,7 +183,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
   <div class="kh kh2">Позначки рядків</div>
   <div class="kr kr-l"><span><i class="sd new"></i>без перекладу</span><span><i class="sd draft"></i>чернетка</span><span><i class="sd done"></i>надіслано</span><span><i class="sd appr"></i>вичитано</span><span><i class="sd qa"></i>є помилка QA</span></div>
 </div>
-<div class="sd-wrap" id="sd" hidden><div class="sd-box" role="dialog" aria-modal="true" aria-label="Пошук скрізь"><input id="sd-in" placeholder="Рядки, файли, терміни…" aria-label="Пошук скрізь" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="sd-res" aria-expanded="true" aria-activedescendant=""><div id="sd-res" role="listbox" aria-label="Результати"></div><div class="sd-foot">↑↓ вибір · Enter відкрити · Esc закрити</div></div></div>
+<div class="sd-wrap" id="sd" hidden><div class="sd-box" role="dialog" aria-modal="true" aria-label="Пошук скрізь"><div class="sd-tabs" id="sd-tabs" role="tablist" aria-label="Розділи результатів"><button type="button" role="tab" data-sdk="" aria-selected="true" tabindex="-1">Усе</button><button type="button" role="tab" data-sdk="Файли" aria-selected="false" tabindex="-1">Файли</button><button type="button" role="tab" data-sdk="Рядки" aria-selected="false" tabindex="-1">Рядки</button><button type="button" role="tab" data-sdk="Терміни" aria-selected="false" tabindex="-1">Терміни</button></div><input id="sd-in" placeholder="Рядки, файли, терміни…" aria-label="Пошук скрізь" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="sd-res" aria-expanded="true" aria-activedescendant=""><div id="sd-res" role="listbox" aria-label="Результати"></div><div class="sd-foot"><span><kbd>↑↓</kbd> вибрати</span><span><kbd>Enter</kbd> відкрити</span><span><kbd>Tab</kbd> розділ</span><span><kbd>Esc</kbd> закрити</span><span class="sd-n" id="sd-n" role="status"></span></div></div></div>
 ${WINDOW_CONTROLS_HTML}`;
 
 export async function start(root: HTMLElement): Promise<void> {
@@ -205,7 +205,7 @@ export async function start(root: HTMLElement): Promise<void> {
   /** A window too narrow for three columns: the right panel is folded by itself and, when opened, lies over the centre. */
   const narrow = matchMedia('(min-width: 761px) and (max-width: 1180px)');
   const s: State = {
-    views: [], game: [], saved, current: null, open: [], rowAt: {}, rowAtFor: '', group: null, groupSel: null, picked: new Set(), cur: null, scene: null, mode: mq.matches ? 'edit' : 'table', filter: 'all', q: '', speaker: null, lenFilter: 'all', sort: 'order', compact: ls('transly.compact') === '1', kb: false,
+    views: [], game: [], saved, current: null, open: [], rowAt: {}, rowAtFor: '', group: null, groupSel: null, picked: new Set(), cur: null, scene: null, mode: mq.matches ? 'edit' : 'table', filters: [], q: '', speaker: null, lenFilter: 'all', sort: 'order', compact: ls('transly.compact') === '1', kb: false,
     checked: new Set(), sideTab: 'panel', sideOn: ['panel'], saveOk: true, savedAt: null, who: saved.settings.who, phone: mq.matches,
     leftTab: { table: 'files', edit: 'rows', scene: 'scenes' }, leftOpen: !mq.matches, leftBoth: false, rightOpen: false, collapsed: new Set(), sess: { n: 0, t0: Date.now(), seen: new Set() }, lastBuild: null,
   };
@@ -384,6 +384,8 @@ export async function start(root: HTMLElement): Promise<void> {
     }
     return true;
   };
+  /** A row passes when no status is chosen or it matches any of the chosen ones. */
+  const passesStatus = (u: Unit, e: Entry | undefined, opts?: QaOptions): boolean => !s.filters.length || s.filters.some(f => matchesStatus(u, e, f, opts));
   const matchesStatus = (u: Unit, e: Entry | undefined, f: Filter, opts?: QaOptions): boolean => {
     switch (f) {
       case 'new': return rowState(e) === 'untranslated';
@@ -402,8 +404,8 @@ export async function start(root: HTMLElement): Promise<void> {
     const v = ctx.view();
     if (!v) return [];
     const ents = ctx.entries(v.name);
-    const opts = withStatus && s.filter === 'adv' ? qaOpts() : undefined;
-    const list = v.units.filter(u => inContext(u, ents[u.key]) && (!withStatus || matchesStatus(u, ents[u.key], s.filter, opts)));
+    const opts = withStatus && s.filters.includes('adv') ? qaOpts() : undefined;
+    const list = v.units.filter(u => inContext(u, ents[u.key]) && (!withStatus || passesStatus(u, ents[u.key], opts)));
     if (s.sort === 'order' || !sorted) return list;
     // Array.sort is stable: rows with the same rank keep the order of the file.
     const rank = (u: Unit): number => {
@@ -420,17 +422,19 @@ export async function start(root: HTMLElement): Promise<void> {
   let uiRestored = false;
   function saveUi(): void {
     if (!uiRestored || !s.current || s.current === GROUP) return;
-    try { localStorage.setItem(UI_KEY, JSON.stringify({ current: s.current, cur: s.cur, filter: s.filter, q: s.q, speaker: s.speaker, sort: s.sort, mode: s.mode, scroll: document.getElementById('slist')?.scrollTop ?? 0 })); } catch { /* private mode */ }
+    try { localStorage.setItem(UI_KEY, JSON.stringify({ current: s.current, cur: s.cur, filters: s.filters, q: s.q, speaker: s.speaker, sort: s.sort, mode: s.mode, scroll: document.getElementById('slist')?.scrollTop ?? 0 })); } catch { /* private mode */ }
   }
   function restoreUi(): void {
     // Before the game's files are read there is nothing to go back to; try again once they are.
     if (uiRestored || !s.views.length) return;
-    let u: { current?: string; cur?: string | null; filter?: Filter; q?: string; speaker?: string | null; sort?: SortMode; mode?: Mode; scroll?: number } = {};
+    let u: { current?: string; cur?: string | null; filter?: Filter; filters?: unknown; q?: string; speaker?: string | null; sort?: SortMode; mode?: Mode; scroll?: number } = {};
     try { u = JSON.parse(ls(UI_KEY) ?? '{}') as typeof u; } catch { /* damaged: start fresh */ }
     uiRestored = true;
     if (!u.current || !s.views.some(v => v.name === u.current)) return;
     if (s.current !== u.current) openFile(u.current);
-    if (u.filter && FILTERS.some(f => f[0] === u.filter)) s.filter = u.filter;
+    const known = (f: unknown): f is Filter => typeof f === 'string' && f !== 'all' && FILTERS.some(x => x[0] === f);
+    if (Array.isArray(u.filters)) s.filters = u.filters.filter(known) as Filter[];
+    else if (known(u.filter)) s.filters = [u.filter];
     s.q = u.q ?? ''; s.speaker = u.speaker ?? null;
     if (u.sort && u.sort in SORT_LABEL) s.sort = u.sort;
     // The old review mode is gone: a saved one opens as the editor; the scene mode needs a file with scenes.
@@ -560,19 +564,35 @@ export async function start(root: HTMLElement): Promise<void> {
     if (mine) mine.focus({ preventScroll: true });
   }
 
-  function chipsHtml(): string {
+  /** The statuses to choose from, in the popover «Ще ▾»: what a row is, and what else it can have. */
+  const STATUS_FILTERS = FILTERS.filter(f => ['new', 'draft', 'auto', 'done', 'appr'].includes(f[0]));
+  const EXTRA_FILTERS = FILTERS.filter(f => ['qa', 'adv', 'cm'].includes(f[0]));
+  const filterDot = (f: Filter): string => (FILTER_DOT[f] ? `<i class="sd ${FILTER_DOT[f]}" aria-hidden="true"></i>` : '');
+  /** How many rows of the open file (inside the search and the other filters) each status has. */
+  function filterCounts(): Map<Filter, number> {
+    const out = new Map<Filter, number>();
     const v = ctx.view();
-    if (!v) return '';
-    const ents = ctx.entries(v.name);
-    const ctxUnits = v.units.filter(u => inContext(u, ents[u.key]));
-    const opts = qaOpts();
-    return FILTERS.map(([f, l]) => {
-      const n = f === 'all' ? ctxUnits.length : ctxUnits.filter(u => matchesStatus(u, ents[u.key], f, opts)).length;
-      // Every filter stays in its place: a chip that appears when the first row of its kind is made would push the table down
-      // under the reader's eyes. One that finds nothing is dimmed and cannot be pressed (unless it is the chosen one).
-      const idle = n === 0 && f !== 'all' && s.filter !== f;
-      return `<button class="chip ${s.filter === f ? 'on' : ''}${idle ? ' idle' : ''}" data-filter="${f}" aria-pressed="${s.filter === f}"${idle ? ' disabled' : ''}>${FILTER_DOT[f] ? `<i class="sd ${FILTER_DOT[f]}" aria-hidden="true"></i>` : ''}${l} <span class="n">${n.toLocaleString('uk-UA')}</span></button>`;
-    }).join('');
+    if (!v) return out;
+    const ents = ctx.entries(v.name), opts = qaOpts();
+    const units = v.units.filter(u => inContext(u, ents[u.key]));
+    for (const [f] of FILTERS) out.set(f, f === 'all' ? units.length : units.filter(u => matchesStatus(u, ents[u.key], f, opts)).length);
+    return out;
+  }
+  /**
+   * The statuses that are chosen show as chips (a click drops one); the rest is in «Ще ▾», so no row of chips takes the room of the rows
+   * and nothing moves when a filter is switched on. `host` tells the two places apart (the table's bar and the rows window).
+   */
+  function chipsHtml(host: string): string {
+    if (!ctx.view()) return '';
+    const n = filterCounts();
+    const chips = s.filters.map(f => { const l = FILTERS.find(x => x[0] === f)?.[1] ?? f; return `<button class="chip on" data-filter="${f}" aria-pressed="true" title="Прибрати фільтр «${l}»">${filterDot(f)}${l} <span class="n">${(n.get(f) ?? 0).toLocaleString('uk-UA')}</span><span class="x" aria-hidden="true">✕</span></button>`; }).join('');
+    return `${chips}<button class="chip more${s.filters.length ? ' on' : ''}" id="more-${host}" data-more aria-haspopup="true" aria-expanded="false">Ще ▾</button>${s.filters.length ? '<button class="chip" data-reset title="Скинути всі фільтри">Скинути</button>' : ''}`;
+  }
+  /** The popover «Ще ▾»: a box for each status with how many rows have it; the boxes can be mixed. */
+  function moreHtml(): string {
+    const n = filterCounts();
+    const row = ([f, l]: [Filter, string]): string => { const on = s.filters.includes(f), idle = !on && !(n.get(f) ?? 0); return `<button class="fi${on ? ' on' : ''}${idle ? ' idle' : ''}" data-filter="${f}" role="menuitemcheckbox" aria-checked="${on}"${idle ? ' disabled' : ''}><span class="cb" aria-hidden="true">${on ? '✓' : ''}</span>${filterDot(f)}<span class="fl">${l}</span><span class="n">${(n.get(f) ?? 0).toLocaleString('uk-UA')}</span></button>`; };
+    return `<div class="group">Статус</div>${STATUS_FILTERS.map(row).join('')}<hr><div class="group">Додатково</div>${EXTRA_FILTERS.map(row).join('')}${s.filters.length ? '<hr><button data-reset>Скинути всі фільтри</button>' : ''}`;
   }
 
   /** The speaker and length buttons show the chosen value themselves, with a cross to drop it. */
@@ -623,8 +643,9 @@ export async function start(root: HTMLElement): Promise<void> {
 
   const SORT_LABEL: Record<SortMode, string> = { order: 'За порядком', new: 'Без перекладу спершу', qa: 'Помилки спершу', long: 'Найдовші спершу' };
   function renderRowsList(): void {
-    $('#chips2').innerHTML = (s.speaker !== null ? `<button class="chip on" data-clear="speaker" title="Скинути фільтр за мовцем">${esc(s.speaker || 'Без мовця')} ✕</button>` : '') + chipsHtml();
-    $('#sortbtn').textContent = `↕ ${SORT_LABEL[s.sort]}`;
+    $('#chips2').innerHTML = (s.speaker !== null ? `<button class="chip on" data-clear="speaker" title="Скинути фільтр за мовцем">${esc(s.speaker || 'Без мовця')} ✕</button>` : '') + chipsHtml('2');
+    $('#sortbtn').textContent = 'Вигляд ▾';
+    $('#sortbtn').title = $('#sortbtn').ariaLabel = `Вигляд: порядок «${SORT_LABEL[s.sort]}»`;
     $('#sortbtn').classList.toggle('on', s.sort !== 'order');
     const v = ctx.view();
     if (!v) { $('#slist').innerHTML = '<div class="emptybox"><b>Спершу оберіть файл угорі</b>Тут з’являться рядки вибраного файлу.</div>'; return; }
@@ -672,7 +693,7 @@ export async function start(root: HTMLElement): Promise<void> {
     renderBulk(visibleUnits(true, false).map(u => u.key));
   }
   /** Is the table showing every row (no filter, search, speaker, length or sort)? Then a changed row stays where it is. */
-  const tablePlain = (): boolean => s.mode === 'table' && s.filter === 'all' && !s.q && s.speaker === null && s.lenFilter === 'all' && !s.phone && !(lp() === 'rows' || s.leftBoth);
+  const tablePlain = (): boolean => s.mode === 'table' && !s.filters.length && !s.q && s.speaker === null && s.lenFilter === 'all' && !s.phone && !(lp() === 'rows' || s.leftBoth);
   /**
    * One row of the table changed (a cell was edited): draw that row again and bring the totals in line, instead of
    * drawing the whole workspace. Anything that could move or remove the row (a filter, a search, a sort) or a view
@@ -680,7 +701,7 @@ export async function start(root: HTMLElement): Promise<void> {
    */
   /** A mouse button is held down: the tree, the tabs and the filter chips are not redrawn now, or the click that began on one of them would be lost. */
   let pointerHeld = false, deferChrome = false;
-  const redrawChrome = (): void => { $('#chips1').innerHTML = chipsHtml(); renderTabs(); renderTree(); };
+  const redrawChrome = (): void => { $('#chips1').innerHTML = chipsHtml('1'); renderTabs(); renderTree(); };
   addEventListener('pointerdown', () => { pointerHeld = true; }, true);
   addEventListener('pointerup', () => { pointerHeld = false; if (deferChrome) { deferChrome = false; setTimeout(redrawChrome, 0); } }, true);
   function rowChanged(key: string): void {
@@ -711,7 +732,7 @@ export async function start(root: HTMLElement): Promise<void> {
   function renderTable(): void {
     const v = ctx.view();
     const grid = $('#grid');
-    $('#chips1').innerHTML = chipsHtml();
+    $('#chips1').innerHTML = chipsHtml('1');
     renderFilterButtons();
     ($('#q') as HTMLInputElement).value = s.q;
     if (!v) { grid.innerHTML = ''; return; }
@@ -848,7 +869,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!s.views.some(v => v.name === name)) return;
     if (!s.open.includes(name)) s.open.push(name);
     s.current = name; s.q = ''; s.lenFilter = 'all'; s.checked.clear();
-    s.filter = 'all';
+    s.filters = [];
     unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u]));
     // a file opens on the row it was left on
     const left = rowMemo()[name];
@@ -887,7 +908,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!known.length) return;
     s.group = known; s.groupSel = null;
     s.current = GROUP; s.q = ''; s.lenFilter = 'all'; s.checked.clear();
-    s.filter = 'all';
+    s.filters = [];
     unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u]));
     s.cur = null;
   }
@@ -899,7 +920,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!keys.size) { toast('Тут ще немає рядків'); return; }
     s.group = [...keys.keys()]; s.groupSel = { title, ...(gid ? { gid } : {}), keys };
     s.current = GROUP; s.q = ''; s.lenFilter = 'all'; s.checked.clear();
-    s.filter = 'all';
+    s.filters = [];
     unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u]));
     s.cur = null;
     renderAll();
@@ -1244,7 +1265,9 @@ export async function start(root: HTMLElement): Promise<void> {
     p.innerHTML = html; p.dataset.for = btn.id; p.hidden = false; btn.setAttribute('aria-expanded', 'true');
     const r = btn.getBoundingClientRect();
     p.style.left = Math.min(r.left, innerWidth - p.offsetWidth - 8) + 'px';
-    p.style.top = r.bottom + 4 + 'px';
+    // under the button when it fits, above it when it does not (a long list such as «Ще ▾» near the bottom of the window)
+    const h = p.offsetHeight, below = r.bottom + 4;
+    p.style.top = (below + h <= innerHeight - 8 ? below : Math.max(8, r.top - 4 - h >= 8 ? r.top - 4 - h : innerHeight - h - 8)) + 'px';
     focusFirst(p);
   }
   /** Phone: the five sections of the bottom bar. Files and rows are full pages, the hints are a bottom sheet. */
@@ -1288,8 +1311,9 @@ export async function start(root: HTMLElement): Promise<void> {
   interface SdItem { t: 'file' | 'row' | 'term'; file?: string; key?: string; term?: string; kind: string; title: string; sub?: string; where?: string; status?: string }
   let sdItems: SdItem[] = [];
   let sdSel = 0;
+  let sdKind = '';
   let searchFrom: HTMLElement | null = null;
-  function openSearch(): void { searchFrom = document.activeElement instanceof HTMLElement ? document.activeElement : null; $('#sd').hidden = false; const i = $('#sd-in') as HTMLInputElement; i.value = ''; sdRender(); i.focus(); holdInert('search', true); }
+  function openSearch(): void { searchFrom = document.activeElement instanceof HTMLElement ? document.activeElement : null; $('#sd').hidden = false; const i = $('#sd-in') as HTMLInputElement; i.value = ''; sdKind = ''; sdRender(); i.focus(); holdInert('search', true); }
   function closeSearch(): void {
     $('#sd').hidden = true; holdInert('search', false);
     const from = searchFrom; searchFrom = null;
@@ -1320,32 +1344,35 @@ export async function start(root: HTMLElement): Promise<void> {
   function sdRender(): void {
     const q = ($('#sd-in') as HTMLInputElement).value.trim().toLowerCase();
     const files: SdItem[] = [], rows: SdItem[] = [], terms: SdItem[] = [];
+    /** A chosen section shows more of its results (nothing else competes for the room). */
+    const only = sdKind !== '', capF = only ? 50 : 5, capR = only ? 60 : 8, capT = only ? 50 : 4;
+    const want = (k: string): boolean => !only || sdKind === k;
     /** How many results each group really has, when more than it shows (the group header then says «показано 8 з 37»). */
     const total: Record<string, number> = {};
     const CAP = 999;
     const fileItem = (name: string): SdItem => ({ t: 'file', file: name, kind: 'Файли', title: fileTitle(name), sub: name.includes('/') ? name : undefined });
     if (!q) {
       const first = [...new Set([...s.open, ...s.views.map(v => v.name)])].filter(n => s.views.some(v => v.name === n));
-      first.slice(0, 8).forEach(n => files.push(fileItem(n)));
+      if (want('Файли')) first.slice(0, only ? 50 : 8).forEach(n => files.push(fileItem(n)));
     } else {
       let nFiles = 0;
-      for (const v of s.views) if (`${v.name} ${v.label ?? ''}`.toLowerCase().includes(q)) { nFiles++; if (files.length < 5) files.push(fileItem(v.name)); }
+      for (const v of s.views) if (want('Файли') && `${v.name} ${v.label ?? ''}`.toLowerCase().includes(q)) { nFiles++; if (files.length < capF) files.push(fileItem(v.name)); }
       total['Файли'] = nFiles;
       let nRows = 0;
-      outer: for (const v of s.views) {
+      if (want('Рядки')) outer: for (const v of s.views) {
         const ents = s.saved.files[v.name] ?? {};
         for (const u of v.units) {
           const e = ents[u.key];
           if (!(u.source + ' ' + flowText(e?.target ?? '') + ' ' + u.key).toLowerCase().includes(q)) continue;
           nRows++;
-          if (rows.length < 8) rows.push({ t: 'row', file: v.name, key: u.key, kind: 'Рядки', title: around(u.source, q), sub: e?.target ? around(e.target, q) : '', where: `${fileTitle(v.name)} · ${shortKey(u.key)}`, status: shownStatus(ctx, u, e) });
+          if (rows.length < capR) rows.push({ t: 'row', file: v.name, key: u.key, kind: 'Рядки', title: around(u.source, q), sub: e?.target ? around(e.target, q) : '', where: `${fileTitle(v.name)} · ${shortKey(u.key)}`, status: shownStatus(ctx, u, e) });
           else if (nRows >= CAP) break outer;
         }
       }
       total['Рядки'] = nRows;
-      const hitTerms = s.saved.terms.filter(t => (t.en + ' ' + t.uk).toLowerCase().includes(q));
+      const hitTerms = want('Терміни') ? s.saved.terms.filter(t => (t.en + ' ' + t.uk).toLowerCase().includes(q)) : [];
       total['Терміни'] = hitTerms.length;
-      hitTerms.slice(0, 4).forEach(t => terms.push({ t: 'term', term: t.en, kind: 'Терміни', title: t.en, sub: t.uk }));
+      hitTerms.slice(0, capT).forEach(t => terms.push({ t: 'term', term: t.en, kind: 'Терміни', title: t.en, sub: t.uk }));
     }
     sdItems = [...files, ...rows, ...terms]; sdSel = 0;
     let html = '', last = '';
@@ -1360,7 +1387,12 @@ export async function start(root: HTMLElement): Promise<void> {
     });
     $('#sd-res').innerHTML = html || '<div class="sd-empty" role="status">Нічого не знайдено</div>';
     $('#sd-in').setAttribute('aria-activedescendant', sdItems.length ? 'sd-opt-0' : '');
+    $('#sd-n').textContent = sdItems.length ? plural(sdItems.length, ['результат', 'результати', 'результатів']) : '';
+    document.querySelectorAll<HTMLElement>('#sd-tabs [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.sdk === sdKind)));
   }
+  /** The sections of the search: «Усе», the files, the rows, the terms (Tab goes to the next one). */
+  const SD_KINDS = ['', 'Файли', 'Рядки', 'Терміни'];
+  function sdSection(step: number): void { sdKind = SD_KINDS[(SD_KINDS.indexOf(sdKind) + step + SD_KINDS.length) % SD_KINDS.length]!; sdRender(); }
   function sdGo(i: number): void {
     const it = sdItems[i];
     if (!it) return;
@@ -1368,7 +1400,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (it.t === 'term') { s.leftOpen = true; s.leftBoth = false; s.leftTab[s.mode] = 'glossary'; renderAll(); showTerm(ctx, it.term ?? ''); return; }
     if (it.file) {
       if (it.file !== s.current) openFile(it.file);
-      if (it.key) { s.filter = 'all'; s.q = ''; s.speaker = null; s.lenFilter = 'all'; ctx.select(it.key, s.mode === 'table' ? undefined : s.mode); } else renderAll();
+      if (it.key) { s.filters = []; s.q = ''; s.speaker = null; s.lenFilter = 'all'; ctx.select(it.key, s.mode === 'table' ? undefined : s.mode); } else renderAll();
     }
   }
 
@@ -1421,7 +1453,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!hit) { toast(QUEUE_LABEL[kind].empty); return; }
     const { file, key } = hit.row;
     if (file !== s.current) openFile(file);
-    s.filter = 'all'; s.q = ''; s.speaker = null; s.lenFilter = 'all';
+    s.filters = []; s.q = ''; s.speaker = null; s.lenFilter = 'all';
     const target = s.current === GROUP ? `${file}${SEP}${key}` : key;
     ctx.select(ctx.unit(target) ? target : key, s.mode === 'table' ? undefined : s.mode);
     toast(`${QUEUE_LABEL[kind].title}: ${hit.place} з ${rows.length}`);
@@ -1591,7 +1623,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const t = e.target as HTMLElement;
     const off = t.closest<HTMLElement>('[aria-disabled="true"][data-why]');
     if (off) { toast(off.dataset.why!); return; }
-    if (!t.closest('#fpop,#spkbtn,#lenbtn,#sortbtn,#bnav,#cfgpop,#cfg-btn,#projpop,#proj-btn')) closePops();
+    if (!t.closest('#fpop,#spkbtn,#lenbtn,#sortbtn,[data-more],#bnav,#cfgpop,#cfg-btn,#projpop,#proj-btn')) closePops();
     if (!t.closest('#keypop,#hk')) $('#keypop').hidden = true;
     if (t.closest('#open2,#fb-repick')) { void openFolder(); return; }
     if (t.closest('#fb-use')) { useFolderAnyway(); return; }
@@ -1616,7 +1648,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const cfgItem = t.closest<HTMLElement>('#cfgpop [data-cfg]');
     if (cfgItem) { runCfg = cfgItem.dataset.cfg as RunCfg; try { localStorage.setItem('transly.runcfg', runCfg); } catch { /* private mode */ } closeCfgMenu(); renderRunCfg(); return; }
     if (t.closest('#run-btn')) { runSelected(); return; }
-    if (t.closest('#sb-adv')) { s.filter = 'adv'; renderAll(); return; }
+    if (t.closest('#sb-adv')) { s.filters = ['adv']; renderAll(); return; }
     if (t.closest('#sb-qa')) { jump('error', 1); return; }
     if (t.closest('#sb-build')) { doBuild(); return; }
     if (t.closest('#sb-sync')) { openSettingsDlg('file'); return; }
@@ -1688,10 +1720,21 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.closest('[data-coach-ok]')) { coachDone(); renderTree(); return; }
     if (f) { coachDone(); openFile(f.dataset.file!); if (s.phone) s.leftTab[s.mode] = 'rows'; renderAll(); return; }
     const ch = t.closest<HTMLElement>('[data-filter]');
-    if (ch) { s.filter = ch.dataset.filter as Filter; if (s.mode !== 'table' && !ctx.visible().some(u => u.key === s.cur)) s.cur = ctx.visible()[0]?.key ?? null; renderAll(); return; }
+    if (ch) {
+      const f = ch.dataset.filter as Filter;
+      s.filters = s.filters.includes(f) ? s.filters.filter(x => x !== f) : [...s.filters, f];
+      if (s.mode !== 'table' && !ctx.visible().some(u => u.key === s.cur)) s.cur = ctx.visible()[0]?.key ?? null;
+      const pop = fpop(), keep = !pop.hidden && pop.dataset.for?.startsWith('more-');
+      renderAll();
+      // the popover stays open while boxes are ticked: it is redrawn with the new counts and the focus stays on the box
+      if (keep) { pop.innerHTML = moreHtml(); document.getElementById(pop.dataset.for!)?.setAttribute('aria-expanded', 'true'); pop.querySelector<HTMLElement>(`[data-filter="${f}"]`)?.focus(); }
+      return;
+    }
+    const more = t.closest<HTMLElement>('[data-more]');
+    if (more) { showPop(more, moreHtml()); return; }
     const clr = t.closest<HTMLElement>('[data-clear]');
     if (clr) { closePops(); if (clr.dataset.clear === 'speaker') s.speaker = null; else s.lenFilter = 'all'; renderAll(); return; }
-    if (t.closest('[data-reset]')) { s.filter = 'all'; s.q = ''; s.speaker = null; s.lenFilter = 'all'; renderAll(); return; }
+    if (t.closest('[data-reset]')) { s.filters = []; s.q = ''; s.speaker = null; s.lenFilter = 'all'; renderAll(); return; }
     if (t.closest('#spkbtn')) {
       const v = ctx.view();
       // Speakers of every file, not only the open one: the choice stays when another file is opened.
@@ -1704,7 +1747,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.closest('[data-act=speakers]')) { closePops(); openSpeakers(ctx); return; }
     const spk = t.closest<HTMLElement>('[data-spk]');
     if (spk) { s.speaker = spk.dataset.spk ?? ''; closePops(); renderAll(); return; }
-    if (t.closest('#sortbtn')) { showPop(t.closest<HTMLElement>('#sortbtn')!, `<div class="group">Сортування</div>${(Object.keys(SORT_LABEL) as SortMode[]).map(k => `<button data-sort="${k}" ${s.sort === k ? 'class="on"' : ''}>${SORT_LABEL[k]}</button>`).join('')}`); return; }
+    if (t.closest('#sortbtn')) { showPop(t.closest<HTMLElement>('#sortbtn')!, `<div class="group">Порядок</div>${(Object.keys(SORT_LABEL) as SortMode[]).map(k => `<button data-sort="${k}" role="menuitemradio" aria-checked="${s.sort === k}" ${s.sort === k ? 'class="on"' : ''}>${SORT_LABEL[k]}</button>`).join('')}`); return; }
     const so = t.closest<HTMLElement>('[data-sort]');
     if (so) { s.sort = so.dataset.sort as SortMode; closePops(); renderAll(); return; }
     if (t.closest('#lenbtn')) { showPop(t.closest<HTMLElement>('#lenbtn')!, `<div class="group">Довжина відносно оригіналу</div>${(Object.keys(LEN_LABEL) as (keyof typeof LEN_LABEL)[]).map(k => `<button data-len="${k}">${LEN_LABEL[k]}</button>`).join('')}`); return; }
@@ -1815,7 +1858,9 @@ export async function start(root: HTMLElement): Promise<void> {
     const k = (e as KeyboardEvent).key;
     if (k === 'ArrowDown' || k === 'ArrowUp') { e.preventDefault(); sdSel = (sdSel + (k === 'ArrowDown' ? 1 : -1) + sdItems.length) % Math.max(1, sdItems.length); document.querySelectorAll('.sd-it').forEach((x, i) => { x.classList.toggle('on', i === sdSel); x.setAttribute('aria-selected', String(i === sdSel)); if (i === sdSel) { $('#sd-in').setAttribute('aria-activedescendant', x.id); x.scrollIntoView({ block: 'nearest' }); } }); }
     else if (k === 'Enter') { e.preventDefault(); sdGo(sdSel); }
+    else if (k === 'Tab') { e.preventDefault(); sdSection((e as KeyboardEvent).shiftKey ? -1 : 1); }
   });
+  $('#sd-tabs').addEventListener('click', e => { const b = (e.target as HTMLElement).closest<HTMLElement>('[data-sdk]'); if (b) { sdKind = b.dataset.sdk ?? ''; sdRender(); $('#sd-in').focus(); } });
 
   let qTimer = 0;
   let lastShift = 0;
@@ -1956,7 +2001,7 @@ export async function start(root: HTMLElement): Promise<void> {
   function openRow(file: string, key: string, tries = 0): void {
     if (s.views.some(v => v.name === file)) {
       if (s.current !== file) openFile(file);
-      s.filter = 'all'; s.q = ''; s.speaker = null; s.lenFilter = 'all';
+      s.filters = []; s.q = ''; s.speaker = null; s.lenFilter = 'all';
       if (!ctx.unit(key)) { renderAll(); return; }
       ctx.select(key, s.mode === 'table' ? 'edit' : s.mode);
     } else if (tries < 40) setTimeout(() => openRow(file, key, tries + 1), 250);

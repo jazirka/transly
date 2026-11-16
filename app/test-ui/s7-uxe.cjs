@@ -52,11 +52,13 @@ const load = async (browser, sources) => {
   {
     const { ctx, page, errors } = await load(browser, ['Yes', 'Yes', 'Yes', 'Other line']);
     await page.locator('.gr .tr').nth(0).click(); await page.keyboard.type('Так'); await page.keyboard.press('Control+Enter'); await sleep(1500);
-    const chips = await page.$$eval('.chip[data-filter]', cs => cs.map(c => c.textContent.trim()));
-    check('the filter row offers «Авто» with the count of filled-in drafts', chips.some(c => /^Авто\s*2$/.test(c)), JSON.stringify(chips));
+    await page.locator('.filters [data-more]').first().click(); await sleep(250);
+    const chips = await page.$$eval('#fpop .fi', cs => cs.map(c => c.textContent.trim().replace(/\s+/g, ' ')));
+    check('«Ще ▾» offers «Авто» with the count of filled-in drafts', chips.some(c => /^Авто\s*2$/.test(c)), JSON.stringify(chips));
     const dashed = await page.$$eval('.gr .sd.draft.auto', d => d.length);
     check('filled-in drafts have their own dot in the table (dashed ring)', dashed === 2, 'n=' + dashed);
-    await page.locator('.chip[data-filter="auto"]').click(); await sleep(500);
+    await page.locator('#fpop .fi[data-filter="auto"]').click(); await sleep(500); await page.keyboard.press('Escape'); await sleep(150);
+    check('the chosen filter shows as a chip', await page.locator('.filters .chip.on[data-filter="auto"]').count() === 1);
     const shown = await page.$$eval('.gr', r => r.length);
     check('the «Авто» filter shows only them', shown === 2, 'rows=' + shown);
     await page.getByLabel('Вибрати всі видимі рядки').click(); await sleep(300);

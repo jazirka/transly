@@ -45,7 +45,8 @@ export interface State {
   /** Unit key selected in the current file. */
   cur: string | null;
   mode: Mode;
-  filter: Filter;
+  /** The statuses shown (a row passes when it matches any of them); none chosen means every row. */
+  filters: Filter[];
   q: string;
   speaker: string | null;
   lenFilter: LenFilter;

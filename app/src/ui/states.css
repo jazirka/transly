@@ -62,3 +62,13 @@ html:not([data-pane=right]) .fs .saveb:hover{background:rgba(255,255,255,.22)}
 /* picked files: the colour of the project while you work in the files, one outline for a run of them (see .pk-top / .pk-bot in theme.css) */
 html[data-pane=files] #tree .node.pick{--rg:var(--use-ring);background:var(--use);color:#fff}
 html[data-pane=files] #tree .node.pick .nm{color:#fff}
+
+/* what can be chosen in a list has one shape wherever it stands (the files, the rows, the scenes, the related): the list keeps an inset on both
+   sides, the item is rounded and has no divider of its own, so the choice in one window looks like the choice in another (only the colour differs
+   by the window you work in) */
+.sl-body{padding:4px 6px}
+.si,.sc-item,.tgrow{border-radius:8px;border-bottom:0}
+.si{margin-bottom:2px;padding:7px 8px}
+.si.lazy{border-bottom:0}
+.sc-item{border-left:0;padding:7px 8px}
+.tgrow{padding:0 8px}

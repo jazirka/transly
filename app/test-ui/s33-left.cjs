@@ -66,6 +66,10 @@ const FILES = { Actors: ['Harold', 'Therese'], Armors: ['Cloth', 'Shield'], Clas
   check('no line is drawn between the picked files', mid.length > 0 && mid.every(l => /^-?1px 0px$/.test(l)) && top.includes('0px 1px') && !top.includes('0px -1px') && bot.includes('0px -1px') && !bot.includes('0px 1px'), JSON.stringify([mid, top, bot]));
   const pickBg = await page.evaluate(() => getComputedStyle(document.querySelector('#tree .node.pick')).backgroundColor);
   check('picked files are filled (the colour of the project while you work in the files)', /rgba?\(/.test(pickBg) && pickBg !== 'rgba(0, 0, 0, 0)', pickBg);
+  // the choice in the rows has the shape of the choice in the files: rounded, inset by the same distance, no divider
+  await page.locator('#lp-rows .si').first().click(); await sleep(300);
+  const shape = await page.evaluate(() => { const r = document.querySelector('#lp-rows .si.sel'), t = document.querySelector('#tree .node.cur'); if (!r || !t) return null; const c = getComputedStyle(r), l = document.querySelector('#slist').getBoundingClientRect(), rr = r.getBoundingClientRect(), tl = document.querySelector('#tree-list').getBoundingClientRect(), tr = t.getBoundingClientRect(); return { rad: c.borderTopLeftRadius, bb: c.borderBottomWidth, insetRows: Math.round(rr.left - l.left), insetFiles: Math.round(tr.left - tl.left), radFiles: getComputedStyle(t).borderTopLeftRadius }; });
+  check('the chosen row is rounded and inset like the chosen file, with no divider under it', !!shape && shape.rad === shape.radFiles && shape.bb === '0px' && shape.insetRows === shape.insetFiles, JSON.stringify(shape));
   check('no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close(); await browser.close();
   if (failed) { console.log(`\n${failed} check(s) failed`); process.exit(1); }

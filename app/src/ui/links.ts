@@ -18,17 +18,39 @@ function at(l: Link, t: number): { x: number; y: number } {
   return { x: u * u * u * l.x1 + 3 * u * u * t * l.x1 + 3 * u * t * t * l.x2 + t * t * t * l.x2, y: u * u * u * l.y1 + 3 * u * u * t * ym + 3 * u * t * t * ym + t * t * t * l.y2 };
 }
 
+/** The threads kept drawn by a click on their chip (`data-thp`); they belong to one row and are let go when another row opens. */
+const pinned = new Set<string>();
+let pinRow = '', rowNow = '';
+export const isPinned = (en: string): boolean => pinned.has(en);
+/** The row the lines are drawn for: the threads kept drawn for another row are let go. */
+function rowIs(row: string): void {
+  rowNow = row;
+  if (row !== pinRow) { pinned.clear(); pinRow = row; }
+}
+/** Keeps the thread of `en` drawn (or lets it go); returns whether it is kept now. */
+export function togglePin(ctx: Ctx, en: string): boolean {
+  rowIs(ctx.s.cur ?? '');
+  if (pinned.delete(en)) return false;
+  pinned.add(en);
+  return true;
+}
+/** Lines of the kept threads stay lit; the chips say so. */
+export function showPinned(): void {
+  rowIs(rowNow);
+  document.querySelectorAll<HTMLElement | SVGPathElement>('#te-links path, #te-links .lk').forEach(p => p.classList.toggle('kept', pinned.has((p.dataset.link ?? '').replace(/^term/, ''))));
+  document.querySelectorAll<HTMLElement>('.thc2[data-ck]').forEach(c => { const on = pinned.has(c.dataset.ck ?? ''); c.classList.toggle('on', on); c.querySelector('.thc2-b')?.setAttribute('aria-pressed', String(on)); });
+}
+
 const first = (el: Element): DOMRect => el.getClientRects()[0] ?? el.getBoundingClientRect();
 
 /** Draw the arrows for the open row. Nothing is drawn while the translation is empty (there is nothing to check yet). */
-export function drawLinks(_ctx: Ctx): void {
+export function drawLinks(ctx: Ctx): void {
+  rowIs(ctx.s.cur ?? '');
   const host = document.getElementById('te-links');
   if (!host) return;
   host.replaceChildren();
+  document.querySelector('.fc-in')?.classList.remove('weave');
   const ta = $('#i-tr') as HTMLTextAreaElement, layer = $('#te-layer');
-  // The threads need room between the original and the translation: the translation steps down while there are some to draw.
-  const room = !!document.querySelector('#f-src [data-hc="term"], #f-src [data-hc="code"]') && !!ta.value.trim() && !ta.disabled;
-  document.querySelector('.fc-in')?.classList.toggle('weave', room);
   const base = host.getBoundingClientRect();
   if (!base.width || !ta.value.trim() || ta.disabled) return;
   const field = ta.getBoundingClientRect();
@@ -68,7 +90,7 @@ export function drawLinks(_ctx: Ctx): void {
       if (sameLine) arcs.push({ key, ...(ci === undefined ? {} : { ci }), x1: rs[0]!.left + rs[0]!.width / 2 - base.left, x2: rs[rs.length - 1]!.left + rs[rs.length - 1]!.width / 2 - base.left, y: top - base.top - 1 });
     }
   }
-  if (!links.length && !arcs.length) return;
+  if (!links.length && !arcs.length) { showPinned(); return; }
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('aria-hidden', 'true');
   svg.innerHTML = `<defs><marker id="lk-ok" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="6" markerHeight="6"><circle cx="4" cy="4" r="3.4" class="lk-h ok"/></marker><marker id="lk-warn" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="6" markerHeight="6"><circle cx="4" cy="4" r="3.4" class="lk-h warn"/></marker></defs>`;
@@ -105,6 +127,7 @@ export function drawLinks(_ctx: Ctx): void {
     b.setAttribute('aria-label', l.ok ? `«${l.key}»: у перекладі є, відкрити картку` : l.kind === 'code' ? `Код ${l.key} загублено в перекладі, відкрити картку` : `«${l.key}»: у перекладі немає, відкрити картку`);
     host.appendChild(b);
   }
+  showPinned();
 }
 
 /** Redraw when the layout changes, and light up the arrow of the word that is pointed at. */
@@ -114,17 +137,18 @@ export function wireLinks(ctx: Ctx): void {
   const fc = document.querySelector('.fc-in');
   if (fc && typeof ResizeObserver !== 'undefined') new ResizeObserver(redraw).observe(fc);
   const lit = (e: Event, on: boolean): void => {
-    const el = (e.target as Element).closest<HTMLElement>('[data-hc], .thc[data-hk]');
-    if (!el?.dataset.hk) return;
-    const id = (el.dataset.hc ?? 'term') + el.dataset.hk;
-    document.querySelectorAll<SVGPathElement>('#te-links path').forEach(p => { if (p.dataset.link === id) p.classList.toggle('hot', on); });
+    const el = (e.target as Element).closest<HTMLElement>('[data-hc], .thc2[data-ck]');
+    const hk = el?.dataset.hk ?? el?.dataset.ck;
+    if (!el || !hk) return;
+    const id = (el.dataset.hc ?? 'term') + hk;
+    document.querySelectorAll<HTMLElement | SVGPathElement>('#te-links path, #te-links .lk').forEach(p => { if (p.dataset.link === id) p.classList.toggle('hot', on); });
     // the other threads step back, so the one that is pointed at can be followed from the word to its place
     if (el.dataset.hc === 'code' || el.dataset.hc === 'name') return;
     const root = document.querySelector('.fc-in');
     root?.classList.toggle('lit', on);
-    root?.querySelectorAll<HTMLElement>('.th[data-hk], mark.tt[data-hk], .thc[data-hk], #te-links path').forEach(n => {
-      const hk = n instanceof SVGElement ? (n.dataset.link ?? '').replace(/^term/, '') : n.dataset.hk;
-      n.classList.toggle('dim', on && hk !== el.dataset.hk);
+    root?.querySelectorAll<HTMLElement>('.th[data-hk], mark.tt[data-hk], .thc2[data-ck], #te-links path').forEach(n => {
+      const k = n instanceof SVGElement ? (n.dataset.link ?? '').replace(/^term/, '') : n.dataset.hk ?? n.dataset.ck;
+      n.classList.toggle('dim', on && k !== hk);
     });
   };
   document.addEventListener('mouseover', e => lit(e, true));

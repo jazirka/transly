@@ -519,7 +519,6 @@ input::placeholder,textarea::placeholder{color:#9a9ea6;opacity:1}
 /* ---------- the cards of the threads (under the editor; in the table, at the end of the row panel) ---------- */
 .thr{margin-top:14px}
 .thr .lbl{display:flex;gap:10px;align-items:baseline}
-.thr-hint{color:var(--dim);text-transform:none;letter-spacing:0;font-size:11px}
 .thr-b{display:flex;flex-direction:column;gap:6px}
 .thc{display:grid;grid-template-columns:12px minmax(0,1.4fr) minmax(0,1.1fr) auto;gap:6px 12px;align-items:center;padding:7px 10px;border:1px solid var(--line);border-left:3px solid var(--tc,var(--violet));border-radius:var(--r2);background:var(--panel-2)}
 .thc:hover{border-color:var(--tc,var(--violet))}
@@ -541,8 +540,6 @@ input::placeholder,textarea::placeholder{color:#9a9ea6;opacity:1}
 .lk-h.ok{fill:context-stroke}
 
 /* ---------- the look of the concept: room for the threads, lines in the colour of their entry, a label row with counters ---------- */
-.fc-in.weave .trblock{margin-top:46px}
-.fc-in.weave .trblock>.lbl{position:absolute;right:0;top:-22px;margin:0}
 .trblock{position:relative}
 .lk-p{stroke-width:2;stroke-linecap:round}
 .lk-p[class*=" sc"]{opacity:.85}
@@ -551,12 +548,7 @@ input::placeholder,textarea::placeholder{color:#9a9ea6;opacity:1}
 .lk{width:18px;height:18px;font-size:11px;background:var(--bg);box-shadow:0 0 0 2px var(--bg)}
 .lk.ok{color:var(--ok);border-color:var(--ok)}
 .th.dim,.te-layer mark.tt.dim{opacity:.3}
-#te-links path.dim,.lk-arc.dim{opacity:.12}
 .thc.dim{opacity:.55}
-.thr-chips{display:inline-flex;gap:6px;margin-left:auto;text-transform:none;letter-spacing:0}
-.thr-chips .chip{display:inline-flex;gap:5px;align-items:center;height:20px;border:1px solid var(--line);border-radius:999px;padding:0 9px;font-size:11px;color:var(--mute);background:transparent}
-.thr-chips .chip.warn{color:var(--warn);border-color:#5b4526}
-.fc-in .lbl:has(.thr-chips){display:flex;align-items:center}
 .thc{border-left-width:1px;background:var(--panel-2)}
 .thc:hover{border-color:var(--tc,var(--accent))}
 .thc-name{font-size:13px}
@@ -596,3 +588,42 @@ input::placeholder,textarea::placeholder{color:#9a9ea6;opacity:1}
 
 /* the dot of a status filter chip */
 .chip .sd{margin-right:6px;vertical-align:0;flex:none}
+
+/* ---------- threads, the second look: a line of chips; the line in the text is drawn only for the chip (or the word) that is pointed at ---------- */
+#te-links path{opacity:0}
+#te-links path.hot,#te-links path.kept{opacity:1}
+#te-links .lk.warn{opacity:0;pointer-events:none}
+#te-links .lk.warn.hot,#te-links .lk.warn.kept{opacity:1;pointer-events:auto}
+.thr{margin-top:10px}
+.thb{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.thc2{display:inline-flex;align-items:center;min-height:26px;border:1px solid var(--line);border-radius:999px;background:var(--panel-2);overflow:hidden;transition:border-color .12s,background .12s,opacity .12s}
+.thc2.name{--tc:#7d828b}
+.thc2:hover{border-color:var(--tc,var(--accent))}
+.thc2.on{border-color:var(--tc,var(--accent));background:color-mix(in srgb,var(--tc,var(--accent)) 16%,var(--panel-2))}
+.thc2.dim{opacity:.45}
+.thc2-b{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 4px 0 10px;border:0;background:none;color:var(--text);font:inherit;font-size:13px;cursor:pointer}
+span.thc2-b{cursor:default}
+.thc2-dot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--tc,var(--accent))}
+.thc2 .arr{color:var(--mute)}
+.thc2-v{font-size:11px}.thc2-v.ok{color:var(--ok)}.thc2-v.warn{color:var(--warn)}
+.thc2.miss{border-style:dashed}
+.thc2-m,.thc2-fix{height:24px;border:0;background:none;color:var(--mute);font:inherit;font-size:12px;cursor:pointer}
+.thc2-m{width:24px;padding:0}
+.thc2-m:hover,.thc2-fix:hover{color:var(--text);background:rgba(255,255,255,.07)}
+.thc2-fix{padding:0 10px 0 8px;border-left:1px solid var(--line);color:var(--warn)}
+.thc2-b:focus-visible,.thc2-m:focus-visible,.thc2-fix:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.fs .thb{gap:5px}
+/* the rows with the same original: a chip at the right of the label of the translation, away from the text, and a card of differences under it */
+.eqhost{margin-left:auto}
+.eqwrap{position:relative;display:inline-block;text-transform:none;letter-spacing:0;font-size:13px}
+.eqchip{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--mute);font:inherit;font-size:12px;cursor:pointer}
+.eqchip:hover{color:var(--text);background:rgba(255,255,255,.06)}
+.eqchip.on{color:var(--text);background:rgba(255,255,255,.1)}
+.eqchip.diff{color:var(--warn);border-color:#5b4526}
+.eqchip:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.rows-pop{position:absolute;right:0;top:calc(100% + 6px);z-index:40;width:min(440px,86vw);max-height:60vh;overflow:auto;display:flex;flex-direction:column;gap:6px;padding:10px;background:#2b2d30;border:1px solid #4a4d54;border-radius:var(--r3);box-shadow:0 14px 40px rgba(0,0,0,.5);font-weight:400;text-align:left}
+.rows-pop-h{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;color:var(--mute)}
+.rows-pop-h b{color:var(--text);font-weight:600}
+.pn-lx mark.df{background:rgba(229,160,75,.22);color:var(--text);border-radius:3px;padding:0 1px}
+.thb .eqwrap{display:inline-block}
+.thb .rows-pop{right:auto;left:0}

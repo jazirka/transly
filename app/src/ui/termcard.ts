@@ -43,6 +43,9 @@ export function hideTermCard(): void {
   shown = null;
 }
 
+/** Whether the card stands open over `el` now (a second click on the button that opened it puts it away). */
+export const cardOpenOver = (el: Element): boolean => !!shown && shown.anchor === el && !!card && !card.hidden;
+
 /** Show the card of `kind` / `key` over `anchor` (below it, or above when there is no room). */
 export function showCard(ctx: Ctx, anchor: HTMLElement, kind: string, key: string, keepView = false): void {
   if (!keepView && !(shown?.kind === kind && shown.key === key)) termView.key = '';
@@ -114,6 +117,7 @@ export function wireTermCard(ctx: Ctx, act: CardActions): void {
       const v = b.dataset.v ?? '';
       // Moves inside the card keep it open.
       if (b.dataset.hca === 'tab' && shown) { termView.tab = v === 'c' ? 'c' : 'a'; termView.i = 0; showCard(ctx, shown.anchor, shown.kind, shown.key, true); return; }
+      if (b.dataset.hca === 'forms' && shown) { termView.forms = !termView.forms; showCard(ctx, shown.anchor, shown.kind, shown.key, true); return; }
       if (b.dataset.hca === 'step' && shown) { termView.i += Number(v); showCard(ctx, shown.anchor, shown.kind, shown.key, true); return; }
       if (b.dataset.hca === 'insert') act.insert(v);
       else if (b.dataset.hca === 'goto') act.goto(b.dataset.file ?? '', b.dataset.key ?? '');
@@ -125,7 +129,7 @@ export function wireTermCard(ctx: Ctx, act: CardActions): void {
     if (rb && shown) { const key = shown.key; act.remark(rb, key); hideTermCard(); return; }
     const w = wordOf(target);
     if (w && !w.el.closest('.te-layer')) { e.preventDefault(); if (shown?.anchor === w.el) hideTermCard(); else showCard(ctx, w.el, w.kind, w.key); return; }
-    if (!target.closest('#termcard')) hideTermCard();
+    if (!target.closest('#termcard, [data-th="card"], [data-th="name"]')) hideTermCard();
   });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && card && !card.hidden) { hideTermCard(); e.stopPropagation(); }

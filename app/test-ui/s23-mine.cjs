@@ -58,7 +58,7 @@ const MAP = { displayName: 'Town', events: [null, { id: 1, name: 'cook', x: 1, y
   await page.locator('#gl-uk').fill('зняти'); await page.locator('#gl-save').click(); await sleep(500);
   await page.locator('#mtabs [data-lt="rows"], nav [data-lp="rows"]').first().click().catch(() => {}); await sleep(300);
   await row('Take it off').click(); await sleep(1500);
-  check('after saving, the proposal is gone and the construction has its own card', (await page.locator('#f-threads .thc.new').count()) === 0 && (await page.locator('#f-threads .thc[data-hk="take … off"]').count()) === 1, await page.locator('#f-threads-b').innerText());
+  check('after saving, the proposal is gone and the construction has its own card', (await page.locator('#f-threads .thc.new').count()) === 0 && (await page.locator('#f-threads .thc2[data-ck="take … off"]').count()) === 1, await page.locator('#f-threads-b').innerText());
   check('no page errors', errors.length === 0, errors.join(' | '));
 
   await browser.close();

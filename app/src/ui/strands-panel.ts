@@ -1,10 +1,11 @@
-import { WordIndex, linkView, strandsOf, termUsage } from '../core';
+import { WordIndex, strandsOf, termUsage } from '../core';
 import type { GlossaryTerm, StrandKind, TermUsage, Unit } from '../core';
 import { esc, plural } from './dom';
 import { namesOfRow, oneLine, termView, tmFind } from './hintcards';
-import { linksClick, linksHtml } from './links-panel';
+import { isPinned, showPinned, togglePin } from './links';
+import { eqChipHtml, linksClick } from './links-panel';
 import { invalidateMined, mineClick, suggestionsForRow } from './mine-panel';
-import { showCard } from './termcard';
+import { cardOpenOver, hideTermCard, showCard } from './termcard';
 import { realOf } from './hintcards';
 import type { Ctx } from './state';
 
@@ -94,34 +95,40 @@ function usageHtml(u: TermUsage | null): string {
   return `${bar}<span class="hint">${text}</span>`;
 }
 
-/** The cards of the row, or '' when there is nothing to show. `target` is the translation as it stands now. */
-export function strandsHtml(ctx: Ctx, u: Unit, target: string): string {
-  const cards: string[] = [];
-  for (const st of strandsOf(u.source, target, ctx.s.saved.terms)) {
-    const t = st.term as GlossaryTerm, use = usageOf(ctx, t, realOf(ctx, u));
-    const verdict = st.state === 'pending' ? '' : st.state === 'missing' ? '<span class="thc-st warn">▲ немає в перекладі</span>' : st.state === 'alt' ? '<span class="thc-st ok">✔ альтернатива</span>' : '<span class="thc-st ok">✔ є в перекладі</span>';
-    const fix = use && use.other ? `<button type="button" class="btn p" data-th="fix" data-hk="${esc(t.en)}" title="Рядки, де «${esc(t.en)}» перекладено не так, як у записі: пройти їх по черзі">Узгодити (${use.other})</button>` : '';
-    const all = (use && use.rows.length ? `<button type="button" class="btn" data-th="all" data-hk="${esc(t.en)}" title="Інші рядки, де вживається «${esc(t.en)}»">Інші ${use.rows.length}</button>` : '');
-    cards.push(`<div class="thc sc${st.ci}" data-ci="${st.ci}" data-hk="${esc(t.en)}"><span class="thc-dot" aria-hidden="true"></span>
-      <div class="thc-t"><button type="button" class="thc-name" data-hc="term" data-hk="${esc(t.en)}"><b>${esc(t.en)}</b><span class="arr" aria-hidden="true">→</span><b>${esc(t.uk)}</b></button><span class="tg k">${KIND_WORD[st.kind]}</span>${verdict}
-        ${t.alt?.length ? `<div class="hint">також: ${esc(t.alt.join('; '))}</div>` : ''}${t.note ? `<div class="hint">${esc(t.note)}</div>` : ''}</div>
-      <div class="thc-u">${usageHtml(use)}</div><div class="thc-a">${fix}${all}</div></div>`);
-  }
+/** One thread as a chip: a click on its body keeps the thread drawn, the pointer over it draws it (see `links.ts`), the small button opens the card. */
+function chipHtml(ctx: Ctx, st: ReturnType<typeof strandsOf>[number], row: { file: string; key: string }): string {
+  const t = st.term as GlossaryTerm, use = usageOf(ctx, t, row);
+  const mark = st.state === 'pending' ? '' : st.state === 'missing' ? '<span class="thc2-v warn" title="Немає в перекладі">▲</span>' : `<span class="thc2-v ok" title="${st.state === 'alt' ? 'Альтернатива' : 'Є в перекладі'}">✔</span>`;
+  const tip = [`${t.en} → ${t.uk}`, KIND_WORD[st.kind], usageLine(use)].filter(Boolean).join(' · ');
+  const fix = use && use.other ? `<button type="button" class="thc2-fix" data-th="fix" data-hk="${esc(t.en)}" title="Рядки, де «${esc(t.en)}» перекладено не так, як у записі: пройти їх по черзі">Узгодити (${use.other})</button>` : '';
+  return `<span class="thc2 sc${st.ci}${st.state === 'missing' ? ' miss' : ''}${isPinned(t.en) ? ' on' : ''}" data-ci="${st.ci}" data-ck="${esc(t.en)}"><button type="button" class="thc2-b" data-thp="${esc(t.en)}" aria-pressed="${isPinned(t.en)}" title="${esc(tip)}"><i class="thc2-dot" aria-hidden="true"></i><b>${esc(t.en)}</b><span class="arr" aria-hidden="true">→</span><b>${esc(t.uk)}</b>${mark}</button><button type="button" class="thc2-m" data-th="card" data-hk="${esc(t.en)}" aria-label="Картка: ${esc(t.en)}" title="Картка, форми, вживання">▾</button>${fix}</span>`;
+}
+
+/**
+ * The threads of the row, or '' when there is nothing to show: one line of chips (a word, a phrase, a construction, a name), the pointer over a
+ * chip draws its thread in the text and the small button opens its card; under them the proposals (the memory, new constructions). The link with
+ * the rows that have the same original is not a thread: it stands beside the label of the translation (`links-panel.ts`); in the panel at the
+ * right (`withRows`) its chip stands first.
+ */
+export function strandsHtml(ctx: Ctx, u: Unit, target: string, withRows = false): string {
+  const chips: string[] = [];
+  const r = realOf(ctx, u);
+  if (withRows) chips.push(eqChipHtml(ctx, u));
+  for (const st of strandsOf(u.source, target, ctx.s.saved.terms)) chips.push(chipHtml(ctx, st, r));
   namesOfRow(ctx, u).forEach((g, i) => {
     const tr = ctx.entries(g.file)[g.key]?.target;
-    cards.push(`<div class="thc name"><span class="thc-dot" aria-hidden="true"></span><div class="thc-t"><button type="button" class="thc-name" data-hc="name" data-hk="${i}"><b>${esc(g.name)}</b><span class="arr" aria-hidden="true">→</span>${tr ? `<b>${esc(tr)}</b>` : '<i>ще не перекладено</i>'}</button><span class="tg k">назва з гри</span></div></div>`);
+    chips.push(`<span class="thc2 name"><span class="thc2-b" title="Назва з гри"><i class="thc2-dot" aria-hidden="true"></i><b>${esc(g.name)}</b><span class="arr" aria-hidden="true">→</span>${tr ? `<b>${esc(tr)}</b>` : '<i class="hint">ще не перекладено</i>'}</span><button type="button" class="thc2-m" data-th="name" data-hk="${i}" aria-label="Картка: ${esc(g.name)}" title="Картка назви">▾</button></span>`);
   });
   // the translation memory: the rows that were already translated and read like this one; a click puts the translation into the field
   const srcLabel = (x: string): string => (x === 'Імпорт' ? 'імпорт' : x.replace(/\.json$/, ''));
+  const under: string[] = [];
   tmFind(ctx, u, target).forEach((x, n) => {
-    cards.push(`<div class="thc mem"><span class="thc-dot" aria-hidden="true"></span>
+    under.push(`<div class="thc mem"><span class="thc-dot" aria-hidden="true"></span>
       <div class="thc-t"><span class="thc-mt">${esc(oneLine(x.t, 140))}</span><span class="tg k">пам’ять ${x.score}%</span>${x.s !== u.source ? `<div class="hint">«${esc(oneLine(x.s, 70))}» · ${esc(srcLabel(x.src))}</div>` : `<div class="hint">той самий оригінал · ${esc(srcLabel(x.src))}</div>`}</div>
       <div class="thc-u"></div><div class="thc-a"><button type="button" class="btn" data-tm="${n}" title="Підставити цей переклад у поле">Підставити</button></div></div>`);
   });
-  const r = realOf(ctx, u);
-  if (linkView(ctx.s.saved, ctx.links(), r.file, r.key)) cards.push(`<div class="thc rows"><span class="thc-dot" aria-hidden="true"></span><div class="thc-t thc-lk">${linksHtml(ctx, u)}</div></div>`);
-  cards.push(suggestionsForRow(ctx, u.source));
-  return cards.join('');
+  under.push(suggestionsForRow(ctx, u.source));
+  return (chips.length ? `<div class="thb" role="group" aria-label="Нитки">${chips.join('')}</div>` : '') + under.join('');
 }
 
 let lastHtml = '';
@@ -139,12 +146,6 @@ export function renderStrands(ctx: Ctx, u: Unit | undefined, target: string): vo
   if (!box || !body) return;
   // Under the editor only in the editing view: elsewhere the cards stand in the right panel.
   const html = u && ctx.s.mode === 'edit' ? strandsHtml(ctx, u, target) : '';
-  const chips = document.getElementById('f-thr-chips');
-  if (chips) {
-    const st = u ? strandsOf(u.source, target, ctx.s.saved.terms) : [];
-    const gaps = st.filter(x => x.src.length > 1).length, bad = st.filter(x => x.state === 'missing').length;
-    chips.innerHTML = st.length ? `<span class="chip">нитки: ${st.length}</span>${gaps ? `<span class="chip">розділені: ${gaps}</span>` : ''}${bad ? `<span class="chip warn">немає в перекладі: ${bad}</span>` : ''}` : '';
-  }
   box.hidden = !html;
   if (html === lastHtml && !box.hidden) return;
   lastHtml = html;
@@ -163,10 +164,14 @@ export function strandsClick(ctx: Ctx, t: HTMLElement): boolean {
     if (term && use?.otherRows.length) ctx.openRows(`«${term.en}»: перекладено інакше`, use.otherRows);
     return true;
   }
-  const all = t.closest<HTMLElement>('[data-th="all"]');
-  if (!all) return false;
-  const en = all.dataset.hk ?? '';
-  termView.key = en; termView.tab = 'c'; termView.i = 0;
-  showCard(ctx, all, 'term', en, true);
+  const pin = t.closest<HTMLElement>('[data-thp]');
+  if (pin) { togglePin(ctx, pin.dataset.thp ?? ''); showPinned(); return true; }
+  const card = t.closest<HTMLElement>('[data-th="card"], [data-th="name"]');
+  if (!card) return false;
+  const en = card.dataset.hk ?? '';
+  if (cardOpenOver(card)) { hideTermCard(); return true; }
+  if (card.dataset.th === 'name') { showCard(ctx, card, 'name', en, false); return true; }
+  termView.key = en; termView.tab = 'a'; termView.i = 0; termView.forms = false;
+  showCard(ctx, card, 'term', en, true);
   return true;
 }

@@ -64,6 +64,8 @@ const check = (name, ok, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ') 
 
   // ---- a repeated line does not fill the panel with twins (ux-a-09)
   await page.locator('.gr').nth(1).click(); await sleep(500);
+  check('the rows with the same original are one chip «≡ N» first, and no card stands open', (await page.locator('#pn-th .eqchip').count()) === 1 && (await page.locator('.pn-lrow').count()) === 0);
+  await page.locator('#pn-th .eqchip').click(); await sleep(300);
   const twins = await page.locator('.pn-lrow').count();
   check('the linked rows of a repeated line are three cards at most, with a button for the rest', twins <= 3 && (await page.getByRole('button', { name: 'Показати всі' }).count()) >= 1, String(twins));
   // ---- Ctrl+Z outside the field takes back what was typed in the editor, in its place among the actions (ux-c-09)

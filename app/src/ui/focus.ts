@@ -12,6 +12,7 @@ import { autoSize, drawMarks, insertAtCursor } from './text-editor';
 import type { Mark } from './text-editor';
 import { hideTermCard } from './termcard';
 import { drawLinks } from './links';
+import { renderRowsChip } from './links-panel';
 import { renderStrands, strandsClick } from './strands-panel';
 import { openLinkRows } from './links-dialog';
 import { isDesktop, openLink, rememberedGameDir } from './desktop';
@@ -44,10 +45,10 @@ const I = {
 export const FOCUS_HTML = `<div class="fc"><div class="fc-in"><div class="te-links" id="te-links"></div>
   <div class="fhd"><span class="k" id="f-key"></span><span class="fchips" id="f-chips"></span><span class="st-pill" id="f-state"></span></div>
   <div class="offlist" id="f-off" hidden><span>Цей рядок не входить у поточний фільтр або пошук.</span><button data-reset>Показати всі рядки</button></div>
-  <div><div class="lbl">Оригінал · EN<span class="thr-chips" id="f-thr-chips"></span></div><div class="srcbox" id="f-src" lang="en"></div><div class="pics" id="f-pics" hidden></div></div>
+  <div><div class="lbl">Оригінал · EN</div><div class="srcbox" id="f-src" lang="en"></div><div class="pics" id="f-pics" hidden></div></div>
   <div id="f-refbox" hidden></div>
   <div class="trblock">
-    <div class="lbl"><span id="f-trlbl">Переклад · UK</span></div>
+    <div class="lbl"><span id="f-trlbl">Переклад · UK</span><span class="eqhost" id="f-eq"></span></div>
     <div class="te"><div class="te-layer" id="te-layer" aria-hidden="true"></div><textarea class="tr-in" id="i-tr" spellcheck="false" aria-label="Переклад"></textarea></div>
     <div class="edbar">
       <button class="ib lab" id="b-compact" title="Лише текст: сховати контекст і примітки" aria-label="Режим лише тексту">${I.compact}<span class="tl">Лише текст</span></button>
@@ -59,7 +60,7 @@ export const FOCUS_HTML = `<div class="fc"><div class="fc-in"><div class="te-lin
     <div class="wraphint" id="f-wrap" hidden></div>
     <div class="qa-under" id="f-qa"></div>
   </div>
-  <section class="thr" id="f-threads" aria-label="Нитки цього рядка" hidden><div class="lbl">Нитки цього рядка <span class="thr-hint">слово · конструкція · назва · однаковий рядок</span></div><div class="thr-b" id="f-threads-b"></div></section>
+  <section class="thr" id="f-threads" aria-label="Нитки цього рядка" hidden><div class="lbl">Нитки</div><div class="thr-b" id="f-threads-b"></div></section>
 </div></div>`;
 
 export const SIDE_HTML = `<aside class="fs" aria-label="Панель рядка">
@@ -119,6 +120,7 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
     renderPics(ctx, undefined);
     $('#f-src').innerHTML = `<span class="hint">${list.length ? 'Оберіть рядок зліва.' : 'За поточним фільтром рядків немає.'}</span>`;
     renderStrands(ctx, undefined, '');
+    renderRowsChip(ctx, undefined);
     return;
   }
   ($('#i-tr') as HTMLTextAreaElement).disabled = false;
@@ -140,6 +142,7 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
   if (document.activeElement !== ta || ta.dataset.key !== u.key) { if (ta.dataset.key !== u.key) hideTermCard(); ta.value = e?.target ?? ''; ta.dataset.key = u.key; }
   refreshTerms(ctx, u);
   renderStrands(ctx, u, ta.value);
+  renderRowsChip(ctx, u);
   meter(ctx, u);
   refreshQa(ctx, u);
   const lab = 'Надіслати';

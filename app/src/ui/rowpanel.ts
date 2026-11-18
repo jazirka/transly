@@ -87,7 +87,7 @@ export function renderRowPanel(ctx: Ctx, u: Unit | undefined, e: Entry | undefin
   $('#pn-tr').innerHTML = `${versionCard(ctx, u, e)}<div class="pn-sub">Попередні версії</div><div class="hist" id="hist-list"></div>`;
   // The cards of the threads stand under the editor in the editing view; where there is no editor (the table, the scenes) they stand here.
   if (ctx.s.mode !== 'edit') clearStrands();
-  const th = ctx.s.mode === 'edit' ? '' : strandsHtml(ctx, u, target);
+  const th = ctx.s.mode === 'edit' ? '' : strandsHtml(ctx, u, target, true);
   $('#pn-th').innerHTML = th;
   document.querySelector<HTMLElement>('.pn-sec[data-sec="th"]')!.hidden = !th || rtab !== 'row';
   const file = ctx.s.current;

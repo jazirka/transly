@@ -1,4 +1,4 @@
-import { HINT_GLYPH, HINT_LABEL, KIND_LABEL, isAutoFilled, activeIssues, byHintOrder, check, describePage, explainCodes, isMessageUnit, prepareText, sceneAt, sourceChanged, targetHasTerm, termRangesIn, termRangesInTarget, usageKey, usesPixels, widthOf } from '../core';
+import { HINT_GLYPH, UK_CASES, ukForms, HINT_LABEL, KIND_LABEL, isAutoFilled, activeIssues, byHintOrder, check, describePage, explainCodes, isMessageUnit, prepareText, sceneAt, sourceChanged, targetHasTerm, termRangesIn, termRangesInTarget, usageKey, usesPixels, widthOf } from '../core';
 import type { Entry, GlossaryTerm, Unit } from '../core';
 import { esc, plural } from './dom';
 import { scenesOf } from './scenecache';
@@ -41,8 +41,8 @@ export function nameMarks(u: Unit, list: RowName[], taken: { start: number; end:
 const chip = (k: string, title = ''): string => `<span class="tg k" ${title ? `title="${esc(title)}"` : ''}>${esc(k)}</span>`;
 
 /** What the card of a term shows now: its tab ('a' the term, 'c' the term in the context of other rows) and which other row. */
-export const termView = { key: '', tab: 'a' as 'a' | 'c', i: 0 };
-export function resetTermView(key: string): void { if (termView.key !== key) { termView.key = key; termView.tab = 'a'; termView.i = 0; } }
+export const termView = { key: '', tab: 'a' as 'a' | 'c', i: 0, forms: false };
+export function resetTermView(key: string): void { if (termView.key !== key) { termView.key = key; termView.tab = 'a'; termView.i = 0; termView.forms = false; } }
 
 interface Use { file: string; key: string }
 const usesCache = new Map<string, { views: unknown; list: Use[] }>();
@@ -103,8 +103,25 @@ function termCard(ctx: Ctx, en: string): string {
   return `${head}
     <div class="tc-alt">${t.alt?.length ? `також: ${t.alt.map(a => `<span>${esc(a)}</span>`).join('')}` : ''}${t.note ? `<span class="tc-n">${esc(t.note)}</span>` : ''}</div>
     ${checkRows(u, target, t)}
+    ${formsBlock(t, target)}
     <div class="tc-status"><span class="tg ${t.qa === false ? '' : 'ok'}">${t.qa === false ? 'лише підказка' : 'перевіряється в QA'}</span></div>
     <div class="tc-acts"><button type="button" class="btn p" data-hca="insert" data-v="${esc(t.uk)}" ${u ? '' : 'disabled'} title="Вставити в переклад на місці курсора">Вставити «${esc(t.uk)}»</button><button type="button" class="btn ic" data-hca="edit" data-v="${esc(t.en)}" title="Змінити термін у глосарії" aria-label="Змінити термін">✎</button></div>`;
+}
+
+/** The forms of the term's translation, behind a button (nothing tells in advance which entry has a hard case): every case, singular and plural; the one the row uses is marked. */
+function formsBlock(t: GlossaryTerm, target: string): string {
+  const open = termView.forms;
+  const btn = `<button type="button" class="tc-fm" data-hca="forms" aria-expanded="${open}">Форми та відмінки ${open ? '▴' : '▾'}</button>`;
+  if (!open) return `<div class="tc-forms">${btn}</div>`;
+  const cells = ukForms(t.uk);
+  if (!cells) return `<div class="tc-forms">${btn}<div class="tc-fh">«${esc(t.uk)}» не відмінюється або це не іменник чи прикметник.</div></div>`;
+  const low = target.toLowerCase();
+  const names: Record<string, string> = { nom: 'називний', gen: 'родовий', dat: 'давальний', acc: 'знахідний', ins: 'орудний', loc: 'місцевий', voc: 'кличний' };
+  const rows = UK_CASES.map(c => {
+    const cell = (n: 'sg' | 'pl'): string => (cells[`${c}.${n}`] ?? []).map(f => `<span class="${low.includes(f.toLowerCase()) ? 'me' : ''}">${esc(f)}</span>`).join('<i>, </i>');
+    return `<div class="tc-fr"><span class="tc-fc">${names[c]}</span><span>${cell('sg')}</span><span>${cell('pl')}</span></div>`;
+  }).join('');
+  return `<div class="tc-forms">${btn}<div class="tc-ft"><div class="tc-fr tc-fhd"><span></span><span>однина</span><span>множина</span></div>${rows}</div></div>`;
 }
 
 /** Whether it is right, side by side: what the original has and what the translation has, each with its own verdict. */
@@ -160,10 +177,6 @@ function factCard(ctx: Ctx, which: string): string {
     return `<div class="tc-row"><span class="tc-lang">ГРА</span><div class="tc-main"><b>Де гравець це отримує</b><ul class="tc-list">${used.map(c => `<li>${esc(c)}</li>`).join('')}</ul></div></div>`;
   }
   if (which === 'db') return `<div class="tc-row"><span class="tc-lang">БАЗА</span><div class="tc-main"><b>Примітка розробників у базі</b><div class="tc-note"><code>${esc(u.dbNote ?? '')}</code></div></div></div>`;
-  if (which === 'same') {
-    const rows = ctx.links().clusterOf(r.file, r.key)?.rows.filter(x => !(x.file === r.file && x.key === r.key)) ?? [];
-    return `<div class="tc-row"><span class="tc-lang">=</span><div class="tc-main"><b>Однаковий оригінал: ${plural(rows.length, ['рядок', 'рядки', 'рядків'])}</b><div class="tc-same">${rows.slice(0, 10).map(x => { const t = ctx.entries(x.file)[x.key]?.target; return `<button type="button" class="tc-s" data-hca="goto" data-file="${esc(x.file)}" data-key="${esc(x.key)}"><span>${t ? esc(oneLine(t, 60)) : '<i>ще не перекладено</i>'}</span><small>${esc(x.file.replace(/\.json$/, ''))} · ${esc(x.key.replace(/^.*\.list/, 'list'))}</small></button>`; }).join('')}${rows.length > 10 ? `<div class="tc-note">Показано 10 із ${rows.length}.</div>` : ''}</div></div></div>`;
-  }
   return '';
 }
 
@@ -214,7 +227,6 @@ export function chipsHtml(ctx: Ctx, u: Unit): string {
   const first = sc ? sceneAt(sc, r.key)?.units[0] : undefined;
   const uk = usageKey(r.file, r.key);
   const used = uk ? ctx.usage().get(uk) ?? [] : [];
-  const same = ctx.links().others(r.file, r.key);
   const st = (t: string, title: string): string => `<span class="cc" title="${esc(title)}">${esc(t)}</span>`;
   const act = (which: string, t: string, title: string, warn = false): string => `<button type="button" class="cc act ${warn ? 'warn' : ''}" data-hc="ctx" data-hk="${which}" title="${esc(title)}">${esc(t)} <span aria-hidden="true">▾</span></button>`;
   // What the row is (plain words) and what can be opened (buttons); the header puts a divider before each group.
@@ -230,7 +242,6 @@ export function chipsHtml(ctx: Ctx, u: Unit): string {
     first?.page ? act('cond', 'умови сторінки', 'Коли показується ця сцена') : '',
     used.length ? act('used', 'де видається', 'Де гравець це отримує') : '',
     u.dbNote ? act('db', 'примітка в базі', 'Примітка розробників у базі даних') : '',
-    same ? act('same', `зв’язано: ${same}`, 'Інші рядки з тим самим оригіналом (докладніше в правій панелі)', true) : '',
   ].filter(Boolean);
   const sep = '<span class="fsep" aria-hidden="true"></span>';
   return (meta.length ? sep + meta.join('<span class="fdot" aria-hidden="true"></span>') : '') + (acts.length ? sep + acts.join('') : '');

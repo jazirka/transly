@@ -17,6 +17,7 @@ import { realOf } from './hintcards';
 import { approveOpenRow } from './rowpanel';
 import { wireTermCard } from './termcard';
 import { wireLinks } from './links';
+import { wireRowsChip } from './links-panel';
 import { SCENE_HTML, focusCard, hasScenes, renderSceneView, sceneClick, sceneFocus, sceneIdOf, sceneInput } from './scene-view';
 import { SCENES_HTML, renderScenesPanel, scenesClick, wireScenes } from './scenes-panel';
 import { undoByKey, undoToast } from './undo-toast';
@@ -2016,6 +2017,7 @@ export async function start(root: HTMLElement): Promise<void> {
   overlayScrollbars();
   wireDiscuss(ctx);
   wireLinks(ctx);
+  wireRowsChip(ctx);
   wireTermCard(ctx, {
     insert: text => insertText(ctx, text),
     goto: (file, key) => openRow(file, key),

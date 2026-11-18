@@ -42,6 +42,14 @@ const put = ({ text, snapshot }) => new Promise((res, rej) => { const o = indexe
   h = await head();
   check('Ctrl+F opens the search in the header and the focus is in it', !!h && h.field && h.searching && (await page.evaluate(() => document.activeElement?.id)) === 'q2', JSON.stringify(h));
   check('the empty field shows its key (Ctrl+F)', await page.locator('#hq .kbd').isVisible());
+  // left empty, the field goes back to the title (a click elsewhere); the accent ring is only for the focus, as in every other field
+  const ring = await page.evaluate(() => { const f = document.querySelector('#hq'), c = getComputedStyle(f); return { border: c.borderTopColor, outline: c.outlineStyle + ' ' + c.outlineColor }; });
+  check('the focused field has the accent ring (the outline) like every other field', ring.outline.startsWith('solid'), JSON.stringify(ring));
+  await page.locator('#slist .si').first().click(); await sleep(350);
+  h = await head();
+  check('an empty field goes back to the title when it is left', !!h && !h.field && !h.searching && /^Рядки/i.test(h.text), JSON.stringify(h));
+  await page.locator('#slist .si').first().focus();
+  await page.keyboard.press('Control+f'); await sleep(300);
   await page.keyboard.type('soul'); await sleep(600);
   check('the list follows what is typed', (await rows()) === 2 && (await rows()) < all, `${await rows()} of ${all}`);
   check('the cross of the field is shown while there is a text', await page.locator('#hq .hqx').isVisible() && !(await page.locator('#hq .kbd').isVisible()));
@@ -68,6 +76,8 @@ const put = ({ text, snapshot }) => new Promise((res, rej) => { const o = indexe
   await page.locator('#slist .si').first().click(); await sleep(400);
   h = await head();
   check('with a text in it the field stays open', !!h && h.field && (await page.locator('#q2').inputValue()) === 'ship', JSON.stringify(h));
+  const bc = await page.evaluate(() => { const t = document.createElement('i'); t.style.cssText = 'border:1px solid var(--line);position:fixed'; document.body.appendChild(t); const line = getComputedStyle(t).borderTopColor; t.remove(); return { field: getComputedStyle(document.querySelector('#hq')).borderTopColor, line }; });
+  check('an open field that is not focused keeps the quiet border (no accent)', bc.field === bc.line, JSON.stringify(bc));
   await page.locator('#rs-menu').click(); await sleep(200);
   await page.locator('#fpop [data-rm="reset"]').click(); await sleep(500);
   h = await head();

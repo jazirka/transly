@@ -1901,6 +1901,12 @@ export async function start(root: HTMLElement): Promise<void> {
   // A field of the scene mode got the focus: that row is the open one, the right panel follows.
   // leaving the editor field: what was typed there is one action of the journal
   root.addEventListener('focusout', e => { const t = e.target as HTMLElement; if (t instanceof HTMLTextAreaElement && t.id === 'i-tr') closeTyping(ctx); });
+  // the search field of the rows window goes back to the title when it is left empty (a click elsewhere, Tab); with a typed query it stays
+  root.addEventListener('focusout', e => {
+    const t = e.target as HTMLElement, to = (e as FocusEvent).relatedTarget as HTMLElement | null;
+    if (t.id !== 'q2' || s.q !== '' || !rowsSearchOpen || !document.hasFocus() || to?.closest('#hq')) return;
+    rowsSearchOpen = false; syncRowsSearch();
+  });
   root.addEventListener('focusin', e => {
     const t = e.target as HTMLElement;
     if (t instanceof HTMLTextAreaElement) sceneFocus(ctx, t, () => { renderSidePanel(ctx); renderStatus(); saveUi(); });

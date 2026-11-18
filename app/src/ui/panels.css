@@ -628,10 +628,11 @@ span.thc2-b{cursor:default}
 
 /* ---------- the editing view as a few cards, like the tool windows: a dark field over a lighter plate with the tools, the remarks and the threads under it ---------- */
 /* the captions of the original and of the translation are one line between the two boxes, joined by a long arrow from the first to the second */
-.bridge{display:flex;align-items:center;gap:10px;min-height:16px;margin:-8px 0 -12px}
+.bridge{display:flex;align-items:center;gap:10px;min-height:16px;margin:-10px 0 -10px}
 .bridge .lbl{margin:0;flex:none}
-.bridge .arrow{flex:1;position:relative;height:1px;min-width:24px;background:#4a4d54}
-.bridge .arrow::after{content:"";position:absolute;right:-1px;top:-4px;border:4px solid transparent;border-left:7px solid var(--mute);border-right:0}
+.bridge{--bridge-c:#4a4d54}
+.bridge .arrow{flex:1;position:relative;height:1px;min-width:24px;background:var(--bridge-c)}
+.bridge .arrow::after{content:"";position:absolute;right:-1px;top:-4px;border:4px solid transparent;border-left:7px solid var(--bridge-c);border-right:0}
 .bridge .tr{display:flex;align-items:center;gap:10px;flex:none}
 .bridge .eqhost{order:-1}
 .fc-in .trblock{margin-top:0}
@@ -690,7 +691,7 @@ span.thc2-b{cursor:default}
 
 /* ---------- the search and the menu of the rows window live in its header; under it only the strip of what is switched on ---------- */
 .rs-head .hq{display:none;flex:1;min-width:0;width:auto;height:24px;margin:0 2px 0 4px;font-size:12.5px;text-transform:none;letter-spacing:0}
-.rs-head.searching .hq{display:flex;border-color:var(--accent)}
+.rs-head.searching .hq{display:flex}
 .rs-head.searching .grow{flex:none}
 .rs-head.searching .ttl{display:none}
 .rs-head.searching .lt-f{display:none}

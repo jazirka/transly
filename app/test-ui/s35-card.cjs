@@ -46,6 +46,11 @@ const sum = c => (c.match(/\d+(\.\d+)?/g) || []).slice(0, 3).reduce((a, b) => a 
   check('the row reads «ОРИГІНАЛ · EN … ≡ 2 ПЕРЕКЛАД · UK»', /Оригінал · EN.*≡\s*2.*Переклад · UK/i.test(g.text), g.text);
   check('the original box has no caption of its own any more', (await page.locator('#f-src').evaluate(e => e.parentElement.querySelector(':scope > .lbl') === null)));
   check('the translation field is close to the caption row', g.boxTop - (g.o[2] + 17) < 18, `${g.boxTop} vs ${g.o[2]}`);
+  // the caption row stands in the middle between the box of the original and the field of the translation (the same space above and below)
+  const mid = await page.evaluate(() => { const b = document.querySelector('.bridge').getBoundingClientRect(), s = document.querySelector('#f-src').getBoundingClientRect(), e = document.querySelector('.ebox').getBoundingClientRect(), c = b.top + b.height / 2; return { above: +(c - s.bottom).toFixed(1), below: +(e.top - c).toFixed(1) }; });
+  const tri = await page.evaluate(() => { const a = document.querySelector('.bridge .arrow'); return { line: getComputedStyle(a).backgroundColor, head: getComputedStyle(a, '::after').borderLeftColor }; });
+  check('the head of the arrow has the colour of its line', tri.line === tri.head, JSON.stringify(tri));
+  check('the caption row stands in the middle between the two boxes', Math.abs(mid.above - mid.below) <= 1, JSON.stringify(mid));
 
   // ---- one box: the field over the plate, one ring
   const box = await page.evaluate(() => {

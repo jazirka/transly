@@ -1,3 +1,4 @@
+export * from './edges';
 export * from './pages';
 export * from './model';
 export * from './controlCodes';

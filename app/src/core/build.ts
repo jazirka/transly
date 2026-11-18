@@ -3,6 +3,7 @@ import type { QaOptions } from './qa';
 import { apply, isTextFormat, formatOf } from './engine';
 import type { Entry, GameFile, Translations } from './model';
 import type { FileView, SavedProject } from './project';
+import { withEdges } from './edges';
 import { isMessageUnit, wrapMessage } from './wrap';
 
 export interface BuildOptions {
@@ -58,7 +59,10 @@ export function build(game: GameFile[], views: FileView[], saved: SavedProject, 
         out.blocked.push(`${v.name}::${u.key}`);
         continue;
       }
-      use[u.key] = wrapping && plan && formatOf(file) === 'rpgmaker' && isMessageUnit(u) ? wrapped(plan, u, e, out.wrap) : e;
+      // a name, a term, a menu command or a plugin text keeps the padding of the original (the game places it by that); a message is the translator's own
+      const spoken = u.kind === 'dialogue' || u.kind === 'scroll', fitted = spoken ? e.target : withEdges(u.source, e.target);
+      const padded = fitted !== e.target ? { ...e, target: fitted } : e;
+      use[u.key] = wrapping && plan && formatOf(file) === 'rpgmaker' && isMessageUnit(u) ? wrapped(plan, u, padded, out.wrap) : padded;
       out.included++;
     }
     if (Object.keys(use).length) {

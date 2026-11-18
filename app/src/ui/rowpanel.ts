@@ -22,7 +22,7 @@ const sec = (id: string, title: string, body: string, extra = ''): string => `<s
 /** Static markup of the panel (the discussion keeps its own field so what is typed in it survives redraws). */
 export const ROW_PANEL_HTML = ['<div class="pn-empty-all hint">Оберіть рядок</div>',
   sec('tr', 'Переклад: українська', '<div class="pn-b" id="pn-tr"></div>'),
-  sec('th', 'Нитки: слова, конструкції, назви, однакові рядки', '<div class="pn-b" id="pn-th"></div>'),
+  sec('th', 'Пов’язане: слова, конструкції, назви, однакові рядки, пам’ять', '<div class="pn-b" id="pn-th"></div>'),
   sec('cm', 'Обговорення', `<div class="pn-b" id="pn-cm"><div id="cm-list" class="cm-list"></div>
     <div class="cm-new"><textarea class="cmin" id="cm-in" placeholder="Нове обговорення цього рядка…" aria-label="Новий коментар"></textarea>
     <div class="actions" style="margin-top:0"><button class="btn" id="cm-add">Коментувати</button><span class="hint">Ctrl+Enter</span></div></div></div>`, '<span class="cnt" id="pn-cm-n" hidden>0</span>'),

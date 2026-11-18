@@ -85,6 +85,8 @@ const mapOf = (name, n) => ({ displayName: name, events: [null, { id: 1, name: '
   await page.locator('#cfg-btn').click(); await sleep(300);
   const icons = await page.$$eval('#cfgpop .cfg-i', is => is.map(i => i.innerHTML));
   check('the three run modes have three different icons', icons.length === 3 && new Set(icons).size === 3, JSON.stringify(icons.length));
+  const al = await page.evaluate(() => [...document.querySelectorAll('#cfgpop button[data-cfg], #cfgpop > button')].map(b => { const r = b.getBoundingClientRect(), t = (b.querySelector('.cfg-t') || b).getBoundingClientRect(), sm = b.querySelector('small'), c = getComputedStyle(b); return { ai: c.alignItems, ta: c.textAlign, dx: Math.round(t.left - r.left), smDx: sm ? Math.round(sm.getBoundingClientRect().left - r.left) : null }; }));
+  check('the items of the run menu are left-aligned (the title, the icon and the hint start at the left edge), not centered', al.length >= 3 && al.every(x => x.ai !== 'center' && x.dx <= 20 && (x.smDx === null || x.smDx <= 40)), JSON.stringify(al));
   await page.keyboard.press('Escape');
   check('no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close(); await browser.close();

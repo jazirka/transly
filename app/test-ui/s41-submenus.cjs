@@ -11,7 +11,7 @@ const check = (name, ok, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ') 
 const project = () => ({
   version: 1, name: 'P', sourceLang: 'en', targetLang: 'uk', resetEpoch: 0, files: {}, memory: [], terms: [],
   settings: { tolerancePct: 25, blockErrors: true, who: 'Ви', propagate: true, pluginCommands: [], pluginsAsked: false, lineLimit: 0 },
-  snapshot: { 'Map001.json': ['The soul of the harbour', 'Nobody saw the ship', 'A lost soul wanders', 'The tide is rising'].map((source, i) => ({ key: 'k' + i, source, speaker: 'Cook', kind: 'dialogue', context: '' })) },
+  snapshot: { 'Map001.json': ['The soul of the harbour', 'Nobody saw the ship', 'A lost soul wanders', 'The tide is rising', ...Array.from({ length: 60 }, (_, i) => `Filler line ${i + 1}`)].map((source, i) => ({ key: 'k' + i, source, speaker: 'Cook', kind: 'dialogue', context: '' })) },
 });
 const put = ({ text, snapshot }) => new Promise((res, rej) => { const o = indexedDB.open('transly', 3); o.onsuccess = () => { const db = o.result; const tx = db.transaction(['projects', 'snapshots'], 'readwrite'); tx.objectStore('projects').put(text, 'default'); tx.objectStore('snapshots').put(snapshot, 'default'); tx.oncomplete = () => { db.close(); res(); }; tx.onerror = () => rej(tx.error); }; o.onerror = () => rej(o.error); });
 
@@ -30,6 +30,15 @@ const put = ({ text, snapshot }) => new Promise((res, rej) => { const o = indexe
   const menuOpen = async () => !(await page.locator('#fpop').evaluate(e => e.hidden));
   const rows = () => page.locator('#slist .si').count();
   const all = await rows();
+
+  // ---- the thumb of the scrollbar of the list under the pointer is not drawn over a menu (the pointer stays over the list while the menu opens from the keyboard)
+  await page.locator('#slist .si').nth(2).hover(); await page.mouse.move(150, 300); await sleep(300);
+  check('over the list its thumb is drawn (the list is long)', (await page.locator('.ovs-y.on').count()) === 1);
+  await page.evaluate(() => document.querySelector('#rs-menu').click()); await sleep(300);
+  check('with a menu open the thumb of the list is not drawn over it', (await menuOpen()) && (await page.locator('.ovs-y.on').count()) === 0);
+  await page.mouse.move(160, 310); await sleep(300);
+  check('and it does not come back while the pointer moves over the list under the menu', (await page.locator('.ovs-y.on').count()) === 0);
+  await page.keyboard.press('Escape'); await sleep(200);
 
   // ---- hover opens the list beside the menu, and the menu stays
   await page.locator('#rs-menu').click(); await sleep(200);

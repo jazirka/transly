@@ -32,6 +32,12 @@ export const thumbOf = (client: number, scroll: number, at: number, track: numbe
   return { len, pos: room > 0 ? ((track - len) * at) / room : 0 };
 };
 
+/** A menu or a popover that stands open: the thumbs of the areas under it are not drawn over it. */
+const openPop = (): Element | null => document.querySelector('.pop:not([hidden]),#mdd:not([hidden])');
+let refresh = (): void => { /* set when the thumbs start */ };
+/** Call when a menu opens or closes: the thumbs follow (a thumb of the list under the pointer must not run across the menu). */
+export const refreshScrollbars = (): void => refresh();
+
 let started = false;
 /** Starts drawing the thumbs; call once. Not for touch screens (they scroll with a finger and show their own indicator). */
 export function overlayScrollbars(): void {
@@ -55,6 +61,8 @@ export function overlayScrollbars(): void {
   const place = (axis: Axis): void => {
     const el = area[axis], b = bar[axis];
     if (!el || !el.isConnected) { hide(axis); return; }
+    const over = openPop();
+    if (over && !over.contains(el)) { hide(axis); return; }
     const r = el.getBoundingClientRect();
     const other = area[axis === 'y' ? 'x' : 'y'] === el ? SIZE + EDGE : 0;   // both bars on one area: they stop short of the corner
     const vertical = axis === 'y';
@@ -66,6 +74,7 @@ export function overlayScrollbars(): void {
     b.classList.add('on');
   };
   const placeAll = (): void => { place('y'); place('x'); };
+  refresh = placeAll;
 
   let pending: Element | null = null, queued = false;
   const point = (t: Element): void => {

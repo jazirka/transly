@@ -10,7 +10,7 @@ import { realOf } from './hintcards';
 import type { Ctx } from './state';
 
 /**
- * «Нитки цього рядка»: a card for every glossary entry the original contains (a word, a phrase, a construction with a
+ * «Пов’язане з рядком» (the cards under the field): a card for every glossary entry the original contains (a word, a phrase, a construction with a
  * gap), for every name the game defines in it, and for the rows that have the same original. A card says what the entry is
  * rendered as in this row and, across the whole game, how often it is rendered as the entry says. The colour of a card is the
  * colour of its thread in the editor (see `links.ts`). The numbers are worked out from the rows, never stored; the index of the
@@ -128,7 +128,7 @@ export function strandsHtml(ctx: Ctx, u: Unit, target: string, withRows = false)
       <div class="thc-u"></div><div class="thc-a"><button type="button" class="btn" data-tm="${n}" title="Підставити цей переклад у поле">Підставити</button></div></div>`);
   });
   under.push(suggestionsForRow(ctx, u.source));
-  return (chips.length ? `<div class="thb" role="group" aria-label="Нитки">${chips.join('')}</div>` : '') + under.join('');
+  return (chips.length ? `<div class="thb" role="group" aria-label="Пов’язане">${chips.join('')}</div>` : '') + under.join('');
 }
 
 let lastHtml = '';

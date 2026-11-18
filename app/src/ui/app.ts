@@ -42,7 +42,7 @@ import { markup } from './markup';
 import { trackActivePane } from './activepane';
 import { loadRowMemo, rowNumber, saveRowMemo } from './rowmemo';
 import { openSettings } from './settings';
-import { overlayScrollbars } from './scrollbars';
+import { overlayScrollbars, refreshScrollbars } from './scrollbars';
 import type { SettingsTab } from './settings';
 import { openSpeakers } from './speakers-dialog';
 import { initMobile } from './mobile';
@@ -1275,7 +1275,7 @@ export async function start(root: HTMLElement): Promise<void> {
     }).join('') + `<hr><button role="menuitem" data-cfg-edit><span class="cfg-t">Налаштувати збірку…</span></button>`;
     const r = btn.getBoundingClientRect();
     pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 300))}px`; pop.style.top = `${r.bottom + 6}px`;
-    rememberOpener(btn); pop.hidden = false; btn.setAttribute('aria-expanded', 'true'); focusFirst(pop);
+    rememberOpener(btn); pop.hidden = false; btn.setAttribute('aria-expanded', 'true'); focusFirst(pop); refreshScrollbars();
   }
   function openProjMenu(): void {
     const pop = $('#projpop'), btn = $('#proj-btn');
@@ -1289,7 +1289,7 @@ export async function start(root: HTMLElement): Promise<void> {
       <div class="pj-card"><span class="pj lg">${esc((Array.from(s.saved.name.trim())[0] ?? 'T').toUpperCase())}</span><div><b>${esc(s.saved.name)}</b><small class="${folder.kind === 'missing' || folder.kind === 'other' ? 'warn' : ''}" title="${esc(folderLine(folder, remembered))}">${esc(folderLine(folder, remembered))}</small><small>${total ? `Перекладено ${done.toLocaleString('uk-UA')} з ${total.toLocaleString('uk-UA')}` : 'Файлів ще немає'}</small></div></div>`;
     const r = btn.getBoundingClientRect();
     pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 340))}px`; pop.style.top = `${r.bottom + 6}px`;
-    rememberOpener(btn); pop.hidden = false; btn.setAttribute('aria-expanded', 'true'); focusFirst(pop);
+    rememberOpener(btn); pop.hidden = false; btn.setAttribute('aria-expanded', 'true'); focusFirst(pop); refreshScrollbars();
   }
   /* ---------- submenus: an item with data-sub opens its list beside it and the menu stays open; a list can lead on to a further list.
      Hover (after a short wait), a click or → opens it; ← or Esc closes the last one; a choice closes them all. ---------- */
@@ -1324,6 +1324,7 @@ export async function start(root: HTMLElement): Promise<void> {
     el.style.top = Math.max(8, Math.min(r.top - 5, innerHeight - el.offsetHeight - 8)) + 'px';
     syncSubMarks();
     if (focusIt) focusFirst(el);
+    refreshScrollbars();
   }
   // the lists the menus open beside themselves (see the engine above)
   subHtml.set('rows-sort', () => sortMenuHtml());
@@ -1407,6 +1408,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const h = p.offsetHeight, below = r.bottom + 4;
     p.style.top = (below + h <= innerHeight - 8 ? below : Math.max(8, r.top - 4 - h >= 8 ? r.top - 4 - h : innerHeight - h - 8)) + 'px';
     focusFirst(p);
+    refreshScrollbars();
   }
   /** Phone: the five sections of the bottom bar. Files and rows are full pages, the hints are a bottom sheet. */
   function bottomNav(to: string, btn: HTMLElement): void {
@@ -1449,6 +1451,7 @@ export async function start(root: HTMLElement): Promise<void> {
     p.style.left = Math.max(8, Math.min(x, innerWidth - p.offsetWidth - 8)) + 'px';
     p.style.top = Math.max(8, Math.min(y, innerHeight - p.offsetHeight - 8)) + 'px';
     focusFirst(p);
+    refreshScrollbars();
   }
   const filesTarget = (name: string): PlaceTarget => {
     const many = s.picked.has(name) && s.picked.size > 1;
@@ -1627,6 +1630,7 @@ export async function start(root: HTMLElement): Promise<void> {
     dd.hidden = false;
     const r = btn.getBoundingClientRect();
     dd.style.left = Math.min(r.left, innerWidth - dd.offsetWidth - 8) + 'px'; dd.style.top = r.bottom + 4 + 'px';
+    refreshScrollbars();
   }
   /** Open the menu of a group of the bar and put the focus on its first item (the keyboard way in). */
   function mbEnter(g: string): void { mbShow(g); focusFirst(mdd(), '[role="menuitem"]'); }

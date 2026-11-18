@@ -61,13 +61,13 @@ export const FOCUS_HTML = `<div class="fc"><div class="fc-in"><div class="te-lin
     </div>
   </div>
   <section class="qacard" id="f-qacard" aria-label="Зауваження до рядка" hidden><div class="qh"><span id="f-qa-t">Зауваження</span></div><div class="qb"><div class="wraphint" id="f-wrap" hidden></div><div class="qa-under" id="f-qa"></div></div></section>
-  <section class="thr" id="f-threads" aria-label="Нитки цього рядка" hidden><div class="lbl">Нитки</div><div class="thr-b" id="f-threads-b"></div></section>
+  <section class="thr" id="f-threads" aria-label="Пов’язане з цим рядком" hidden><div class="lbl">Пов’язане</div><div class="thr-b" id="f-threads-b"></div></section>
 </div></div>`;
 
 export const SIDE_HTML = `<aside class="fs" aria-label="Панель рядка">
   <div class="rz rz-r" id="rz-r" role="separator" aria-orientation="vertical" aria-label="Ширина правої панелі" aria-valuemin="260" aria-valuemax="640" tabindex="0" title="Потягніть, щоб змінити ширину (подвійний клік — стандартна)"></div>
   <div class="itabs" id="stabs" role="toolbar" aria-label="Права панель">
-    <button class="on" aria-pressed="true" data-p="row" title="Рядок: переклад, версії, нитки">${I.row}<span class="tl">Рядок</span></button>
+    <button class="on" aria-pressed="true" data-p="row" title="Рядок: переклад, версії, пов’язане">${I.row}<span class="tl">Рядок</span></button>
     <button aria-pressed="false" data-p="cm" title="Обговорення рядка">${I.chat}<span class="tl">Обговорення</span> <span class="cnt" id="cm-badge" hidden>0</span></button>
   </div>
   <div class="ibody">

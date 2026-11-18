@@ -578,6 +578,148 @@ async fn install_update(app: AppHandle, url: String, token: String, name: String
     Ok(())
 }
 
+/* ---------- the update in the background: fetched while the app works, installed without a window when it closes ---------- */
+
+/// What the UI asked for, and what has already been done (the installer is started once).
+#[derive(Default)]
+struct UpdateFlags {
+    /// Install a downloaded update when the app closes.
+    auto: std::sync::atomic::AtomicBool,
+    /// The app is being closed on purpose to update: start it again afterwards.
+    relaunch: std::sync::atomic::AtomicBool,
+    started: std::sync::atomic::AtomicBool,
+}
+
+/// The installer that waits in the app's data folder: its name, its SHA-256 and the build (the commit) it is.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct PendingUpdate {
+    name: String,
+    sum: String,
+    build: String,
+}
+
+const PENDING_FILE: &str = "pending.json";
+
+fn updates_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    use tauri::Manager;
+    app.path().app_data_dir().map(|d| d.join("updates")).map_err(|e| e.to_string())
+}
+
+fn read_pending(dir: &Path) -> Option<PendingUpdate> {
+    serde_json::from_str(&fs::read_to_string(dir.join(PENDING_FILE)).ok()?).ok()
+}
+
+/// The waiting installer, checked once more right before it is started: it must be exactly the file that was downloaded and checked.
+fn verified_pending(dir: &Path) -> Result<(PathBuf, PendingUpdate), String> {
+    let p = read_pending(dir).ok_or("Оновлення не завантажено")?;
+    let path = dir.join(safe_name(&p.name)?);
+    if !path.is_file() || sha256_hex(&path)? != p.sum {
+        return Err("Файл оновлення змінився або пошкоджений: інсталятор не запущено".into());
+    }
+    Ok((path, p))
+}
+
+/// A string for PowerShell in single quotes.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn ps_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "''"))
+}
+
+/// What the helper does after the app has closed: waits for it, runs the installer without a window, starts the app again when asked, tidies up.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn silent_install_script(pid: u32, installer: &Path, exe: &Path, relaunch: bool) -> String {
+    let again = if relaunch { format!("; Start-Process -FilePath {}", ps_quote(&exe.to_string_lossy())) } else { String::new() };
+    let dir = installer.parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default();
+    format!(
+        "Wait-Process -Id {pid} -ErrorAction SilentlyContinue; Start-Process -FilePath {} -ArgumentList '/S' -Wait{again}; Remove-Item -Path {} -Recurse -Force -ErrorAction SilentlyContinue",
+        ps_quote(&installer.to_string_lossy()),
+        ps_quote(&dir)
+    )
+}
+
+#[cfg(windows)]
+fn spawn_silent_install(installer: &Path, relaunch: bool) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let script = silent_install_script(std::process::id(), installer, &exe, relaunch);
+    // no window of its own (CREATE_NO_WINDOW), its own process group, and it outlives the app
+    Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-Command", &script])
+        .creation_flags(0x0800_0000 | 0x0000_0200)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("Не вдалося запустити встановлення: {e}"))
+}
+
+#[cfg(not(windows))]
+fn spawn_silent_install(_installer: &Path, _relaunch: bool) -> Result<(), String> {
+    Err("Автоматичне встановлення працює лише у Windows".into())
+}
+
+/// Download the installer of a new version into the app's data folder and check it; nothing is started. A version that is already there is not fetched again.
+#[tauri::command]
+async fn prefetch_update(app: AppHandle, url: String, token: String, name: String, build: String) -> Result<(), String> {
+    allowed_update(&url, &name)?;
+    if !name.to_lowercase().ends_with(".exe") {
+        return Err("У фоні встановлюється лише інсталятор .exe".into());
+    }
+    if build.is_empty() || build.len() > 64 || !build.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return Err("Невідомий номер збірки".into());
+    }
+    let dir = updates_dir(&app)?;
+    if read_pending(&dir).is_some_and(|p| p.build == build) && verified_pending(&dir).is_ok() {
+        return Ok(());
+    }
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join(safe_name(&name)?);
+    let dest = path.clone();
+    tauri::async_runtime::spawn_blocking(move || download_asset(&url, &token, &dest)).await.map_err(|e| e.to_string())??;
+    let sum = sha256_hex(&path)?;
+    let meta = serde_json::to_string(&PendingUpdate { name, sum, build }).map_err(|e| e.to_string())?;
+    fs::write(dir.join(PENDING_FILE), meta).map_err(|e| e.to_string())
+}
+
+/// The build (commit) of the installer that waits, when it is whole.
+#[tauri::command]
+fn pending_update(app: AppHandle) -> Option<String> {
+    let dir = updates_dir(&app).ok()?;
+    verified_pending(&dir).ok().map(|(_, p)| p.build)
+}
+
+#[tauri::command]
+fn clear_pending_update(app: AppHandle) {
+    if let Ok(dir) = updates_dir(&app) {
+        let _ = fs::remove_dir_all(dir);
+    }
+}
+
+/// Whether a waiting update is installed when the app closes (the setting «Оновлювати у фоні»).
+#[tauri::command]
+fn set_update_mode(flags: State<'_, UpdateFlags>, auto: bool) {
+    flags.auto.store(auto, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// The UI is about to close the app to update it: start it again after the installer is done.
+#[tauri::command]
+fn relaunch_on_exit(flags: State<'_, UpdateFlags>) {
+    flags.relaunch.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// The app is closing: a waiting, checked installer runs without a window (once), and the app starts again if the closing was meant as an update.
+fn install_on_exit(app: &AppHandle) {
+    use std::sync::atomic::Ordering::SeqCst;
+    use tauri::Manager;
+    let flags = app.state::<UpdateFlags>();
+    let relaunch = flags.relaunch.load(SeqCst);
+    if !(flags.auto.load(SeqCst) || relaunch) || flags.started.swap(true, SeqCst) {
+        return;
+    }
+    let Ok(dir) = updates_dir(app) else { return };
+    let Ok((path, _)) = verified_pending(&dir) else { return };
+    let _ = spawn_silent_install(&path, relaunch);
+}
+
 #[tauri::command]
 fn launch(roots: State<'_, Roots>, exe: String) -> Result<(), String> {
     let p = roots.check(&exe)?;
@@ -620,15 +762,21 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Roots::default())
+        .manage(UpdateFlags::default())
         .setup(|app| {
             use tauri::Manager;
             let file = app.path().app_data_dir().map(|d| d.join("picked-folders.json")).unwrap_or_else(|_| std::env::temp_dir().join("transly-picked-folders.json"));
             app.manage(Picked::open(file));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![pick_dir, pick_exe, allow_again, list_json, read_text, read_image, apply_data, restore_data, apply_jump, restore_jump, install_update, launch, open_url])
-        .run(tauri::generate_context!())
-        .expect("error while running Transly");
+        .invoke_handler(tauri::generate_handler![pick_dir, pick_exe, allow_again, list_json, read_text, read_image, apply_data, restore_data, apply_jump, restore_jump, install_update, prefetch_update, pending_update, clear_pending_update, set_update_mode, relaunch_on_exit, launch, open_url])
+        .build(tauri::generate_context!())
+        .expect("error while building Transly")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                install_on_exit(app);
+            }
+        });
 }
 
 #[cfg(test)]
@@ -999,5 +1147,45 @@ mod tests {
         assert_eq!(download_asset(&format!("http://127.0.0.1:{port}/asset"), "t", &dest).unwrap(), 5);
         th.join().unwrap();
         let _ = fs::remove_file(&dest);
+    }
+
+    #[test]
+    fn a_waiting_update_is_started_only_when_it_is_the_file_that_was_downloaded() {
+        let dir = std::env::temp_dir().join(format!("transly-pending-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        assert!(verified_pending(&dir).is_err(), "nothing is waiting");
+        fs::write(dir.join("setup.exe"), b"installer").unwrap();
+        let sum = sha256_hex(&dir.join("setup.exe")).unwrap();
+        let meta = |sum: &str| serde_json::to_string(&PendingUpdate { name: "setup.exe".into(), sum: sum.into(), build: "abc123".into() }).unwrap();
+        fs::write(dir.join(PENDING_FILE), meta(&sum)).unwrap();
+        let (path, p) = verified_pending(&dir).unwrap();
+        assert!(path.ends_with("setup.exe") && p.build == "abc123");
+        fs::write(dir.join("setup.exe"), b"changed").unwrap();
+        assert!(verified_pending(&dir).is_err(), "a changed installer is never started");
+        fs::write(dir.join(PENDING_FILE), "{\"name\":\"../evil.exe\",\"sum\":\"0\",\"build\":\"x\"}").unwrap();
+        assert!(verified_pending(&dir).is_err(), "a name that leaves the folder is refused");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_helper_waits_for_the_app_installs_silently_and_starts_the_app_only_when_asked() {
+        let inst = Path::new("C:\\Users\\O'Neil\\AppData\\transly\\updates\\Transly_setup.exe");
+        let exe = Path::new("C:\\Program Files\\Transly\\Transly.exe");
+        let quiet = silent_install_script(4242, inst, exe, false);
+        assert!(quiet.starts_with("Wait-Process -Id 4242"), "{quiet}");
+        assert!(quiet.contains("-ArgumentList '/S' -Wait"), "{quiet}");
+        assert!(!quiet.contains("Transly.exe"), "closing the app does not start it again: {quiet}");
+        assert!(quiet.contains("O''Neil"), "a quote in a path is doubled: {quiet}");
+        let again = silent_install_script(4242, inst, exe, true);
+        assert!(again.contains("Start-Process -FilePath 'C:\\Program Files\\Transly\\Transly.exe'"), "{again}");
+        assert!(again.find("/S").unwrap() < again.find("Transly.exe").unwrap(), "the app starts after the installer: {again}");
+        assert_eq!(ps_quote("a'b"), "'a''b'");
+    }
+
+    #[test]
+    fn only_a_checked_installer_exe_is_fetched_in_the_background() {
+        assert!(allowed_update_from("https://api.github.com/repos/o/r/releases/assets/1", "Transly_setup.exe", None).is_ok());
+        assert!(allowed_update_from("https://example.com/Transly_setup.exe", "Transly_setup.exe", None).is_err());
     }
 }

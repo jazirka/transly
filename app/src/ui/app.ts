@@ -31,7 +31,7 @@ import { announceQa } from './qalive';
 import { showRecovery } from './recovery';
 import { openImport } from './import-dialog';
 
-import { autoCheck } from './updates';
+import { autoCheck, updateNow } from './updates';
 import { openFindReplace } from './tools-dialogs';
 import { openLinkTool } from './links-dialog';
 import { openTermSyncTool } from './termsync-dialog';
@@ -159,7 +159,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
   <nav class="bnav" id="bnav" aria-label="Розділи"><button data-bn="files" aria-label="Файли"><svg viewBox="0 0 16 16"><path d="M2.5 4.5v8h11v-6.5h-6l-1.5-1.5z"/></svg><span>Файли</span></button><button data-bn="rows" aria-label="Рядки"><svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h10"/></svg><span>Рядки</span></button><button data-bn="edit" aria-label="Редактор"><svg viewBox="0 0 16 16"><path d="M3 13l.7-3L11 2.7a1.4 1.4 0 0 1 2 2L5.7 12z"/></svg><span>Редактор</span></button><button data-bn="help" aria-label="Вказівки"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M6.3 6.3a1.8 1.8 0 1 1 2.6 1.6c-.6.3-.9.7-.9 1.4M8 11.6v.1"/></svg><span>Вказівки</span></button><button data-bn="more" aria-label="Ще"><svg viewBox="0 0 16 16"><circle cx="3.5" cy="8" r="1" fill="currentColor"/><circle cx="8" cy="8" r="1" fill="currentColor"/><circle cx="12.5" cy="8" r="1" fill="currentColor"/></svg><span>Ще</span></button></nav>
   <footer class="status">
     <span class="ok" id="sb-save"></span><span id="sb-load" class="busy" role="status" hidden></span><span id="sb-fmt"></span><span id="sb-qa" class="sbtn" role="button" tabindex="0" title="Перейти до наступної помилки QA у проєкті (F8)"></span><span id="sb-adv" class="sbtn" role="button" tabindex="0" title="Показати рядки з порадами" hidden></span><span id="st-sel"></span>
-    <span id="sb-sync" class="sbtn" role="button" tabindex="0" title="Налаштування синхронізації"></span><span id="sb-build" class="sbtn" role="button" tabindex="0" title="Зібрати (F5)"></span>
+    <span id="sb-upd" class="sbtn" role="button" tabindex="0" hidden title="Нову версію завантажено й перевірено. Натисніть, щоб оновитися зараз: застосунок закриється, оновиться без вікон і сам запуститься знову">↻ Оновлення готове</span><span id="sb-sync" class="sbtn" role="button" tabindex="0" title="Налаштування синхронізації"></span><span id="sb-build" class="sbtn" role="button" tabindex="0" title="Зібрати (F5)"></span>
     <div class="r"><span id="sb-file"></span><span id="sb-sess"></span></div>
   </footer>
 </div></div>
@@ -1804,6 +1804,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.closest('#sb-adv')) { s.filters = ['adv']; renderAll(); return; }
     if (t.closest('#sb-qa')) { jump('error', 1); return; }
     if (t.closest('#sb-build')) { doBuild(); return; }
+    if (t.closest('#sb-upd')) { updateNow(); return; }
     if (t.closest('#sb-sync')) { openSettingsDlg('file'); return; }
     if (t.closest('#lp-search,#mt-search')) { openSearch(); return; }
     if (t.closest('#hk')) { toggleKeys(); return; }

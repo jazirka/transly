@@ -1,7 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
-import { RELEASE_TAG, parseRelease, pickAsset, platformOf, updateAvailable, withTimeout } from '../core';
+import { RELEASE_TAG, parseRelease, pickAsset, platformOf, sameBuild, updateAvailable, withTimeout } from '../core';
 import type { Platform, ReleaseAsset, ReleaseInfo } from '../core';
 import { androidBridge } from './android';
+import { backgroundRound } from './bgupdate';
 import { isDesktop } from './desktop';
 import { $, esc, toast } from './dom';
 import { dialog } from './settings';
@@ -79,8 +80,33 @@ export function openUpdateDialog(cfg: UpdateConfig, c: UpdateCheck): void {
   });
 }
 
-/** At start: look for an update quietly; only a new, not yet declined version interrupts. */
+/** The chip of the status bar: a new version is downloaded and checked, and waits for the app to close. */
+function showWaiting(build: string | null, fresh: boolean): void {
+  const chip = document.getElementById('sb-upd');
+  if (chip) chip.hidden = !build;
+  if (build && fresh) toast('Нову версію завантажено: вона встановиться, коли ви закриєте застосунок. Щоб оновитися зараз, натисніть «Оновлення готове» внизу.');
+}
+
+/** Windows: look for a new version, fetch and check its installer without a word. Nothing is shown but the chip; the installer runs when the app closes. */
+export function runBackgroundUpdate(): Promise<unknown> {
+  return backgroundRound(loadUpdateConfig(), { invoke, check: () => checkForUpdate(loadUpdateConfig()), thisBuild: id => sameBuild(__BUILD_ID__, id), waiting: showWaiting });
+}
+
+/** The chip was pressed: the app closes the way it always does (what is typed is saved), the installer runs without a window and the app starts again. */
+export function updateNow(): void {
+  void invoke('relaunch_on_exit').then(() => document.getElementById('wc-close')?.click());
+}
+
+const ROUND_MS = 6 * 60 * 60 * 1000;
+let rounds = 0;
+
+/** At start: look for an update quietly. Windows works in the background (and again every few hours); Android asks once, when a new, not yet declined version appears. */
 export async function autoCheck(): Promise<void> {
+  if (updatePlatform() === 'windows') {
+    await runBackgroundUpdate();
+    if (!rounds) rounds = window.setInterval(() => void runBackgroundUpdate(), ROUND_MS);
+    return;
+  }
   const cfg = loadUpdateConfig();
   if (!updatePlatform() || !cfg.auto || !cfg.token.trim()) return;
   try {
@@ -95,7 +121,7 @@ export function updateSectionHtml(cfg: UpdateConfig): string {
     <p class="hint">Застосунок може сам знаходити нову збірку в релізах приватного репозиторію. Потрібен токен лише для читання: GitHub → Settings → Developer settings → Fine-grained tokens → доступ до репозиторію <b>${esc(cfg.repo)}</b>, право «Contents: Read-only». Токен лишається на цьому пристрої.</p>
     <div class="grid"><label for="up-repo">Репозиторій зі збірками</label><input id="up-repo" autocomplete="off" spellcheck="false" value="${esc(cfg.repo)}">
       <label for="up-token">Токен (лише читання)</label><input id="up-token" type="password" autocomplete="off" value="${esc(cfg.token)}"></div>
-    <label class="achk"><input type="checkbox" id="up-auto" ${cfg.auto ? 'checked' : ''}> Шукати оновлення під час запуску</label>
+    <label class="achk"><input type="checkbox" id="up-auto" ${cfg.auto ? 'checked' : ''}> ${updatePlatform() === 'windows' ? 'Оновлювати у фоні: нову версію завантажувати самому й ставити без вікон, коли закриваєте застосунок' : 'Шукати оновлення під час запуску'}</label>
     <div class="acts l"><button class="btn p" type="button" id="up-check">Перевірити оновлення зараз</button></div>
     <p class="hint" id="up-status" role="status">Версія збірки: ${__BUILD_ID__ === 'dev' ? 'локальна' : __BUILD_ID__.slice(0, 7)}</p></div>`;
 }
@@ -105,6 +131,7 @@ export function wireUpdateSection(dlg: HTMLDialogElement): { save: () => UpdateC
   const save = (): UpdateConfig => {
     const cfg = { ...loadUpdateConfig(), repo: ($('#up-repo', dlg) as HTMLInputElement).value.trim(), token: ($('#up-token', dlg) as HTMLInputElement).value.trim(), auto: ($('#up-auto', dlg) as HTMLInputElement).checked };
     saveUpdateConfig(cfg);
+    if (updatePlatform() === 'windows') void runBackgroundUpdate();
     return cfg;
   };
   dlg.querySelector('#up-check')?.addEventListener('click', async () => {

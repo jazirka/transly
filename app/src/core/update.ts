@@ -43,3 +43,6 @@ export function updateAvailable(buildId: string, releaseSha: string, releasePubl
   const rel = Date.parse(releasePublished), mine = Date.parse(builtAt);
   return !(Number.isFinite(rel) && Number.isFinite(mine) && rel <= mine);
 }
+
+/** Two ids of one build: a full commit and its short form are the same build; a local ("dev") build is nobody's. */
+export const sameBuild = (a: string, b: string): boolean => !!a && !!b && a !== 'dev' && b !== 'dev' && (a.startsWith(b) || b.startsWith(a));

@@ -83,6 +83,7 @@ const load = async (browser, sources) => {
     await page.evaluate(put, { text: JSON.stringify(proj), snapshot });
     await page.reload(); await sleep(1500);
     await page.locator('.gr .src').nth(0).click(); await sleep(700);
+    await page.locator('#pn-th .eqchip').click(); await sleep(300);
     await page.getByRole('button', { name: /Оновити зв’язані/ }).click(); await sleep(700);
     const boxes = await page.$$eval('#lk-list input[type=checkbox]', b => b.map(x => x.checked));
     const labels = await page.$$eval('#lk-list .hint', h => h.map(x => x.textContent));

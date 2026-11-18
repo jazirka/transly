@@ -717,14 +717,12 @@ export async function start(root: HTMLElement): Promise<void> {
     const find = `<button data-wm="${w}:find" role="menuitem">⌕ ${w === 'files' ? 'Пошук у файлах' : 'Пошук сцени'}<span class="sk">Ctrl+F</span></button>${winQuery(w) !== '' ? `<button data-wm="${w}:reset" role="menuitem">Скинути пошук</button>` : ''}`;
     const hide = `<hr><button data-wm="${w}:hide" role="menuitem">Сховати панель</button>`;
     if (w !== 'files') return find + hide;
-    // the groups: all the files in one table, a new group, and what can be done with the picked files (Ctrl+click on the files)
-    const groups = `${s.views.length > 1 ? '<button data-act="group-all" role="menuitem" title="Усі рядки всіх файлів в одній таблиці">Усі файли разом</button>' : ''}<button data-wm="files:newgroup" role="menuitem" title="Файли в групу: Ctrl+клік по файлах, потім «Додати вибрані до групи» (або перетягніть файл на групу)">+ Нова група…</button>`;
-    const picked = s.picked.size ? `<hr><div class="group">Вибрано файлів: ${s.picked.size}</div><button data-act="group-picked" role="menuitem">Відкрити вибрані разом</button><button data-wm="files:place" role="menuitem">Додати вибрані до групи<span class="sk">▸</span></button><button data-act="group-clear" role="menuitem">Зняти позначки</button>` : '';
-    return `${find}<hr>${groups}${picked}${hide}`;
+    return `${find}<hr><button data-sub="files-groups" role="menuitem" aria-haspopup="menu" aria-expanded="false" title="Усі файли разом, нова група, вибрані файли">Групи<span class="sk">▸</span></button>${hide}`;
   };
+  const sortMenuHtml = (): string => `<div class="group">Порядок</div>${(Object.keys(SORT_LABEL) as SortMode[]).map(k => `<button data-sort="${k}" role="menuitemradio" aria-checked="${s.sort === k}" ${s.sort === k ? 'class="on"' : ''}>${SORT_LABEL[k]}</button>`).join('')}`;
   const rowsMenuHtml = (): string => {
     const active = s.filters.length > 0 || s.speaker !== null || s.sort !== 'order' || s.q !== '';
-    return `<button data-rm="sort" role="menuitem">↕ Вигляд<span class="sk">▸</span></button><button data-rm="more" role="menuitem">Фільтри${s.filters.length ? ` · ${s.filters.length}` : ''}<span class="sk">▸</span></button><hr><button data-rm="find" role="menuitem">⌕ Пошук у файлі<span class="sk">Ctrl+F</span></button>${active ? '<button data-rm="reset" role="menuitem">Скинути пошук і фільтри</button>' : ''}<hr><button data-rm="hide" role="menuitem">Сховати панель</button>`;
+    return `<button data-sub="rows-sort" role="menuitem" aria-haspopup="menu" aria-expanded="false">↕ Вигляд<span class="sk">▸</span></button><button data-sub="rows-more" role="menuitem" aria-haspopup="menu" aria-expanded="false">Фільтри${s.filters.length ? ` · ${s.filters.length}` : ''}<span class="sk">▸</span></button><hr><button data-rm="find" role="menuitem">⌕ Пошук у файлі<span class="sk">Ctrl+F</span></button>${active ? '<button data-rm="reset" role="menuitem">Скинути пошук і фільтри</button>' : ''}<hr><button data-rm="hide" role="menuitem">Сховати панель</button>`;
   };
   function renderRowsList(): void {
     $('#chips2').innerHTML = chipsHtml('2', (s.sort !== 'order' ? `<button class="chip on" data-sort="order" title="Повернути порядок за номером">↕ ${esc(SORT_LABEL[s.sort])} ✕</button>` : '') + (s.speaker !== null ? `<button class="chip on" data-clear="speaker" title="Скинути фільтр за мовцем">${esc(s.speaker || 'Без мовця')} ✕</button>` : ''));
@@ -1293,9 +1291,52 @@ export async function start(root: HTMLElement): Promise<void> {
     pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 340))}px`; pop.style.top = `${r.bottom + 6}px`;
     rememberOpener(btn); pop.hidden = false; btn.setAttribute('aria-expanded', 'true'); focusFirst(pop);
   }
+  /* ---------- submenus: an item with data-sub opens its list beside it and the menu stays open; a list can lead on to a further list.
+     Hover (after a short wait), a click or → opens it; ← or Esc closes the last one; a choice closes them all. ---------- */
+  const subHtml = new Map<string, () => string>();
+  const subEls: HTMLElement[] = [];
+  const subFrom = new Map<HTMLElement, HTMLElement>();
+  const popLevel = (host: HTMLElement | null): number => !host ? -1 : host.id === 'fpop' ? 0 : subEls.indexOf(host) + 1 || -1;
+  function syncSubMarks(): void {
+    const open = new Set(subEls.map(e => e.dataset.subof));
+    document.querySelectorAll<HTMLElement>('.pop [data-sub]').forEach(b => b.setAttribute('aria-expanded', String(open.has(b.dataset.sub))));
+  }
+  /** Close the submenus from level `from` on; the focus that was in them goes back to the item that opened the first of them. */
+  function closeSubs(from = 0, back = true): void {
+    if (from >= subEls.length) return;
+    const first = subEls[from]!, item = subFrom.get(first), had = subEls.slice(from).some(e => e.contains(document.activeElement));
+    for (const e of subEls.splice(from)) { subFrom.delete(e); e.remove(); }
+    syncSubMarks();
+    if (had && back) item?.focus({ preventScroll: true });
+  }
+  function openSub(item: HTMLElement, focusIt: boolean): void {
+    const host = item.closest<HTMLElement>('.pop'), level = popLevel(host), key = item.dataset.sub ?? '';
+    if (!host || level < 0) return;
+    if (subEls[level]?.dataset.subof === key) { if (focusIt) focusFirst(subEls[level]!); return; }
+    const html = subHtml.get(key)?.();
+    if (!html) return;
+    closeSubs(level, false);
+    const el = document.createElement('div');
+    el.className = 'pop sub'; el.setAttribute('role', 'menu'); el.dataset.subof = key; el.innerHTML = html;
+    fpop().after(el); subEls.push(el); subFrom.set(el, item);
+    const hr = host.getBoundingClientRect(), r = item.getBoundingClientRect();
+    el.style.left = (hr.right + el.offsetWidth + 8 <= innerWidth ? hr.right - 3 : Math.max(8, hr.left - el.offsetWidth + 3)) + 'px';
+    el.style.top = Math.max(8, Math.min(r.top - 5, innerHeight - el.offsetHeight - 8)) + 'px';
+    syncSubMarks();
+    if (focusIt) focusFirst(el);
+  }
+  // the lists the menus open beside themselves (see the engine above)
+  subHtml.set('rows-sort', () => sortMenuHtml());
+  subHtml.set('rows-more', () => moreHtml());
+  subHtml.set('files-groups', () => {
+    const picked = s.picked.size ? `<hr><div class="group">Вибрано файлів: ${s.picked.size}</div><button data-act="group-picked" role="menuitem">Відкрити вибрані разом</button><button data-sub="files-place" role="menuitem" aria-haspopup="menu" aria-expanded="false">Додати вибрані до групи<span class="sk">▸</span></button><button data-act="group-clear" role="menuitem">Зняти позначки</button>` : '';
+    return `${s.views.length > 1 ? '<button data-act="group-all" role="menuitem" title="Усі рядки всіх файлів в одній таблиці">Усі файли разом</button>' : ''}<button data-wm="files:newgroup" role="menuitem" title="Файли в групу: Ctrl+клік по файлах, потім «Додати вибрані до групи» (або перетягніть файл на групу)">+ Нова група…</button>${picked}`;
+  });
+  subHtml.set('files-place', () => { const first = [...s.picked][0]; return first ? placeMenuHtml(ctx, filesTarget(first)) : ''; });
   /** Hide a popover; the focus that was inside it goes back to the control that opened it. */
   const hidePop = (pop: HTMLElement): void => {
-    const had = pop.contains(document.activeElement); pop.hidden = true;
+    const had = pop.contains(document.activeElement) || (pop.id === 'fpop' && subEls.some(e => e.contains(document.activeElement))); pop.hidden = true;
+    if (pop.id === 'fpop') closeSubs(0, false);
     if (pop.dataset.for) document.getElementById(pop.dataset.for)?.setAttribute('aria-expanded', 'false');
     if (had) restoreOpener();
   };
@@ -1355,6 +1396,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const fpop = () => $('#fpop');
   function showPop(btn: HTMLElement, html: string): void {
     const p = fpop();
+    closeSubs(0, false);
     if (!p.hidden && p.dataset.for === btn.id) { hidePop(p); return; }
     rememberOpener(btn);
     if (p.dataset.for) document.getElementById(p.dataset.for)?.setAttribute('aria-expanded', 'false');
@@ -1387,11 +1429,21 @@ export async function start(root: HTMLElement): Promise<void> {
     renderAll();
     if (to === 'edit' && s.cur) { reveal('slist', s.cur); document.querySelector<HTMLElement>(`.si[data-key="${CSS.escape(s.cur)}"]`)?.scrollIntoView({ block: 'nearest' }); }
   }
-  const closePops = () => { hidePop(fpop()); closeCfgMenu(); closeProjMenu(); };
+  let subTimer = 0;
+  document.addEventListener('pointerover', e => {
+    if ((e as PointerEvent).pointerType === 'touch') return;
+    const b = (e.target as HTMLElement).closest<HTMLElement>('.pop button');
+    const host = b?.closest<HTMLElement>('.pop') ?? null, level = popLevel(host);
+    if (!b || level < 0) return;
+    window.clearTimeout(subTimer);
+    subTimer = window.setTimeout(() => { if (b.dataset.sub) openSub(b, false); else closeSubs(level, false); }, b.dataset.sub ? 120 : 250);
+  });
+  const closePops = () => { closeSubs(0, false); hidePop(fpop()); closeCfgMenu(); closeProjMenu(); };
   const groupsApi = { pop: (a: HTMLElement, html: string) => showPop(a, html), closePops: () => closePops() };
   /** A menu at the pointer. */
   function popAt(x: number, y: number, html: string): void {
     const p = fpop();
+    closeSubs(0, false);
     rememberOpener();
     p.innerHTML = html; p.dataset.for = 'at'; p.hidden = false;
     p.style.left = Math.max(8, Math.min(x, innerWidth - p.offsetWidth - 8)) + 'px';
@@ -1719,7 +1771,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const t = e.target as HTMLElement;
     const off = t.closest<HTMLElement>('[aria-disabled="true"][data-why]');
     if (off) { toast(off.dataset.why!); return; }
-    if (!t.closest('#fpop,#spkbtn,#lenbtn,#sortbtn,[data-more],#bnav,#cfgpop,#cfg-btn,#projpop,#proj-btn,#rs-menu,#fs-menu,#sc-menu')) closePops();
+    if (!t.closest('#fpop,#spkbtn,#lenbtn,#sortbtn,[data-more],#bnav,#cfgpop,#cfg-btn,#projpop,#proj-btn,#rs-menu,#fs-menu,#sc-menu,.pop.sub')) closePops();
     if (!t.closest('#keypop,#hk')) $('#keypop').hidden = true;
     if (pagesClick(t)) return;
     if (t.closest('#open2,#fb-repick')) { void openFolder(); return; }
@@ -1821,8 +1873,9 @@ export async function start(root: HTMLElement): Promise<void> {
       const f = ch.dataset.filter as Filter;
       s.filters = s.filters.includes(f) ? s.filters.filter(x => x !== f) : [...s.filters, f];
       if (s.mode !== 'table' && !ctx.visible().some(u => u.key === s.cur)) s.cur = ctx.visible()[0]?.key ?? null;
-      const pop = fpop(), keep = !pop.hidden && pop.dataset.for?.startsWith('more-');
+      const pop = fpop(), keep = !pop.hidden && pop.dataset.for?.startsWith('more-'), subMore = subEls.find(e => e.dataset.subof === 'rows-more');
       renderAll();
+      if (subMore) { subMore.innerHTML = moreHtml(); subMore.querySelector<HTMLElement>(`[data-filter="${f}"]`)?.focus(); }
       // the popover stays open while boxes are ticked: it is redrawn with the new counts and the focus stays on the box
       if (keep) { pop.innerHTML = moreHtml(); document.getElementById(pop.dataset.for!)?.setAttribute('aria-expanded', 'true'); pop.querySelector<HTMLElement>(`[data-filter="${f}"]`)?.focus(); }
       return;
@@ -1831,7 +1884,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (more) { showPop(more, moreHtml()); return; }
     const clr = t.closest<HTMLElement>('[data-clear]');
     if (clr) { closePops(); if (clr.dataset.clear === 'speaker') s.speaker = null; else s.lenFilter = 'all'; renderAll(); return; }
-    if (t.closest('[data-reset]')) { rowsSearchOpen = false; s.filters = []; s.q = ''; s.speaker = null; s.lenFilter = 'all'; renderAll(); return; }
+    if (t.closest('[data-reset]')) { closePops(); rowsSearchOpen = false; s.filters = []; s.q = ''; s.speaker = null; s.lenFilter = 'all'; renderAll(); return; }
     if (t.closest('#spkbtn')) {
       const v = ctx.view();
       // Speakers of every file, not only the open one: the choice stays when another file is opened.
@@ -1844,6 +1897,8 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.closest('[data-act=speakers]')) { closePops(); openSpeakers(ctx); return; }
     const spk = t.closest<HTMLElement>('[data-spk]');
     if (spk) { s.speaker = spk.dataset.spk ?? ''; closePops(); renderAll(); return; }
+    const subItem = t.closest<HTMLElement>('.pop [data-sub]');
+    if (subItem) { openSub(subItem, true); return; }
     if (t.closest('#q2-x')) { closeRowsSearch(); return; }
     if (t.closest('#fq-x')) { closeWinSearch('files'); return; }
     if (t.closest('#sc-x')) { closeWinSearch('scenes'); return; }
@@ -1857,7 +1912,6 @@ export async function start(root: HTMLElement): Promise<void> {
       else if (act === 'reset') closeWinSearch(w);
       else if (act === 'hide') { s.leftOpen = false; renderAll(); }
       else if (act === 'newgroup') startNewGroup(ctx);
-      else if (act === 'place') { const first = [...s.picked][0]; if (first) showPop($('#fs-menu'), placeMenuHtml(ctx, filesTarget(first))); }
       return;
     }
     if (t.closest('#rs-menu')) { showPop(t.closest<HTMLElement>('#rs-menu')!, rowsMenuHtml()); return; }
@@ -1865,14 +1919,12 @@ export async function start(root: HTMLElement): Promise<void> {
     if (rm) {
       hidePop(fpop());
       const act = rm.dataset.rm;
-      if (act === 'sort') $('#sortbtn').click();
-      else if (act === 'more') document.querySelector<HTMLElement>('#chips2 [data-more]')?.click();
-      else if (act === 'find') openRowsSearch();
+      if (act === 'find') openRowsSearch();
       else if (act === 'reset') { rowsSearchOpen = false; s.filters = []; s.q = ''; s.speaker = null; s.lenFilter = 'all'; s.sort = 'order'; renderAll(); }
       else if (act === 'hide') { s.leftOpen = false; renderAll(); }
       return;
     }
-    if (t.closest('#sortbtn')) { showPop(t.closest<HTMLElement>('#sortbtn')!, `<div class="group">Порядок</div>${(Object.keys(SORT_LABEL) as SortMode[]).map(k => `<button data-sort="${k}" role="menuitemradio" aria-checked="${s.sort === k}" ${s.sort === k ? 'class="on"' : ''}>${SORT_LABEL[k]}</button>`).join('')}`); return; }
+    if (t.closest('#sortbtn')) { showPop(t.closest<HTMLElement>('#sortbtn')!, sortMenuHtml()); return; }
     const so = t.closest<HTMLElement>('[data-sort]');
     if (so) { s.sort = so.dataset.sort as SortMode; closePops(); renderAll(); return; }
     if (t.closest('#lenbtn')) { showPop(t.closest<HTMLElement>('#lenbtn')!, `<div class="group">Довжина відносно оригіналу</div>${(Object.keys(LEN_LABEL) as (keyof typeof LEN_LABEL)[]).map(k => `<button data-len="${k}">${LEN_LABEL[k]}</button>`).join('')}`); return; }
@@ -1999,6 +2051,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const t = e.target as HTMLElement;
     if (e.key === 'Escape') {
       if (!$('#sd').hidden) { closeSearch(); return; }
+      if (subEls.length) { closeSubs(subEls.length - 1); return; }
       if (!$('#fpop').hidden || !$('#cfgpop').hidden || !$('#projpop').hidden || !$('#keypop').hidden) {
         closePops(); hidePop($('#keypop'));
         return;
@@ -2009,8 +2062,10 @@ export async function start(root: HTMLElement): Promise<void> {
     }
     if (document.querySelector('dialog[open]')) return;
     // Menus, popovers, the menu bar and the file tree answer the arrows.
-    const pop = t.closest<HTMLElement>('#projpop,#cfgpop,#fpop,#keypop,#mdd');
+    const pop = t.closest<HTMLElement>('#projpop,#cfgpop,#fpop,.pop.sub,#keypop,#mdd');
     if (pop && !pop.hidden) {
+      if (e.key === 'ArrowRight' && t.closest('.pop [data-sub]')) { e.preventDefault(); openSub(t.closest<HTMLElement>('[data-sub]')!, true); return; }
+      if (e.key === 'ArrowLeft' && pop.classList.contains('sub')) { e.preventDefault(); closeSubs(subEls.indexOf(pop)); return; }
       if (pop.id === 'mdd' && (e.key === 'ArrowRight' || e.key === 'ArrowLeft') && mbOpen) {
         const gs = Object.keys(MENUS), i = gs.indexOf(mbOpen);
         e.preventDefault(); mbEnter(gs[(i + (e.key === 'ArrowRight' ? 1 : -1) + gs.length) % gs.length]!); return;

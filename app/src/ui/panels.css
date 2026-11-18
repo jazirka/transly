@@ -335,8 +335,8 @@ button.cc:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .gm-new input{flex:1;min-width:0}
 /* the dividers of the menus are one quiet line (the default hr is a thick light bevel) */
 .pop hr{height:0;border:0;border-top:1px solid var(--line);margin:4px 0}
-#fpop button .grp-dot{margin-right:8px}
-#fpop button.on{color:var(--accent)}
+#fpop button .grp-dot,.pop.sub button .grp-dot{margin-right:8px}
+#fpop button.on,.pop.sub button.on{color:var(--accent)}
 
 /* ----- the right panel of the row (translation, proposals, terms, discussion) ----- */
 .pn-sec{border-bottom:1px solid var(--line)}
@@ -723,3 +723,9 @@ span.thc2-b{cursor:default}
 .card-ph .lt-f{color:var(--text);font-weight:600;text-transform:none;letter-spacing:0;margin-left:6px;overflow:hidden;text-overflow:ellipsis}
 .card-ph .lt-f.none{color:var(--mute);font-weight:400;font-style:italic}
 .card-ph .grow{overflow:hidden}
+
+/* ---------- the menus open lists beside themselves (an item with ▸), and those can open further lists ---------- */
+.pop.sub{width:auto;min-width:210px;max-width:340px;z-index:61}
+.pop button[data-sub][aria-expanded="true"]{background:#393b40}
+.pop.sub [role="menuitemradio"]{position:relative;padding-left:30px}
+.pop.sub [role="menuitemradio"][aria-checked="true"]::before{content:"✓";position:absolute;left:11px;color:var(--text)}

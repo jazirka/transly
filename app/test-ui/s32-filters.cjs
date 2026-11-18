@@ -39,16 +39,16 @@ const mapOf = (name, n) => ({ displayName: name, events: [null, { id: 1, name: '
   check('the menu ⋮ has no dot while nothing is switched on', !(await page.locator('#rs-menu').evaluate(e => e.classList.contains('dot'))));
   // the box with the statuses opens from the menu
   await page.locator('#rs-menu').click(); await sleep(200);
-  await page.locator('#fpop [data-rm="more"]').click(); await sleep(250);
-  const pop = await page.$$eval('#fpop .fi', cs => cs.map(c => ({ f: c.dataset.filter, t: c.textContent.trim().replace(/\s+/g, ' '), dot: c.querySelector('.sd')?.className ?? '', off: c.disabled })));
+  await page.locator('#fpop [data-sub="rows-more"]').click(); await sleep(250);
+  const pop = await page.$$eval('.pop.sub .fi', cs => cs.map(c => ({ f: c.dataset.filter, t: c.textContent.trim().replace(/\s+/g, ' '), dot: c.querySelector('.sd')?.className ?? '', off: c.disabled })));
   check('«Ще ▾» lists the statuses and the extras with their counts', pop.length === 8 && pop.every(p => /\d$/.test(p.t)), JSON.stringify(pop.map(p => p.t)));
   check('the statuses wear their dots', pop.find(p => p.f === 'new')?.dot === 'sd new' && pop.find(p => p.f === 'done')?.dot === 'sd done', JSON.stringify(pop.map(p => [p.f, p.dot])));
-  await page.locator('#fpop .fi[data-filter="new"]').click(); await sleep(400);
+  await page.locator('.pop.sub .fi[data-filter="new"]').click(); await sleep(400);
   const onlyNew = await rowsN();
   check('with a status switched on the menu ⋮ carries a dot', await page.locator('#rs-menu').evaluate(e => e.classList.contains('dot')));
   check('a ticked status filters the rows and shows as a chip', onlyNew === all - 1 && (await page.locator('#chips2 .chip.on[data-filter="new"]').count()) === 1, `${all} -> ${onlyNew}`);
-  check('the box stays open while statuses are ticked', await page.locator('#fpop').isVisible() && (await page.locator('#fpop .fi.on').count()) === 1);
-  await page.locator('#fpop .fi[data-filter="done"]').click(); await sleep(400);
+  check('the box stays open while statuses are ticked (beside the menu)', await page.locator('.pop.sub').isVisible() && (await page.locator('.pop.sub .fi.on').count()) === 1);
+  await page.locator('.pop.sub .fi[data-filter="done"]').click(); await sleep(400);
   check('two statuses can be mixed (a row passes when it has any of them)', (await rowsN()) === all && (await page.locator('#chips2 .chip.on[data-filter]').count()) === 2, `${await rowsN()} of ${all}`);
   await page.keyboard.press('Escape'); await sleep(200);
   await page.locator('#chips2 .chip.on[data-filter="new"]').click(); await sleep(400);
@@ -58,9 +58,9 @@ const mapOf = (name, n) => ({ displayName: name, events: [null, { id: 1, name: '
 
   // the sort is «Вигляд» in the menu ⋮
   await page.locator('#rs-menu').click(); await sleep(200);
-  check('the menu has «Вигляд», «Фільтри» and the quick search with its keys', /Вигляд/.test(await page.locator('#fpop [data-rm="sort"]').innerText()) && /Фільтри/.test(await page.locator('#fpop [data-rm="more"]').innerText()) && /Ctrl\+F/.test(await page.locator('#fpop [data-rm="find"]').innerText()));
-  await page.locator('#fpop [data-rm="sort"]').click(); await sleep(200);
-  check('and offers the order with a mark on the current one', (await page.locator('#fpop [data-sort]').count()) >= 3 && (await page.locator('#fpop [data-sort][aria-checked="true"]').count()) === 1);
+  check('the menu has «Вигляд», «Фільтри» and the quick search with its keys', /Вигляд/.test(await page.locator('#fpop [data-sub="rows-sort"]').innerText()) && /Фільтри/.test(await page.locator('#fpop [data-sub="rows-more"]').innerText()) && /Ctrl\+F/.test(await page.locator('#fpop [data-rm="find"]').innerText()));
+  await page.locator('#fpop [data-sub="rows-sort"]').click(); await sleep(250);
+  check('and offers the order with a mark on the current one, beside the menu (the menu stays)', (await page.locator('.pop.sub [data-sort]').count()) >= 3 && (await page.locator('.pop.sub [data-sort][aria-checked="true"]').count()) === 1 && !(await page.locator('#fpop').evaluate(e => e.hidden)));
   await page.keyboard.press('Escape'); await sleep(150);
 
   // the search over everything

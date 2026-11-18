@@ -59,7 +59,9 @@ const MAP2 = { displayName: 'Cave', events: [null, ev(1, 'miner', 'Mind the dark
 
   // the menu opens the same field; the cross clears and closes; left empty the field goes back by itself; with a text it stays
   await page.locator('#fs-menu').click(); await sleep(200);
-  check('the menu offers the search with its key, the groups (all the files together, a new group) and hiding of the panel', (await page.locator('#fpop [data-wm]').count()) === 3 && /Ctrl\+F/.test(await page.locator('#fpop [data-wm="files:find"]').innerText()) && (await page.locator('#fpop [data-act="group-all"]').count()) === 1 && (await page.locator('#fpop [data-wm="files:newgroup"]').count()) === 1);
+  check('the menu offers the search with its key, a list «Групи ▸» and hiding of the panel', (await page.locator('#fpop [data-wm]').count()) === 2 && /Ctrl\+F/.test(await page.locator('#fpop [data-wm="files:find"]').innerText()) && (await page.locator('#fpop [data-sub="files-groups"]').count()) === 1);
+  await page.locator('#fpop [data-sub="files-groups"]').click(); await sleep(250);
+  check('«Групи ▸» opens its list beside the menu: all the files together and a new group', (await page.locator('.pop.sub [data-act="group-all"]').count()) === 1 && (await page.locator('.pop.sub [data-wm="files:newgroup"]').count()) === 1 && !(await page.locator('#fpop').evaluate(e => e.hidden)));
   const hr = await page.evaluate(() => { const h = document.querySelector('#fpop hr'), c = h && getComputedStyle(h), t = document.createElement('i'); t.style.cssText = 'border:1px solid var(--line);position:fixed'; document.body.appendChild(t); const line = getComputedStyle(t).borderTopColor; t.remove(); return h ? { w: c.borderTopWidth, color: c.borderTopColor, line, bw: c.borderBottomWidth } : null; });
   check('the dividers of the menu are one quiet line, not the default bevel', !!hr && hr.w === '1px' && hr.bw === '0px' && hr.color === hr.line, JSON.stringify(hr));
   await page.locator('#fpop [data-wm="files:find"]').click(); await sleep(300);
@@ -85,12 +87,14 @@ const MAP2 = { displayName: 'Cave', events: [null, ev(1, 'miner', 'Mind the dark
   await sleep(300);
   check('with files picked the menu carries a dot', await page.locator('#fs-menu').evaluate(e => e.classList.contains('dot')));
   await page.locator('#fs-menu').click(); await sleep(200);
-  const pm = await page.locator('#fpop').innerText();
-  check('the menu then offers to open the picked files together, to put them into a group, and to clear the picks', /Вибрано файлів: 2/i.test(pm) && (await page.locator('#fpop [data-act="group-picked"]').count()) === 1 && (await page.locator('#fpop [data-wm="files:place"]').count()) === 1 && (await page.locator('#fpop [data-act="group-clear"]').count()) === 1, pm.replace(/\s+/g, ' '));
-  await page.locator('#fpop [data-wm="files:place"]').click(); await sleep(250);
-  check('«Додати вибрані до групи» opens the list of the groups under the menu', (await page.locator('#fpop').innerText()).length > 0 && (await page.locator('#fpop [data-wm]').count()) === 0);
+  await page.locator('#fpop [data-sub="files-groups"]').click(); await sleep(250);
+  const pm = await page.locator('.pop.sub').innerText();
+  check('the list of the groups then offers to open the picked files together, to put them into a group, and to clear the picks', /Вибрано файлів: 2/i.test(pm) && (await page.locator('.pop.sub [data-act="group-picked"]').count()) === 1 && (await page.locator('.pop.sub [data-sub="files-place"]').count()) === 1 && (await page.locator('.pop.sub [data-act="group-clear"]').count()) === 1, pm.replace(/\s+/g, ' '));
+  await page.locator('.pop.sub [data-sub="files-place"]').click(); await sleep(250);
+  check('«Додати вибрані до групи ▸» opens a third list: three menus stand open, one beside the other', (await page.locator('.pop.sub').count()) === 2 && !(await page.locator('#fpop').evaluate(e => e.hidden)));
   await page.keyboard.press('Escape'); await sleep(150);
-  await page.locator('#fs-menu').click(); await sleep(200); await page.locator('#fpop [data-act="group-clear"]').click(); await sleep(300);
+  check('Esc closes the last list only', (await page.locator('.pop.sub').count()) === 1 && !(await page.locator('#fpop').evaluate(e => e.hidden)));
+  await page.locator('.pop.sub [data-act="group-clear"]').click(); await sleep(300);
   check('«Зняти позначки» clears the picks and the dot', !(await page.locator('#fs-menu').evaluate(e => e.classList.contains('dot'))));
 
   // ---- the scenes under the files: each window has its own header and its own field

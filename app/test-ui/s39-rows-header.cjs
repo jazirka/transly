@@ -62,7 +62,7 @@ const put = ({ text, snapshot }) => new Promise((res, rej) => { const o = indexe
 
   // the menu opens the same field; the cross clears and closes it
   await page.locator('#rs-menu').click(); await sleep(200);
-  check('the menu lists the order, the filters and the search with its keys', (await page.locator('#fpop [data-rm]').count()) >= 4 && /Ctrl\+F/.test(await page.locator('#fpop [data-rm="find"]').innerText()));
+  check('the menu lists the order, the filters and the search with its keys', (await page.locator('#fpop [data-sub]').count()) === 2 && (await page.locator('#fpop [data-rm]').count()) >= 2 && /Ctrl\+F/.test(await page.locator('#fpop [data-rm="find"]').innerText()));
   await page.locator('#fpop [data-rm="find"]').click(); await sleep(300);
   await page.keyboard.type('tide'); await sleep(600);
   check('the field opened from the menu works', (await rows()) === 1, String(await rows()));

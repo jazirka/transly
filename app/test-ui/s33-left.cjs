@@ -41,9 +41,10 @@ const FILES = { Actors: ['Harold', 'Therese'], Armors: ['Cloth', 'Shield'], Clas
   check('the groups have no title of their own', (await page.locator('#tree-groups .grp-head, #tree-groups .grp-title').count()) === 0);
   check('no row of buttons under the header of the files', (await page.locator('#tree-act').count()) === 0 && (await page.locator('#gr-add').count()) === 0);
   await page.locator('#fs-menu').click(); await sleep(200);
-  const menu = await page.locator('#fpop').innerText();
-  check('the menu ⋮ holds «Усі файли разом» and «+ Нова група…»', /Усі файли разом/.test(menu) && /Нова група/.test(menu), menu.replace(/\s+/g, ' '));
-  await page.locator('#fpop [data-wm="files:newgroup"]').click(); await sleep(250);
+  await page.locator('#fpop [data-sub="files-groups"]').click(); await sleep(250);
+  const menu = await page.locator('.pop.sub').innerText();
+  check('the menu ⋮ holds a list «Групи ▸» with «Усі файли разом» and «+ Нова група…»', /Усі файли разом/.test(menu) && /Нова група/.test(menu), menu.replace(/\s+/g, ' '));
+  await page.locator('.pop.sub [data-wm="files:newgroup"]').click(); await sleep(250);
   check('and «+ Нова група…» opens the field of a new group', await page.locator('#gr-name').isVisible());
   await page.locator('#gr-name').fill('Магазин'); await page.keyboard.press('Enter'); await sleep(300);
   check('the new group is a row', (await page.locator('#tree-groups .grp-item').count()) === 1);

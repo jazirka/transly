@@ -692,6 +692,7 @@ span.thc2-b{cursor:default}
 /* ---------- the search and the menu of the rows window live in its header; under it only the strip of what is switched on ---------- */
 .rs-head .hq{display:none;flex:1;min-width:0;width:auto;height:24px;margin:0 2px 0 4px;font-size:12.5px;text-transform:none;letter-spacing:0}
 .rs-head.searching .hq{display:flex}
+.rs-head .hq[hidden]{display:none}
 .rs-head.searching .grow{flex:none}
 .rs-head.searching .ttl{display:none}
 .rs-head.searching .lt-f{display:none}
@@ -699,8 +700,8 @@ span.thc2-b{cursor:default}
 .ico.rs-t:hover{background:rgba(255,255,255,.09);color:var(--text)}
 .ico.rs-t svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.5}
 .ico.rs-t[hidden]{display:none}
-#rs-menu{position:relative}
-#rs-menu.dot::after{content:"";position:absolute;top:2px;right:3px;width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.rs-t{position:relative}
+.rs-t.dot::after{content:"";position:absolute;top:2px;right:3px;width:6px;height:6px;border-radius:50%;background:var(--accent)}
 .rs-head .hq input{flex:1;min-width:0;background:none;border:0;outline:0;color:var(--text);font:inherit}
 .rs-head .hq .kbd{color:var(--dim);font-size:11px}
 .rs-head .hq input:not(:placeholder-shown)~.kbd{display:none}

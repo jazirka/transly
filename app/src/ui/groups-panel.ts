@@ -29,6 +29,9 @@ export interface GroupsApi {
 
 const FILES_MIME = 'application/x-transly-files';
 let creating = false;
+
+/** «Нова група» of the menu of the files: opens the field for the name above the groups and puts the cursor in it. */
+export function startNewGroup(ctx: Ctx): void { creating = true; renderGroupsBlock(ctx); ($('#gr-name') as HTMLInputElement).focus(); }
 let renaming: string | null = null;
 let confirmDel: string | null = null;
 let showOrphans = false;
@@ -238,7 +241,6 @@ export function groupsClick(ctx: Ctx, t: HTMLElement, api: GroupsApi): boolean {
     }
     return true;
   }
-  if (t.closest('#gr-add')) { creating = !creating; renderGroupsBlock(ctx); if (creating) ($('#gr-name') as HTMLInputElement).focus(); return true; }
   if (!t.closest('#tree-groups')) return false;
   const menu = t.closest<HTMLElement>('[data-gmenu]');
   if (menu) { const g = ctx.s.saved.groups?.[menu.dataset.gmenu!]; if (g) { confirmDel = null; api.pop(menu, groupMenuHtml(ctx, g, filesByGroup(ctx).get(g.id) ?? [])); } return true; }

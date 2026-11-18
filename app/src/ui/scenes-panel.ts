@@ -14,12 +14,16 @@ import type { Ctx } from './state';
 const SEARCH = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>';
 
 export const SCENES_HTML = `<div class="slist scpanel" id="lp-sc" hidden>
-  <div class="ph card-ph" data-card="scenes"><span class="grow"><span class="ttl">Сцени</span> <span class="lt-f" data-fname></span></span><span class="ico" data-hide-left="scenes" role="button" tabindex="0" aria-label="Сховати панель «Сцени»" title="Сховати">—</span></div>
-  <div class="fh"><div class="fin">${SEARCH}<input class="qin" id="sc-q" placeholder="Пошук сцени" aria-label="Пошук сцени" autocomplete="off" spellcheck="false"></div><div class="gl-bar"><span class="hint" id="sc-n"></span></div></div>
+  <div class="ph card-ph" data-card="scenes"><span class="grow"><span class="ttl">Сцени</span> <span class="lt-f" data-fname></span></span><label class="fin hq" id="hq-s">${SEARCH}<input class="qin" id="sc-q" placeholder="Пошук сцени" aria-label="Пошук сцени" autocomplete="off" spellcheck="false"><span class="kbd" aria-hidden="true">Ctrl+F</span><button class="hqx" type="button" id="sc-x" aria-label="Очистити пошук">✕</button></label><button class="ico ico-btn rs-t" id="sc-menu" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Меню вікна «Сцени»: пошук" title="Пошук (Ctrl+F)">⋮</button><span class="ico" data-hide-left="scenes" role="button" tabindex="0" aria-label="Сховати панель «Сцени»" title="Сховати">—</span></div>
+  <div class="fh"><div class="gl-bar"><span class="hint" id="sc-n"></span></div></div>
   <div class="sl-body" id="sc-list"></div>
 </div>`;
 
 let query = '';
+
+/** What is typed in the search of the scenes (the header of the window shows its field while there is something in it). */
+export const sceneQuery = (): string => query;
+export function setSceneQuery(ctx: Ctx, q: string): void { query = q; renderScenesPanel(ctx); }
 
 const norm = (s: string): string => s.trim().toLowerCase();
 

@@ -1,5 +1,5 @@
 // Browser regression check: the left column. The numbers of the windows are always in their place; the searches are alike, with no divider
-// under them; the groups have no title and «+ Група» stands beside «Усі файли разом»; the highlight of the tree is rounded and inside the inset;
+// under them; the groups have no title and their actions are in the menu ⋮ of the files; the highlight of the tree is rounded and inside the inset;
 // picked files in a row share one outline with nothing drawn between them. See s0-safety.cjs:   PC_URL=http://localhost:4285/ node test-ui/s33-left.cjs
 const { chromium } = require('playwright');
 const PC = process.env.PC_URL || 'http://localhost:4285/';
@@ -32,19 +32,19 @@ const FILES = { Actors: ['Harold', 'Therese'], Armors: ['Cloth', 'Shield'], Clas
   const heads = await page.evaluate(() => ({ steps: document.querySelectorAll('.step').length, rows: document.querySelector('[data-card="rows"] .grow')?.textContent.replace(/\s+/g, ' ').trim() }));
   check('no numbered badges; the rows window says «Рядки» and the file', heads.steps === 0 && /^Рядки /.test(heads.rows), JSON.stringify(heads));
 
-  // the searches are alike and nothing is drawn under them
-  const look = q => page.evaluate(q => { const f = document.querySelector(q), h = f.closest('.tree-q, .fh'), c = getComputedStyle(f), p = getComputedStyle(h); return { h: Math.round(f.getBoundingClientRect().height), r: c.borderTopLeftRadius, bg: c.backgroundColor, bb: p.borderBottomWidth, hbg: p.backgroundColor }; }, q);
-  const lf = await look('#fq');
-  check('the search of the files has no divider under it and no strip of its own', lf.bb === '0px' && lf.hbg === 'rgba(0, 0, 0, 0)', JSON.stringify(lf));
+  // the searches are alike: each is a field in the header of its window (it replaces the title when opened); nothing is drawn under them
+  check('the search of the files is in the header of its window, not under it', await page.evaluate(() => !!document.querySelector('[data-card="files"] #fq') && !document.querySelector('.tree-q')));
   check('the search of the rows is in the header of its window, not under it', await page.evaluate(() => !!document.querySelector('[data-card="rows"] #q2') && !document.querySelector('#lp-rows .fh #q2')));
   check('and no divider between the groups and the tree', await page.evaluate(() => getComputedStyle(document.querySelector('#tree-groups')).borderBottomWidth === '0px'));
 
-  // the groups: no title, «+ Група» beside «Усі файли разом»
+  // the groups: no title; everything about them (all the files together, a new group, the picked files) is in the menu ⋮ of the files, not in a row of buttons
   check('the groups have no title of their own', (await page.locator('#tree-groups .grp-head, #tree-groups .grp-title').count()) === 0);
-  const acts = await page.locator('#tree-act').innerText();
-  check('«+ Група» stands beside «Усі файли разом», without a hint line', /Усі файли разом/.test(acts) && /\+ Група/.test(acts) && !/Ctrl\+клік/.test(acts), acts.replace(/\s+/g, ' '));
-  await page.locator('#gr-add').click(); await sleep(200);
-  check('and it opens the field of a new group', await page.locator('#gr-name').isVisible());
+  check('no row of buttons under the header of the files', (await page.locator('#tree-act').count()) === 0 && (await page.locator('#gr-add').count()) === 0);
+  await page.locator('#fs-menu').click(); await sleep(200);
+  const menu = await page.locator('#fpop').innerText();
+  check('the menu ⋮ holds «Усі файли разом» and «+ Нова група…»', /Усі файли разом/.test(menu) && /Нова група/.test(menu), menu.replace(/\s+/g, ' '));
+  await page.locator('#fpop [data-wm="files:newgroup"]').click(); await sleep(250);
+  check('and «+ Нова група…» opens the field of a new group', await page.locator('#gr-name').isVisible());
   await page.locator('#gr-name').fill('Магазин'); await page.keyboard.press('Enter'); await sleep(300);
   check('the new group is a row', (await page.locator('#tree-groups .grp-item').count()) === 1);
 

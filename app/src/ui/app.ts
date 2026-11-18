@@ -19,9 +19,9 @@ import { wireTermCard } from './termcard';
 import { wireLinks } from './links';
 import { wireRowsChip } from './links-panel';
 import { SCENE_HTML, focusCard, hasScenes, renderSceneView, sceneClick, sceneFocus, sceneIdOf, sceneInput } from './scene-view';
-import { SCENES_HTML, renderScenesPanel, scenesClick, wireScenes } from './scenes-panel';
+import { SCENES_HTML, renderScenesPanel, sceneQuery, scenesClick, setSceneQuery, wireScenes } from './scenes-panel';
 import { undoByKey, undoToast } from './undo-toast';
-import { FILES_DRAG, GROUPS_HTML, dragFiles, groupsClick, placeMenuHtml, renderGroupsBlock, wireGroups } from './groups-panel';
+import { FILES_DRAG, GROUPS_HTML, dragFiles, groupsClick, placeMenuHtml, renderGroupsBlock, startNewGroup, wireGroups } from './groups-panel';
 import type { PlaceTarget } from './groups-panel';
 import { GLOSSARY_HTML, editTerm, glossaryClick, newTerm, renderGlossaryPanel, showTerm, wireGlossary } from './glossary-panel';
 import { pickGameFolder, readFiles, reopenHandle } from './folder';
@@ -132,7 +132,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     <aside class="tree" id="lpanel" aria-label="Бічна панель: файли й рядки">
       <div class="mtabs" id="mtabs" role="group" aria-label="Бічна панель"><button data-lt="files">Файли</button><button data-lt="rows">Рядки</button><button data-lt="scenes">Сцени</button><button data-lt="glossary">Пов’язане</button><button class="ab-ic" id="mt-open" aria-label="Відкрити файли або вставити JSON" title="Відкрити файли або вставити JSON">${SVG.import}</button><button class="ab-ic" id="mt-search" aria-label="Пошук скрізь">${SVG.searchBig}</button></div>
       <div class="ph"><span class="grow" id="lp-title">Файли гри</span><button class="ico ico-btn" id="lp-search" type="button" aria-label="Знайти скрізь (Ctrl+K)" title="Знайти скрізь (Ctrl+K або двічі Shift)">${SVG.search}</button><span class="ico" id="lp-close" title="Сховати панель" role="button" aria-label="Сховати панель">—</span></div>
-      <div class="treebody" id="tree"><div class="ph card-ph" data-card="files"><span class="grow">Файли гри</span><span class="ico" data-hide-left="files" role="button" tabindex="0" aria-label="Сховати панель «Файли гри»" title="Сховати">—</span></div><div class="tree-q"><div class="fin">${SVG.search}<input class="qin" id="fq" placeholder="Пошук у файлах гри" aria-label="Пошук у файлах гри" autocomplete="off" spellcheck="false"></div></div><div class="tree-act" id="tree-act"></div>${GROUPS_HTML}<div id="tree-list" role="tree" aria-label="Файли гри"></div></div>
+      <div class="treebody" id="tree"><div class="ph card-ph" data-card="files"><span class="grow"><span class="ttl">Файли гри</span></span><label class="fin hq" id="hq-f">${SVG.search}<input class="qin" id="fq" placeholder="Пошук у файлах гри" aria-label="Пошук у файлах гри" autocomplete="off" spellcheck="false"><span class="kbd" aria-hidden="true">Ctrl+F</span><button class="hqx" type="button" id="fq-x" aria-label="Очистити пошук">✕</button></label><button class="ico ico-btn rs-t" id="fs-menu" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Меню вікна «Файли гри»: пошук" title="Пошук (Ctrl+F)">⋮</button><span class="ico" data-hide-left="files" role="button" tabindex="0" aria-label="Сховати панель «Файли гри»" title="Сховати">—</span></div>${GROUPS_HTML}<div id="tree-list" role="tree" aria-label="Файли гри"></div></div>
       <div class="rz rz-y" id="rz-y" role="separator" aria-orientation="horizontal" aria-label="Розділ між файлами й рядками" aria-valuemin="15" aria-valuemax="85" tabindex="0" title="Потягніть, щоб змінити співвідношення (подвійний клік — навпіл)" hidden></div>
       <div class="slist" id="lp-rows" hidden>
         <div class="ph card-ph" data-card="rows"><span class="grow"><span class="ttl">Рядки</span> <span class="lt-f" data-fname></span></span><label class="fin hq" id="hq">${SVG.search}<input class="qin" id="q2" placeholder="Пошук рядків" aria-label="Пошук рядків" autocomplete="off" spellcheck="false"><span class="kbd" aria-hidden="true">Ctrl+F</span><button class="hqx" type="button" id="q2-x" aria-label="Очистити пошук">✕</button></label><button class="ico ico-btn rs-t" id="rs-menu" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Меню вікна «Рядки»: вигляд, фільтри, пошук" title="Вигляд, фільтри, пошук (Ctrl+F)">⋮</button><span class="ico" data-hide-left="rows" role="button" tabindex="0" aria-label="Сховати панель «Рядки файлу»" title="Сховати">—</span></div>
@@ -470,6 +470,7 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#lp-sc').hidden = l !== 'scenes';
     renderFileChips();
     placeRowsTools(both, l);
+    syncRowsSearch();
     $('#lp-title').innerHTML = both ? (second === 'scenes' ? 'Файли й сцени' : 'Файли й рядки') : l === 'rows' ? `Рядки <span class="lt-f">${esc(currentLabel())}</span>` : l === 'glossary' ? 'Пов’язане' : l === 'scenes' ? `Сцени <span class="lt-f">${esc(currentLabel())}</span>` : 'Файли гри';
     document.querySelectorAll<HTMLElement>('#mtabs [data-lt]').forEach(b => { const on = b.dataset.lt === s.leftTab[s.mode]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
     document.querySelectorAll<HTMLElement>('#seg [data-m]').forEach(b => { const on = b.dataset.m === s.mode; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
@@ -531,7 +532,8 @@ export async function start(root: HTMLElement): Promise<void> {
     const box = $('#tree-list');
     const had = box.contains(document.activeElement) ? (document.activeElement as HTMLElement) : null;
     const hadId = had ? { file: had.dataset.file, dir: had.dataset.dir } : null;
-    $('#tree-act').innerHTML = s.views.length > 1 ? `<button class="btn" data-act="group-all" title="Усі рядки всіх файлів в одній таблиці">Усі файли разом</button>${s.picked.size ? `<button class="btn p" data-act="group-picked">Відкрити вибрані (${s.picked.size})</button><button class="btn" id="tree-grp" aria-haspopup="menu" title="Додати вибрані файли до групи">У групу ▾</button><button class="btn" data-act="group-clear" title="Зняти позначки">✕</button>` : `<button class="btn" id="gr-add" type="button" aria-label="Нова група" title="Нова група. Файли в групу: Ctrl+клік по файлах, потім «У групу» (або перетягніть файл на групу)">+ Група</button>`}` : '';
+    // everything about the groups (all the files together, a new group, the picked files) is in the menu ⋮ of the window; the dot says that files are picked
+    $('#fs-menu').classList.toggle('dot', s.picked.size > 0);
     // a tree with nothing in it is no tree: the message stands alone until there are files
     if (!s.views.length) { box.removeAttribute('role'); box.innerHTML = '<div class="msg-empty">Папку гри ще не відкрито</div>'; return; }
     box.setAttribute('role', 'tree');
@@ -651,26 +653,40 @@ export async function start(root: HTMLElement): Promise<void> {
   const emptyHtml = '<div class="empty-state"><b>Нічого не знайдено</b><span>Немає рядків за поточним пошуком і статусом.</span><button class="btn" data-reset>Скинути фільтри</button></div>';
 
   const SORT_LABEL: Record<SortMode, string> = { order: 'За порядком', new: 'Без перекладу спершу', qa: 'Помилки спершу', long: 'Найдовші спершу' };
-  /** The search of the rows window is a field in its header: it opens with the 🔍 or Ctrl+F and stays open while there is something typed. */
+  /** The search of a window of the left panel (the files, the rows, the scenes) is a field in its header: it opens with Ctrl+F or the menu ⋮ and stays open while there is something typed. */
   let rowsSearchOpen = false;
+  const winSearchOpen = { files: false, scenes: false };
+  type SearchWin = 'files' | 'rows' | 'scenes';
+  const SEARCH_WINS: readonly SearchWin[] = ['files', 'rows', 'scenes'];
+  const WIN_TOOLS: Record<SearchWin, readonly string[]> = { files: ['hq-f', 'fs-menu'], rows: ['hq', 'rs-menu'], scenes: ['hq-s', 'sc-menu'] };
+  const winQuery = (w: SearchWin): string => w === 'files' ? fileQ : w === 'rows' ? s.q : sceneQuery();
+  const winOpen = (w: SearchWin): boolean => (w === 'rows' ? rowsSearchOpen : winSearchOpen[w]) || winQuery(w) !== '';
+  const winInput = (w: SearchWin): HTMLInputElement => $(w === 'files' ? '#fq' : w === 'rows' ? '#q2' : '#sc-q') as HTMLInputElement;
   function syncRowsSearch(): void {
-    const open = rowsSearchOpen || s.q !== '';
-    document.querySelectorAll<HTMLElement>('.rs-head').forEach(h => h.classList.toggle('searching', open));
-    const box = $('#q2') as HTMLInputElement;
-    if (box.value !== s.q) box.value = s.q;
-    const v = !!ctx.view();
-    document.querySelectorAll<HTMLElement>('#rs-menu, #hq').forEach(x => { x.hidden = !v; });
+    const both = $('#lpanel').classList.contains('split'), cur = lp(), single = document.querySelector<HTMLElement>('#lpanel > .ph');
+    for (const w of SEARCH_WINS) {
+      const inSingle = !both && cur === w;
+      document.querySelector<HTMLElement>(`[data-card="${w}"]`)?.classList.toggle('searching', !inSingle && winOpen(w));
+      if (inSingle) single?.classList.toggle('searching', winOpen(w));
+    }
+    if (both || !cur || !SEARCH_WINS.includes(cur as SearchWin)) single?.classList.remove('searching');
+    for (const w of SEARCH_WINS) { const i = winInput(w); if (i.value !== winQuery(w)) i.value = winQuery(w); }
+    const shown: Record<SearchWin, boolean> = { files: s.views.length > 0, rows: !!ctx.view(), scenes: !!ctx.view() };
+    for (const w of SEARCH_WINS) for (const id of WIN_TOOLS[w]) { const x = document.getElementById(id); if (x) x.hidden = !shown[w]; }
   }
-  /** The menu ⋮ and the search field stand in the header of the rows window: in its own card when two windows are shown, in the header of the panel when only the rows are. */
+  /** The menu ⋮ and the search field of each window stand in its header: in its own card when two windows are shown, in the header of the panel when only that one is. */
   function placeRowsTools(both: boolean, l: string | null): void {
-    const single = document.querySelector<HTMLElement>('#lpanel > .ph'), card = document.querySelector<HTMLElement>('[data-card="rows"]');
-    const host = !both && l === 'rows' ? single : card;
-    if (!host || !single || !card) return;
-    const before = host === single ? $('#lp-search') : card.querySelector<HTMLElement>('[data-hide-left]');
-    for (const id of ['hq', 'rs-menu']) { const t = document.getElementById(id); if (t && t.parentElement !== host) host.insertBefore(t, before); }
-    single.classList.toggle('rs-head', host === single);
-    card.classList.toggle('rs-head', host === card);
-    if (host === single) card.classList.remove('searching'); else single.classList.remove('searching');
+    const single = document.querySelector<HTMLElement>('#lpanel > .ph');
+    if (!single) return;
+    for (const w of SEARCH_WINS) {
+      const card = document.querySelector<HTMLElement>(`[data-card="${w}"]`);
+      if (!card) continue;
+      const host = !both && l === w ? single : card;
+      const before = host === single ? $('#lp-search') : card.querySelector<HTMLElement>('[data-hide-left]');
+      for (const id of WIN_TOOLS[w]) { const t = document.getElementById(id); if (t && t.parentElement !== host) host.insertBefore(t, before); }
+      card.classList.toggle('rs-head', host === card);
+    }
+    single.classList.toggle('rs-head', !both && SEARCH_WINS.includes(l as SearchWin));
   }
   function openRowsSearch(): void {
     if (!ctx.view()) return;
@@ -683,6 +699,29 @@ export async function start(root: HTMLElement): Promise<void> {
     rowsSearchOpen = false;
     if (s.q !== '') { s.q = ''; renderAll(); } else syncRowsSearch();
   }
+  /** Opens the search field of the files or of the scenes (the rows have their own, above) and puts the cursor in it. */
+  function openWinSearch(w: 'files' | 'scenes'): void {
+    if (w === 'files' ? !s.views.length : !ctx.view()) return;
+    const shown = s.leftOpen && (w === 'files' ? lp() === 'files' || s.leftBoth : lp() === 'scenes');
+    if (!shown) { s.leftOpen = true; s.leftTab[s.mode] = w; renderAll(); }
+    winSearchOpen[w] = true; syncRowsSearch();
+    const box = winInput(w);
+    box.focus(); box.select();
+  }
+  function closeWinSearch(w: 'files' | 'scenes'): void {
+    winSearchOpen[w] = false;
+    if (w === 'files') { fileQ = ''; renderTree(); } else setSceneQuery(ctx, '');
+    syncRowsSearch();
+  }
+  const winMenuHtml = (w: 'files' | 'scenes'): string => {
+    const find = `<button data-wm="${w}:find" role="menuitem">⌕ ${w === 'files' ? 'Пошук у файлах' : 'Пошук сцени'}<span class="sk">Ctrl+F</span></button>${winQuery(w) !== '' ? `<button data-wm="${w}:reset" role="menuitem">Скинути пошук</button>` : ''}`;
+    const hide = `<hr><button data-wm="${w}:hide" role="menuitem">Сховати панель</button>`;
+    if (w !== 'files') return find + hide;
+    // the groups: all the files in one table, a new group, and what can be done with the picked files (Ctrl+click on the files)
+    const groups = `${s.views.length > 1 ? '<button data-act="group-all" role="menuitem" title="Усі рядки всіх файлів в одній таблиці">Усі файли разом</button>' : ''}<button data-wm="files:newgroup" role="menuitem" title="Файли в групу: Ctrl+клік по файлах, потім «Додати вибрані до групи» (або перетягніть файл на групу)">+ Нова група…</button>`;
+    const picked = s.picked.size ? `<hr><div class="group">Вибрано файлів: ${s.picked.size}</div><button data-act="group-picked" role="menuitem">Відкрити вибрані разом</button><button data-wm="files:place" role="menuitem">Додати вибрані до групи<span class="sk">▸</span></button><button data-act="group-clear" role="menuitem">Зняти позначки</button>` : '';
+    return `${find}<hr>${groups}${picked}${hide}`;
+  };
   const rowsMenuHtml = (): string => {
     const active = s.filters.length > 0 || s.speaker !== null || s.sort !== 'order' || s.q !== '';
     return `<button data-rm="sort" role="menuitem">↕ Вигляд<span class="sk">▸</span></button><button data-rm="more" role="menuitem">Фільтри${s.filters.length ? ` · ${s.filters.length}` : ''}<span class="sk">▸</span></button><hr><button data-rm="find" role="menuitem">⌕ Пошук у файлі<span class="sk">Ctrl+F</span></button>${active ? '<button data-rm="reset" role="menuitem">Скинути пошук і фільтри</button>' : ''}<hr><button data-rm="hide" role="menuitem">Сховати панель</button>`;
@@ -1680,7 +1719,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const t = e.target as HTMLElement;
     const off = t.closest<HTMLElement>('[aria-disabled="true"][data-why]');
     if (off) { toast(off.dataset.why!); return; }
-    if (!t.closest('#fpop,#spkbtn,#lenbtn,#sortbtn,[data-more],#bnav,#cfgpop,#cfg-btn,#projpop,#proj-btn,#rs-menu')) closePops();
+    if (!t.closest('#fpop,#spkbtn,#lenbtn,#sortbtn,[data-more],#bnav,#cfgpop,#cfg-btn,#projpop,#proj-btn,#rs-menu,#fs-menu,#sc-menu')) closePops();
     if (!t.closest('#keypop,#hk')) $('#keypop').hidden = true;
     if (pagesClick(t)) return;
     if (t.closest('#open2,#fb-repick')) { void openFolder(); return; }
@@ -1806,6 +1845,21 @@ export async function start(root: HTMLElement): Promise<void> {
     const spk = t.closest<HTMLElement>('[data-spk]');
     if (spk) { s.speaker = spk.dataset.spk ?? ''; closePops(); renderAll(); return; }
     if (t.closest('#q2-x')) { closeRowsSearch(); return; }
+    if (t.closest('#fq-x')) { closeWinSearch('files'); return; }
+    if (t.closest('#sc-x')) { closeWinSearch('scenes'); return; }
+    if (t.closest('#fs-menu')) { showPop(t.closest<HTMLElement>('#fs-menu')!, winMenuHtml('files')); return; }
+    if (t.closest('#sc-menu')) { showPop(t.closest<HTMLElement>('#sc-menu')!, winMenuHtml('scenes')); return; }
+    const wm = t.closest<HTMLElement>('[data-wm]');
+    if (wm) {
+      hidePop(fpop());
+      const [w, act] = (wm.dataset.wm ?? '').split(':') as ['files' | 'scenes', string];
+      if (act === 'find') openWinSearch(w);
+      else if (act === 'reset') closeWinSearch(w);
+      else if (act === 'hide') { s.leftOpen = false; renderAll(); }
+      else if (act === 'newgroup') startNewGroup(ctx);
+      else if (act === 'place') { const first = [...s.picked][0]; if (first) showPop($('#fs-menu'), placeMenuHtml(ctx, filesTarget(first))); }
+      return;
+    }
     if (t.closest('#rs-menu')) { showPop(t.closest<HTMLElement>('#rs-menu')!, rowsMenuHtml()); return; }
     const rm = t.closest<HTMLElement>('[data-rm]');
     if (rm) {
@@ -1827,7 +1881,6 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.closest('#bb-ok')) { bulkSend(); return; }
     if (t.closest('#bb-appr')) { bulkApprove(); return; }
     if (t.closest('#bb-tm')) { void bulkTm(); return; }
-    if (t.closest('#tree-grp')) { const first = [...s.picked][0]; if (first) showPop(t.closest<HTMLElement>('#tree-grp')!, placeMenuHtml(ctx, filesTarget(first))); return; }
     if (t.closest('#bb-clear')) { s.checked.clear(); renderSelection(); return; }
     if (t.closest('#selall')) { const all = ($('#selall') as HTMLInputElement).checked; for (const u of visibleUnits(true)) all ? s.checked.add(u.key) : s.checked.delete(u.key); renderSelection(); return; }
     const rc = t.closest<HTMLInputElement>('.rc');
@@ -1854,8 +1907,7 @@ export async function start(root: HTMLElement): Promise<void> {
     }
   });
 
-  $('#fq').addEventListener('input', e => { fileQ = (e.target as HTMLInputElement).value; renderTree(); });
-  $('#fq').addEventListener('keydown', e => { if (e.key === 'Escape' && fileQ) { e.stopPropagation(); fileQ = ''; ($('#fq') as HTMLInputElement).value = ''; renderTree(); } });
+  $('#fq').addEventListener('input', e => { fileQ = (e.target as HTMLInputElement).value; renderTree(); syncRowsSearch(); });
   // The tab strip scrolls sideways with the wheel and with a faint thumb drawn over its top edge (no scrollbar row of its own).
   {
     const host = $('#tabs-host'), bar = host.parentElement!;
@@ -1901,11 +1953,13 @@ export async function start(root: HTMLElement): Promise<void> {
   // A field of the scene mode got the focus: that row is the open one, the right panel follows.
   // leaving the editor field: what was typed there is one action of the journal
   root.addEventListener('focusout', e => { const t = e.target as HTMLElement; if (t instanceof HTMLTextAreaElement && t.id === 'i-tr') closeTyping(ctx); });
-  // the search field of the rows window goes back to the title when it is left empty (a click elsewhere, Tab); with a typed query it stays
+  // the search field of a window goes back to the title when it is left empty (a click elsewhere, Tab); with a typed query it stays
   root.addEventListener('focusout', e => {
     const t = e.target as HTMLElement, to = (e as FocusEvent).relatedTarget as HTMLElement | null;
-    if (t.id !== 'q2' || s.q !== '' || !rowsSearchOpen || !document.hasFocus() || to?.closest('#hq')) return;
-    rowsSearchOpen = false; syncRowsSearch();
+    const w: SearchWin | null = t.id === 'q2' ? 'rows' : t.id === 'fq' ? 'files' : t.id === 'sc-q' ? 'scenes' : null;
+    if (!w || winQuery(w) !== '' || !(w === 'rows' ? rowsSearchOpen : winSearchOpen[w]) || !document.hasFocus() || to?.closest('.hq')) return;
+    if (w === 'rows') rowsSearchOpen = false; else winSearchOpen[w] = false;
+    syncRowsSearch();
   });
   root.addEventListener('focusin', e => {
     const t = e.target as HTMLElement;
@@ -1981,8 +2035,22 @@ export async function start(root: HTMLElement): Promise<void> {
     // A span or a div with role="button" is not a native button: Enter and Space press it, as they would a <button>.
     if ((e.key === 'Enter' || e.key === ' ') && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey && t.matches('[role="button"][tabindex]:not(button):not(a)')) { e.preventDefault(); t.click(); return; }
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') { e.preventDefault(); openSearch(); return; }
-    // Ctrl+F in the list of rows (or while the window of rows is the one worked in) opens its search; elsewhere it is left alone
-    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'f' && ctx.view() && (document.documentElement.dataset.pane === 'rows' || document.activeElement?.closest('#lp-rows'))) { e.preventDefault(); openRowsSearch(); return; }
+    // Ctrl+F in a window of the left panel (or while it is the one worked in) opens its search; elsewhere it is left alone
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'f') {
+      const pane = document.documentElement.dataset.pane, at = document.activeElement;
+      if (ctx.view() && (pane === 'rows' || at?.closest('#lp-rows'))) { e.preventDefault(); openRowsSearch(); return; }
+      if (s.views.length && (pane === 'files' || at?.closest('#tree'))) { e.preventDefault(); openWinSearch('files'); return; }
+      if (ctx.view() && (pane === 'scenes' || at?.closest('#lp-sc'))) { e.preventDefault(); openWinSearch('scenes'); return; }
+    }
+    // Esc in the search field of the files or of the scenes: what is typed goes first, then the field closes and the focus goes back to the list
+    if (e.key === 'Escape' && (document.activeElement?.id === 'fq' || document.activeElement?.id === 'sc-q')) {
+      e.preventDefault(); e.stopPropagation();
+      const w = document.activeElement.id === 'fq' ? 'files' : 'scenes', box = document.activeElement as HTMLInputElement;
+      if (box.value !== '') { winSearchOpen[w] = true; if (w === 'files') { fileQ = ''; renderTree(); } else setSceneQuery(ctx, ''); syncRowsSearch(); box.focus(); return; }
+      closeWinSearch(w);
+      document.querySelector<HTMLElement>(w === 'files' ? '#tree-list .node.cur, #tree-list .node' : '#sc-list .sc-item.cur, #sc-list .sc-item')?.focus();
+      return;
+    }
     // Esc in the search field of the rows window: what is typed goes first, then the field closes and the focus goes back to the list
     if (e.key === 'Escape' && document.activeElement?.id === 'q2') {
       e.preventDefault(); e.stopPropagation();

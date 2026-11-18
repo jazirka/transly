@@ -45,7 +45,7 @@ const sum = c => (c.match(/\d+(\.\d+)?/g) || []).slice(0, 3).reduce((a, b) => a 
   check('the chip of the twins stands right before the caption of the translation', g.t[0] - g.c[1] >= 0 && g.t[0] - g.c[1] < 30, JSON.stringify(g));
   check('the row reads «ОРИГІНАЛ · EN … ≡ 2 ПЕРЕКЛАД · UK»', /Оригінал · EN.*≡\s*2.*Переклад · UK/i.test(g.text), g.text);
   check('the original box has no caption of its own any more', (await page.locator('#f-src').evaluate(e => e.parentElement.querySelector(':scope > .lbl') === null)));
-  check('the translation field is close to the caption row', g.boxTop - (g.o[2] + 22) < 24, `${g.boxTop} vs ${g.o[2]}`);
+  check('the translation field is close to the caption row', g.boxTop - (g.o[2] + 17) < 18, `${g.boxTop} vs ${g.o[2]}`);
 
   // ---- one box: the field over the plate, one ring
   const box = await page.evaluate(() => {
@@ -58,9 +58,9 @@ const sum = c => (c.match(/\d+(\.\d+)?/g) || []).slice(0, 3).reduce((a, b) => a 
   check('the plate is lighter than the field', sum(box.plateBg) > sum(box.bodyBg) + 20, `${box.plateBg} vs ${box.bodyBg}`);
   check('the field has no border of its own', box.taBorder === 'rgba(0, 0, 0, 0)' || /, 0\)$/.test(box.taBorder), box.taBorder);
   await page.locator('#i-tr').click(); await sleep(250);
-  const ring = await page.evaluate(() => ({ b: getComputedStyle(document.querySelector('.ebox')).borderTopColor, accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() }));
+  const ring = await page.evaluate(() => ({ field: getComputedStyle(document.querySelector('.ebox .te')).borderTopColor, box: getComputedStyle(document.querySelector('.ebox')).borderTopColor, plate: getComputedStyle(document.querySelector('.ebox .edbar')).borderBottomColor, accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() }));
   const hex = h => { const m = /^#(..)(..)(..)$/.exec(h); return m ? `rgb(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)})` : h; };
-  check('the whole box wears the ring while you type', ring.b === hex(ring.accent), JSON.stringify(ring));
+  check('the ring is the field\'s alone while you type: the plate and the border of the box stay neutral', ring.field === hex(ring.accent) && ring.plate !== hex(ring.accent) && ring.box !== hex(ring.accent), JSON.stringify(ring));
 
   // ---- the counter is a fraction
   const cnt = await page.evaluate(() => { const n = document.querySelector('#c-n').getBoundingClientRect(), o = document.querySelector('#c-o').getBoundingClientRect(), b = getComputedStyle(document.querySelector('#cnt2')); return { n: document.querySelector('#c-n').textContent, o: document.querySelector('#c-o').textContent, stacked: n.bottom <= o.top + 1, bg: b.backgroundColor, border: b.borderTopWidth, label: document.querySelector('#cnt2').getAttribute('aria-label') }; });

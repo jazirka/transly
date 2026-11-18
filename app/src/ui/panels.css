@@ -628,18 +628,19 @@ span.thc2-b{cursor:default}
 
 /* ---------- the editing view as a few cards, like the tool windows: a dark field over a lighter plate with the tools, the remarks and the threads under it ---------- */
 /* the captions of the original and of the translation are one line between the two boxes, joined by a long arrow from the first to the second */
-.bridge{display:flex;align-items:center;gap:10px;min-height:22px;margin:-2px 0 -6px}
+.bridge{display:flex;align-items:center;gap:10px;min-height:16px;margin:-8px 0 -12px}
 .bridge .lbl{margin:0;flex:none}
 .bridge .arrow{flex:1;position:relative;height:1px;min-width:24px;background:#4a4d54}
 .bridge .arrow::after{content:"";position:absolute;right:-1px;top:-4px;border:4px solid transparent;border-left:7px solid var(--mute);border-right:0}
 .bridge .tr{display:flex;align-items:center;gap:10px;flex:none}
 .bridge .eqhost{order:-1}
-.fc-in .trblock{margin-top:4px}
+.fc-in .trblock{margin-top:0}
 .ide.sz-s.compact .bridge{display:none}
 /* the field and its plate are one box with one ring */
 .ide:not(.sz-s) .ebox{background:var(--bg);border:1px solid rgba(255,255,255,.16);border-radius:12px;position:relative}
-.ide:not(.sz-s) .ebox:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.18)}
-.ide:not(.sz-s) .ebox .te{background:transparent;border-radius:12px 12px 0 0}
+/* the ring is the field's alone: it lies over the top and the sides of the box and under the plate, which keeps its own border */
+.ide:not(.sz-s) .ebox .te{background:transparent;margin:-1px -1px 0;border:1px solid transparent;border-radius:12px 12px 0 0;position:relative;z-index:1}
+.ide:not(.sz-s) .ebox .te:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.18)}
 .ide:not(.sz-s) .ebox .te textarea.tr-in,.ide:not(.sz-s) .ebox .te textarea.tr-in:focus{border-color:transparent;box-shadow:none;border-radius:12px 12px 0 0}
 .ide:not(.sz-s) .ebox .edbar{margin:0;border:0;border-top:1px solid var(--line);border-radius:0 0 11px 11px;background:var(--panel);padding:6px 8px}
 .ide.sz-s .ebox{display:contents}

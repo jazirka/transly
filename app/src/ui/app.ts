@@ -1812,7 +1812,7 @@ export async function start(root: HTMLElement): Promise<void> {
       hidePop(fpop());
       const act = rm.dataset.rm;
       if (act === 'sort') $('#sortbtn').click();
-      else if (act === 'more') $('#more-2').click();
+      else if (act === 'more') document.querySelector<HTMLElement>('#chips2 [data-more]')?.click();
       else if (act === 'find') openRowsSearch();
       else if (act === 'reset') { rowsSearchOpen = false; s.filters = []; s.q = ''; s.speaker = null; s.lenFilter = 'all'; s.sort = 'order'; renderAll(); }
       else if (act === 'hide') { s.leftOpen = false; renderAll(); }

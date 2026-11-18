@@ -671,3 +671,12 @@ span.thc2-b{cursor:default}
 .qacard .qa-row.muted{color:var(--dim)}
 .qacard .btn,.qacard .ign,.qacard .fix{height:26px;padding:0 11px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--text);margin:0}
 .qacard .qa-row.bad{background:rgba(247,84,100,.06)}
+
+/* ---------- the top of a tool window (the header, the search and its buttons): the lighter fill fades into the dark body instead of ending in a strip ---------- */
+.tree.split .card-ph{background:none;border-bottom:0}
+#lp-rows,#lp-sc,#lp-gl{position:relative}
+#lp-rows::before,#lp-sc::before,#lp-gl::before{content:"";position:absolute;left:0;right:0;top:0;height:112px;background:linear-gradient(to bottom,var(--panel) 0%,color-mix(in srgb,var(--panel) 55%,transparent) 50%,transparent 100%);pointer-events:none;z-index:0}
+#lp-gl::before{height:132px}
+#lp-rows>:not(.card-ph),#lp-sc>:not(.card-ph),#lp-gl>:not(.card-ph){position:relative;z-index:1}
+/* the files window scrolls as a whole under its sticky header: the fade is a sticky layer at its top, content passes under it */
+#tree::before{content:"";position:sticky;top:0;display:block;flex:none;height:92px;margin-bottom:-92px;background:linear-gradient(to bottom,var(--panel) 0%,color-mix(in srgb,var(--panel) 55%,transparent) 50%,transparent 100%);pointer-events:none;z-index:2}

@@ -1139,5 +1139,13 @@ html.ovsb ::-webkit-scrollbar{display:none}
 .slist .fh{padding:8px 10px}
 
 /* the last column of the table keeps clear of the thumb of the scrollbar: its numbers (and its header) stand the same distance from the edge as the files in the tree */
-.gr .len{padding-right:14px}
-.gh>div:last-child{padding-right:14px;justify-content:flex-end}
+.gr .len{padding-right:10px}
+.gh>div:last-child{padding-right:10px;justify-content:flex-end;border-right:0}
+.gr>div:last-child{border-right:0}
+/* the rows of the table are rounded like the items of the lists, inside the same inset; the header is a rounded bar over them */
+.gridwrap{padding:0 6px 6px}
+.gh{border-radius:8px 8px 0 0}
+.gr{border-radius:8px}
+.gr.sel{border-bottom-color:transparent}
+/* in the bar of the table the menu buttons and the chosen filters stand in the row of the search, as in the rows window */
+.filters .chipsHost{display:contents}

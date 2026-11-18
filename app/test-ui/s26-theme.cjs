@@ -58,7 +58,7 @@ async function pcPart(browser) {
   check('and so is the right rail button', (await read('#stabs button.on')).bg === GREY);
   // two tool windows stacked in the left column are two windows: only the one you work in is lit
   await page.locator('.gr').nth(1).click(); await sleep(250); // a row is chosen again (opening a file clears the choice)
-  if (!(await page.locator('#lp-rows').isVisible())) { await page.locator('.strip [data-lp="rows"]').click(); await sleep(300); } else { await page.locator('#q2').click(); await sleep(200); }
+  if (!(await page.locator('#lp-rows').isVisible())) { await page.locator('.strip [data-lp="rows"]').click(); await sleep(300); } else { await page.locator('#rs-menu').click(); await sleep(200); await page.locator('#fpop [data-rm="find"]').click(); await sleep(200); }
   check('the rows window became the working window, and not the files', (await pane()) === 'rows', String(await pane()));
   const rowsRail = await read('.strip button[data-lp="rows"].on'), filesRail = await read('.strip button[data-lp="files"].on');
   check('its rail button is in colour and the rail button of the files stays grey', rowsRail && rowsRail.bg === ACC && filesRail && filesRail.bg === GREY, JSON.stringify([rowsRail && rowsRail.bg, filesRail && filesRail.bg]));

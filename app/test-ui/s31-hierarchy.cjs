@@ -36,17 +36,17 @@ const mapOf = (name, n) => ({ displayName: name, events: [null, { id: 1, name: '
   check('the list of files teaches the order file › row › translation', /файл › рядок › переклад/.test(hint), hint);
   await page.locator('#tabs-host .tab .x, #tabs-host .tab [data-close]').first().click({ timeout: 3000 }).catch(() => {});
   await sleep(500);
-  const empty = await page.evaluate(() => ({ ask: document.querySelector('#slist .emptybox')?.textContent ?? '', chip: document.querySelector('[data-card="rows"] [data-fchip]')?.textContent ?? '', none: document.querySelector('[data-card="rows"] [data-fchip]')?.classList.contains('none'), coach: document.querySelector('#tree-list .coach')?.textContent ?? '' }));
+  const empty = await page.evaluate(() => ({ ask: document.querySelector('#slist .emptybox')?.textContent ?? '', chip: document.querySelector('[data-card="rows"] [data-fname]')?.textContent ?? '', none: document.querySelector('[data-card="rows"] [data-fname]')?.classList.contains('none'), coach: document.querySelector('#tree-list .coach')?.textContent ?? '' }));
   check('while no file is open the rows window says «Спершу оберіть файл угорі»', /Спершу оберіть файл угорі/.test(empty.ask), JSON.stringify(empty));
   check('its chip says that no file is chosen', /файл не вибрано/.test(empty.chip) && empty.none, JSON.stringify(empty));
   check('and the hint over the files asks for a file', /Оберіть файл/.test(empty.coach), empty.coach);
 
   // the file is chosen: the windows are numbered, the chip names the file, the hint is gone for good
   await page.locator('#tree .node[data-file="Map001.json"]').click(); await sleep(600);
-  const heads = await page.evaluate(() => ({ files: document.querySelector('[data-card="files"] .grow')?.textContent.trim(), rows: document.querySelector('[data-card="rows"] .grow')?.textContent.replace(/\s+/g, ' ').trim(), sep: !!document.querySelector('[data-card="rows"] .crumb-sep') }));
-  check('the rows window reads as a path: the file › Рядки', /Рядки$/.test(heads.rows) && heads.sep && /^Файли гри$/.test(heads.files), JSON.stringify(heads));
-  const chip = await page.evaluate(() => ({ t: document.querySelector('[data-card="rows"] [data-fchip]').textContent, none: document.querySelector('[data-card="rows"] [data-fchip]').classList.contains('none') }));
-  check('the chip of the rows window names the file', /^MAP\s*Town$/.test(chip.t.trim()) && !chip.none, JSON.stringify(chip));
+  const heads = await page.evaluate(() => ({ files: document.querySelector('[data-card="files"] .grow')?.textContent.trim(), rows: document.querySelector('[data-card="rows"] .grow')?.textContent.replace(/\s+/g, ' ').trim() }));
+  check('the rows window is titled «Рядки» and names the file, like the header of the panel', /^Рядки Town/.test(heads.rows) && /^Файли гри$/.test(heads.files), JSON.stringify(heads));
+  const chip = await page.evaluate(() => ({ t: document.querySelector('[data-card="rows"] [data-fname]').textContent, none: document.querySelector('[data-card="rows"] [data-fname]').classList.contains('none') }));
+  check('the name of the file in the header of the rows window', /^Town · Map001$/.test(chip.t.trim()) && !chip.none, JSON.stringify(chip));
   check('the hint over the files goes when a file is opened from the list, and stays gone', (await page.locator('#tree-list .coach').count()) === 0 && (await page.evaluate(() => localStorage.getItem('transly.coach.files'))) === '1');
 
   // the row: the status bar names the file and the place in it

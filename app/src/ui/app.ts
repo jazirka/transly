@@ -135,8 +135,8 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
       <div class="treebody" id="tree"><div class="ph card-ph" data-card="files"><span class="grow">Файли гри</span><span class="ico" data-hide-left="files" role="button" tabindex="0" aria-label="Сховати панель «Файли гри»" title="Сховати">—</span></div><div class="tree-q"><div class="fin">${SVG.search}<input class="qin" id="fq" placeholder="Пошук у файлах гри" aria-label="Пошук у файлах гри" autocomplete="off" spellcheck="false"></div></div><div class="tree-act" id="tree-act"></div>${GROUPS_HTML}<div id="tree-list" role="tree" aria-label="Файли гри"></div></div>
       <div class="rz rz-y" id="rz-y" role="separator" aria-orientation="horizontal" aria-label="Розділ між файлами й рядками" aria-valuemin="15" aria-valuemax="85" tabindex="0" title="Потягніть, щоб змінити співвідношення (подвійний клік — навпіл)" hidden></div>
       <div class="slist" id="lp-rows" hidden>
-        <div class="ph card-ph" data-card="rows"><span class="grow"><span class="fchip" data-fchip></span>${CRUMB}Рядки</span><span class="ico" data-hide-left="rows" role="button" tabindex="0" aria-label="Сховати панель «Рядки файлу»" title="Сховати">—</span></div>
-        <div class="fh"><div class="fin">${SVG.search}<input class="qin" id="q2" placeholder="Пошук рядків" aria-label="Пошук рядків"></div><div class="chips2"><button class="chip" id="sortbtn" aria-haspopup="menu">↕ За порядком</button><span class="chipsHost" id="chips2"></span></div></div>
+        <div class="ph card-ph" data-card="rows"><span class="grow"><span class="ttl">Рядки</span> <span class="lt-f" data-fname></span></span><label class="fin hq" id="hq">${SVG.search}<input class="qin" id="q2" placeholder="Пошук рядків" aria-label="Пошук рядків" autocomplete="off" spellcheck="false"><span class="kbd" aria-hidden="true">Ctrl+F</span><button class="hqx" type="button" id="q2-x" aria-label="Очистити пошук">✕</button></label><button class="ico ico-btn rs-t" id="rs-menu" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Меню вікна «Рядки»: вигляд, фільтри, пошук" title="Вигляд, фільтри, пошук (Ctrl+F)">⋮</button><span class="ico" data-hide-left="rows" role="button" tabindex="0" aria-label="Сховати панель «Рядки файлу»" title="Сховати">—</span></div>
+        <div class="fh"><div class="chips2"><button class="chip hm" id="sortbtn" aria-haspopup="menu">↕ За порядком</button><span class="chipsHost" id="chips2"></span></div></div>
         <div class="sl-body" id="slist"></div>
         <div class="pgb" id="pgb" hidden></div>
       </div>
@@ -469,6 +469,7 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#lp-gl').hidden = l !== 'glossary';
     $('#lp-sc').hidden = l !== 'scenes';
     renderFileChips();
+    placeRowsTools(both, l);
     $('#lp-title').innerHTML = both ? (second === 'scenes' ? 'Файли й сцени' : 'Файли й рядки') : l === 'rows' ? `Рядки <span class="lt-f">${esc(currentLabel())}</span>` : l === 'glossary' ? 'Пов’язане' : l === 'scenes' ? `Сцени <span class="lt-f">${esc(currentLabel())}</span>` : 'Файли гри';
     document.querySelectorAll<HTMLElement>('#mtabs [data-lt]').forEach(b => { const on = b.dataset.lt === s.leftTab[s.mode]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
     document.querySelectorAll<HTMLElement>('#seg [data-m]').forEach(b => { const on = b.dataset.m === s.mode; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
@@ -481,6 +482,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const v = ctx.view();
     const html = v ? (s.current === GROUP ? esc(currentLabel()) : `<span class="ic ${fileIcon(s.current!)[0]}">${fileIcon(s.current!)[1]}</span>${esc(shortLabel())}`) : 'файл не вибрано';
     document.querySelectorAll<HTMLElement>('[data-fchip]').forEach(c => { c.innerHTML = html; c.classList.toggle('none', !v); });
+    document.querySelectorAll<HTMLElement>('[data-fname]').forEach(c => { c.textContent = v ? currentLabel() : 'файл не вибрано'; c.classList.toggle('none', !v); });
     document.querySelectorAll<HTMLElement>('#lp-rows .fh, #lp-sc .fh').forEach(f => { f.hidden = !v; });
     if (!v) {
       const ask = (what: string): string => `<div class="emptybox"><b>Спершу оберіть файл угорі</b>Тут з’являться ${what} вибраного файлу.</div>`;
@@ -592,7 +594,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const n = filterCounts();
     const chips = s.filters.map(f => { const l = FILTERS.find(x => x[0] === f)?.[1] ?? f; return `<button class="chip on" data-filter="${f}" aria-pressed="true" title="Прибрати фільтр «${l}»">${filterDot(f)}${l} <span class="n">${(n.get(f) ?? 0).toLocaleString('uk-UA')}</span><span class="x" aria-hidden="true">✕</span></button>`; }).join('');
     // «Ще ▾» comes first, where the eye looks for it; the chosen ones (the speaker, the statuses) follow it
-    return `<button class="chip more${s.filters.length ? ' on' : ''}" id="more-${host}" data-more aria-haspopup="true" aria-expanded="false">Ще ▾</button>${lead}${chips}${s.filters.length ? '<button class="chip" data-reset title="Скинути всі фільтри">Скинути</button>' : ''}`;
+    return `<button class="chip more${host === '2' ? ' hm' : ''}${s.filters.length ? ' on' : ''}" id="more-${host}" data-more aria-haspopup="true" aria-expanded="false">Ще ▾</button>${lead}${chips}${s.filters.length ? '<button class="chip" data-reset title="Скинути всі фільтри">Скинути</button>' : ''}`;
   }
   /** The popover «Ще ▾»: a box for each status with how many rows have it; the boxes can be mixed. */
   function moreHtml(): string {
@@ -649,8 +651,49 @@ export async function start(root: HTMLElement): Promise<void> {
   const emptyHtml = '<div class="empty-state"><b>Нічого не знайдено</b><span>Немає рядків за поточним пошуком і статусом.</span><button class="btn" data-reset>Скинути фільтри</button></div>';
 
   const SORT_LABEL: Record<SortMode, string> = { order: 'За порядком', new: 'Без перекладу спершу', qa: 'Помилки спершу', long: 'Найдовші спершу' };
+  /** The search of the rows window is a field in its header: it opens with the 🔍 or Ctrl+F and stays open while there is something typed. */
+  let rowsSearchOpen = false;
+  function syncRowsSearch(): void {
+    const open = rowsSearchOpen || s.q !== '';
+    document.querySelectorAll<HTMLElement>('.rs-head').forEach(h => h.classList.toggle('searching', open));
+    const box = $('#q2') as HTMLInputElement;
+    if (box.value !== s.q) box.value = s.q;
+    const v = !!ctx.view();
+    document.querySelectorAll<HTMLElement>('#rs-menu, #hq').forEach(x => { x.hidden = !v; });
+  }
+  /** The menu ⋮ and the search field stand in the header of the rows window: in its own card when two windows are shown, in the header of the panel when only the rows are. */
+  function placeRowsTools(both: boolean, l: string | null): void {
+    const single = document.querySelector<HTMLElement>('#lpanel > .ph'), card = document.querySelector<HTMLElement>('[data-card="rows"]');
+    const host = !both && l === 'rows' ? single : card;
+    if (!host || !single || !card) return;
+    const before = host === single ? $('#lp-search') : card.querySelector<HTMLElement>('[data-hide-left]');
+    for (const id of ['hq', 'rs-menu']) { const t = document.getElementById(id); if (t && t.parentElement !== host) host.insertBefore(t, before); }
+    single.classList.toggle('rs-head', host === single);
+    card.classList.toggle('rs-head', host === card);
+    if (host === single) card.classList.remove('searching'); else single.classList.remove('searching');
+  }
+  function openRowsSearch(): void {
+    if (!ctx.view()) return;
+    if (!s.leftOpen || (lp() !== 'rows' && !s.leftBoth)) { s.leftOpen = true; s.leftTab[s.mode] = 'rows'; renderAll(); }
+    rowsSearchOpen = true; syncRowsSearch();
+    const box = $('#q2') as HTMLInputElement;
+    box.focus(); box.select();
+  }
+  function closeRowsSearch(): void {
+    rowsSearchOpen = false;
+    if (s.q !== '') { s.q = ''; renderAll(); } else syncRowsSearch();
+  }
+  const rowsMenuHtml = (): string => {
+    const active = s.filters.length > 0 || s.speaker !== null || s.sort !== 'order' || s.q !== '';
+    return `<button data-rm="sort" role="menuitem">↕ Вигляд<span class="sk">▸</span></button><button data-rm="more" role="menuitem">Фільтри${s.filters.length ? ` · ${s.filters.length}` : ''}<span class="sk">▸</span></button><hr><button data-rm="find" role="menuitem">⌕ Пошук у файлі<span class="sk">Ctrl+F</span></button>${active ? '<button data-rm="reset" role="menuitem">Скинути пошук і фільтри</button>' : ''}<hr><button data-rm="hide" role="menuitem">Сховати панель</button>`;
+  };
   function renderRowsList(): void {
-    $('#chips2').innerHTML = chipsHtml('2', s.speaker !== null ? `<button class="chip on" data-clear="speaker" title="Скинути фільтр за мовцем">${esc(s.speaker || 'Без мовця')} ✕</button>` : '');
+    $('#chips2').innerHTML = chipsHtml('2', (s.sort !== 'order' ? `<button class="chip on" data-sort="order" title="Повернути порядок за номером">↕ ${esc(SORT_LABEL[s.sort])} ✕</button>` : '') + (s.speaker !== null ? `<button class="chip on" data-clear="speaker" title="Скинути фільтр за мовцем">${esc(s.speaker || 'Без мовця')} ✕</button>` : ''));
+    // the strip of what is switched on stands under the header only while something is; the menu ⋮ carries a dot then
+    const active = s.filters.length > 0 || s.speaker !== null || s.sort !== 'order';
+    $('#lp-rows').classList.toggle('has-active', active);
+    $('#rs-menu').classList.toggle('dot', active);
+    syncRowsSearch();
     $('#sortbtn').textContent = 'Вигляд ▾';
     $('#sortbtn').title = $('#sortbtn').ariaLabel = `Вигляд: порядок «${SORT_LABEL[s.sort]}»`;
     $('#sortbtn').classList.toggle('on', s.sort !== 'order');
@@ -1637,7 +1680,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const t = e.target as HTMLElement;
     const off = t.closest<HTMLElement>('[aria-disabled="true"][data-why]');
     if (off) { toast(off.dataset.why!); return; }
-    if (!t.closest('#fpop,#spkbtn,#lenbtn,#sortbtn,[data-more],#bnav,#cfgpop,#cfg-btn,#projpop,#proj-btn')) closePops();
+    if (!t.closest('#fpop,#spkbtn,#lenbtn,#sortbtn,[data-more],#bnav,#cfgpop,#cfg-btn,#projpop,#proj-btn,#rs-menu')) closePops();
     if (!t.closest('#keypop,#hk')) $('#keypop').hidden = true;
     if (pagesClick(t)) return;
     if (t.closest('#open2,#fb-repick')) { void openFolder(); return; }
@@ -1749,7 +1792,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (more) { showPop(more, moreHtml()); return; }
     const clr = t.closest<HTMLElement>('[data-clear]');
     if (clr) { closePops(); if (clr.dataset.clear === 'speaker') s.speaker = null; else s.lenFilter = 'all'; renderAll(); return; }
-    if (t.closest('[data-reset]')) { s.filters = []; s.q = ''; s.speaker = null; s.lenFilter = 'all'; renderAll(); return; }
+    if (t.closest('[data-reset]')) { rowsSearchOpen = false; s.filters = []; s.q = ''; s.speaker = null; s.lenFilter = 'all'; renderAll(); return; }
     if (t.closest('#spkbtn')) {
       const v = ctx.view();
       // Speakers of every file, not only the open one: the choice stays when another file is opened.
@@ -1762,6 +1805,19 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.closest('[data-act=speakers]')) { closePops(); openSpeakers(ctx); return; }
     const spk = t.closest<HTMLElement>('[data-spk]');
     if (spk) { s.speaker = spk.dataset.spk ?? ''; closePops(); renderAll(); return; }
+    if (t.closest('#q2-x')) { closeRowsSearch(); return; }
+    if (t.closest('#rs-menu')) { showPop(t.closest<HTMLElement>('#rs-menu')!, rowsMenuHtml()); return; }
+    const rm = t.closest<HTMLElement>('[data-rm]');
+    if (rm) {
+      hidePop(fpop());
+      const act = rm.dataset.rm;
+      if (act === 'sort') $('#sortbtn').click();
+      else if (act === 'more') $('#more-2').click();
+      else if (act === 'find') openRowsSearch();
+      else if (act === 'reset') { rowsSearchOpen = false; s.filters = []; s.q = ''; s.speaker = null; s.lenFilter = 'all'; s.sort = 'order'; renderAll(); }
+      else if (act === 'hide') { s.leftOpen = false; renderAll(); }
+      return;
+    }
     if (t.closest('#sortbtn')) { showPop(t.closest<HTMLElement>('#sortbtn')!, `<div class="group">Порядок</div>${(Object.keys(SORT_LABEL) as SortMode[]).map(k => `<button data-sort="${k}" role="menuitemradio" aria-checked="${s.sort === k}" ${s.sort === k ? 'class="on"' : ''}>${SORT_LABEL[k]}</button>`).join('')}`); return; }
     const so = t.closest<HTMLElement>('[data-sort]');
     if (so) { s.sort = so.dataset.sort as SortMode; closePops(); renderAll(); return; }
@@ -1919,6 +1975,17 @@ export async function start(root: HTMLElement): Promise<void> {
     // A span or a div with role="button" is not a native button: Enter and Space press it, as they would a <button>.
     if ((e.key === 'Enter' || e.key === ' ') && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey && t.matches('[role="button"][tabindex]:not(button):not(a)')) { e.preventDefault(); t.click(); return; }
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') { e.preventDefault(); openSearch(); return; }
+    // Ctrl+F in the list of rows (or while the window of rows is the one worked in) opens its search; elsewhere it is left alone
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'f' && ctx.view() && (document.documentElement.dataset.pane === 'rows' || document.activeElement?.closest('#lp-rows'))) { e.preventDefault(); openRowsSearch(); return; }
+    // Esc in the search field of the rows window: what is typed goes first, then the field closes and the focus goes back to the list
+    if (e.key === 'Escape' && document.activeElement?.id === 'q2') {
+      e.preventDefault(); e.stopPropagation();
+      const had = (document.activeElement as HTMLInputElement).value !== '';
+      if (had) { rowsSearchOpen = true; s.q = ''; renderAll(); ($('#q2') as HTMLInputElement).focus(); return; }
+      closeRowsSearch();
+      document.querySelector<HTMLElement>('#slist .si.sel, #slist .si')?.focus();
+      return;
+    }
     // Ctrl+Z / Ctrl+Shift+Z (Ctrl+Y) outside the text fields walk the bulk actions back and forth; in a field the field's own undo keeps working.
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !t.closest('input,textarea,select,[contenteditable="true"]')) {
       const k = e.key.toLowerCase();

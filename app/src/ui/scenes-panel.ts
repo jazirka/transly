@@ -14,7 +14,7 @@ import type { Ctx } from './state';
 const SEARCH = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>';
 
 export const SCENES_HTML = `<div class="slist scpanel" id="lp-sc" hidden>
-  <div class="ph card-ph" data-card="scenes"><span class="grow"><span class="fchip" data-fchip></span>${CRUMB}Сцени</span><span class="ico" data-hide-left="scenes" role="button" tabindex="0" aria-label="Сховати панель «Сцени»" title="Сховати">—</span></div>
+  <div class="ph card-ph" data-card="scenes"><span class="grow"><span class="ttl">Сцени</span> <span class="lt-f" data-fname></span></span><span class="ico" data-hide-left="scenes" role="button" tabindex="0" aria-label="Сховати панель «Сцени»" title="Сховати">—</span></div>
   <div class="fh"><div class="fin">${SEARCH}<input class="qin" id="sc-q" placeholder="Пошук сцени" aria-label="Пошук сцени" autocomplete="off" spellcheck="false"></div><div class="gl-bar"><span class="hint" id="sc-n"></span></div></div>
   <div class="sl-body" id="sc-list"></div>
 </div>`;

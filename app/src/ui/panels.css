@@ -672,14 +672,7 @@ span.thc2-b{cursor:default}
 .qacard .btn,.qacard .ign,.qacard .fix{height:26px;padding:0 11px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--text);margin:0}
 .qacard .qa-row.bad{background:rgba(247,84,100,.06)}
 
-/* ---------- the top of a tool window (the header, the search and its buttons): the lighter fill fades into the dark body instead of ending in a strip ---------- */
-.tree.split .card-ph{background:none;border-bottom:0}
-#lp-rows,#lp-sc,#lp-gl{position:relative}
-#lp-rows::before,#lp-sc::before,#lp-gl::before{content:"";position:absolute;left:0;right:0;top:0;height:112px;background:linear-gradient(to bottom,var(--panel) 0%,color-mix(in srgb,var(--panel) 55%,transparent) 50%,transparent 100%);pointer-events:none;z-index:0}
-#lp-gl::before{height:132px}
-#lp-rows>:not(.card-ph),#lp-sc>:not(.card-ph),#lp-gl>:not(.card-ph){position:relative;z-index:1}
-/* the files window scrolls as a whole under its sticky header: the fade is a sticky layer at its top, content passes under it */
-#tree::before{content:"";position:sticky;top:0;display:block;flex:none;height:92px;margin-bottom:-92px;background:linear-gradient(to bottom,var(--panel) 0%,color-mix(in srgb,var(--panel) 55%,transparent) 50%,transparent 100%);pointer-events:none;z-index:2}
+#lp-rows{position:relative}
 
 /* ---------- the pages of the list of rows: a bubble at the bottom of the window, a mark where each page begins in the continuous list ---------- */
 .pgb{position:absolute!important;left:50%;bottom:12px;transform:translateX(-50%);z-index:4;display:flex;align-items:center;gap:2px;height:32px;padding:0 6px;border-radius:999px;border:1px solid #4a4d54;background:#2b2d30;color:var(--text);box-shadow:0 6px 16px rgba(0,0,0,.45);white-space:nowrap}
@@ -694,3 +687,33 @@ span.thc2-b{cursor:default}
 #lp-rows.has-pager .sl-body{padding-bottom:56px}
 .si.pg-first::before{content:"Сторінка " attr(data-page);grid-column:1/-1;display:block;margin:0 0 6px;padding-top:2px;color:var(--mute);font-size:11.5px;letter-spacing:.02em;border-top:1px solid var(--line);text-align:center}
 .si.pg-first[data-page="1"]::before{border-top:0}
+
+/* ---------- the search and the menu of the rows window live in its header; under it only the strip of what is switched on ---------- */
+.rs-head .hq{display:none;flex:1;min-width:0;width:auto;height:24px;margin:0 2px 0 4px;font-size:12.5px;text-transform:none;letter-spacing:0}
+.rs-head.searching .hq{display:flex;border-color:var(--accent)}
+.rs-head.searching .grow{flex:none}
+.rs-head.searching .ttl{display:none}
+.rs-head.searching .lt-f{display:none}
+.ico.rs-t{opacity:1;width:24px;height:22px;display:grid;place-items:center;background:none;border:0;color:var(--mute);cursor:pointer;font-size:15px;line-height:1;padding:0;border-radius:6px}
+.ico.rs-t:hover{background:rgba(255,255,255,.09);color:var(--text)}
+.ico.rs-t svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.5}
+.ico.rs-t[hidden]{display:none}
+#rs-menu{position:relative}
+#rs-menu.dot::after{content:"";position:absolute;top:2px;right:3px;width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.rs-head .hq input{flex:1;min-width:0;background:none;border:0;outline:0;color:var(--text);font:inherit}
+.rs-head .hq .kbd{color:var(--dim);font-size:11px}
+.rs-head .hq input:not(:placeholder-shown)~.kbd{display:none}
+.rs-head .hq .hqx{display:none;border:0;background:none;color:var(--mute);cursor:pointer;padding:0 2px;font-size:11px}
+.rs-head .hq input:not(:placeholder-shown)~.hqx{display:inline}
+.rs-head .hq .hqx:hover{color:var(--text)}
+/* the anchors of the menu (the sort button and «Ще ▾») are kept in the strip but are not seen: their lists open under the ⋮ */
+#lp-rows .hm{position:absolute;top:-36px;right:30px;width:24px;height:24px;padding:0;border:0;opacity:0;pointer-events:none;overflow:hidden}
+#lp-rows:not(.has-active) .fh{height:0;min-height:0;padding:0;margin:0;overflow:visible;border:0}
+#lp-rows.has-active .fh{padding:2px 10px 8px}
+.pop .sk{margin-left:auto;padding-left:14px;color:var(--mute);font-size:11.5px}
+.pop button{display:flex;align-items:center}
+.rs-head #lp-search{display:none}
+.card-ph .lt-f,.card-ph .ttl{white-space:nowrap}
+.card-ph .lt-f{color:var(--text);font-weight:600;text-transform:none;letter-spacing:0;margin-left:6px;overflow:hidden;text-overflow:ellipsis}
+.card-ph .lt-f.none{color:var(--mute);font-weight:400;font-style:italic}
+.card-ph .grow{overflow:hidden}

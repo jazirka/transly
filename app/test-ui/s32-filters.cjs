@@ -34,15 +34,18 @@ const mapOf = (name, n) => ({ displayName: name, events: [null, { id: 1, name: '
   const rowsN = () => page.locator('#slist .si').count();
   const all = await rowsN();
 
-  // at rest there is no row of chips: «Ще ▾» only
-  check('at rest the rows window has no chips of statuses, only «Ще ▾»', (await page.locator('#chips2 .chip[data-filter]').count()) === 0 && (await page.locator('#chips2 [data-more]').count()) === 1);
-  // the box with the statuses
-  await page.locator('#chips2 [data-more]').click(); await sleep(250);
+  // at rest there is no strip under the header: the buttons are in the menu ⋮
+  check('at rest the rows window has no chips of statuses and no strip under its header', (await page.locator('#chips2 .chip[data-filter]').count()) === 0 && (await page.locator('#lp-rows .fh').evaluate(e => e.getBoundingClientRect().height)) < 2);
+  check('the menu ⋮ has no dot while nothing is switched on', !(await page.locator('#rs-menu').evaluate(e => e.classList.contains('dot'))));
+  // the box with the statuses opens from the menu
+  await page.locator('#rs-menu').click(); await sleep(200);
+  await page.locator('#fpop [data-rm="more"]').click(); await sleep(250);
   const pop = await page.$$eval('#fpop .fi', cs => cs.map(c => ({ f: c.dataset.filter, t: c.textContent.trim().replace(/\s+/g, ' '), dot: c.querySelector('.sd')?.className ?? '', off: c.disabled })));
   check('«Ще ▾» lists the statuses and the extras with their counts', pop.length === 8 && pop.every(p => /\d$/.test(p.t)), JSON.stringify(pop.map(p => p.t)));
   check('the statuses wear their dots', pop.find(p => p.f === 'new')?.dot === 'sd new' && pop.find(p => p.f === 'done')?.dot === 'sd done', JSON.stringify(pop.map(p => [p.f, p.dot])));
   await page.locator('#fpop .fi[data-filter="new"]').click(); await sleep(400);
   const onlyNew = await rowsN();
+  check('with a status switched on the menu ⋮ carries a dot', await page.locator('#rs-menu').evaluate(e => e.classList.contains('dot')));
   check('a ticked status filters the rows and shows as a chip', onlyNew === all - 1 && (await page.locator('#chips2 .chip.on[data-filter="new"]').count()) === 1, `${all} -> ${onlyNew}`);
   check('the box stays open while statuses are ticked', await page.locator('#fpop').isVisible() && (await page.locator('#fpop .fi.on').count()) === 1);
   await page.locator('#fpop .fi[data-filter="done"]').click(); await sleep(400);
@@ -53,9 +56,10 @@ const mapOf = (name, n) => ({ displayName: name, events: [null, { id: 1, name: '
   await page.locator('#chips2 [data-reset]').click(); await sleep(400);
   check('«Скинути» brings every row back and the chips go', (await rowsN()) === all && (await page.locator('#chips2 .chip.on[data-filter]').count()) === 0);
 
-  // the sort moved into «Вигляд ▾»
-  check('the sort button is «Вигляд ▾»', /Вигляд/.test(await page.locator('#sortbtn').innerText()));
-  await page.locator('#sortbtn').click(); await sleep(200);
+  // the sort is «Вигляд» in the menu ⋮
+  await page.locator('#rs-menu').click(); await sleep(200);
+  check('the menu has «Вигляд», «Фільтри» and the quick search with its keys', /Вигляд/.test(await page.locator('#fpop [data-rm="sort"]').innerText()) && /Фільтри/.test(await page.locator('#fpop [data-rm="more"]').innerText()) && /Ctrl\+F/.test(await page.locator('#fpop [data-rm="find"]').innerText()));
+  await page.locator('#fpop [data-rm="sort"]').click(); await sleep(200);
   check('and offers the order with a mark on the current one', (await page.locator('#fpop [data-sort]').count()) >= 3 && (await page.locator('#fpop [data-sort][aria-checked="true"]').count()) === 1);
   await page.keyboard.press('Escape'); await sleep(150);
 

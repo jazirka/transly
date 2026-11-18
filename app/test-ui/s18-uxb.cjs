@@ -64,8 +64,8 @@ const check = (name, ok, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ') 
   } else check('a QA fix button is offered for a double space', false, 'no button');
 
   // ---- the sort of the list does not reorder the table (ux-b-20)
-  await page.locator('#sortbtn').click(); await sleep(200);
-  await page.locator('[data-sort="long"]').click(); await sleep(400);
+  await page.locator('#rs-menu').click(); await sleep(200); await page.locator('#fpop [data-rm="sort"]').click(); await sleep(200);
+  await page.locator('#fpop [data-sort="long"]').click(); await sleep(400);
   await page.locator('[data-m="table"]').click(); await sleep(600);
   const order = await page.$$eval('.gr[data-key]:not(.lazy)', rs => rs.map(r => r.dataset.key));
   check('the table keeps the order of the file when the list is sorted', order.join() === 'k0,k1,k2,k3,k4,k5', order.join());

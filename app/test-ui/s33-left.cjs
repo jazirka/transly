@@ -29,14 +29,14 @@ const FILES = { Actors: ['Harold', 'Therese'], Armors: ['Cloth', 'Shield'], Clas
   await page.locator('[data-coach-ok]').click().catch(() => {}); await sleep(200);
 
   // the windows are a path: the file › the rows, with no numbers
-  const heads = await page.evaluate(() => ({ steps: document.querySelectorAll('.step').length, rows: document.querySelector('[data-card="rows"] .grow')?.textContent.replace(/\s+/g, ' ').trim(), sep: !!document.querySelector('[data-card="rows"] .crumb-sep') }));
-  check('no numbered badges; the rows window says «file › Рядки»', heads.steps === 0 && heads.sep && /Рядки$/.test(heads.rows), JSON.stringify(heads));
+  const heads = await page.evaluate(() => ({ steps: document.querySelectorAll('.step').length, rows: document.querySelector('[data-card="rows"] .grow')?.textContent.replace(/\s+/g, ' ').trim() }));
+  check('no numbered badges; the rows window says «Рядки» and the file', heads.steps === 0 && /^Рядки /.test(heads.rows), JSON.stringify(heads));
 
   // the searches are alike and nothing is drawn under them
   const look = q => page.evaluate(q => { const f = document.querySelector(q), h = f.closest('.tree-q, .fh'), c = getComputedStyle(f), p = getComputedStyle(h); return { h: Math.round(f.getBoundingClientRect().height), r: c.borderTopLeftRadius, bg: c.backgroundColor, bb: p.borderBottomWidth, hbg: p.backgroundColor }; }, q);
-  const lf = await look('#fq'), lr = await look('#q2');
-  check('the search of the files is the search of the rows (the same field)', lf.h === lr.h && lf.r === lr.r && lf.bg === lr.bg, JSON.stringify([lf, lr]));
-  check('with no divider under it and no strip of its own', lf.bb === '0px' && lr.bb === '0px' && lf.hbg === 'rgba(0, 0, 0, 0)' && lr.hbg === 'rgba(0, 0, 0, 0)', JSON.stringify([lf, lr]));
+  const lf = await look('#fq');
+  check('the search of the files has no divider under it and no strip of its own', lf.bb === '0px' && lf.hbg === 'rgba(0, 0, 0, 0)', JSON.stringify(lf));
+  check('the search of the rows is in the header of its window, not under it', await page.evaluate(() => !!document.querySelector('[data-card="rows"] #q2') && !document.querySelector('#lp-rows .fh #q2')));
   check('and no divider between the groups and the tree', await page.evaluate(() => getComputedStyle(document.querySelector('#tree-groups')).borderBottomWidth === '0px'));
 
   // the groups: no title, «+ Група» beside «Усі файли разом»

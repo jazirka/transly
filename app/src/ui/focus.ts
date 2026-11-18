@@ -45,21 +45,22 @@ const I = {
 export const FOCUS_HTML = `<div class="fc"><div class="fc-in"><div class="te-links" id="te-links"></div>
   <div class="fhd"><span class="k" id="f-key"></span><span class="fchips" id="f-chips"></span><span class="st-pill" id="f-state"></span></div>
   <div class="offlist" id="f-off" hidden><span>Цей рядок не входить у поточний фільтр або пошук.</span><button data-reset>Показати всі рядки</button></div>
-  <div><div class="lbl">Оригінал · EN</div><div class="srcbox" id="f-src" lang="en"></div><div class="pics" id="f-pics" hidden></div></div>
+  <div><div class="srcbox" id="f-src" lang="en"></div><div class="pics" id="f-pics" hidden></div></div>
   <div id="f-refbox" hidden></div>
+  <div class="bridge"><div class="lbl">Оригінал · EN</div><span class="arrow" aria-hidden="true"></span><div class="tr"><span class="eqhost" id="f-eq"></span><div class="lbl" id="f-trlbl">Переклад · UK</div></div></div>
   <div class="trblock">
-    <div class="lbl"><span id="f-trlbl">Переклад · UK</span><span class="eqhost" id="f-eq"></span></div>
-    <div class="te"><div class="te-layer" id="te-layer" aria-hidden="true"></div><textarea class="tr-in" id="i-tr" spellcheck="false" aria-label="Переклад"></textarea></div>
-    <div class="edbar">
-      <button class="ib lab" id="b-compact" title="Лише текст: сховати контекст і примітки" aria-label="Режим лише тексту">${I.compact}<span class="tl">Лише текст</span></button>
-      <button class="ib" id="b-clear" title="Очистити переклад" aria-label="Очистити переклад">${I.clear}</button>
-      <span class="grow"></span>
-      <div class="cnt2" id="cnt2" title="Знаків у перекладі / в оригіналі. Рекомендація: якнайближче до оригіналу"><span id="c-ch">0 / 0 зн.</span></div>
-      <button class="saveb" id="b-save" aria-label="Надіслати">${I.send}</button>
+    <div class="ebox">
+      <div class="te"><div class="te-layer" id="te-layer" aria-hidden="true"></div><textarea class="tr-in" id="i-tr" spellcheck="false" aria-label="Переклад"></textarea></div>
+      <div class="edbar">
+        <button class="ib lab" id="b-compact" title="Лише текст: сховати контекст і примітки" aria-label="Режим лише тексту">${I.compact}<span class="tl">Лише текст</span></button>
+        <button class="ib" id="b-clear" title="Очистити переклад" aria-label="Очистити переклад">${I.clear}</button>
+        <span class="grow"></span>
+        <div class="cnt2" id="cnt2" title="Знаків у перекладі над знаків в оригіналі. Рекомендація: якнайближче до оригіналу"><span class="cfrac" id="c-ch"><b id="c-n">0</b><i aria-hidden="true"></i><span id="c-o">0</span></span></div>
+        <button class="saveb" id="b-save" aria-label="Надіслати">${I.send}</button>
+      </div>
     </div>
-    <div class="wraphint" id="f-wrap" hidden></div>
-    <div class="qa-under" id="f-qa"></div>
   </div>
+  <section class="qacard" id="f-qacard" aria-label="Зауваження до рядка" hidden><div class="qh"><span id="f-qa-t">Зауваження</span></div><div class="qb"><div class="wraphint" id="f-wrap" hidden></div><div class="qa-under" id="f-qa"></div></div></section>
   <section class="thr" id="f-threads" aria-label="Нитки цього рядка" hidden><div class="lbl">Нитки</div><div class="thr-b" id="f-threads-b"></div></section>
 </div></div>`;
 
@@ -179,7 +180,9 @@ function meter(ctx: Ctx, u: Unit): void {
   const t = ($('#i-tr') as HTMLTextAreaElement).value;
   const rl = displayLength(u.source), n = displayLength(t);
   const d = Math.abs(lengthDeviation(u.source, t)), tol = ctx.s.saved.settings.tolerancePct;
-  $('#c-ch').textContent = `${n} / ${rl} зн.`;
+  $('#c-n').textContent = String(n);
+  $('#c-o').textContent = String(rl);
+  $('#cnt2').setAttribute('aria-label', `Знаків у перекладі: ${n} з ${rl} в оригіналі`);
   $('#cnt2').classList.toggle('over', !!t && d > tol);
   $('#cnt2').classList.toggle('mid', !!t && d <= tol && d > tol / 2);
   // A line longer than the game's window is said right under the field, with the way to fix it; so is a message with more lines than the window shows.
@@ -193,7 +196,23 @@ function meter(ctx: Ctx, u: Unit): void {
   const max = plan.settings.maxLines, shown = u.kind === 'dialogue' && max > 0 && t ? linesShown(plan, u, t) : 0;
   if (shown > max) said.push(`<b>${plural(shown, ['рядок', 'рядки', 'рядків'])}</b>, а вікно показує ${max}: гра покаже на кількох сторінках`);
   wh.hidden = !said.length;
+  wh.dataset.n = String(said.length);
   if (said.length) wh.innerHTML = `<span>${said.join(' · ')}</span>${wide.count ? '<button type="button" class="btn" data-wrap>Перенести за шириною</button>' : ''}`;
+  syncQaCard();
+}
+
+/**
+ * The remarks of the row (the width of the window, the checks of the QA) stand in one card under the field, with their buttons; the card
+ * is not there while there is nothing to say, and its title counts the remarks that are not set aside.
+ */
+function syncQaCard(): void {
+  const card = document.getElementById('f-qacard'), wrap = document.getElementById('f-wrap'), qa = document.getElementById('f-qa');
+  if (!card || !wrap || !qa) return;
+  const hints = wrap.hidden ? 0 : Number(wrap.dataset.n ?? 1) || 1;
+  const live = hints + qa.querySelectorAll('.qa-row:not(.muted)').length, rows = hints + qa.querySelectorAll('.qa-row').length;
+  card.hidden = !rows;
+  const t = document.getElementById('f-qa-t');
+  if (t) t.textContent = live ? `Зауваження · ${live}` : 'Зауваження відкладено';
 }
 
 function refreshQa(ctx: Ctx, u: Unit): void {
@@ -201,6 +220,7 @@ function refreshQa(ctx: Ctx, u: Unit): void {
   const t = e?.target ?? '';
   const q = qaRows(ctx, u, e);
   $('#f-qa').innerHTML = q.html;
+  syncQaCard();
   const st = shownStatus(ctx, u, e);
   const pill = $('#f-state');
   pill.innerHTML = `<span class="sd ${st}"></span>${e?.returned && e.status === 'draft' ? 'повернено на доопрацювання' : STATUS_CAP[st]}`;

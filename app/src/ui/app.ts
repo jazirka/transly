@@ -56,6 +56,7 @@ import { describeGithub, githubConfigured, loadGithubConfig, runGithubSync } fro
 import { describe as describeSync, loadSyncConfig, runSync, syncConfigured } from './sync';
 import { initResize, initRightResize } from './resize';
 import { mountRows, patchRow, reveal } from './chunks';
+import { pagesClick, planRows, renderPager, takeWantTop, wirePages } from './pages';
 import { buildAndRunGame, playInGame } from './play';
 import { invalidateUsage, renderStrands, wireStrands } from './strands-panel';
 import { wireMine } from './mine-panel';
@@ -137,6 +138,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
         <div class="ph card-ph" data-card="rows"><span class="grow"><span class="fchip" data-fchip></span>${CRUMB}Рядки</span><span class="ico" data-hide-left="rows" role="button" tabindex="0" aria-label="Сховати панель «Рядки файлу»" title="Сховати">—</span></div>
         <div class="fh"><div class="fin">${SVG.search}<input class="qin" id="q2" placeholder="Пошук рядків" aria-label="Пошук рядків"></div><div class="chips2"><button class="chip" id="sortbtn" aria-haspopup="menu">↕ За порядком</button><span class="chipsHost" id="chips2"></span></div></div>
         <div class="sl-body" id="slist"></div>
+        <div class="pgb" id="pgb" hidden></div>
       </div>
       ${SCENES_HTML}
       ${GLOSSARY_HTML}
@@ -639,9 +641,10 @@ export async function start(root: HTMLElement): Promise<void> {
     return enforcedCache.en;
   }
 
-  const siHtml = (u: Unit, n: number): string => {
+  /** `page` is the number of the page this row begins (the continuous list marks it), or 0. */
+  const siHtml = (u: Unit, n: number, page = 0): string => {
     const e = entryOf(u), st = shownStatus(ctx, u, e);
-    return `<div class="si ${u.key === s.cur ? 'sel' : ''}" data-key="${esc(u.key)}" role="button" tabindex="0"><span class="sd ${st}${autoDraft(st, e) ? ' auto' : ''}" title="${STATUS_LABEL[st]}${autoDraft(st, e) ? ' (заповнено застосунком, ще не переглянуто)' : ''}"></span><div><div class="a"><span>${n}</span><b>${esc(ctx.speaker(u) || KIND_LABEL[u.kind])}</b><span>${esc(shortKey(u.key))}</span>${cmIcon(e)}</div><div class="s" lang="en">${esc(flow(u.source))}</div><div class="t">${e?.target ? esc(flow(e.target)) : '—'}</div></div></div>`;
+    return `<div class="si ${u.key === s.cur ? 'sel' : ''}${page ? ' pg-first' : ''}"${page ? ` data-page="${page}"` : ''} data-key="${esc(u.key)}" role="button" tabindex="0"><span class="sd ${st}${autoDraft(st, e) ? ' auto' : ''}" title="${STATUS_LABEL[st]}${autoDraft(st, e) ? ' (заповнено застосунком, ще не переглянуто)' : ''}"></span><div><div class="a"><span>${n}</span><b>${esc(ctx.speaker(u) || KIND_LABEL[u.kind])}</b><span>${esc(shortKey(u.key))}</span>${cmIcon(e)}</div><div class="s" lang="en">${esc(flow(u.source))}</div><div class="t">${e?.target ? esc(flow(e.target)) : '—'}</div></div></div>`;
   };
   const emptyHtml = '<div class="empty-state"><b>Нічого не знайдено</b><span>Немає рядків за поточним пошуком і статусом.</span><button class="btn" data-reset>Скинути фільтри</button></div>';
 
@@ -656,8 +659,15 @@ export async function start(root: HTMLElement): Promise<void> {
     const idx = new Map(v.units.map((u, i) => [u.key, i + 1]));
     const list = visibleUnits(true);
     const box = $('#slist');
-    if (list.length) mountRows('slist', box, box, '', list.map(u => u.key), i => siHtml(list[i]!, idx.get(list[i]!.key)!), s.current ?? '', 72, 'si');
-    else box.innerHTML = emptyHtml;
+    // pages: only the rows of one page are drawn; the continuous list marks where each page begins; both have the bubble of the pages
+    const plan = planRows(`${s.current ?? ''}|${s.filters.join(',')}|${s.q}|${s.speaker ?? ''}|${s.lenFilter}|${s.sort}`, list.map(u => u.key), s.cur);
+    renderPager(document.getElementById('pgb'), document.getElementById('lp-rows'), plan);
+    if (list.length) {
+      const part = plan.mode === 'pages' ? list.slice(plan.from, plan.to) : list;
+      mountRows('slist', box, box, '', part.map(u => u.key), i => siHtml(part[i]!, idx.get(part[i]!.key)!, plan.mode === 'flow' && i % plan.size === 0 ? i / plan.size + 1 : 0), s.current ?? '', 72, 'si');
+      const top = takeWantTop();
+      if (top !== null) box.scrollTop = top;
+    } else box.innerHTML = emptyHtml;
   }
 
 
@@ -1629,6 +1639,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (off) { toast(off.dataset.why!); return; }
     if (!t.closest('#fpop,#spkbtn,#lenbtn,#sortbtn,[data-more],#bnav,#cfgpop,#cfg-btn,#projpop,#proj-btn')) closePops();
     if (!t.closest('#keypop,#hk')) $('#keypop').hidden = true;
+    if (pagesClick(t)) return;
     if (t.closest('#open2,#fb-repick')) { void openFolder(); return; }
     if (t.closest('#fb-use')) { useFolderAnyway(); return; }
     if (t.closest('#fb-hide')) { folderHidden = true; renderFolderBar(); return; }
@@ -2018,6 +2029,7 @@ export async function start(root: HTMLElement): Promise<void> {
   wireDiscuss(ctx);
   wireLinks(ctx);
   wireRowsChip(ctx);
+  wirePages({ render: renderRowsList, list: () => document.getElementById('slist'), bubble: () => document.getElementById('pgb') });
   wireTermCard(ctx, {
     insert: text => insertText(ctx, text),
     goto: (file, key) => openRow(file, key),

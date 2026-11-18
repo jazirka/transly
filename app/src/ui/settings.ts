@@ -4,6 +4,8 @@ import { $, CRUMB, el, esc, plural, toast } from './dom';
 import { isDesktop } from './desktop';
 import { showDialog } from './modal';
 import { nativeChrome, setNativeChrome } from './winctl';
+import { forgetPlaces, pagesPrefs, setPagesPrefs } from './pages';
+import { PAGE_SIZES } from '../core';
 import type { Ctx } from './state';
 import { artifactDb, describeClaude, loadClaudeConfig, runClaudeSync, saveClaudeConfig } from './claude';
 import { DEFAULT_API, describeGithub, loadGithubConfig, runGithubSync, saveGithubConfig } from './github';
@@ -91,6 +93,11 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
       <div class="th-row"><span class="th-sw" id="th-sw" aria-hidden="true" style="background:${themeTokens(themeHue(ctx.s.saved.name, st.hue))['--accent']}"></span><span class="hint" id="th-hint" role="status">${st.hue === undefined ? `Колір береться з назви проєкту: ${themeHue(ctx.s.saved.name, st.hue)}°` : `Обрано вручну: ${themeHue(ctx.s.saved.name, st.hue)}°`}</span><button class="btn" type="button" id="th-reset"${st.hue === undefined ? ' disabled' : ''}>Взяти з назви проєкту</button></div>
       <div class="th-pre" id="th-pre" role="group" aria-label="Готові кольори">${[185, 215, 245, 275, 305, 335].map(h => `<button type="button" data-h="${h}" aria-label="Відтінок ${h}°" aria-pressed="${h === themeHue(ctx.s.saved.name, st.hue)}" style="background:${themeTokens(h)['--accent']}"></button>`).join('')}</div></div>
     <p class="hint">Колір береться з холодної частини кола, щоб його не сплутати зі статусами. Спробувати можна одразу: він міняється в усьому застосунку, а зберігається разом із проєктом лише після «Застосувати».</p>
+    <div class="st-sub" data-now><h3>Список рядків</h3>
+      <div class="grid"><label for="st-pgm">Як показувати довгий список</label><select id="st-pgm"><option value="pages" ${pagesPrefs().mode === 'pages' ? 'selected' : ''}>сторінками: одна сторінка, кнопки ‹ ›</option><option value="flow" ${pagesPrefs().mode === 'flow' ? 'selected' : ''}>безперервно, зі знаками сторінок</option><option value="off" ${pagesPrefs().mode === 'off' ? 'selected' : ''}>безперервно, без сторінок</option></select>
+        <label for="st-pgs">Рядків на сторінці</label><select id="st-pgs">${PAGE_SIZES.map(n => `<option value="${n}" ${pagesPrefs().size === n ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+      <label class="achk"><input type="checkbox" id="st-pgr" ${pagesPrefs().remember ? 'checked' : ''}> Пам’ятати місце (сторінку, рядок і прокрутку) для кожного файлу й набору фільтрів</label>
+      <p class="hint">Малюється лише одна сторінка, тож великі файли відкриваються швидше, а в кожного рядка є місце, до якого легко повернутися. Застосовується одразу.</p></div>
     ${isDesktop() ? `<div data-now><label class="achk"><input type="checkbox" id="st-sysbar" ${nativeChrome() ? 'checked' : ''}> Системний заголовок вікна</label>
       <p class="hint">Запасний варіант: якщо власного заголовка не видно або його кнопки не працюють. Застосовується одразу.</p></div>` : ''}`)}
     ${isDesktop() ? page('folder', '', `<div class="folder-set"><label for="st-folder">Папка гри цього проєкту</label><div class="folder-row"><span id="st-folder" class="path" tabindex="0"></span><button class="btn" type="button" id="st-folder-change">Змінити…</button><button class="btn" type="button" id="st-folder-forget">Забути</button></div>
@@ -320,6 +327,9 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
   const showFolder = (): void => { const el0 = dlg.querySelector<HTMLElement>('#st-folder'); if (el0) { el0.textContent = onFolder.text(); el0.title = el0.textContent; } };
   showFolder();
   dlg.querySelector('#st-folder-change')?.addEventListener('click', () => away(onFolder.change));
+  dlg.querySelector('#st-pgm')?.addEventListener('change', e => { setPagesPrefs({ mode: (e.target as HTMLSelectElement).value as 'pages' | 'flow' | 'off' }); ctx.render(); });
+  dlg.querySelector('#st-pgs')?.addEventListener('change', e => { setPagesPrefs({ size: Number((e.target as HTMLSelectElement).value) }); ctx.render(); });
+  dlg.querySelector('#st-pgr')?.addEventListener('change', e => { const on = (e.target as HTMLInputElement).checked; setPagesPrefs({ remember: on }); if (!on) forgetPlaces(); });
   dlg.querySelector('#st-sysbar')?.addEventListener('change', e => { setNativeChrome((e.target as HTMLInputElement).checked); });
   dlg.querySelector('#st-folder-forget')?.addEventListener('click', () => { onFolder.forget(); showFolder(); toast('Папку гри забуто. Переклад лишився; збірка й запуск гри недоступні, поки папку не вказано'); });
   const termsFile = $('#st-terms-file', dlg) as HTMLInputElement;

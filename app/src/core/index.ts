@@ -1,3 +1,4 @@
+export * from './pages';
 export * from './model';
 export * from './controlCodes';
 export * from './qa';

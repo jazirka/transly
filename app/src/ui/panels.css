@@ -680,3 +680,17 @@ span.thc2-b{cursor:default}
 #lp-rows>:not(.card-ph),#lp-sc>:not(.card-ph),#lp-gl>:not(.card-ph){position:relative;z-index:1}
 /* the files window scrolls as a whole under its sticky header: the fade is a sticky layer at its top, content passes under it */
 #tree::before{content:"";position:sticky;top:0;display:block;flex:none;height:92px;margin-bottom:-92px;background:linear-gradient(to bottom,var(--panel) 0%,color-mix(in srgb,var(--panel) 55%,transparent) 50%,transparent 100%);pointer-events:none;z-index:2}
+
+/* ---------- the pages of the list of rows: a bubble at the bottom of the window, a mark where each page begins in the continuous list ---------- */
+.pgb{position:absolute!important;left:50%;bottom:12px;transform:translateX(-50%);z-index:4;display:flex;align-items:center;gap:2px;height:32px;padding:0 6px;border-radius:999px;border:1px solid #4a4d54;background:#2b2d30;color:var(--text);box-shadow:0 6px 16px rgba(0,0,0,.45);white-space:nowrap}
+.pgb[hidden]{display:none}
+.pgb button{height:26px;min-width:26px;padding:0 8px;border:0;border-radius:999px;background:none;color:var(--text);font:inherit;font-size:12.5px;cursor:pointer}
+.pgb button:hover:not(:disabled){background:rgba(255,255,255,.09)}
+.pgb button:disabled{color:var(--dim);cursor:default}
+.pgb button:focus-visible,.pgb .pg-in:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.pgb .pg-a{font-size:15px;padding:0 6px}
+.pgb .pg-in{width:64px;height:24px;margin:0 4px;border:1px solid var(--accent);border-radius:8px;background:var(--bg);color:var(--text);text-align:center;font:inherit;font-size:12.5px}
+.pgb.flow{padding:0 4px}
+#lp-rows.has-pager .sl-body{padding-bottom:56px}
+.si.pg-first::before{content:"Сторінка " attr(data-page);grid-column:1/-1;display:block;margin:0 0 6px;padding-top:2px;color:var(--mute);font-size:11.5px;letter-spacing:.02em;border-top:1px solid var(--line);text-align:center}
+.si.pg-first[data-page="1"]::before{border-top:0}

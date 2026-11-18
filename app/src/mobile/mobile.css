@@ -657,7 +657,7 @@ textarea::placeholder,input::placeholder{color:#9a9ca3}
 /* a landscape screen as short as a keyboard leaves (200 px): the rail of four buttons fits */
 @media (orientation:landscape) and (max-height:300px) and (min-width:560px){
   .m-nav button{min-height:0;font-size:10px;gap:0;max-height:none}
-  .m-nav button svg{width:18px;height:18px}
+  .m-nav button svg{width:18px;height:18px;padding:3px 12px}
 }
 
 /* with the keyboard up: the first remark only, and a line that says how many more there are (four full cards covered the field and the buttons) */
@@ -675,13 +675,17 @@ textarea::placeholder,input::placeholder{color:#9a9ca3}
 
 /* ===== the states (see ../ui/states.css): chosen = a grey fill and a grey ring; a press = the colour of the project; no bars, no underlines ===== */
 .m-row.picked,.m-af.sel,.m-item.picked,.m-item.cur,.m-row.cur,.m-bubble.cur,.scn-box.cur,.m-lkrow.me,
-.m-chip.on,.m-seg button.on,.m-scope button.on,.m-dseg button.on,.m-mini.on,.m-hdr.on,.m-stabs button.on,.m-nav button.on,.ab-ic[aria-pressed=true]{
+.m-chip.on,.m-seg button.on,.m-scope button.on,.m-dseg button.on,.m-mini.on,.m-hdr.on,.m-stabs button.on,.ab-ic[aria-pressed=true]{
   background:var(--on-bg)!important;box-shadow:inset 0 0 0 1px var(--on-ring)!important;border-color:var(--on-ring)!important;color:var(--text)!important}
-.m-nav button.on{border-radius:12px}
-.m-nav button.on svg{color:inherit}
+/* the bottom navigation: the chosen destination is its icon on a filled pill; there is no box round the whole button */
+.m-nav button.on{background:none;box-shadow:none;border-color:transparent;border-radius:0;color:var(--text)}
+.m-nav button svg{box-sizing:content-box;width:22px;height:22px;padding:4px 16px;border-radius:999px;transition:background .12s}
+.m-nav button.on svg{background:var(--use);color:#fff}
+.m-nav button:active svg{background:var(--accent-soft)}
+.m-nav button.on span{color:var(--text);font-weight:600}
 .m-stab-ind{display:none}
 :is(.m-row.picked,.m-af.sel,.m-item.picked,.m-item.cur,.m-row.cur,.m-bubble.cur,.scn-box.cur,.m-lkrow.me,
-.m-chip.on,.m-seg button.on,.m-scope button.on,.m-dseg button.on,.m-mini.on,.m-hdr.on,.m-stabs button.on,.m-nav button.on):active{
+.m-chip.on,.m-seg button.on,.m-scope button.on,.m-dseg button.on,.m-mini.on,.m-hdr.on,.m-stabs button.on):active{
   background:var(--accent-soft)!important;box-shadow:inset 0 0 0 1px var(--accent-ring)!important;border-color:var(--accent-ring)!important;color:var(--accent-text)!important}
 
 /* settings: the accent colour */

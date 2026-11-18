@@ -38,6 +38,11 @@ const MAP2 = { displayName: 'Cave', events: [null, ev(1, 'miner', 'Mind the dark
   check('the header of the files says «Файли гри» and the menu ⋮ stands in it, with no field', !!h && /Файли гри/i.test(h.text) && h.menu && !h.field && !h.searching, JSON.stringify(h));
   check('there is no field under the header (the old strip is gone)', (await page.locator('.tree-q').count()) === 0 && (await page.locator('#tree > .fin').count()) === 0);
   const all = await files();
+  // like the «—», the menu ⋮ is shown when the window is touched, not all the time
+  await page.evaluate(() => document.activeElement && document.activeElement.blur()); await page.mouse.move(1300, 800); await sleep(300);
+  check('the menu ⋮ is not drawn while the window is not touched', (await page.locator('#fs-menu').evaluate(e => getComputedStyle(e).opacity)) === '0');
+  await page.locator('#tree-list').hover(); await sleep(300);
+  check('and it comes when the mouse is over the window', (await page.locator('#fs-menu').evaluate(e => getComputedStyle(e).opacity)) === '1');
   await page.locator('#tree-list .node[data-file]').first().focus();
   await page.keyboard.press('Control+f'); await sleep(300);
   h = await head('.rs-head');
@@ -55,6 +60,8 @@ const MAP2 = { displayName: 'Cave', events: [null, ev(1, 'miner', 'Mind the dark
   // the menu opens the same field; the cross clears and closes; left empty the field goes back by itself; with a text it stays
   await page.locator('#fs-menu').click(); await sleep(200);
   check('the menu offers the search with its key, the groups (all the files together, a new group) and hiding of the panel', (await page.locator('#fpop [data-wm]').count()) === 3 && /Ctrl\+F/.test(await page.locator('#fpop [data-wm="files:find"]').innerText()) && (await page.locator('#fpop [data-act="group-all"]').count()) === 1 && (await page.locator('#fpop [data-wm="files:newgroup"]').count()) === 1);
+  const hr = await page.evaluate(() => { const h = document.querySelector('#fpop hr'), c = h && getComputedStyle(h), t = document.createElement('i'); t.style.cssText = 'border:1px solid var(--line);position:fixed'; document.body.appendChild(t); const line = getComputedStyle(t).borderTopColor; t.remove(); return h ? { w: c.borderTopWidth, color: c.borderTopColor, line, bw: c.borderBottomWidth } : null; });
+  check('the dividers of the menu are one quiet line, not the default bevel', !!hr && hr.w === '1px' && hr.bw === '0px' && hr.color === hr.line, JSON.stringify(hr));
   await page.locator('#fpop [data-wm="files:find"]').click(); await sleep(300);
   await page.keyboard.type('Map001'); await sleep(300);
   await page.locator('#fq-x').click(); await sleep(300);

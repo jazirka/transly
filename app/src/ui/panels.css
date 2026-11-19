@@ -652,8 +652,10 @@ span.thc2-b{cursor:default}
 #cnt2 .cfrac{display:flex;flex-direction:column;align-items:center;gap:2px}
 #cnt2 .cfrac b{font-weight:600;font-size:13px;color:var(--text)}
 #cnt2 .cfrac i{width:20px;height:1px;background:var(--dim)}
-#cnt2.over,#cnt2.mid{background:none;color:#f0d9a0}
-#cnt2.over .cfrac b,#cnt2.mid .cfrac b{color:#f0d9a0}
+#cnt2.over,#cnt2.mid,#cnt2.ok{background:none}
+#cnt2.ok .cfrac b{color:var(--ok)}#cnt2.ok .cfrac i{background:var(--ok)}
+#cnt2.mid .cfrac b{color:var(--warn)}#cnt2.mid .cfrac i{background:var(--warn)}
+#cnt2.over .cfrac b{color:var(--bad)}#cnt2.over .cfrac i{background:var(--bad)}
 /* the remarks and the threads: a card each, a lighter header over a dark body */
 .qacard,.thr{background:var(--bg);border:1px solid rgba(255,255,255,.16);border-radius:12px;padding:0;overflow:hidden;gap:0;margin-top:0}
 .qacard[hidden]{display:none}

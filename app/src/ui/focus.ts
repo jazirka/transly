@@ -187,8 +187,13 @@ function meter(ctx: Ctx, u: Unit): void {
   $('#c-n').textContent = String(n);
   $('#c-o').textContent = String(rl);
   $('#cnt2').setAttribute('aria-label', `Знаків у перекладі: ${n} з ${rl} в оригіналі`);
-  $('#cnt2').classList.toggle('over', !!t && d > tol);
-  $('#cnt2').classList.toggle('mid', !!t && d <= tol && d > tol / 2);
+  // The digits say by their colour how the length stands: green near the original, amber when it nears the limit of the tolerance, red beyond it (grey while empty)
+  const state = !t ? 'none' : d > tol ? 'over' : d > tol / 2 ? 'mid' : 'ok';
+  const box = $('#cnt2'), dev = lengthDeviation(u.source, t), pct = Math.round(Math.abs(dev));
+  for (const k of ['ok', 'mid', 'over']) box.classList.toggle(k, state === k);
+  const words = { none: 'Переклад порожній', ok: 'Довжина близька до оригіналу', mid: `${dev > 0 ? 'Довший' : 'Коротший'} за оригінал на ${pct}%: близько до допустимого (${tol}%)`, over: `${dev > 0 ? 'Довший' : 'Коротший'} за оригінал на ${pct}%: понад допустиме (${tol}%)` }[state];
+  box.title = `Знаків у перекладі над знаків в оригіналі. ${words}`;
+  box.dataset.state = state;
   // A line longer than the game's window is said right under the field, with the way to fix it; so is a message with more lines than the window shows.
   const plan = ctx.wrapPlan(), wide = tooWide(plan, u, t), wh = $('#f-wrap');
   const said: string[] = [];

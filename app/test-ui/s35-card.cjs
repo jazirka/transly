@@ -73,6 +73,15 @@ const sum = c => (c.match(/\d+(\.\d+)?/g) || []).slice(0, 3).reduce((a, b) => a 
   check('with no box of its own', /rgba\(0, 0, 0, 0\)/.test(cnt.bg) && cnt.border === '0px', JSON.stringify(cnt));
   check('and it says in words what it counts (for a screen reader)', /2 з 18/.test(cnt.label ?? ''), cnt.label ?? '');
 
+  // ---- the digits signal the state by their colour: green near the original, amber near the limit of the tolerance, red beyond it, grey while empty
+  const digits = async txt => { await page.locator('#i-tr').fill(txt); await sleep(250); return page.evaluate(() => ({ state: document.querySelector('#cnt2').dataset.state, color: getComputedStyle(document.querySelector('#c-n')).color, line: getComputedStyle(document.querySelector('#cnt2 .cfrac i')).backgroundColor, title: document.querySelector('#cnt2').title })); };
+  const dEmpty = await digits(''), dOk = await digits('Зніми свій капелюх'), dMid = await digits('Зніми свій капелюх!!!'), dOver = await digits('Зніми свій капелюх негайно, будь ласка');
+  check('an empty translation: the digits are not coloured by a state', dEmpty.state === 'none' && dEmpty.color !== dOk.color, JSON.stringify(dEmpty));
+  check('a length near the original is green', dOk.state === 'ok' && dOk.color === 'rgb(95, 184, 101)' && dOk.line === dOk.color, JSON.stringify(dOk));
+  check('a length near the limit of the tolerance is amber', dMid.state === 'mid' && dMid.color === 'rgb(229, 160, 75)' && dMid.line === dMid.color, JSON.stringify(dMid));
+  check('a length beyond the tolerance is red', dOver.state === 'over' && dOver.color === 'rgb(247, 84, 100)' && dOver.line === dOver.color, JSON.stringify(dOver));
+  check('and the title says in words what the colour means', /Довший за оригінал на \d+%/.test(dOver.title) && /близька до оригіналу/.test(dOk.title), `${dOk.title} | ${dOver.title}`);
+
   // ---- the remarks: one card that is there only when there is something to say
   const qa = await page.evaluate(() => { const c = document.getElementById('f-qacard'); if (!c || c.hidden) return null; const h = c.querySelector('.qh'), b = c.querySelector('.qb'); return { title: h.textContent.trim(), rows: c.querySelectorAll('.qa-row').length, hBg: getComputedStyle(h).backgroundColor, bBg: getComputedStyle(c).backgroundColor, radius: getComputedStyle(c).borderTopLeftRadius, after: c.getBoundingClientRect().top >= document.querySelector('.ebox').getBoundingClientRect().bottom, btn: !!c.querySelector('.ign, .fix') }; });
   check('a row with a remark has the card under the field, titled with the count', !!qa && /^Зауваження · 1$/.test(qa.title) && qa.rows === 1 && qa.after, JSON.stringify(qa));

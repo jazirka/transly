@@ -1,4 +1,5 @@
 import type { SavedProject } from './project';
+import { rowState } from './progress';
 
 /**
  * Marks of what was done with the project outside this browser: when a copy of it last left the browser's storage (a project
@@ -34,4 +35,20 @@ export function copyLine(saved: SavedProject, now: number, translated: number): 
   const c = stampOf(saved, 'copy');
   if (!c) return { text: 'Копії поза браузером ще не було', warn: translated > 0 };
   return { text: `Копія: ${ago(c.mt, now)}`, warn: translated > 0 && now - c.mt > 24 * 3600 * 1000 };
+}
+
+/** What has changed since the last build: the rows that would go into a build (sent or proofread) and were written after it. */
+export interface BuildDrift { n: number; approved: number; sent: number; rows: { file: string; key: string }[] }
+
+export function builtDrift(saved: SavedProject, since: number): BuildDrift {
+  const d: BuildDrift = { n: 0, approved: 0, sent: 0, rows: [] };
+  for (const [file, ents] of Object.entries(saved.files)) {
+    for (const [key, e] of Object.entries(ents)) {
+      if (e.mt <= since) continue;
+      const st = rowState(e);
+      if (st !== 'sent' && st !== 'approved') continue;
+      d.n++; d[st === 'approved' ? 'approved' : 'sent']++; d.rows.push({ file, key });
+    }
+  }
+  return d;
 }

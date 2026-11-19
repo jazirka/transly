@@ -1,5 +1,5 @@
-import { syncTheme, isAutoFilled, autoNote, planIngest, looksLikeAnotherGame, ingestQuiet, ingestNote, Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, jumpTarget, qaOf, termsStamp, adoptSynced, applyPlan, planOf, reconcileChanges, pct, progressOf, rowState, sumProgress, QUEUE_LABEL, nextIn, positionOf, queueRows, ago, copyLine, stamp, stampOf } from '../core';
-import type { IngestReport, QaOptions, QueueKind, WrapPlan } from '../core';
+import { builtDrift, inboxOf, syncTheme, isAutoFilled, autoNote, planIngest, looksLikeAnotherGame, ingestQuiet, ingestNote, Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, jumpTarget, qaOf, termsStamp, adoptSynced, applyPlan, planOf, reconcileChanges, pct, progressOf, rowState, sumProgress, QUEUE_LABEL, nextIn, positionOf, queueRows, ago, copyLine, stamp, stampOf } from '../core';
+import type { InboxItem, IngestReport, QaOptions, QueueKind, WrapPlan } from '../core';
 import { pxMeasure } from './measure';
 import { openWrapTool } from './wrap-dialog';
 import { openQaRules } from './qarules-dialog';
@@ -68,6 +68,7 @@ const SVG = {
   menu: '<svg viewBox="0 0 16 16"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg>',
   search: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>',
   searchBig: '<svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>',
+  bell: '<svg viewBox="0 0 16 16"><path d="M4 11V7.5a4 4 0 0 1 8 0V11l1 1.5H3zM6.5 14h3"/></svg>',
   keys: '<svg viewBox="0 0 16 16"><rect x="1.5" y="3.5" width="13" height="9" rx="1.8"/><path d="M4.2 6.5h.01M6.7 6.5h.01M9.3 6.5h.01M11.8 6.5h.01M4.5 9.5h7"/></svg>',
   gear: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>',
   play: '<svg viewBox="0 0 16 16"><path d="M4.5 2.5l9 5.5-9 5.5z" fill="currentColor" stroke="none"/></svg>',
@@ -110,6 +111,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     <button class="tpill run" id="cfg-btn" aria-haspopup="menu" aria-expanded="false" title="Що запускає кнопка ▶">${SVG.build}<span id="cfg-name">Збірка (файл)</span><span class="dd" aria-hidden="true">▾</span></button>
     <button class="tb-ic play" id="run-btn" title="Запустити (F5)" aria-label="Запустити">${SVG.play}</button>
     <div class="tsep"></div>
+    <button class="tb-ic bellb" id="bell" title="Сповіщення: що потребує уваги й що змінили інші" aria-label="Сповіщення" aria-haspopup="menu" aria-expanded="false">${SVG.bell}<b id="bell-n" hidden>0</b></button>
     <button class="tb-ic" id="hk" title="Гарячі клавіші" aria-label="Гарячі клавіші">${SVG.keys}</button>
     <div class="tsep"></div>
     <button class="tb-ic" id="settings" title="Налаштування" aria-label="Налаштування">${SVG.gear}</button>
@@ -166,6 +168,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
 <div class="scrim" id="scrim"></div>
 <div class="pop cfgpop projpop" id="projpop" role="menu" aria-label="Проєкт" hidden></div>
 <div class="pop cfgpop" id="cfgpop" role="menu" aria-label="Що запускати" hidden></div>
+<div class="pop cfgpop inboxpop" id="inboxpop" role="menu" aria-label="Сповіщення" hidden></div>
 <div class="pop" id="fpop" role="dialog" aria-label="Параметри" hidden></div>
 <div class="pop keys" id="keypop" role="dialog" aria-label="Гарячі клавіші й позначки" hidden>
   <div class="kh">Гарячі клавіші</div>
@@ -316,7 +319,7 @@ export async function start(root: HTMLElement): Promise<void> {
     softTm: () => { tmStale = true; },
     refreshTop: () => { window.clearTimeout(topTimer); topTimer = window.setTimeout(() => { renderTop(); renderStatus(); }, 500); },
     links: () => { if (!linkCache || linkCache.views !== s.views) linkCache = { views: s.views, idx: new LinkIndex(s.views) }; return linkCache.idx; },
-    persist: () => autosave.queue(s.saved),
+    persist: () => { inboxDirty = true; autosave.queue(s.saved); },
     stage: () => 'translate',
     history: new UndoStack(),
     fileTitle: name => fileTitle(name),
@@ -867,11 +870,14 @@ export async function start(root: HTMLElement): Promise<void> {
     const copy = copyLine(s.saved, Date.now(), prog.translated), built = stampOf(s.saved, 'build');
     $('#sb-sync').hidden = false; $('#sb-sync').textContent = copy.text; $('#sb-sync').className = copy.warn ? 'bad' : '';
     $('#sb-sync').title = copy.warn ? 'Проєкт зберігається лише в цьому браузері. Збережіть копію у файл («Налаштування → Застосунок») або синхронізуйте' : 'Остання копія проєкту поза браузером (файл або синхронізація)';
+    stale = built ? builtDrift(s.saved, built.mt).n : 0;
+    $('#run-btn').classList.toggle('stale', stale > 0);
+    renderBell();
     $('#sb-build').hidden = !built;
     $('#sb-build').textContent = built ? `Збірка: ${ago(built.mt, Date.now())}${built.n !== undefined ? ` · ${plural(built.n, ['рядок', 'рядки', 'рядків'])}` : ''}` : '';
     renderRunCfg();
     setUnavailable($('#cfg-btn'), !s.views.length, 'Спершу відкрийте гру', 'Що запускає кнопка ▶');
-    setUnavailable($('#run-btn'), !s.views.length, 'Спершу відкрийте гру', `Запустити «${CFG[runCfg].name}» (F5)`);
+    setUnavailable($('#run-btn'), !s.views.length, 'Спершу відкрийте гру', `Запустити «${CFG[runCfg].name}» (F5)${stale ? ` · після останньої збірки змінено ${plural(stale, ['рядок', 'рядки', 'рядків'])}` : ''}`);
   }
 
   function renderStatus(): void {
@@ -1263,19 +1269,59 @@ export async function start(root: HTMLElement): Promise<void> {
     if (CFG[runCfg].desk && !isDesktop()) runCfg = 'file';
     $('#cfg-name').textContent = CFG[runCfg].name;
     $('#cfg-btn').setAttribute('aria-label', `Що запускає кнопка ▶: ${CFG[runCfg].name}`);
-    $('#run-btn').title = `Запустити «${CFG[runCfg].name}» (F5)`;
+    $('#run-btn').title = `Запустити «${CFG[runCfg].name}» (F5)${stale ? ` · після останньої збірки змінено ${plural(stale, ['рядок', 'рядки', 'рядків'])}` : ''}`;
     $('#run-btn').setAttribute('aria-label', `Запустити «${CFG[runCfg].name}»`);
   }
   function openCfgMenu(): void {
     const pop = $('#cfgpop'), btn = $('#cfg-btn');
     if (!pop.hidden) { pop.hidden = true; btn.setAttribute('aria-expanded', 'false'); return; }
-    pop.innerHTML = (Object.keys(CFG) as RunCfg[]).map(k => {
+    pop.innerHTML = buildStatusHtml() + (Object.keys(CFG) as RunCfg[]).map(k => {
       const off = CFG[k].desk && !isDesktop();
       return `<div class="cfg-row ${k === runCfg ? 'on' : ''}"><button role="menuitemradio" aria-checked="${k === runCfg}" data-cfg="${k}" ${off ? 'disabled' : ''}><span class="cfg-t"><svg class="cfg-i" viewBox="0 0 16 16" aria-hidden="true">${CFG_ICON[k]}</svg>${CFG[k].name}</span><small>${off ? 'Лише в застосунку на ПК' : CFG[k].sub}</small></button>${off ? '' : `<button class="cfg-go" data-cfg-run="${k}" title="Запустити «${CFG[k].name}»" aria-label="Запустити «${CFG[k].name}»">${SVG.play}</button>`}</div>`;
     }).join('') + `<hr><button role="menuitem" data-cfg-edit><span class="cfg-t">Налаштувати збірку…</span></button>`;
     const r = btn.getBoundingClientRect();
     pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 300))}px`; pop.style.top = `${r.bottom + 6}px`;
     rememberOpener(btn); pop.hidden = false; btn.setAttribute('aria-expanded', 'true'); focusFirst(pop); refreshScrollbars();
+  }
+  /* ---------- notifications: what needs attention and what the others did since the translator last looked ---------- */
+  const SEEN_KEY = 'transly.inboxSeen';
+  let inboxSeen = (() => { const v = Number(ls(SEEN_KEY)); if (Number.isFinite(v) && v > 0) return v; const now = Date.now(); try { localStorage.setItem(SEEN_KEY, String(now)); } catch { /* private mode: the news count from now on */ } return now; })();
+  let inboxItems: InboxItem[] = [], inboxErrors: { file: string; key: string }[] = [], inboxDirty = true, inboxTimer = 0, stale = 0;
+  const IB_PATH: Record<InboxItem['kind'], string> = { error: 'M8 2.5L14 13H2zM8 7v3M8 11.5v.2', draft: 'M10.5 2.5l3 3L5.5 13.5l-3.5.5.5-3.5z', unreviewed: 'M3 8.5l3.2 3.2L13 4.8', source: 'M13 6a5 5 0 0 0-9-1.5M3 2.5v2.5h2.5M3 10a5 5 0 0 0 9 1.5M13 13.5V11h-2.5', replies: 'M2.5 3.5h11v7h-5l-3 2.5v-2.5h-3z', others: 'M8 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM3 13.5c.5-2.5 2.5-3.5 5-3.5s4.5 1 5 3.5' };
+  /** The list, with the QA errors of the whole project: the pass of the QA over every row is made once the data stops changing, not at every redraw. */
+  function renderBell(): void {
+    inboxItems = inboxOf({ views: s.views, saved: s.saved, who: s.who, seen: inboxSeen, errors: inboxErrors });
+    const n = inboxItems.length, b = $('#bell-n');
+    b.hidden = !n; b.textContent = String(n);
+    b.classList.toggle('bad', inboxItems.some(i => i.kind === 'error'));
+    $('#bell').setAttribute('aria-label', n ? `Сповіщення: ${n}` : 'Сповіщення');
+    if (inboxDirty && !inboxTimer) inboxTimer = window.setTimeout(() => { inboxTimer = 0; inboxDirty = false; inboxErrors = queueRows(s.views, s.saved, 'error', qaOpts()); renderBell(); }, 2500);
+  }
+  const closeInbox = (): void => { hidePop($('#inboxpop')); $('#bell').setAttribute('aria-expanded', 'false'); };
+  function openInbox(): void {
+    const pop = $('#inboxpop'), btn = $('#bell');
+    if (!pop.hidden) { closeInbox(); return; }
+    if (inboxDirty) { inboxDirty = false; inboxErrors = queueRows(s.views, s.saved, 'error', qaOpts()); }
+    renderBell();
+    const row = (i: InboxItem): string => `<button role="menuitem" data-ib="${esc(i.id)}"><span class="cfg-t"><svg class="cfg-i" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="${IB_PATH[i.kind]}"/></svg>${esc(i.title)}</span><small>${esc(i.sub)}</small></button>`;
+    const state = inboxItems.filter(i => !i.news), news = inboxItems.filter(i => i.news);
+    pop.innerHTML = !inboxItems.length ? '<div class="pj-h">Усе гаразд</div><div class="ib-none">Немає помилок QA, чернеток і рядків на вичитку, нових змін від інших теж.</div>'
+      : (state.length ? `<div class="pj-h">Потребує уваги</div>${state.map(row).join('')}` : '')
+        + (news.length ? `${state.length ? '<hr>' : ''}<div class="pj-h">Нове від інших</div>${news.map(row).join('')}<hr><button role="menuitem" data-ib="~read"><span class="cfg-t">Позначити нове прочитаним</span></button>` : '');
+    const r = btn.getBoundingClientRect();
+    pop.style.left = `${Math.max(8, Math.min(r.right - 340, window.innerWidth - 348))}px`; pop.style.top = `${r.bottom + 6}px`;
+    rememberOpener(btn); pop.hidden = false; btn.setAttribute('aria-expanded', 'true'); focusFirst(pop); refreshScrollbars();
+  }
+  /** The state of the last build, at the head of the build menu: how old it is, and what was written after it (so a build that is out of date is seen where it is made). */
+  function buildStatusHtml(): string {
+    const built = stampOf(s.saved, 'build');
+    const icon = (d: string): string => `<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+    if (!built) return `<div class="pj-h">Остання збірка</div><div class="bs"><span class="bi">${icon('M2.5 5.5h11v7h-11zM2 3.5h12v2H2zM6.5 8h3')}</span><div><b>Збірки ще не було</b><small>Тут буде видно, чи зібраний переклад актуальний</small></div></div><hr>`;
+    const d = builtDrift(s.saved, built.mt);
+    const when = `${new Date(built.mt).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} · ${ago(built.mt, Date.now())}${built.n !== undefined ? ` · ${plural(built.n, ['рядок', 'рядки', 'рядків'])}` : ''}`;
+    if (!d.n) return `<div class="pj-h">Остання збірка</div><div class="bs"><span class="bi ok">${icon('M3 8.5l3.2 3.2L13 4.8')}</span><div><b>Збірка свіжа</b><small>${esc(when)}</small><small>Після неї нічого не змінювалось</small></div></div><hr>`;
+    const parts = [d.approved ? `${d.approved} вичитано` : '', d.sent ? `${d.sent} надіслано` : ''].filter(Boolean).join(', ');
+    return `<div class="pj-h">Остання збірка</div><div class="bs"><span class="bi">${icon('M8 2.5L14 13H2zM8 7v3M8 11.5v.2')}</span><div><b>Збірка застаріла</b><small>${esc(when)}</small><small class="w">Після неї змінено ${plural(d.n, ['рядок', 'рядки', 'рядків'])}: ${esc(parts)}</small><div class="acts"><button class="btn p" type="button" data-bs="build">Зібрати зараз</button><button class="btn" type="button" data-bs="changes">Що змінилося</button></div></div></div><hr>`;
   }
   function openProjMenu(): void {
     const pop = $('#projpop'), btn = $('#proj-btn');
@@ -1440,7 +1486,7 @@ export async function start(root: HTMLElement): Promise<void> {
     window.clearTimeout(subTimer);
     subTimer = window.setTimeout(() => { if (b.dataset.sub) openSub(b, false); else closeSubs(level, false); }, b.dataset.sub ? 120 : 250);
   });
-  const closePops = () => { closeSubs(0, false); hidePop(fpop()); closeCfgMenu(); closeProjMenu(); };
+  const closePops = () => { closeSubs(0, false); hidePop(fpop()); closeCfgMenu(); closeProjMenu(); closeInbox(); };
   const groupsApi = { pop: (a: HTMLElement, html: string) => showPop(a, html), closePops: () => closePops() };
   /** A menu at the pointer. */
   function popAt(x: number, y: number, html: string): void {
@@ -1775,7 +1821,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const t = e.target as HTMLElement;
     const off = t.closest<HTMLElement>('[aria-disabled="true"][data-why]');
     if (off) { toast(off.dataset.why!); return; }
-    if (!t.closest('#fpop,#spkbtn,#lenbtn,#sortbtn,[data-more],#bnav,#cfgpop,#cfg-btn,#projpop,#proj-btn,#rs-menu,#fs-menu,#sc-menu,.pop.sub')) closePops();
+    if (!t.closest('#fpop,#spkbtn,#lenbtn,#sortbtn,[data-more],#bnav,#cfgpop,#cfg-btn,#projpop,#proj-btn,#inboxpop,#bell,#rs-menu,#fs-menu,#sc-menu,.pop.sub')) closePops();
     if (!t.closest('#keypop,#hk')) $('#keypop').hidden = true;
     if (pagesClick(t)) return;
     if (t.closest('#open2,#fb-repick')) { void openFolder(); return; }
@@ -1792,6 +1838,23 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!t.closest('#cfgpop,#cfg-btn')) closeCfgMenu();
     if (!t.closest('#projpop,#proj-btn')) closeProjMenu();
     if (t.closest('#proj-btn')) { openProjMenu(); return; }
+    if (t.closest('#bell')) { openInbox(); return; }
+    const ib = t.closest<HTMLElement>('#inboxpop [data-ib]');
+    if (ib) {
+      closeInbox();
+      const id = ib.dataset.ib!, it = inboxItems.find(i => i.id === id);
+      if (id === '~read') { inboxSeen = Date.now(); try { localStorage.setItem(SEEN_KEY, String(inboxSeen)); } catch { /* private mode */ } renderBell(); }
+      else if (it?.kind === 'error') jump('error', 1);
+      else if (it) openRows(it.title, it.rows);
+      return;
+    }
+    const bs = t.closest<HTMLElement>('#cfgpop [data-bs]');
+    if (bs) {
+      closeCfgMenu();
+      const b = stampOf(s.saved, 'build');
+      if (bs.dataset.bs === 'build') runSelected(); else if (b) openRows('Змінено після збірки', builtDrift(s.saved, b.mt).rows);
+      return;
+    }
     const pj = t.closest<HTMLElement>('#projpop [data-pj]');
     if (pj) { closeProjMenu(); if (pj.dataset.pj === 'folder') void openFolder(); else if (pj.dataset.pj === 'files') openImportDlg(); else openSettingsDlg(); return; }
     if (t.closest('#cfg-btn')) { openCfgMenu(); return; }
@@ -2057,7 +2120,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (e.key === 'Escape') {
       if (!$('#sd').hidden) { closeSearch(); return; }
       if (subEls.length) { closeSubs(subEls.length - 1); return; }
-      if (!$('#fpop').hidden || !$('#cfgpop').hidden || !$('#projpop').hidden || !$('#keypop').hidden) {
+      if (!$('#fpop').hidden || !$('#cfgpop').hidden || !$('#projpop').hidden || !$('#inboxpop').hidden || !$('#keypop').hidden) {
         closePops(); hidePop($('#keypop'));
         return;
       }

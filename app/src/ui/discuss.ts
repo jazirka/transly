@@ -11,7 +11,7 @@ import type { Ctx } from './state';
 
 const when = (t: number): string => new Date(t).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 const COLORS = ['#7a62d8', '#3d8bd9', '#2f9e7f', '#c0803a', '#c25b8a', '#6f7f8c'];
-const colorOf = (name: string): string => { let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return COLORS[h % COLORS.length]!; };
+export const colorOf = (name: string): string => { let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return COLORS[h % COLORS.length]!; };
 
 /** Thread with an open answer form; comment being edited; comment waiting for the second click of a deletion. */
 let replying: string | null = null;

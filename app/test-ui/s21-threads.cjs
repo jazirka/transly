@@ -68,25 +68,25 @@ async function addTerm(page, en, uk, alt = '') {
   check('and the translation has not stepped down to make room for them', (await page.locator('.fc-in.weave').count()) === 0);
   // the chips under the translation
   await sleep(900);
-  const cards = await page.locator('#f-threads .thc2[data-ck]').evaluateAll(els => els.map(e => ({ hk: e.dataset.ck, ci: e.dataset.ci, text: e.innerText.replace(/\s+/g, ' '), tip: e.querySelector('.thc2-b').title })));
+  const cards = await page.locator('#pn-th .thc2[data-ck]').evaluateAll(els => els.map(e => ({ hk: e.dataset.ck, ci: e.dataset.ci, text: e.innerText.replace(/\s+/g, ' '), tip: e.querySelector('.thc2-b').title })));
   check('a chip for each entry of the row, in the colour of its thread', cards.length === 4 && cards.map(c => c.ci).join('') === '0123', JSON.stringify(cards.map(c => c.hk + ':' + c.ci)));
   check('the chip says what is rendered as what, with the verdict for this row', /take … off/.test(cards[0].text) && /зняти/.test(cards[0].text) && /✔/.test(cards[0].text), cards[0] && cards[0].text);
   check('the tip of a construction says what it is and where it is used across the game', /конструкція/.test(cards[0].tip) && /2 рядки/.test(cards[0].tip), cards[0] && cards[0].tip);
   check('the verdict for an entry that is rendered by its alternative is on its chip', /✔/.test(cards[2].text), cards[2] && cards[2].text);
   // pointing at a chip draws its thread (and only that one)
-  await page.locator('#f-threads .thc2[data-ck="take … off"] .thc2-b').hover(); await sleep(300);
+  await page.locator('#pn-th .thc2[data-ck="take … off"] .thc2-b').hover(); await sleep(300);
   const hot = await page.evaluate(() => [...document.querySelectorAll('#te-links path')].map(p => ({ link: p.dataset.link, op: Number(getComputedStyle(p).opacity) })));
   check('the chip draws its own thread: the arrows and the arc of «take … off»', hot.filter(h => h.op > 0.9).length === 3 && hot.filter(h => h.op > 0.9).every(h => h.link === 'termtake … off'), JSON.stringify(hot));
   check('the other threads stay hidden', hot.filter(h => h.link !== 'termtake … off').every(h => h.op === 0), JSON.stringify(hot));
   await page.mouse.move(700, 8); await sleep(300);
   check('it goes when the pointer leaves', (await op('#te-links path')).every(o => o === 0));
   // a click keeps a thread drawn
-  await page.locator('#f-threads .thc2[data-ck="hat"] .thc2-b').click(); await page.mouse.move(700, 8); await sleep(300);
-  check('a click on the chip keeps its thread drawn', (await page.locator('#f-threads .thc2[data-ck="hat"] .thc2-b').getAttribute('aria-pressed')) === 'true' && (await page.evaluate(() => [...document.querySelectorAll('#te-links path')].filter(p => Number(getComputedStyle(p).opacity) > 0.9).map(p => p.dataset.link).join())) === 'termhat');
-  await page.locator('#f-threads .thc2[data-ck="hat"] .thc2-b').click(); await page.mouse.move(700, 8); await sleep(300);
-  check('and a second click lets it go', (await op('#te-links path')).every(o => o === 0) && (await page.locator('#f-threads .thc2.on').count()) === 0);
+  await page.locator('#pn-th .thc2[data-ck="hat"] .thc2-b').click(); await page.mouse.move(700, 8); await sleep(300);
+  check('a click on the chip keeps its thread drawn', (await page.locator('#pn-th .thc2[data-ck="hat"] .thc2-b').getAttribute('aria-pressed')) === 'true' && (await page.evaluate(() => [...document.querySelectorAll('#te-links path')].filter(p => Number(getComputedStyle(p).opacity) > 0.9).map(p => p.dataset.link).join())) === 'termhat');
+  await page.locator('#pn-th .thc2[data-ck="hat"] .thc2-b').click(); await page.mouse.move(700, 8); await sleep(300);
+  check('and a second click lets it go', (await op('#te-links path')).every(o => o === 0) && (await page.locator('#pn-th .thc2.on').count()) === 0);
   // the card of an entry opens from its small button, not from the chip
-  await page.locator('#f-threads .thc2[data-ck="hat"] .thc2-m').click(); await sleep(300);
+  await page.locator('#pn-th .thc2[data-ck="hat"] .thc2-m').click(); await sleep(300);
   check('the small button of a chip opens the card of the entry', await page.locator('#termcard').isVisible() && /капелюх/.test(await page.locator('#termcard').innerText()));
   check('the card has a button for the forms and cases, closed at first', (await page.locator('#termcard [data-hca="forms"]').count()) === 1 && (await page.locator('#termcard .tc-fr').count()) === 0);
   await page.locator('#termcard [data-hca="forms"]').click(); await sleep(250);
@@ -111,7 +111,7 @@ async function addTerm(page, en, uk, alt = '') {
   await page.locator('.gr', { hasText: 'Take your hat off' }).first().click(); await sleep(500);
   const inPanel = await page.locator('#pn-th .thc2[data-ck]').count();
   check('in the table the chips of the threads are in the right panel', inPanel === 4, String(inPanel));
-  check('and not twice: the block under the editor is empty', (await page.locator('#f-threads-b .thc2').count()) === 0);
+  check('and not twice: the block under the editor has none of them', (await page.locator('#f-var .thc2').count()) === 0);
   check('no page errors', errors.length === 0, errors.join(' | '));
   if (SHOT) await page.screenshot({ path: SHOT + '/s21-threads.png' });
 

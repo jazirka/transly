@@ -4,7 +4,7 @@ import { $, esc, toast } from './dom';
 import { realOf } from './hintcards';
 import { renderHistory } from './history-panel';
 import { linksClick } from './links-panel';
-import { clearStrands, strandsClick, strandsHtml } from './strands-panel';
+import { clearStrands, renderStrands, strandsClick } from './strands-panel';
 import { STATUS_CAP, shownStatus } from './state';
 import { undoToast } from './undo-toast';
 import type { Ctx } from './state';
@@ -82,14 +82,13 @@ export function renderRowPanel(ctx: Ctx, u: Unit | undefined, e: Entry | undefin
   // Two tabs, on the rail beside the panel: the row (its translation, versions, threads) and the discussion.
   for (const id of ['tr']) document.querySelector<HTMLElement>(`.pn-sec[data-sec="${id}"]`)!.hidden = rtab !== 'row';
   document.querySelector<HTMLElement>('.pn-sec[data-sec="cm"]')!.hidden = rtab !== 'cm';
-  if (!u) return;
+  if (!u) { clearStrands(); return; }
   const target = e?.target ?? '';
-  $('#pn-tr').innerHTML = `${versionCard(ctx, u, e)}<div class="pn-sub">Попередні версії</div><div class="hist" id="hist-list"></div>`;
-  // The cards of the threads stand under the editor in the editing view; where there is no editor (the table, the scenes) they stand here.
-  if (ctx.s.mode !== 'edit') clearStrands();
-  const th = ctx.s.mode === 'edit' ? '' : strandsHtml(ctx, u, target, true);
-  $('#pn-th').innerHTML = th;
-  document.querySelector<HTMLElement>('.pn-sec[data-sec="th"]')!.hidden = !th || rtab !== 'row';
+  $('#pn-tr').innerHTML = `${versionCard(ctx, u, e)}<div class="pn-sub">Активність у рядку</div><div class="hist" id="hist-list"></div>`;
+  // The related things (the words and constructions, the names, the memory, the rows with the same original) stand here, in the editing view too: they follow the text of the field there.
+  const ta = document.getElementById('i-tr') as HTMLTextAreaElement | null;
+  renderStrands(ctx, u, ctx.s.mode === 'edit' && ta && ta.dataset.key === u.key ? ta.value : target);
+  document.querySelector<HTMLElement>('.pn-sec[data-sec="th"]')!.hidden = rtab !== 'row';
   const file = ctx.s.current;
   if (file) renderHistory(ctx, `${file}|${u.key}`, e);
 }

@@ -37,8 +37,8 @@ const MAP = { displayName: 'Town', events: [null, { id: 1, name: 'cook', x: 1, y
   // the proposals are looked for again some seconds after the translations changed (not on every send)
   await sleep(10500);
   await row('Take that off').click(); await sleep(400); await row('Take it off').click(); await sleep(2500);
-  const card = page.locator('#f-threads .thc.new');
-  check('a construction rendered the same way in four rows is proposed under the cards of a row that has it', (await card.count()) === 1 && /take … off/.test(await card.innerText()) && /нова конструкція/.test(await card.innerText()), await page.locator('#f-threads-b').innerText());
+  const card = page.locator('#pn-th .thc.new');
+  check('a construction rendered the same way in four rows is proposed under the cards of a row that has it', (await card.count()) === 1 && /take … off/.test(await card.innerText()) && /нова конструкція/.test(await card.innerText()), await page.locator('#pn-th').innerText());
   check('the card says how many rows it comes from', /4 рядках/.test(await card.innerText()), await card.innerText());
   check('nothing was added to the glossary by itself', (await page.evaluate(() => JSON.parse(localStorage.getItem('transly.mine.no') ?? '[]').length)) === 0);
 
@@ -46,19 +46,19 @@ const MAP = { displayName: 'Town', events: [null, { id: 1, name: 'cook', x: 1, y
   check('«Показати» opens exactly those rows', (await page.locator('#lp-rows [data-key]:visible').count()) === 4, String(await page.locator('#lp-rows [data-key]:visible').count()));
   await row('Take it off').click(); await sleep(900);
 
-  await page.locator('#f-threads .thc.new [data-mn="no"]').click(); await sleep(500);
-  check('«Не зараз» takes it away', (await page.locator('#f-threads .thc.new').count()) === 0);
+  await page.locator('#pn-th .thc.new [data-mn="no"]').click(); await sleep(500);
+  check('«Не зараз» takes it away', (await page.locator('#pn-th .thc.new').count()) === 0);
   await page.evaluate(() => { try { localStorage.removeItem('transly.mine.no'); } catch (e) { /* none */ } });
   await row('Take that off').click(); await sleep(500); await row('Take it off').click(); await sleep(900);
-  check('and it comes back when the choice is forgotten', (await page.locator('#f-threads .thc.new').count()) === 1);
+  check('and it comes back when the choice is forgotten', (await page.locator('#pn-th .thc.new').count()) === 1);
 
-  await page.locator('#f-threads .thc.new [data-mn="add"]').click(); await sleep(600);
+  await page.locator('#pn-th .thc.new [data-mn="add"]').click(); await sleep(600);
   check('«Додати» opens the form with the pattern and the Ukrainian word filled in', (await page.locator('#gl-en').inputValue()) === 'take … off' && /^зн/.test(await page.locator('#gl-uk').inputValue()), (await page.locator('#gl-en').inputValue()) + ' → ' + (await page.locator('#gl-uk').inputValue()));
   check('and nothing is stored before it is saved', (await page.evaluate(() => (window.__t || 0))) === 0);
   await page.locator('#gl-uk').fill('зняти'); await page.locator('#gl-save').click(); await sleep(500);
   await page.locator('#mtabs [data-lt="rows"], nav [data-lp="rows"]').first().click().catch(() => {}); await sleep(300);
   await row('Take it off').click(); await sleep(1500);
-  check('after saving, the proposal is gone and the construction has its own card', (await page.locator('#f-threads .thc.new').count()) === 0 && (await page.locator('#f-threads .thc2[data-ck="take … off"]').count()) === 1, await page.locator('#f-threads-b').innerText());
+  check('after saving, the proposal is gone and the construction has its own card', (await page.locator('#pn-th .thc.new').count()) === 0 && (await page.locator('#pn-th .thc2[data-ck="take … off"]').count()) === 1, await page.locator('#pn-th').innerText());
   check('no page errors', errors.length === 0, errors.join(' | '));
 
   await browser.close();

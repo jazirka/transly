@@ -37,7 +37,7 @@ const put = ({ text, snapshot }) => new Promise((res, rej) => {
   check('the row has one chip «≡ 2» (the two other rows with this original)', (await chip.count()) === 1 && /≡\s*2/.test(await chip.innerText()), await page.locator('#f-eq').innerHTML());
   const geo = await page.evaluate(() => { const c = document.querySelector('#f-eq .eqchip').getBoundingClientRect(), l = document.querySelector('#f-trlbl').getBoundingClientRect(), b = document.querySelector('.trblock').getBoundingClientRect(); return { chipRight: Math.round(c.right), labelLeft: Math.round(l.left), labelRight: Math.round(l.right), blockRight: Math.round(b.right) }; });
   check('it stands at the right end of the caption row, just before the caption of the translation (away from the original)', geo.labelLeft - geo.chipRight < 30 && geo.labelLeft - geo.chipRight >= 0 && geo.blockRight - geo.labelRight < 12, JSON.stringify(geo));
-  check('it is not a thread: not among the chips of the threads', (await page.locator('#f-threads .eqchip').count()) === 0);
+  check('it is not a thread: not among the chips of the threads', (await page.locator('#pn-th .eqchip').count()) === 0);
   check('the translations differ, so the chip says so', await chip.evaluate(e => e.classList.contains('diff')));
   check('no card stands open at first', (await page.locator('.rows-pop').count()) === 0 && (await chip.getAttribute('aria-expanded')) === 'false');
 

@@ -33,8 +33,8 @@ const MAP = { displayName: 'Town', events: [null, { id: 1, name: 'cook', x: 1, y
   const ta = page.locator('#i-tr'); await ta.click(); await ta.fill('Дорога на північ довга й холодна.'); await page.keyboard.press('Control+Enter'); await sleep(500);
   await row('road south').click(); await sleep(1200);
 
-  const mem = page.locator('#f-threads .thc.mem');
-  check('a row that reads like a translated one gets the memory card under the translation', (await mem.count()) === 1 && /Дорога на північ/.test(await mem.innerText()) && /пам’ять \d+%/.test(await mem.innerText()), await page.locator('#f-threads-b').innerText());
+  const mem = page.locator('#pn-th .thc.mem');
+  check('a row that reads like a translated one gets the memory card under the translation', (await mem.count()) === 1 && /Дорога на північ/.test(await mem.innerText()) && /пам’ять \d+%/.test(await mem.innerText()), await page.locator('#pn-th').innerText());
   check('the old «Пропозиції» section is gone from the right panel', (await page.locator('.pn-sec[data-sec="sg"], #pn-sg').count()) === 0);
   await mem.locator('[data-tm]').click(); await sleep(400);
   check('«Підставити» puts the translation into the field', (await page.locator('#i-tr').inputValue()) === 'Дорога на північ довга й холодна.', await page.locator('#i-tr').inputValue());

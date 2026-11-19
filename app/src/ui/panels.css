@@ -730,3 +730,17 @@ span.thc2-b{cursor:default}
 .pop button[data-sub][aria-expanded="true"]{background:#393b40}
 .pop.sub [role="menuitemradio"]{position:relative;padding-left:30px}
 .pop.sub [role="menuitemradio"][aria-checked="true"]::before{content:"✓";position:absolute;left:11px;color:var(--text)}
+
+/* ---------- «Переклади» under the field: the sent translations of the row, a card for each ---------- */
+#f-var[hidden]{display:none}
+#f-var .thr-b{padding:0}
+.var{display:grid;grid-template-columns:24px 1fr auto;gap:10px;align-items:start;padding:10px 12px}
+.var+.var{border-top:1px solid var(--line)}
+.var .av{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;color:#1e1f22}
+.var-h{display:flex;align-items:center;gap:8px;color:var(--mute);font-size:12px}
+.var-h b{color:var(--text);font-weight:500}
+.var-t{margin-top:3px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;line-height:1.45}
+.var.cur .var-t{color:var(--text)}
+.var .btn{height:26px;padding:0 11px;border-radius:8px;white-space:nowrap}
+.var .btn:disabled{opacity:.5;cursor:default}
+.pn-sec[data-sec="th"][data-empty="1"]{display:none}

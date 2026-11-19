@@ -14,6 +14,7 @@ import { hideTermCard } from './termcard';
 import { drawLinks } from './links';
 import { renderRowsChip } from './links-panel';
 import { renderStrands, strandsClick } from './strands-panel';
+import { renderVariants, variantsOf } from './variants';
 import { openLinkRows } from './links-dialog';
 import { isDesktop, openLink, rememberedGameDir } from './desktop';
 import { drawPic, picOfFace, picsOfRow } from './gameimg';
@@ -61,7 +62,7 @@ export const FOCUS_HTML = `<div class="fc"><div class="fc-in"><div class="te-lin
     </div>
   </div>
   <section class="qacard" id="f-qacard" aria-label="Зауваження до рядка" hidden><div class="qh"><span id="f-qa-t">Зауваження</span></div><div class="qb"><div class="wraphint" id="f-wrap" hidden></div><div class="qa-under" id="f-qa"></div></div></section>
-  <section class="thr" id="f-threads" aria-label="Пов’язане з цим рядком" hidden><div class="lbl">Пов’язане</div><div class="thr-b" id="f-threads-b"></div></section>
+  <section class="thr" id="f-var" aria-label="Переклади цього рядка" hidden><div class="lbl">Переклади <span class="cnt" id="f-var-n">0</span></div><div class="thr-b" id="f-var-b"></div></section>
 </div></div>`;
 
 export const SIDE_HTML = `<aside class="fs" aria-label="Панель рядка">
@@ -121,6 +122,7 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
     renderPics(ctx, undefined);
     $('#f-src').innerHTML = `<span class="hint">${list.length ? 'Оберіть рядок зліва.' : 'За поточним фільтром рядків немає.'}</span>`;
     renderStrands(ctx, undefined, '');
+    renderVariants(ctx, undefined, '');
     renderRowsChip(ctx, undefined);
     return;
   }
@@ -143,6 +145,7 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
   if (document.activeElement !== ta || ta.dataset.key !== u.key) { if (ta.dataset.key !== u.key) hideTermCard(); ta.value = e?.target ?? ''; ta.dataset.key = u.key; }
   refreshTerms(ctx, u);
   renderStrands(ctx, u, ta.value);
+  renderVariants(ctx, u.key, ta.value);
   renderRowsChip(ctx, u);
   meter(ctx, u);
   refreshQa(ctx, u);
@@ -174,6 +177,7 @@ function refreshTerms(ctx: Ctx, u: Unit): void {
   autoSize(ta);
   drawLinks(ctx);
   renderStrands(ctx, u, ta.value);
+  renderVariants(ctx, u.key, ta.value);
 }
 
 function meter(ctx: Ctx, u: Unit): void {
@@ -400,6 +404,8 @@ export function focusClick(ctx: Ctx, t: HTMLElement): boolean {
   const ta = $('#i-tr') as HTMLTextAreaElement;
   const tm = t.closest<HTMLElement>('[data-tm]');
   if (tm) { const m = tmMatch(Number(tm.dataset.tm)); if (m) setText(ctx, u, m.t, `підставлено з пам’яті (${m.score}%)`, 'memory'); return true; }
+  const vr = t.closest<HTMLElement>('[data-vr]');
+  if (vr) { const v = variantsOf(ctx, u.key)[Number(vr.dataset.vr)]; if (v) setText(ctx, u, v.text, `підставлено переклад: ${v.who || 'хтось'}`); return true; }
   const go = t.closest<HTMLElement>('[data-goto]');
   if (go) { ctx.select(go.dataset.goto!); return true; }
   if (t.closest('#b-clear')) {

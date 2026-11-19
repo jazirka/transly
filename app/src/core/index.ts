@@ -1,3 +1,4 @@
+export * from './variants';
 export * from './edges';
 export * from './pages';
 export * from './model';

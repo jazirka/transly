@@ -132,22 +132,25 @@ export function strandsHtml(ctx: Ctx, u: Unit, target: string, withRows = false)
 }
 
 let lastHtml = '';
-/** Empty the block under the editor (the cards stand in the right panel when there is no editor). */
+/** Empty the block of the related things in the right panel. */
 export function clearStrands(): void {
-  const box = document.getElementById('f-threads'), body = document.getElementById('f-threads-b');
-  if (box) box.hidden = true;
+  const body = document.getElementById('pn-th'), sec = document.querySelector<HTMLElement>('.pn-sec[data-sec="th"]');
+  if (sec) sec.dataset.empty = '1';
   if (body) body.replaceChildren();
   lastHtml = '';
 }
 
-/** Fill the block under the editor; it stays hidden when the row has nothing to show. */
+/**
+ * Fill the block of the related things in the right panel (in the editing view too: there the cards follow the text of the field as it is typed);
+ * the section is not drawn when the row has nothing to show.
+ */
 export function renderStrands(ctx: Ctx, u: Unit | undefined, target: string): void {
-  const box = document.getElementById('f-threads'), body = document.getElementById('f-threads-b');
-  if (!box || !body) return;
-  // Under the editor only in the editing view: elsewhere the cards stand in the right panel.
-  const html = u && ctx.s.mode === 'edit' ? strandsHtml(ctx, u, target) : '';
-  box.hidden = !html;
-  if (html === lastHtml && !box.hidden) return;
+  const body = document.getElementById('pn-th'), sec = document.querySelector<HTMLElement>('.pn-sec[data-sec="th"]');
+  if (!body || !sec) return;
+  // the chip of the rows with the same original stands beside the label of the translation in the editing view, and first among the cards where there is no editor
+  const html = u ? strandsHtml(ctx, u, target, ctx.s.mode !== 'edit') : '';
+  sec.dataset.empty = html ? '' : '1';
+  if (html === lastHtml) return;
   lastHtml = html;
   body.innerHTML = html;
 }

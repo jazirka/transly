@@ -63,6 +63,10 @@ export interface Entry {
   /** When `ign` last changed (it has its own clock, so ignoring a warning never overrides a newer translation in a merge). */
   ignAt?: number;
   comments?: Comment[];
+  /** Votes for the contributions of the row (the translations that were sent). Like comments they are not a change of the translation: `mt` stays. */
+  votes?: Vote[];
+  /** Contributions taken off the card of the row (the sent translations stay in the history). Like votes, not a change of the translation. */
+  drops?: Drop[];
   /** Newest last; capped so a long-lived unit does not grow the project without bound. */
   history?: HistoryItem[];
 }
@@ -80,6 +84,10 @@ export interface Comment {
   /** Deleted: the comment stays as a trace (without its text), so a merge with a device that still has it does not bring it back. */
   del?: boolean;
 }
+/** A translator's vote for or against one contribution of a row. `v` 0 is a taken-back vote: it stays as a trace, so a merge with a device that still has the vote does not bring it back. */
+export interface Vote { who: string; at: number; /** Id of the contribution (`variantId`). */ on: string; v: -1 | 0 | 1 }
+/** A contribution taken off the card of a row (`off`: put back). The later record of one contribution wins in a merge. */
+export interface Drop { who: string; at: number; /** Id of the contribution (`variantId`). */ on: string; off?: boolean }
 export interface HistoryItem {
   at: number; who: string; what: string; text: string;
   /** Id of the bulk action (send, auto-fill, replace…) this record belongs to: lets the whole action be undone and redone. */

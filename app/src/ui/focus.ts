@@ -1,9 +1,9 @@
-import { activeIssues, afterSend, applyPlan, linkModeOf, planOf, strandsOf, targetHasTerm, targetTermHits, displayLength, edit as editFn, lengthDeviation, linesShown, openThreads, recordChange, referenceSets, setIgnored, submit, termsIn, tooWide, unitWord, wrapMessage } from '../core';
+import { activeIssues, afterSend, applyPlan, castVote, linkModeOf, setDropped, planOf, strandsOf, targetHasTerm, targetTermHits, displayLength, edit as editFn, lengthDeviation, linesShown, openThreads, recordChange, referenceSets, setIgnored, submit, termsIn, tooWide, unitWord, wrapMessage } from '../core';
 import type { BatchKind, Entry, Unit } from '../core';
 import { $, buzz, esc, plural, toast } from './dom';
 import { discussClick, renderDiscuss } from './discuss';
 import { chipsHtml, qaRows, namesOfRow, nameMarks, realOf, tmMatch } from './hintcards';
-import { ROW_PANEL_HTML, getRowTab, renderRowPanel, rowPanelClick, setRowTab } from './rowpanel';
+import { ROW_PANEL_HTML, approveOpenRow, getRowTab, sendBackOpenRow, renderRowPanel, rowPanelClick, setRowTab } from './rowpanel';
 import type { RowTab } from './rowpanel';
 import { focusCard, sceneBlocked } from './scene-view';
 import { historyClick } from './history-panel';
@@ -62,7 +62,7 @@ export const FOCUS_HTML = `<div class="fc"><div class="fc-in"><div class="te-lin
     </div>
   </div>
   <section class="qacard" id="f-qacard" aria-label="Зауваження до рядка" hidden><div class="qh"><span id="f-qa-t">Зауваження</span></div><div class="qb"><div class="wraphint" id="f-wrap" hidden></div><div class="qa-under" id="f-qa"></div></div></section>
-  <section class="thr" id="f-var" aria-label="Переклади цього рядка" hidden><div class="lbl">Переклади <span class="cnt" id="f-var-n">0</span></div><div class="thr-b" id="f-var-b"></div></section>
+  <section class="thr" id="f-var" aria-label="Внески до цього рядка" hidden><div class="lbl">Внески <span class="cnt" id="f-var-n">0</span></div><div class="thr-b" id="f-var-b"></div></section>
 </div></div>`;
 
 export const SIDE_HTML = `<aside class="fs" aria-label="Панель рядка">
@@ -122,7 +122,7 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
     renderPics(ctx, undefined);
     $('#f-src').innerHTML = `<span class="hint">${list.length ? 'Оберіть рядок зліва.' : 'За поточним фільтром рядків немає.'}</span>`;
     renderStrands(ctx, undefined, '');
-    renderVariants(ctx, undefined, '');
+    renderVariants(ctx, undefined);
     renderRowsChip(ctx, undefined);
     return;
   }
@@ -145,7 +145,7 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
   if (document.activeElement !== ta || ta.dataset.key !== u.key) { if (ta.dataset.key !== u.key) hideTermCard(); ta.value = e?.target ?? ''; ta.dataset.key = u.key; }
   refreshTerms(ctx, u);
   renderStrands(ctx, u, ta.value);
-  renderVariants(ctx, u.key, ta.value);
+  renderVariants(ctx, u.key);
   renderRowsChip(ctx, u);
   meter(ctx, u);
   refreshQa(ctx, u);
@@ -177,7 +177,7 @@ function refreshTerms(ctx: Ctx, u: Unit): void {
   autoSize(ta);
   drawLinks(ctx);
   renderStrands(ctx, u, ta.value);
-  renderVariants(ctx, u.key, ta.value);
+  renderVariants(ctx, u.key);
 }
 
 function meter(ctx: Ctx, u: Unit): void {
@@ -409,8 +409,32 @@ export function focusClick(ctx: Ctx, t: HTMLElement): boolean {
   const ta = $('#i-tr') as HTMLTextAreaElement;
   const tm = t.closest<HTMLElement>('[data-tm]');
   if (tm) { const m = tmMatch(Number(tm.dataset.tm)); if (m) setText(ctx, u, m.t, `підставлено з пам’яті (${m.score}%)`, 'memory'); return true; }
+  const vv = t.closest<HTMLElement>('[data-vv]');
+  if (vv) {
+    const v = variantsOf(ctx, u.key)[Number(vv.dataset.vi)], cur = ents[u.key];
+    if (v && cur) { ents[u.key] = castVote(cur, v.id, ctx.s.who, vv.dataset.vv === 'up' ? 1 : -1, Date.now()); ctx.persist(); ctx.render(); }
+    return true;
+  }
   const vr = t.closest<HTMLElement>('[data-vr]');
-  if (vr) { const v = variantsOf(ctx, u.key)[Number(vr.dataset.vr)]; if (v) setText(ctx, u, v.text, `підставлено переклад: ${v.who || 'хтось'}`); return true; }
+  if (vr) {
+    // the tick: an approved contribution is un-approved (the row goes back to a draft); another one goes into the row (a draft, if it is not the row's translation yet) and the row is proofread
+    const v = variantsOf(ctx, u.key)[Number(vr.dataset.vr)];
+    if (v) {
+      if (v.current && v.approved) sendBackOpenRow(ctx, u);
+      else { if (!v.current) setText(ctx, u, v.text, `затверджено внесок: ${v.who || 'хтось'}`); approveOpenRow(ctx, u); }
+    }
+    return true;
+  }
+  const vd = t.closest<HTMLElement>('[data-vd]');
+  if (vd) {
+    // the bin: the contribution leaves the card (not the history); the toast puts it back
+    const v = variantsOf(ctx, u.key)[Number(vd.dataset.vd)], cur = ents[u.key], key = u.key, file = s.current;
+    if (v && cur && !v.current) {
+      ents[key] = setDropped(cur, v.id, ctx.s.who, false, Date.now()); ctx.persist(); ctx.render();
+      toast('Внесок прибрано з картки', { action: { label: 'Скасувати', run: () => { const e2 = ctx.entries(file)[key]; if (e2) { ctx.entries(file)[key] = setDropped(e2, v.id, ctx.s.who, true, Date.now()); ctx.persist(); ctx.render(); } } } });
+    }
+    return true;
+  }
   const go = t.closest<HTMLElement>('[data-goto]');
   if (go) { ctx.select(go.dataset.goto!); return true; }
   if (t.closest('#b-clear')) {

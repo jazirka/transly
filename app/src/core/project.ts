@@ -203,8 +203,11 @@ function liveEntry(e: Entry, epoch: number): Entry | null {
   if (epoch <= 0) return e;
   const newComments = e.comments?.some(c => c.at > epoch);
   if (e.mt <= epoch && !newComments) return null;
-  const comments = e.comments?.filter(c => c.at > epoch), history = e.history?.filter(h => h.at > epoch);
+  const comments = e.comments?.filter(c => c.at > epoch), history = e.history?.filter(h => h.at > epoch), votes = e.votes?.filter(v => v.at > epoch);
   const out: Entry = { ...e };
+  if (votes && votes.length !== e.votes!.length) { if (votes.length) out.votes = votes; else delete out.votes; }
+  const drops = e.drops?.filter(d => d.at > epoch);
+  if (drops && drops.length !== e.drops!.length) { if (drops.length) out.drops = drops; else delete out.drops; }
   if (comments && comments.length !== e.comments!.length) { if (comments.length) out.comments = comments; else delete out.comments; }
   if (history && history.length !== e.history!.length) { if (history.length) out.history = history; else delete out.history; }
   return out;

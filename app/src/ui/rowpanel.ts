@@ -22,6 +22,7 @@ const sec = (id: string, title: string, body: string, extra = ''): string => `<s
 /** Static markup of the panel (the discussion keeps its own field so what is typed in it survives redraws). */
 export const ROW_PANEL_HTML = ['<div class="pn-empty-all hint">Оберіть рядок</div>',
   sec('tr', 'Переклад: українська', '<div class="pn-b" id="pn-tr"></div>'),
+  sec('ac', 'Активність у рядку', '<div class="pn-b"><div class="act" id="hist-list"></div></div>'),
   sec('th', 'Пов’язане: слова, конструкції, назви, однакові рядки, пам’ять', '<div class="pn-b" id="pn-th"></div>'),
   sec('cm', 'Обговорення', `<div class="pn-b" id="pn-cm"><div id="cm-list" class="cm-list"></div>
     <div class="cm-new"><textarea class="cmin" id="cm-in" placeholder="Нове обговорення цього рядка…" aria-label="Новий коментар"></textarea>
@@ -80,17 +81,20 @@ export function renderRowPanel(ctx: Ctx, u: Unit | undefined, e: Entry | undefin
   const pane = $('#s-pn');
   pane.classList.toggle('no-row', !u);
   // Two tabs, on the rail beside the panel: the row (its translation, versions, threads) and the discussion.
-  for (const id of ['tr']) document.querySelector<HTMLElement>(`.pn-sec[data-sec="${id}"]`)!.hidden = rtab !== 'row';
+  // The translation card stands here only where the field does not: in the editing view the field, with the contributions under it, is the translation.
+  const card = ctx.s.mode !== 'edit';
+  document.querySelector<HTMLElement>('.pn-sec[data-sec="tr"]')!.hidden = rtab !== 'row' || !card;
+  document.querySelector<HTMLElement>('.pn-sec[data-sec="ac"]')!.hidden = rtab !== 'row';
   document.querySelector<HTMLElement>('.pn-sec[data-sec="cm"]')!.hidden = rtab !== 'cm';
   if (!u) { clearStrands(); return; }
   const target = e?.target ?? '';
-  $('#pn-tr').innerHTML = `${versionCard(ctx, u, e)}<div class="pn-sub">Активність у рядку</div><div class="hist" id="hist-list"></div>`;
+  $('#pn-tr').innerHTML = card ? versionCard(ctx, u, e) : '';
   // The related things (the words and constructions, the names, the memory, the rows with the same original) stand here, in the editing view too: they follow the text of the field there.
   const ta = document.getElementById('i-tr') as HTMLTextAreaElement | null;
   renderStrands(ctx, u, ctx.s.mode === 'edit' && ta && ta.dataset.key === u.key ? ta.value : target);
   document.querySelector<HTMLElement>('.pn-sec[data-sec="th"]')!.hidden = rtab !== 'row';
   const file = ctx.s.current;
-  if (file) renderHistory(ctx, `${file}|${u.key}`, e);
+  if (file) renderHistory(ctx, `${file}|${u.key}`, e, card);
 }
 
 /** Approve the open row (a draft is sent first, so the history says both). */
@@ -105,6 +109,13 @@ export function approveOpenRow(ctx: Ctx, u: Unit): boolean {
   ctx.persist(); ctx.invalidateTm(); ctx.render();
   undoToast(ctx, 'Вичитано', batch);
   return true;
+}
+/** Send the open row back to the translator (a proofread or sent one becomes a draft again). */
+export function sendBackOpenRow(ctx: Ctx, u: Unit): void {
+  const { s } = ctx, cur = ctx.entries(s.current!)[u.key];
+  if (!cur) return;
+  const batch = ctx.commit([{ file: s.current!, key: u.key, next: sendBack(cur, Date.now()), text: cur.target }], 'back');
+  ctx.persist(); ctx.render(); undoToast(ctx, 'Повернено на доопрацювання', batch);
 }
 const approve = (ctx: Ctx, u: Unit): void => { approveOpenRow(ctx, u); };
 
@@ -123,7 +134,7 @@ export function rowPanelClick(ctx: Ctx, t: HTMLElement, setText: (u: Unit, text:
     case 'approve': approve(ctx, u); break;
     case 'more': { const k = `${s.current}|${u.key}`; if (expanded.has(k)) expanded.delete(k); else expanded.add(k); ctx.render(); break; }
     case 'back':
-      if (cur) { const batch = ctx.commit([{ file: s.current, key: u.key, next: sendBack(cur, Date.now()), text: cur.target }], 'back'); ctx.persist(); ctx.render(); undoToast(ctx, 'Повернено на доопрацювання', batch); }
+      if (cur) sendBackOpenRow(ctx, u);
       break;
     case 'clear':
       if (!cur?.target) { toast('Переклад уже порожній'); break; }

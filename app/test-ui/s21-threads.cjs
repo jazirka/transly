@@ -99,13 +99,13 @@ async function addTerm(page, en, uk, alt = '') {
   check('exactly one is lit: the open one', rail.filter(r => r.on).length === 1 && rail[0].on, JSON.stringify(rail));
   check('the panel has no tabs of its own in its header', (await page.locator('#rp-tabs, .fs .ph .rtab').count()) === 0);
   check('the old sections «Терміни й назви з гри» and «Зв’язані рядки» are gone from it', (await page.locator('#pn-tm, #pn-lk').count()) === 0);
-  check('the discussion is on its own tab: hidden while the row tab is open', !(await page.locator('#cm-in').isVisible()) && (await page.locator('.pn-sec[data-sec="tr"]').isVisible()));
+  check('the discussion is on its own tab: hidden while the row tab is open', !(await page.locator('#cm-in').isVisible()) && (await page.locator('.pn-sec[data-sec="ac"]').isVisible()));
   await page.locator('#stabs [data-p="cm"]').click(); await sleep(250);
-  check('the discussion tab shows the discussion and hides the translation, and the title says so', (await page.locator('#cm-in').isVisible()) && !(await page.locator('.pn-sec[data-sec="tr"]').isVisible()) && (await page.locator('#rp-title').innerText()).toLowerCase() === 'обговорення');
+  check('the discussion tab shows the discussion and hides the translation, and the title says so', (await page.locator('#cm-in').isVisible()) && !(await page.locator('.pn-sec[data-sec="ac"]').isVisible()) && (await page.locator('#rp-title').innerText()).toLowerCase() === 'обговорення');
   await page.locator('#stabs [data-p="cm"]').click(); await sleep(250);
   check('a second tap on the open tab folds the panel to the rail', !(await page.locator('#cm-in').isVisible()) && (await page.locator('#stabs [data-p].on').count()) === 0);
   await page.locator('#stabs [data-p="row"]').click(); await sleep(250);
-  check('a tap on the other tab opens the panel on it', (await page.locator('.pn-sec[data-sec="tr"]').isVisible()) && (await page.locator('#stabs [data-p="row"].on').count()) === 1);
+  check('a tap on the other tab opens the panel on it', (await page.locator('.pn-sec[data-sec="ac"]').isVisible()) && (await page.locator('#stabs [data-p="row"].on').count()) === 1);
   // the table has no editor: the cards stand at the end of the row tab
   await page.locator('[data-m="table"]').click(); await sleep(500);
   await page.locator('.gr', { hasText: 'Take your hat off' }).first().click(); await sleep(500);

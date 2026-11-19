@@ -27,6 +27,23 @@ function repairComments(raw: Record<string, unknown>, n: Counts): void {
   }
 }
 
+function repairVotes(raw: Record<string, unknown>, n: Counts): void {
+  if (!('votes' in raw)) return;
+  if (!Array.isArray(raw.votes)) { delete raw.votes; n.entries++; return; }
+  const ok = raw.votes.filter((v): v is Record<string, unknown> => isObj(v) && num(v.at) && typeof v.who === 'string' && typeof v.on === 'string' && (v.v === 1 || v.v === -1 || v.v === 0));
+  if (ok.length !== raw.votes.length) { raw.votes = ok; n.dropped++; }
+  if (!ok.length) delete raw.votes;
+}
+
+function repairDrops(raw: Record<string, unknown>, n: Counts): void {
+  if (!('drops' in raw)) return;
+  if (!Array.isArray(raw.drops)) { delete raw.drops; n.entries++; return; }
+  const ok = raw.drops.filter((d): d is Record<string, unknown> => isObj(d) && num(d.at) && typeof d.who === 'string' && typeof d.on === 'string');
+  if (ok.length !== raw.drops.length) { raw.drops = ok; n.dropped++; }
+  for (const d of ok) if ('off' in d && typeof d.off !== 'boolean') delete d.off;
+  if (!ok.length) delete raw.drops;
+}
+
 function repairHistory(raw: Record<string, unknown>, n: Counts): void {
   if (!('history' in raw)) return;
   if (!Array.isArray(raw.history)) { delete raw.history; n.entries++; return; }
@@ -57,7 +74,7 @@ function repairEntry(raw: unknown, n: Counts): Record<string, unknown> | null {
   if ('returned' in raw && typeof raw.returned !== 'boolean') { delete raw.returned; touched = true; }
   if ('ign' in raw && !strs(raw.ign)) { delete raw.ign; touched = true; }
   if ('ignAt' in raw && !num(raw.ignAt)) { delete raw.ignAt; touched = true; }
-  repairComments(raw, n); repairHistory(raw, n);
+  repairComments(raw, n); repairVotes(raw, n); repairDrops(raw, n); repairHistory(raw, n);
   if (touched) n.entries++;
   return raw;
 }
@@ -153,6 +170,8 @@ export function clampClock(o: Record<string, unknown>, now: number, ahead = MAX_
         if (!isObj(e)) continue;
         fix(e, 'mt'); fix(e, 'ignAt');
         if (Array.isArray(e.comments)) for (const c of e.comments) if (isObj(c)) { fix(c, 'at'); fix(c, 'ed'); if (isObj(c.res)) fix(c.res, 'at'); }
+        if (Array.isArray(e.votes)) for (const v of e.votes) if (isObj(v)) fix(v, 'at');
+        if (Array.isArray(e.drops)) for (const d of e.drops) if (isObj(d)) fix(d, 'at');
         if (Array.isArray(e.history)) for (const h of e.history) if (isObj(h)) fix(h, 'at');
       }
     }

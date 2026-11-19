@@ -1,4 +1,4 @@
-// Browser regression check: «Переклади» under the field of the editing view: the translations of the row that were sent, a card for each send of each translator (the newest first, several
+// Browser regression check: «Внески» under the field of the editing view: the translations of the row that were sent, a card for each send of each translator (the newest first, several
 // from one translator all there), with a button that puts one into the field; the related things and the discussion stay in the panel on the right (two tabs on its rail).
 // See s0-safety.cjs for how to run:   PC_URL=http://localhost:4285/ node test-ui/s43-variants.cjs
 const { chromium } = require('playwright');
@@ -31,27 +31,53 @@ const put = ({ text, snapshot }) => new Promise((res, rej) => { const o = indexe
   await page.locator('[data-m="edit"]').click(); await sleep(500);
   await page.locator('#lp-rows .si').first().click(); await sleep(600);
 
-  const cards = () => page.locator('#f-var .var').evaluateAll(els => els.map(e => ({ who: e.querySelector('b').textContent, text: e.querySelector('.var-t').textContent, cur: e.classList.contains('cur'), btn: e.querySelector('button').textContent.trim(), off: e.querySelector('button').disabled })));
+  const cards = () => page.locator('#f-var .var').evaluateAll(els => els.map(e => ({ who: e.querySelector('b').textContent, text: e.querySelector('.var-t').textContent, cur: e.classList.contains('cur'), btn: e.querySelector('[data-vr]').getAttribute('aria-label'), on: e.querySelector('[data-vr]').getAttribute('aria-checked') === 'true', binOff: e.querySelector('[data-vd]').disabled, up: e.querySelector('[data-vv=up] b').textContent, down: e.querySelector('[data-vv=down] b').textContent, upOn: e.querySelector('[data-vv=up]').classList.contains('on') })));
   let c = await cards();
-  check('«Переклади» stands under the field and lists the sent translations, the newest first (the draft edit is not among them)', c.map(x => `${x.who}:${x.text}`).join('|') === 'Ви:Нокаут|Ви:Нокдаун|Оля:Удар', JSON.stringify(c));
-  check('the translation the row holds is marked, and its button says it is in the field', c[0].cur && c[0].off && c[0].btn === 'У полі' && !c[1].cur && !c[1].off && c[1].btn === 'Підставити', JSON.stringify(c));
-  check('the card has its title with the count', /Переклади\s*3/i.test(await page.locator('#f-var > .lbl').innerText()));
-  await page.locator('#f-var .var').nth(2).locator('button').click(); await sleep(500);
-  check('«Підставити» puts that translation into the field', (await page.locator('#i-tr').inputValue()) === 'Удар', await page.locator('#i-tr').inputValue());
+  check('«Внески» stands under the field and lists the sent translations, the newest first (the draft edit is not among them)', c.map(x => `${x.who}:${x.text}`).join('|') === 'Ви:Нокаут|Ви:Нокдаун|Оля:Удар', JSON.stringify(c));
+  check('each card has its votes, the tick (not ticked: the row is only sent) and the bin (not for the translation the row holds)', c.every(x => x.up === '0' && x.down === '0') && c.every(x => x.btn === 'Затвердити' && !x.on) && c[0].cur && !c[1].cur && c[0].binOff && !c[1].binOff, JSON.stringify(c));
+  check('the card has its title with the count', /Внески\s*3/i.test(await page.locator('#f-var > .lbl').innerText()));
+  // votes: ▲ counts, the same click takes it back, ▼ replaces it
+  await page.locator('#f-var .var').nth(2).locator('[data-vv=up]').click(); await sleep(400);
   c = await cards();
-  check('and now that card says it is in the field, the other one can be put', c[2].btn === 'У полі' && c[2].off && c[0].btn === 'Підставити', JSON.stringify(c));
-  check('the row is a draft again: only the list of the translations that were sent stays what it was', c.length === 3 && c.every(x => !x.cur));
+  check('▲ adds a vote of mine to that contribution only', c[2].up === '1' && c[2].upOn && c[0].up === '0' && c[1].up === '0', JSON.stringify(c));
+  await page.locator('#f-var .var').nth(2).locator('[data-vv=down]').click(); await sleep(400);
+  c = await cards();
+  check('▼ replaces my vote: one against, none for', c[2].up === '0' && c[2].down === '1' && !c[2].upOn, JSON.stringify(c));
+  await page.locator('#f-var .var').nth(2).locator('[data-vv=down]').click(); await sleep(400);
+  c = await cards();
+  check('the same click again takes the vote back', c[2].up === '0' && c[2].down === '0', JSON.stringify(c));
+  await page.locator('#f-var .var').nth(0).locator('[data-vv=up]').click(); await sleep(400);
+  check('a vote does not change the translation of the row or its status', (await page.locator('#i-tr').inputValue()) === 'Нокаут' && (await page.locator('#f-var .var.cur [data-vr]').getAttribute('aria-checked')) === 'false', await page.locator('#i-tr').inputValue());
+  // «Затвердити» of a contribution that is not the row's text: it goes into the row and the row is proofread
+  await page.locator('#f-var .var').nth(2).locator('[data-vr]').click(); await sleep(700);
+  check('the tick of a contribution puts it into the row', (await page.locator('#i-tr').inputValue()) === 'Удар', await page.locator('#i-tr').inputValue());
+  c = await cards();
+  check('and the row is proofread: that contribution is marked current and its tick is on', c.some(x => x.cur && x.text === 'Удар' && x.on && x.btn === 'Затверджено'), JSON.stringify(c));
+  check('approving does not make a second card of the same text: the credit stays with the one who sent it (Оля), three cards', c.length === 3 && c.find(x => x.cur).who === 'Оля', JSON.stringify(c));
+
+  // the bin takes a contribution off the card (not the history); the toast puts it back
+  await page.locator('#f-var .var').nth(1).locator('[data-vd]').click(); await sleep(500);
+  c = await cards();
+  check('the bin takes the contribution off the card', c.length === 2 && !c.some(x => x.text === 'Нокдаун'), JSON.stringify(c));
+  await page.locator('#toasts .toast', { hasText: 'Внесок прибрано' }).getByRole('button', { name: 'Скасувати' }).click(); await sleep(500);
+  c = await cards();
+  check('«Скасувати» in the toast puts it back', c.length === 3 && c.some(x => x.text === 'Нокдаун'), JSON.stringify(c));
+  // the tick of the approved contribution takes the approval back
+  await page.locator('#f-var .var.cur [data-vr]').click(); await sleep(600);
+  c = await cards();
+  check('the tick of the approved one sends the row back to a draft (none of the contributions is the row\'s sent text now), the field keeps the text', c.every(x => !x.cur && !x.on) && (await page.locator('#i-tr').inputValue()) === 'Удар', JSON.stringify(c));
 
   // the related things and the discussion are on the right
   const rail = await page.locator('#stabs [data-p]').evaluateAll(els => els.map(e => e.dataset.p));
   check('the rail of the right panel keeps its two tabs: the row and the discussion', rail.join() === 'row,cm', rail.join());
   check('the related things stand in the right panel, not under the field', (await page.locator('#f-threads').count()) === 0 && (await page.locator('#f-var .thc2, #f-var .thb').count()) === 0 && (await page.locator('.pn-sec[data-sec="th"]').count()) === 1);
   check('the discussion is the second tab of the right panel (not under the field)', (await page.locator('#f-var #cm-in').count()) === 0 && (await page.locator('.fs #cm-in').count()) === 1);
-  check('the activity of the row (the earlier translations with what was added and deleted) is in the panel too', (await page.locator('.pn-sub', { hasText: 'Активність у рядку' }).count()) === 1);
+  check('the activity of the row (the earlier translations with what was added and deleted) is in the panel too, grouped by the day, each record with its icon and its time', (await page.locator('.pn-sec[data-sec="ac"] .pn-h', { hasText: 'Активність у рядку' }).count()) === 1 && (await page.locator('#hist-list .ac-d').count()) >= 1 && (await page.locator('#hist-list .ac-i .ac-ic svg').count()) >= 3 && (await page.locator('#hist-list .ac-i time').count()) >= 3);
+  check('in the editing view the right panel has no card of the translation (the field and the contributions are the translation)', !(await page.locator('.pn-sec[data-sec="tr"]').isVisible()) && (await page.locator('.pn-ver').count()) === 0);
 
   // a row that was not sent has no card
   await page.locator('#lp-rows .si').nth(1).click(); await sleep(500);
-  check('a row with nothing sent has no «Переклади»', !(await page.locator('#f-var').isVisible()), JSON.stringify(await page.evaluate(() => { const b = document.querySelector('#f-var'); return { hidden: b.hidden, disp: getComputedStyle(b).display, n: document.querySelector('#f-var-n').textContent, key: document.querySelector('#f-key').textContent, tr: document.querySelector('#i-tr').dataset.key }; })));
+  check('a row with nothing sent has no «Внески»', !(await page.locator('#f-var').isVisible()), JSON.stringify(await page.evaluate(() => { const b = document.querySelector('#f-var'); return { hidden: b.hidden, disp: getComputedStyle(b).display, n: document.querySelector('#f-var-n').textContent, key: document.querySelector('#f-key').textContent, tr: document.querySelector('#i-tr').dataset.key }; })));
   check('no page errors', errors.length === 0, errors.join(' | '));
   if (process.env.SHOT_DIR) { await page.locator('#lp-rows .si').first().click(); await sleep(500); await page.screenshot({ path: process.env.SHOT_DIR + '/s43-variants.png' }); }
   await browser.close();

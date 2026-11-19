@@ -42,3 +42,26 @@ export function historyRows(history: HistoryItem[] | undefined, current: string)
 /** The sentence a restore leaves in the history. */
 export const restoreNote = (rec: HistoryItem, which: 'text' | 'before', when: string): string =>
   which === 'text' ? `відновлено версію від ${when} (${rec.what})` : `відновлено текст, що був перед дією «${rec.what}» від ${when}`;
+
+const MONTHS = ['січня', 'лютого', 'березня', 'квітня', 'травня', 'червня', 'липня', 'серпня', 'вересня', 'жовтня', 'листопада', 'грудня'];
+const dayStart = (t: number): number => { const d = new Date(t); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
+
+/** The heading of the day a record belongs to: «Сьогодні», «Вчора», «14 листопада» (with the year when it is not this one). A record without a time is a version that came from another device. */
+export function dayLabel(at: number, now: number): string {
+  if (!at) return 'З іншого пристрою';
+  const days = Math.round((dayStart(now) - dayStart(at)) / 86400000);
+  if (days === 0) return 'Сьогодні';
+  if (days === 1) return 'Вчора';
+  const d = new Date(at), same = d.getFullYear() === new Date(now).getFullYear();
+  return `${d.getDate()} ${MONTHS[d.getMonth()]}${same ? '' : ' ' + d.getFullYear()}`;
+}
+
+/** The kind of a history record, for its icon: sent, proofread, restored, returned, or an ordinary edit. */
+export type ActivityKind = 'send' | 'approve' | 'restore' | 'back' | 'edit';
+export function activityKind(what: string): ActivityKind {
+  if (what.startsWith('надіслано') || what === 'send') return 'send';
+  if (what.startsWith('вичитано') || what.startsWith('затверджено')) return 'approve';
+  if (what.startsWith('відновлено')) return 'restore';
+  if (what.startsWith('повернено')) return 'back';
+  return 'edit';
+}

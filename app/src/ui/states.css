@@ -66,7 +66,7 @@ html[data-pane=files] #tree .node.pick .nm{color:#fff}
 /* what can be chosen in a list has one shape wherever it stands (the files, the rows, the scenes, the related): the list keeps an inset on both
    sides, the item is rounded and has no divider of its own, so the choice in one window looks like the choice in another (only the colour differs
    by the window you work in) */
-.sl-body{padding:4px 6px}
+.sl-body{padding:6px}
 .si,.sc-item,.tgrow{border-radius:8px;border-bottom:0}
 .si{margin-bottom:2px;padding:7px 8px}
 .si.lazy{border-bottom:0}

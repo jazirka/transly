@@ -1,4 +1,5 @@
 import type { Comment, Entry, HistoryItem, Translations } from './model';
+import { byDrop, byVote, laterDrop, laterVote, voteId } from './variants';
 import { HISTORY_LIMIT, commentId } from './workflow';
 
 export interface MergeResult { merged: Translations; conflicts: string[] }
@@ -75,6 +76,12 @@ export function mergeEntry(a: Entry, b: Entry): Entry {
   const comments = unionBy(a.comments, b.comments, commentId, pickComment);
   if (comments) out.comments = comments === a.comments || comments === b.comments ? comments : [...comments].sort((x, y) => x.at - y.at);
   else delete out.comments;
+  const votes = unionBy(a.votes, b.votes, voteId, laterVote);
+  if (votes) out.votes = votes === a.votes || votes === b.votes ? votes : [...votes].sort(byVote);
+  else delete out.votes;
+  const drops = unionBy(a.drops, b.drops, d => d.on, laterDrop);
+  if (drops) out.drops = drops === a.drops || drops === b.drops ? drops : [...drops].sort(byDrop);
+  else delete out.drops;
   const history = unionBy(a.history, b.history, sameHistory, earlier);
   if (history) out.history = history === a.history || history === b.history ? history : history.sort(byTime).slice(-HISTORY_LIMIT);
   else delete out.history;

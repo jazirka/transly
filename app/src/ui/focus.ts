@@ -3,7 +3,7 @@ import type { BatchKind, Entry, Unit } from '../core';
 import { $, buzz, esc, plural, toast } from './dom';
 import { discussClick, renderDiscuss } from './discuss';
 import { chipsHtml, qaRows, namesOfRow, nameMarks, realOf, tmMatch } from './hintcards';
-import { ROW_PANEL_HTML, approveOpenRow, getRowTab, sendBackOpenRow, renderRowPanel, rowPanelClick, setRowTab } from './rowpanel';
+import { ROW_PANEL_HTML, ROW_TAB_TITLE, approveOpenRow, getRowTab, sendBackOpenRow, renderRowPanel, rowPanelClick, setRowTab } from './rowpanel';
 import type { RowTab } from './rowpanel';
 import { focusCard, sceneBlocked } from './scene-view';
 import { historyClick } from './history-panel';
@@ -38,6 +38,8 @@ const I = {
   hint: '<svg viewBox="0 0 16 16"><path d="M8 2.5a4 4 0 0 0-2.2 7.3c.5.4.7.9.7 1.4v.3h3v-.3c0-.5.2-1 .7-1.4A4 4 0 0 0 8 2.5zM6.5 13.5h3"/></svg>',
   chat: '<svg viewBox="0 0 16 16"><path d="M3 3.5h10v7H8.5L6 13v-2.5H3z"/></svg>',
   row: '<svg viewBox="0 0 16 16"><path d="M3 4.5h10M3 8h10M5 11.5h6"/></svg>',
+  history: '<svg viewBox="0 0 16 16"><path d="M8 4.5V8l2.5 1.6M13.5 8A5.5 5.5 0 1 1 8 2.5a5.5 5.5 0 0 1 4.6 2.5M12.7 2.6V5H10.3"/></svg>',
+  link: '<svg viewBox="0 0 16 16"><path d="M6.6 9.4a2.4 2.4 0 0 0 3.4 0l2-2a2.4 2.4 0 0 0-3.4-3.4l-.7.7M9.4 6.6a2.4 2.4 0 0 0-3.4 0l-2 2a2.4 2.4 0 0 0 3.4 3.4l.7-.7"/></svg>',
   clock: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.2l2 1.3"/></svg>',
   dict: '<svg viewBox="0 0 16 16"><path d="M3.5 2.5h8a1 1 0 0 1 1 1v10H4.5a1 1 0 0 1-1-1z"/><path d="M6 5.5h4M6 8h4"/></svg>',
 };
@@ -68,13 +70,14 @@ export const FOCUS_HTML = `<div class="fc"><div class="fc-in"><div class="te-lin
 export const SIDE_HTML = `<aside class="fs" aria-label="Панель рядка">
   <div class="rz rz-r" id="rz-r" role="separator" aria-orientation="vertical" aria-label="Ширина правої панелі" aria-valuemin="260" aria-valuemax="640" tabindex="0" title="Потягніть, щоб змінити ширину (подвійний клік — стандартна)"></div>
   <div class="itabs" id="stabs" role="toolbar" aria-label="Права панель">
-    <button class="on" aria-pressed="true" data-p="row" title="Рядок: переклад, версії, пов’язане">${I.row}<span class="tl">Рядок</span></button>
+    <button class="on" aria-pressed="true" data-p="act" title="Активність у рядку: хто, коли й що змінював">${I.history}<span class="tl">Активність</span></button>
+    <button aria-pressed="false" data-p="rel" title="Пов’язане: слова, конструкції, назви, однакові рядки, пам’ять">${I.link}<span class="tl">Пов’язане</span></button>
     <button aria-pressed="false" data-p="cm" title="Обговорення рядка">${I.chat}<span class="tl">Обговорення</span> <span class="cnt" id="cm-badge" hidden>0</span></button>
   </div>
   <div class="ibody">
-    <div class="ph"><span class="grow" id="rp-title">Рядок</span><span class="ico" id="rp-close" title="Сховати панель" role="button" tabindex="0" aria-label="Сховати панель">—</span></div>
+    <div class="ph"><span class="grow" id="rp-title">Пов’язане</span><span class="ico" id="rp-close" title="Сховати панель" role="button" tabindex="0" aria-label="Сховати панель">—</span></div>
     <section class="qa-side" id="qa-side" hidden><div class="lbl">Перевірка рядка</div><div id="i-iss" class="qa-under"></div></section>
-    <div class="pane on" id="s-pn" data-title="Рядок">${ROW_PANEL_HTML}</div>
+    <div class="pane on" id="s-pn" data-title="Панель рядка">${ROW_PANEL_HTML}</div>
   </div>
 </aside>`;
 
@@ -245,10 +248,10 @@ export function renderSidePanel(ctx: Ctx): void {
 function renderSide(ctx: Ctx, u: Unit | undefined, e: Entry | undefined): void {
   const { s } = ctx;
   const open = s.phone || s.sideOn.length > 0;
-  // The rail has the two tabs of the panel: the one that is open is lit (none while the panel is folded).
+  // The rail has the three tabs of the panel (activity, related, discussion): the one that is open is lit (none while the panel is folded).
   const tab = getRowTab();
   document.querySelectorAll<HTMLElement>('#stabs [data-p]').forEach(b => { const on = open && b.dataset.p === tab; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
-  $('#rp-title').textContent = tab === 'cm' ? 'Обговорення' : 'Рядок';
+  $('#rp-title').textContent = ROW_TAB_TITLE[tab];
   document.getElementById('v-focus')?.classList.toggle('side-collapsed', !open);
   // In the table there is no editor to carry the remarks of the row: they stand at the top of this zone.
   const q = u && s.mode === 'table' ? qaRows(ctx, u, e) : { html: '', count: 0 };
@@ -482,7 +485,7 @@ export function sideClick(ctx: Ctx, t: HTMLElement): boolean {
   const tab = t.closest<HTMLElement>('#stabs [data-p]');
   if (tab) {
     // As on the left rail: a tab that is not open opens the panel on it; the open one folds the panel to the rail (the phone keeps its row of tabs open).
-    const want: RowTab = tab.dataset.p === 'cm' ? 'cm' : 'row', same = getRowTab() === want;
+    const want: RowTab = tab.dataset.p === 'cm' ? 'cm' : tab.dataset.p === 'act' ? 'act' : 'rel', same = getRowTab() === want;
     setRowTab(want);
     if (s.phone) { s.sideOn = ['panel']; } else { s.sideOn = same && s.sideOn.length ? [] : ['panel']; s.sideTouched = true; }
     ctx.render(); return true;
@@ -494,7 +497,7 @@ export function sideClick(ctx: Ctx, t: HTMLElement): boolean {
   const ext = t.closest<HTMLElement>('[data-ext]');
   if (ext) { void openLink(ext.dataset.ext!); return true; }
   if (!u || !s.current) return false;
-  if (rowPanelClick(ctx, t, (unit, text, what, kind) => setText(ctx, unit, text, what, kind))) return true;
+  if (rowPanelClick(ctx, t)) return true;
   if (historyClick(ctx, t, (unit, text, what) => setText(ctx, unit, text, what))) return true;
   if (discussClick(ctx, t)) return true;
   return false;

@@ -93,20 +93,22 @@ async function addTerm(page, en, uk, alt = '') {
   const forms = await page.locator('#termcard .tc-fr').allInnerTexts();
   check('opened, it lists the cases with the forms; the form used in this row is marked', forms.length === 8 && (await page.locator('#termcard .tc-fr .me').count()) >= 1, JSON.stringify(forms));
   await page.keyboard.press('Escape'); await sleep(200);
-  // the right panel: its two tabs are on the rail beside it
+  // the right panel: its three tabs (activity, related, discussion) are on the rail beside it
   const rail = await page.locator('#stabs [data-p]').evaluateAll(els => els.map(e => ({ p: e.dataset.p, text: e.textContent.trim(), on: e.classList.contains('on') })));
-  check('the rail beside the right panel has two tabs: «Рядок» and «Обговорення»', rail.length === 2 && rail[0].p === 'row' && /Рядок/.test(rail[0].text) && rail[1].p === 'cm' && /Обговорення/.test(rail[1].text), JSON.stringify(rail));
-  check('exactly one is lit: the open one', rail.filter(r => r.on).length === 1 && rail[0].on, JSON.stringify(rail));
+  check('the rail beside the right panel has three tabs: «Активність», «Пов’язане» and «Обговорення» (no «Рядок»)', rail.length === 3 && rail.map(r => r.p).join() === 'act,rel,cm' && /Активність/.test(rail[0].text) && /Пов’язане/.test(rail[1].text) && /Обговорення/.test(rail[2].text), JSON.stringify(rail));
+  check('exactly one is lit: the open one (the related things are the default)', rail.filter(r => r.on).length === 1 && rail[1].on, JSON.stringify(rail));
   check('the panel has no tabs of its own in its header', (await page.locator('#rp-tabs, .fs .ph .rtab').count()) === 0);
   check('the old sections «Терміни й назви з гри» and «Зв’язані рядки» are gone from it', (await page.locator('#pn-tm, #pn-lk').count()) === 0);
-  check('the discussion is on its own tab: hidden while the row tab is open', !(await page.locator('#cm-in').isVisible()) && (await page.locator('.pn-sec[data-sec="ac"]').isVisible()));
+  check('the discussion is on its own tab: hidden while the related things are open', !(await page.locator('#cm-in').isVisible()) && (await page.locator('.pn-sec[data-sec="th"]').isVisible()) && !(await page.locator('.pn-sec[data-sec="ac"]').isVisible()));
   await page.locator('#stabs [data-p="cm"]').click(); await sleep(250);
   check('the discussion tab shows the discussion and hides the translation, and the title says so', (await page.locator('#cm-in').isVisible()) && !(await page.locator('.pn-sec[data-sec="ac"]').isVisible()) && (await page.locator('#rp-title').innerText()).toLowerCase() === 'обговорення');
   await page.locator('#stabs [data-p="cm"]').click(); await sleep(250);
   check('a second tap on the open tab folds the panel to the rail', !(await page.locator('#cm-in').isVisible()) && (await page.locator('#stabs [data-p].on').count()) === 0);
-  await page.locator('#stabs [data-p="row"]').click(); await sleep(250);
-  check('a tap on the other tab opens the panel on it', (await page.locator('.pn-sec[data-sec="ac"]').isVisible()) && (await page.locator('#stabs [data-p="row"].on').count()) === 1);
-  // the table has no editor: the cards stand at the end of the row tab
+  await page.locator('#stabs [data-p="act"]').click(); await sleep(250);
+  check('a tap on the other tab opens the panel on it: the activity, with the title of the panel saying so', (await page.locator('.pn-sec[data-sec="ac"]').isVisible()) && !(await page.locator('.pn-sec[data-sec="th"]').isVisible()) && (await page.locator('#stabs [data-p="act"].on').count()) === 1 && (await page.locator('#rp-title').innerText()).toLowerCase() === 'активність');
+  await page.locator('#stabs [data-p="rel"]').click(); await sleep(250);
+  check('and the related things are on their own tab', (await page.locator('.pn-sec[data-sec="th"]').isVisible()) && !(await page.locator('.pn-sec[data-sec="ac"]').isVisible()) && (await page.locator('#rp-title').innerText()).toLowerCase() === 'пов’язане');
+  // the table has no editor: the cards are on the tab of the related things
   await page.locator('[data-m="table"]').click(); await sleep(500);
   await page.locator('.gr', { hasText: 'Take your hat off' }).first().click(); await sleep(500);
   const inPanel = await page.locator('#pn-th .thc2[data-ck]').count();

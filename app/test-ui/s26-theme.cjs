@@ -66,7 +66,7 @@ async function pcPart(browser) {
   check('the chosen row of the table and its cell are grey too (the centre is not in use)', (await read('.gr.sel')).bg === GREY && (await read('.gr.sel .tr')).bg !== ACC);
   if (await page.locator('#lp-rows').isVisible()) { await page.locator('.strip [data-lp="rows"]').click(); await sleep(200); } // folds the rows window
   await page.locator('#stabs button.on').click(); await sleep(150); // folds the panel
-  await page.locator('#stabs [data-p="row"]').click(); await sleep(250);
+  await page.locator('#stabs [data-p="rel"]').click(); await sleep(250);
   check('a click on the right rail makes the right panel the working window', (await pane()) === 'right' && (await read('#stabs button.on')).bg === ACC, String(await pane()));
   check('and the left file turns grey again', (await read('.node.cur')).bg === GREY);
   const rest = page.locator('.seg button:not(.on)').first();

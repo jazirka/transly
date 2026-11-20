@@ -800,3 +800,7 @@ span.thc2-b{cursor:default}
 
 /* the state of the row in the table and in the scene: one flat line, the text itself stands in the table or in the scene card */
 .pn-ver.slim{border:0;background:none;padding:2px 0}
+
+/* the right panel has one tab for each section: the title of the panel names it, so the sections have no heading of their own */
+.pn-sec .pn-h{display:none}
+.pn-sec .pn-b{padding-top:6px}

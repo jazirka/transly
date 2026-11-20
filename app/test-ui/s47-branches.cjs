@@ -114,6 +114,20 @@ const stored = () => new Promise((res, rej) => { const o = indexedDB.open('trans
   await page.locator('#br-btn').click(); await sleep(200);
   await page.locator('#brpop [data-br="main"]').click(); await sleep(900);
   check('switching back gives main again', await page.locator('#br-name').innerText() === 'main' && (await page.evaluate(stored)).files['Map001.json'].k2.target === 'Наш варіант');
+  // rename and delete
+  await page.locator('#br-btn').click(); await sleep(200); await page.locator('#brpop [data-br="вичитка"]').click(); await sleep(800);
+  await page.locator('#br-btn').click(); await sleep(200);
+  check('on another branch the menu offers to rename it (not main)', await page.locator('#brpop [data-bra="rename"]').count() === 1 && /Перейменувати «вичитка»/.test(await page.locator('#brpop [data-bra="rename"]').innerText()));
+  await page.locator('#brpop [data-bra="rename"]').click(); await sleep(300);
+  await page.locator('dialog #br-name').fill('правка'); await page.locator('dialog #br-name').press('Enter'); await sleep(800);
+  check('rename: the button and the project say the new name', await page.locator('#br-name').innerText() === 'правка' && (await page.evaluate(stored)).branch === 'правка');
+  await page.locator('#br-btn').click(); await sleep(200); await page.locator('#brpop [data-br="main"]').click(); await sleep(800);
+  await page.locator('#br-btn').click(); await sleep(200); await page.locator('#brpop [data-bra="delete"]').click(); await sleep(300);
+  await page.locator('dialog [data-del="правка"]').click(); await sleep(150);
+  check('delete asks once more before it deletes', /Так, видалити/.test(await page.locator('dialog [data-del="правка"]').innerText()) && !!(await page.evaluate(stored)).branches['правка']);
+  await page.locator('dialog [data-del="правка"]').click(); await sleep(900);
+  const gone = await page.evaluate(stored);
+  check('the branch is deleted, a trace is left, the others are untouched', !gone.branches['правка'] && typeof gone.goneBranches['правка'] === 'number' && !!gone.branches.olya.files && gone.files['Map001.json'].k2.target === 'Наш варіант');
   check('no page errors', errors.length === 0, errors.join(' | '));
   await browser.close();
   console.log(failed ? `\n${failed} check(s) failed` : '\nall checks passed');

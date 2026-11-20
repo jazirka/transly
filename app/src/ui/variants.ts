@@ -6,7 +6,7 @@ import type { Ctx } from './state';
 
 /**
  * «Внески» under the field: the translations of the row that were sent, one card for each send of each translator (several from one translator
- * are all there), the newest first. Each can be voted for or against (▲ ▼, the same vote again takes it back), approved (the tick: the translation
+ * are all there), the newest first. Each can be voted for or against (+ −, the same vote again takes it back), approved (the tick: the translation
  * goes into the row and the row is proofread; the tick of the approved one takes the approval back) and taken off the card (the bin; the one the row
  * holds is not taken off, it is the row's translation). Like the contributions of a string in an online editor.
  */
@@ -18,7 +18,7 @@ export const variantsOf = (ctx: Ctx, key: string): Variant[] => sentVariants(ctx
 function cardHtml(ctx: Ctx, e: Entry | undefined, v: Variant, i: number): string {
   const who = v.who || 'Хтось';
   const t = tallyOf(e, v.id, ctx.s.who);
-  const vote = (dir: 'up' | 'down', n: number, on: boolean): string => `<button type="button" class="vt ${dir}${on ? ' on' : ''}" data-vv="${dir}" data-vi="${i}" aria-pressed="${on}" title="${dir === 'up' ? 'За цей внесок' : 'Проти цього внеску'}" aria-label="${dir === 'up' ? 'За' : 'Проти'}: ${n}"><span aria-hidden="true">${dir === 'up' ? '▲' : '▼'}</span><b>${n}</b></button>`;
+  const vote = (dir: 'up' | 'down', n: number, on: boolean): string => `<button type="button" class="vt ${dir}${on ? ' on' : ''}" data-vv="${dir}" data-vi="${i}" aria-pressed="${on}" title="${dir === 'up' ? 'За цей внесок' : 'Проти цього внеску'}" aria-label="${dir === 'up' ? 'За' : 'Проти'}: ${n}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="${dir === 'up' ? 'M3 8h10M8 3v10' : 'M3 8h10'}"/></svg><b>${n}</b></button>`;
   const done = v.current && v.approved;
   const tick = `<button type="button" class="ck${done ? ' on' : ''}" role="checkbox" aria-checked="${done}" data-vr="${i}" title="${done ? 'Затверджено: зняти затвердження (повернути на доопрацювання)' : 'Затвердити: поставити цей переклад у рядок і вичитати його'}" aria-label="${done ? 'Затверджено' : 'Затвердити'}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 4.8"/></svg></button>`;
   const bin = `<button type="button" class="vd" data-vd="${i}" ${v.current ? 'disabled' : ''} title="${v.current ? 'Це переклад рядка: очистити його можна кошиком біля поля' : 'Прибрати цей внесок з картки'}" aria-label="Прибрати внесок"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5v-1.5h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/></svg></button>`;

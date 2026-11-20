@@ -740,20 +740,20 @@ span.thc2-b{cursor:default}
 .var-t{margin-top:3px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;line-height:1.45}
 .var.cur .var-t{color:var(--text)}
 .var-a{display:flex;align-items:center;gap:6px}
-.var .btn{height:26px;padding:0 11px;border-radius:8px;white-space:nowrap}
+.var .btn{height:28px;padding:0 11px;border-radius:8px;white-space:nowrap}
 .var .btn:disabled{opacity:.5;cursor:default}
-.var .ck{width:26px;height:26px;border-radius:8px;border:1px solid var(--line);background:none;color:transparent;display:grid;place-items:center;padding:0;cursor:pointer}
-.var .ck svg,.var .vd svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.var .ck:hover{color:var(--mute)}
-.var .ck.on{background:var(--ok);border-color:var(--ok);color:#10261a}
-.var .vd{width:26px;height:26px;border-radius:8px;border:1px solid transparent;background:none;color:var(--dim);display:grid;place-items:center;padding:0;cursor:pointer}
-.var .vd:hover{color:var(--bad)}
-.var .vd:disabled{opacity:.35;cursor:default}
-.var .vd:disabled:hover{color:var(--dim)}
-.var .vt{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 8px;border-radius:8px;border:1px solid var(--line);background:none;color:var(--mute);font:inherit;font-size:12px;cursor:pointer}
+/* the four buttons of a contribution are one family: 28 px, the same outline, glyphs of the same size and stroke */
+.var .vt,.var .ck,.var .vd{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;min-width:28px;padding:0 8px;border-radius:8px;border:1px solid #4a4d54;background:none;color:var(--mute);font:inherit;font-size:13px;cursor:pointer}
+.var .ck,.var .vd{width:28px;padding:0}
+.var .ck{color:var(--dim)}
+.var .vt svg,.var .ck svg,.var .vd svg{width:14px;height:14px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .var .vt b{font-weight:600;min-width:1ch;text-align:center}
-.var .vt.on.up{border-color:var(--ok);color:var(--ok)}
-.var .vt.on.down{border-color:var(--bad);color:var(--bad)}
+.var .vt:hover,.var .ck:hover{background:rgba(255,255,255,.07);color:var(--text)}
+.var .vt.on.up,.var .ck.on{border-color:var(--ok);color:var(--ok);background:rgba(95,184,101,.14)}
+.var .vt.on.down{border-color:var(--bad);color:var(--bad);background:rgba(247,84,100,.12)}
+.var .vd:hover{color:var(--bad);border-color:var(--bad);background:rgba(247,84,100,.08)}
+.var .vd:disabled{opacity:.35;cursor:default}
+.var .vd:disabled:hover{color:var(--mute);border-color:#4a4d54;background:none}
 @media (max-width:760px){.var{grid-template-columns:24px 1fr}.var-a{grid-column:2;flex-wrap:wrap}}
 
 /* ---------- «Активність у рядку»: the feed of the row, grouped by day ---------- */

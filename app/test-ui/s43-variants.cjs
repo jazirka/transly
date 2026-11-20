@@ -36,13 +36,16 @@ const put = ({ text, snapshot }) => new Promise((res, rej) => { const o = indexe
   check('«Внески» stands under the field and lists the sent translations, the newest first (the draft edit is not among them)', c.map(x => `${x.who}:${x.text}`).join('|') === 'Ви:Нокаут|Ви:Нокдаун|Оля:Удар', JSON.stringify(c));
   check('each card has its votes, the tick (not ticked: the row is only sent) and the bin (not for the translation the row holds)', c.every(x => x.up === '0' && x.down === '0') && c.every(x => x.btn === 'Затвердити' && !x.on) && c[0].cur && !c[1].cur && c[0].binOff && !c[1].binOff, JSON.stringify(c));
   check('the card has its title with the count', /Внески\s*3/i.test(await page.locator('#f-var > .lbl').innerText()));
-  // votes: ▲ counts, the same click takes it back, ▼ replaces it
+  // the four buttons of a card are one family: the same height and outline, and the vote signs are drawn (+ and − of the same size and stroke), not typed
+  const fam = await page.evaluate(() => [...document.querySelectorAll('#f-var .var:first-child .vt, #f-var .var:first-child .ck, #f-var .var:first-child .vd')].map(e => { const cs = getComputedStyle(e), r = e.getBoundingClientRect(); return { h: Math.round(r.height), bw: cs.borderTopWidth, br: cs.borderTopLeftRadius, svg: !!e.querySelector('svg'), text: [...e.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent.trim()).join('') }; }));
+  check('the vote, the tick and the bin buttons are 28 px high, outlined, with the same radius, and have drawn signs (no ▲ ▼ typed)', fam.length === 4 && fam.every(x => x.h === 28 && x.bw === '1px' && x.br === fam[0].br && x.svg && x.text === ''), JSON.stringify(fam));
+  // votes: + counts, the same click takes it back, − replaces it
   await page.locator('#f-var .var').nth(2).locator('[data-vv=up]').click(); await sleep(400);
   c = await cards();
-  check('▲ adds a vote of mine to that contribution only', c[2].up === '1' && c[2].upOn && c[0].up === '0' && c[1].up === '0', JSON.stringify(c));
+  check('+ adds a vote of mine to that contribution only', c[2].up === '1' && c[2].upOn && c[0].up === '0' && c[1].up === '0', JSON.stringify(c));
   await page.locator('#f-var .var').nth(2).locator('[data-vv=down]').click(); await sleep(400);
   c = await cards();
-  check('▼ replaces my vote: one against, none for', c[2].up === '0' && c[2].down === '1' && !c[2].upOn, JSON.stringify(c));
+  check('− replaces my vote: one against, none for', c[2].up === '0' && c[2].down === '1' && !c[2].upOn, JSON.stringify(c));
   await page.locator('#f-var .var').nth(2).locator('[data-vv=down]').click(); await sleep(400);
   c = await cards();
   check('the same click again takes the vote back', c[2].up === '0' && c[2].down === '0', JSON.stringify(c));

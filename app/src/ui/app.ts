@@ -71,7 +71,6 @@ const SVG = {
   caret: '<svg class="caret" viewBox="0 0 10 10"><path d="M2 3.6L5 6.6l3-3"/></svg>',
   bell: '<svg viewBox="0 0 16 16"><path d="M4 11V7.5a4 4 0 0 1 8 0V11l1 1.5H3zM6.5 14h3"/></svg>',
   keys: '<svg viewBox="0 0 16 16"><rect x="1.5" y="3.5" width="13" height="9" rx="1.8"/><path d="M4.2 6.5h.01M6.7 6.5h.01M9.3 6.5h.01M11.8 6.5h.01M4.5 9.5h7"/></svg>',
-  gear: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>',
   play: '<svg viewBox="0 0 16 16"><path d="M4.5 2.5l9 5.5-9 5.5z" fill="currentColor" stroke="none"/></svg>',
   folder: '<svg viewBox="0 0 16 16"><path d="M2 4.5h4l1.2 1.5H14V12.5H2z"/><path d="M8 8v3M6.5 9.5h3"/></svg>',
   import: '<svg viewBox="0 0 16 16"><path d="M8 2.5v7M5 6.5l3 3 3-3M2.5 11v2h11v-2"/></svg>',
@@ -114,8 +113,6 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     <div class="tsep"></div>
     <button class="tb-ic bellb" id="bell" title="Сповіщення: що потребує уваги й що змінили інші" aria-label="Сповіщення" aria-haspopup="menu" aria-expanded="false">${SVG.bell}<b id="bell-n" hidden>0</b></button>
     <button class="tb-ic" id="hk" title="Гарячі клавіші" aria-label="Гарячі клавіші">${SVG.keys}</button>
-    <div class="tsep"></div>
-    <button class="tb-ic" id="settings" title="Налаштування" aria-label="Налаштування">${SVG.gear}</button>
   </header>
   <header class="appbar">
     <div class="abt"><b id="ab-title">Transly</b><small id="ab-sub"></small></div>
@@ -1333,7 +1330,8 @@ export async function start(root: HTMLElement): Promise<void> {
     pop.innerHTML = `<button role="menuitem" data-pj="folder"><span class="cfg-t">Відкрити папку гри…</span></button>
       <button role="menuitem" data-pj="files"><span class="cfg-t">Відкрити файли або вставити JSON…</span></button>
       <hr><div class="pj-h">Поточний проєкт</div>
-      <div class="pj-card"><span class="pj lg">${esc((Array.from(s.saved.name.trim())[0] ?? 'T').toUpperCase())}</span><div><b>${esc(s.saved.name)}</b><small class="${folder.kind === 'missing' || folder.kind === 'other' ? 'warn' : ''}" title="${esc(folderLine(folder, remembered))}">${esc(folderLine(folder, remembered))}</small><small>${total ? `Перекладено ${done.toLocaleString('uk-UA')} з ${total.toLocaleString('uk-UA')}` : 'Файлів ще немає'}</small></div></div>`;
+      <div class="pj-card"><span class="pj lg">${esc((Array.from(s.saved.name.trim())[0] ?? 'T').toUpperCase())}</span><div><b>${esc(s.saved.name)}</b><small class="${folder.kind === 'missing' || folder.kind === 'other' ? 'warn' : ''}" title="${esc(folderLine(folder, remembered))}">${esc(folderLine(folder, remembered))}</small><small>${total ? `Перекладено ${done.toLocaleString('uk-UA')} з ${total.toLocaleString('uk-UA')}` : 'Файлів ще немає'}</small></div></div>
+      <hr><button role="menuitem" data-pj="settings"><span class="cfg-t">Налаштування…</span></button>`;
     const r = btn.getBoundingClientRect();
     pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 340))}px`; pop.style.top = `${r.bottom + 6}px`;
     rememberOpener(btn); pop.hidden = false; btn.setAttribute('aria-expanded', 'true'); focusFirst(pop); refreshScrollbars();
@@ -1835,7 +1833,6 @@ export async function start(root: HTMLElement): Promise<void> {
       runClaudeSync(ctx, loadClaudeConfig(), adopt).then(r => toast(s.views.length ? describeClaude(r) : 'У спільній базі ще немає проєкту: спершу синхронізуйте на комп’ютері (Налаштування → Синхронізація через Claude)'), er => toast(er instanceof Error ? er.message : 'Не вдалося синхронізувати'));
       return;
     }
-    if (t.closest('#settings')) { openSettingsDlg(); return; }
     if (!t.closest('#cfgpop,#cfg-btn')) closeCfgMenu();
     if (!t.closest('#projpop,#proj-btn')) closeProjMenu();
     if (t.closest('#proj-btn')) { openProjMenu(); return; }

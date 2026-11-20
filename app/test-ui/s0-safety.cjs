@@ -58,7 +58,7 @@ async function fresh(browser, url, viewport, extra = {}) {
     const { ctx, page, log } = await fresh(browser, PC, { width: 1400, height: 900 });
     await page.evaluate(rawPut, { project: hostile(), withSnapshot: true });
     await page.reload(); await page.waitForTimeout(1500);
-    await page.click('#settings'); await page.waitForTimeout(600);
+    await page.click('#proj-btn'); await page.click('[data-pj="settings"]'); await page.waitForTimeout(600);
     const pwned = await page.evaluate(() => window.__pwned || 0);
     const who = await page.evaluate(() => document.querySelector('#st-who')?.value ?? 'no #st-who');
     const tol = await page.evaluate(() => document.querySelector('#st-tol')?.getAttribute('value') ?? 'no #st-tol');
@@ -78,7 +78,7 @@ async function fresh(browser, url, viewport, extra = {}) {
     const p = hostile(); p.settings.who = 'Ви'; p.settings.tolerancePct = 25; p.groups = {}; p.members = {}; p.files['Map001.json'].b.status = 'draft';
     await page.evaluate(rawPut, { project: p, withSnapshot: true });
     await page.reload(); await page.waitForTimeout(1500);
-    await page.click('#settings'); await page.waitForTimeout(500);
+    await page.click('#proj-btn'); await page.click('[data-pj="settings"]'); await page.waitForTimeout(500);
     await page.locator('.st-ti[data-p="danger"]').click();
     const btn = page.locator('#st-reset');
     await btn.dblclick(); await page.waitForTimeout(300);

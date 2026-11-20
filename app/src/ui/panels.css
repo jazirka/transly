@@ -201,7 +201,8 @@ textarea.tr-in:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(var(--
 
 /* ----- hints in their place: chips of the header, proposals of the memory, words of the original that open cards ----- */
 .cc{display:inline-flex;align-items:center;gap:4px;font:inherit;font-size:12px;line-height:18px;color:var(--mute)}
-button.cc{cursor:pointer;padding:2px 9px;border:1px solid var(--line);border-radius:var(--r2);background:transparent}
+button.cc{cursor:pointer;padding:2px 9px;border:1px solid var(--line);border-radius:var(--r2);background:transparent;flex:none;flex-direction:row;white-space:nowrap}
+button.cc>span{flex:none;line-height:1;font-size:10px}
 button.cc:hover{background:var(--panel2,#34363b);color:var(--text)}
 button.cc:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .cc.warn{border-color:#5a4a2a;color:#f0c477}

@@ -83,8 +83,8 @@ const NAMES = ['Town', 'Forest', 'Old house', 'Harbour', 'Market square', 'Castl
   check('in a window you are not in it is grey', s.pane !== 'centre' && /rgba\(255, 255, 255, 0\.15\)/.test(s.bg), JSON.stringify(s));
 
   // ---- a primary button follows the theme when hovered (it was a fixed purple)
-  await page.locator('#hamb').click().catch(() => {}); await sleep(200);
-  await page.locator('#settings').click().catch(() => {}); await sleep(500);
+  await page.locator('#proj-btn').click().catch(() => {}); await sleep(200);
+  await page.locator('[data-pj="settings"]').click().catch(() => {}); await sleep(500);
   const save = page.locator('#st-save');
   if (await save.count()) {
     await save.hover(); await sleep(250);

@@ -1149,3 +1149,18 @@ html.ovsb ::-webkit-scrollbar{display:none}
 .gr.sel{border-bottom-color:transparent}
 /* in the bar of the table the menu buttons and the chosen filters stand in the row of the search, as in the rows window */
 .filters .chipsHost{display:contents}
+
+/* ---------- the modes (Таблиця · Редагування · Сцена): the look of the side strips, and the place of the middle ----------
+   Separate rounded squares with a hairline between them (no pill round the group), as in the strip on the left. The modes open the middle of the window from above,
+   so on a wide window they stand in the middle of the top bar; the progress, which belongs to the project, stands beside its name. */
+.topbar #seg{background:none;box-shadow:none;border:0;padding:0;gap:0;border-radius:0;overflow:visible}
+.topbar #seg button{position:relative;height:32px;padding:0 12px;margin:0 4px;border-radius:var(--r2)!important}
+.topbar #seg button+button::before{content:"";position:absolute;left:-5px;top:8px;bottom:8px;width:1px;background:rgba(255,255,255,.12)}
+@media (min-width:1200px){
+  .topbar{position:relative}
+  .topbar #seg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);margin:0}
+  .topbar .logo,.topbar #hamb,.topbar #menubar,.topbar #proj-btn{order:-2}
+  .topbar #pg{order:-1;min-width:0;max-width:calc(50% - 365px);margin:0 0 0 8px}
+  .topbar #pg #pg-txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  .topbar #pg+.tsep{display:none}
+}

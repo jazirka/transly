@@ -26,6 +26,7 @@ export * from './filesync';
 export * from './github';
 export * from './dbsync';
 export * from './links';
+export * from './branches';
 export * from './ukmorph';
 export * from './termsync';
 export * from './termtable';

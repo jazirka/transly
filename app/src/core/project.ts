@@ -10,6 +10,7 @@ import type { ExtractOptions } from './rpgmaker';
 import { OTHER_DEVICE, RESET_WHAT, merge } from './merge';
 import { clampClock, repairProject } from './validate';
 import { progressOf } from './progress';
+import { branchOf, checkoutBranch, mergeBranchData } from './branches';
 import type { Entry, GameFile, Translations, Unit } from './model';
 import type { WrapSettings } from './wrapconfig';
 import type { QaSettings } from './qaconfig';
@@ -60,14 +61,31 @@ export interface SavedProject {
   /** What each file, scene or row is put into (see `groups.ts`). */
   members?: Record<string, Member>;
   /** The exceptions to «rows with the same original are linked»: unlinked rows and chosen main translations (see `links.ts`). */
-  links?: Record<string, LinkItem>;
+  links?: Record<string, LinkItem>;  /** The branch of the translation whose rows are in `files` (see `branches.ts`); missing = «main». */
+  branch?: string;
+  /** The branches of the translation: the other ones keep their rows here, the current one only where it began. */
+  branches?: Record<string, Branch>;
+  /** Branches that were deleted: name → when. A branch made before that is dropped by a merge, so it does not come back. */
+  goneBranches?: Record<string, number>;
+}
+
+/** One branch of the translation (see `branches.ts`). */
+export interface Branch {
+  /** The branch this one was made from. */
+  from?: string;
+  /** When it was made. */
+  at: number;
+  /** The rows as they were when the branch was made, and as the merges settled them: the common ground of a compare. */
+  base?: Record<string, Translations>;
+  /** The rows of the branch while it is not the current one (the current branch's rows are `SavedProject.files`). */
+  files?: Record<string, Translations>;
 }
 
 /** The layout this build writes (see `SavedProject.schema`). */
 export const SCHEMA = 2;
 
 /** Top-level fields this build knows. Everything else in a project file belongs to a newer version and is passed through unchanged. */
-const KNOWN = new Set(['version', 'name', 'sourceLang', 'targetLang', 'resetEpoch', 'files', 'memory', 'terms', 'settings', 'settingsAt', 'snapshot', 'reference', 'labels', 'sysNames', 'speakers', 'assetsRev', 'schema', 'deletedTerms', 'groups', 'members', 'links']);
+const KNOWN = new Set(['version', 'name', 'sourceLang', 'targetLang', 'resetEpoch', 'files', 'memory', 'terms', 'settings', 'settingsAt', 'snapshot', 'reference', 'labels', 'sysNames', 'speakers', 'assetsRev', 'schema', 'deletedTerms', 'groups', 'members', 'links', 'branch', 'branches', 'goneBranches']);
 const extrasOf = (p: object): Record<string, unknown> => Object.fromEntries(Object.entries(p).filter(([k]) => !KNOWN.has(k)));
 
 export interface ProjectSettings {
@@ -191,6 +209,9 @@ export function deserializeChecked(text: string, now?: number): Deserialized {
     ...(o.groups ? { groups: o.groups } : {}),
     ...(o.members ? { members: o.members } : {}),
     ...(o.links ? { links: o.links } : {}),
+    ...(typeof o.branch === 'string' && o.branch ? { branch: o.branch } : {}),
+    ...(o.branches ? { branches: o.branches } : {}),
+    ...(o.goneBranches ? { goneBranches: o.goneBranches } : {}),
   };
   return { project, notes };
 }
@@ -288,7 +309,15 @@ function deepCmp(x: unknown, y: unknown): number {
 }
 
 /** Merge two copies of the same project (e.g. PC and phone). Entries from before the newest reset are dropped. */
-export function mergeProjects(a: SavedProject, b: SavedProject, since = 0): ProjectMerge {
+export function mergeProjects(a0: SavedProject, b0: SavedProject, since = 0): ProjectMerge {
+  let a = a0, b = b0;
+  // two copies that stand on different branches: both are put on the one the newer copy stands on, so the rows of two branches are never mixed
+  if (branchOf(a) !== branchOf(b)) {
+    const rank = (p: SavedProject): string => `${p.name}\u0001${p.sourceLang}\u0001${p.targetLang}\u0001${branchOf(p)}`;
+    const pick = a.resetEpoch !== b.resetEpoch ? (a.resetEpoch > b.resetEpoch ? a : b) : (rank(b) > rank(a) ? b : a);
+    const cur = branchOf(pick);
+    a = checkoutBranch(a, cur); b = checkoutBranch(b, cur);
+  }
   const epoch = Math.max(a.resetEpoch, b.resetEpoch);
   let droppedByReset = 0;
   const live = (t: Translations): Translations => {
@@ -350,6 +379,9 @@ export function mergeProjects(a: SavedProject, b: SavedProject, since = 0): Proj
       ...(Object.keys(deleted).length ? { deletedTerms: deleted } : {}),
       ...grp, ...lnk,
   };
+  delete project.branches; delete project.goneBranches; delete project.branch;
+  Object.assign(project, mergeBranchData(a, b, branchOf(a), epoch, live));
+  if (branchOf(a) !== 'main') project.branch = branchOf(a);
   if (!Object.keys(deleted).length) delete project.deletedTerms;
   if (!grp.groups) delete project.groups;
   if (!grp.members) delete project.members;

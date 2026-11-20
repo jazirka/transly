@@ -134,6 +134,24 @@ export function repairProject(o: Record<string, unknown>): string[] {
     if ('color' in v && !(typeof v.color === 'string' && /^#[0-9a-f]{3,8}$/i.test(v.color))) { delete v.color; n.other++; }
   });
   record('members', v => typeof v.g === 'string' && num(v.mt));
+  // branches: the parked rows are repaired like the rows of the project; a branch of a wrong shape is dropped
+  if ('branch' in o && (typeof o.branch !== 'string' || !o.branch)) delete o.branch;
+  if (isObj(o.goneBranches)) { for (const [k, t] of Object.entries(o.goneBranches)) if (!num(t)) delete o.goneBranches[k]; } else if ('goneBranches' in o) delete o.goneBranches;
+  if (isObj(o.branches)) {
+    const fixFiles = (fs: unknown): boolean => {
+      if (!isObj(fs)) return false;
+      for (const [name, f] of Object.entries(fs)) {
+        if (!isObj(f)) { delete fs[name]; n.dropped++; continue; }
+        for (const [key, e] of Object.entries(f)) if (!repairEntry(e, n)) delete f[key];
+      }
+      return true;
+    };
+    for (const [name, br] of Object.entries(o.branches)) {
+      if (!isObj(br) || !num(br.at)) { delete o.branches[name]; n.dropped++; continue; }
+      if ('from' in br && typeof br.from !== 'string') delete br.from;
+      for (const k of ['files', 'base']) if (k in br && !fixFiles(br[k])) delete br[k];
+    }
+  } else if ('branches' in o) delete o.branches;
   if (isObj(o.deletedTerms)) { for (const [k, t] of Object.entries(o.deletedTerms)) if (!num(t)) delete o.deletedTerms[k]; } else if ('deletedTerms' in o) delete o.deletedTerms;
   if (isObj(o.snapshot)) {
     for (const [name, units] of Object.entries(o.snapshot)) {
@@ -163,8 +181,11 @@ export function clampClock(o: Record<string, unknown>, now: number, ahead = MAX_
   let n = 0;
   const fix = (r: Record<string, unknown>, k: string): void => { const v = r[k]; if (typeof v === 'number' && v > limit) { r[k] = now; n++; } };
   for (const k of ['resetEpoch', 'settingsAt', 'assetsRev']) fix(o, k);
-  if (isObj(o.files)) {
-    for (const f of Object.values(o.files)) {
+  const sets: unknown[] = [o.files];
+  if (isObj(o.branches)) for (const br of Object.values(o.branches)) if (isObj(br)) sets.push(br.files, br.base);
+  for (const fs of sets) {
+    if (!isObj(fs)) continue;
+    for (const f of Object.values(fs)) {
       if (!isObj(f)) continue;
       for (const e of Object.values(f)) {
         if (!isObj(e)) continue;

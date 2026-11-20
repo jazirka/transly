@@ -11,7 +11,7 @@ import { HISTORY_LIMIT } from './workflow';
 export type Prev = NonNullable<HistoryItem['prev']>;
 
 /** What a bulk action is. The kind is the part of the batch id before the colon. */
-export type BatchKind = 'edit' | 'send' | 'approve' | 'scene' | 'words' | 'twin' | 'replace' | 'unify' | 'memory' | 'wrap' | 'clear' | 'copy' | 'back' | 'link' | 'term' | 'fix' | 'reconcile' | 'rekey' | 'undo' | 'redo';
+export type BatchKind = 'edit' | 'send' | 'approve' | 'scene' | 'words' | 'twin' | 'replace' | 'unify' | 'memory' | 'wrap' | 'clear' | 'copy' | 'back' | 'link' | 'term' | 'fix' | 'reconcile' | 'rekey' | 'merge' | 'undo' | 'redo';
 
 /** The history text and the feed title of each kind of action. */
 export const BATCH_INFO: Record<BatchKind, { what: string; title: (n: string) => string }> = {
@@ -33,6 +33,7 @@ export const BATCH_INFO: Record<BatchKind, { what: string; title: (n: string) =>
   fix: { what: 'виправлено за правилом', title: n => `Виправлено за правилом: ${n}` },
   reconcile: { what: 'оригінал змінився: повернуто в чернетки', title: n => `Оригінал змінився, повернуто в чернетки: ${n}` },
   rekey: { what: 'зіставлено з новою версією гри', title: n => `Переклади зіставлено з новою версією гри: ${n}` },
+  merge: { what: 'злито з іншої гілки', title: n => `Злито з іншої гілки: ${n}` },
   undo: { what: 'скасовано', title: n => `Скасовано дію: ${n}` },
   redo: { what: 'повторено', title: n => `Повторено дію: ${n}` },
 };

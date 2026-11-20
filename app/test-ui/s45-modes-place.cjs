@@ -33,7 +33,7 @@ const project = () => ({ version: 1, name: 'P', sourceLang: 'en', targetLang: 'u
     await page.context().close();
   }
   const narrow = await open(1100); const n = await geo(narrow);
-  check('on a narrow window the modes keep their old place (right after the project)', n.seg.l < 200 && n.seg.l > n.proj.r, JSON.stringify(n.seg));
+  check('on a narrow window the modes keep their old place (right after the project and its branch button)', n.seg.l < 300 && n.seg.l > n.proj.r, JSON.stringify(n.seg));
   await narrow.context().close();
   check('no page errors', errors.length === 0, errors.join(' | '));
   await browser.close();

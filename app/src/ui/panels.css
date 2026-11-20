@@ -754,7 +754,6 @@ span.thc2-b{cursor:default}
 .var .vt.on.up{border-color:var(--ok);color:var(--ok)}
 .var .vt.on.down{border-color:var(--bad);color:var(--bad)}
 @media (max-width:760px){.var{grid-template-columns:24px 1fr}.var-a{grid-column:2;flex-wrap:wrap}}
-.pn-sec[data-sec="th"][data-empty="1"]{display:none}
 
 /* ---------- «Активність у рядку»: the feed of the row, grouped by day ---------- */
 .act{display:flex;flex-direction:column}
@@ -804,3 +803,17 @@ span.thc2-b{cursor:default}
 /* the right panel has one tab for each section: the title of the panel names it, so the sections have no heading of their own */
 .pn-sec .pn-h{display:none}
 .pn-sec .pn-b{padding-top:6px}
+
+/* the open tab of the right panel takes the whole height, so a message that says «Брак …» can stand in the middle of it; the field for a new comment stays at the foot */
+#s-pn{flex:1}
+#s-pn .pn-sec:not([hidden]){flex:1;display:flex;flex-direction:column;border-bottom:0}
+#s-pn .pn-sec:not([hidden]) .pn-b{flex:1}
+#s-pn .act,#s-pn #cm-list{flex:1;display:flex;flex-direction:column}
+#s-pn .cm-new{margin-top:auto}
+.pn-mid{margin:auto;padding:18px;text-align:center;color:var(--mute);font-size:14px;line-height:1.4}
+
+/* the little arrow of a button that opens a menu: a drawn chevron, centred with the text (the glyph ▾ of a font sits lower than the text) */
+.caret{width:10px;height:10px;flex:none;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;margin-left:4px;vertical-align:middle}
+.tpill .dd,#proj-btn .dd,#cfg-btn .dd{display:inline-flex;align-items:center}
+.tpill .dd .caret{margin-left:0}
+button.chip .caret{margin-left:5px;vertical-align:middle;position:relative;top:-1px}

@@ -66,7 +66,7 @@ export function renderHistory(ctx: Ctx, row: string, e: Entry | undefined, cardA
         ${cmp ? '<div class="hint">Закреслене зникне, підкреслене повернеться, якщо відновити цю версію.</div>' : ''}
       </div>
     </div>`;
-  }).join('') : '<div class="hint pn-empty">Версій немає</div>';
+  }).join('') : '<div class="pn-mid">Брак активності</div>';
 }
 
 /** Clicks in the history. `apply` writes a text into the open row as one change (with its own history record). */

@@ -68,6 +68,7 @@ const SVG = {
   menu: '<svg viewBox="0 0 16 16"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg>',
   search: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>',
   searchBig: '<svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>',
+  caret: '<svg class="caret" viewBox="0 0 10 10"><path d="M2 3.6L5 6.6l3-3"/></svg>',
   bell: '<svg viewBox="0 0 16 16"><path d="M4 11V7.5a4 4 0 0 1 8 0V11l1 1.5H3zM6.5 14h3"/></svg>',
   keys: '<svg viewBox="0 0 16 16"><rect x="1.5" y="3.5" width="13" height="9" rx="1.8"/><path d="M4.2 6.5h.01M6.7 6.5h.01M9.3 6.5h.01M11.8 6.5h.01M4.5 9.5h7"/></svg>',
   gear: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>',
@@ -99,7 +100,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     <div class="logo" aria-hidden="true">T</div>
     <button class="tb-ic" id="hamb" title="Головне меню" aria-haspopup="menu" aria-expanded="false">${SVG.menu}</button>
     <nav class="menubar" id="menubar" role="menubar" aria-label="Головне меню" hidden></nav>
-    <button class="tpill" id="proj-btn" aria-haspopup="menu" aria-expanded="false" title="Проєкт: відкрити іншу гру, налаштування"><span class="pj" id="proj-av" aria-hidden="true">T</span><span id="proj-name">Проєкт</span><span class="dd" aria-hidden="true">▾</span></button>
+    <button class="tpill" id="proj-btn" aria-haspopup="menu" aria-expanded="false" title="Проєкт: відкрити іншу гру, налаштування"><span class="pj" id="proj-av" aria-hidden="true">T</span><span id="proj-name">Проєкт</span><span class="dd" aria-hidden="true">${SVG.caret}</span></button>
     <div class="seg" id="seg" role="group" aria-label="Режим">
       <button aria-pressed="true" data-m="table" class="on"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM2.5 7h11M6.5 3.5v9"/></svg>Таблиця</button>
       <button aria-pressed="false" data-m="edit"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM6 3.5v9M6 8h7.5"/></svg>Редагування</button>
@@ -108,7 +109,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     <div class="grow"></div>
     <div class="prog" id="pg" title="" role="progressbar" aria-label="Прогрес перекладу" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="bar"><i class="a" id="pg-a"></i><i class="b" id="pg-b"></i><i class="c" id="pg-c"></i></div><span id="pg-txt" style="font-family:var(--mono);font-size:11.5px"></span></div>
     <div class="tsep"></div>
-    <button class="tpill run" id="cfg-btn" aria-haspopup="menu" aria-expanded="false" title="Що запускає кнопка ▶">${SVG.build}<span id="cfg-name">Збірка (файл)</span><span class="dd" aria-hidden="true">▾</span></button>
+    <button class="tpill run" id="cfg-btn" aria-haspopup="menu" aria-expanded="false" title="Що запускає кнопка ▶">${SVG.build}<span id="cfg-name">Збірка (файл)</span><span class="dd" aria-hidden="true">${SVG.caret}</span></button>
     <button class="tb-ic play" id="run-btn" title="Запустити (F5)" aria-label="Запустити">${SVG.play}</button>
     <div class="tsep"></div>
     <button class="tb-ic bellb" id="bell" title="Сповіщення: що потребує уваги й що змінили інші" aria-label="Сповіщення" aria-haspopup="menu" aria-expanded="false">${SVG.bell}<b id="bell-n" hidden>0</b></button>
@@ -150,7 +151,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
       <div class="tabs"><span class="tabs-host" id="tabs-host"></span></div>
       <div class="view" id="v-table">
         <div class="filters"><div class="fin">${SVG.search}<input class="qin" id="q" placeholder="Фільтр у цьому файлі" aria-label="Фільтр"></div><span class="chipsHost" id="chips1"></span>
-          <div class="r"><button class="chip" id="spkbtn">Мовець ▾</button><button class="chip" id="lenbtn">Довжина ▾</button></div></div>
+          <div class="r"><button class="chip" id="spkbtn">Мовець${SVG.caret}</button><button class="chip" id="lenbtn">Довжина${SVG.caret}</button></div></div>
         <div class="gridwrap"><div class="bulk" id="bulk"><div class="bulk-in"><b id="bulkn">0</b><span id="bulkt"></span><button id="bb-ok" title="Надіслати вибрані переклади">Надіслати</button><button id="bb-appr" title="Вичитати вибрані переклади (рядки, що ще не надіслано, надсилаються й вичитуються разом)">Вичитати</button><button id="bb-tm" title="Підставити збіг із пам’яті перекладів (від 70%) у порожні вибрані рядки">З пам’яті</button><button id="bb-clear" class="ghost" title="Скасувати вибір" aria-label="Скасувати вибір">✕</button></div></div><div class="grid" id="grid" role="grid" aria-label="Рядки файлу"></div></div>
       </div>
       <div class="view" id="v-focus">${FOCUS_HTML}</div>
@@ -599,7 +600,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const n = filterCounts();
     const chips = s.filters.map(f => { const l = FILTERS.find(x => x[0] === f)?.[1] ?? f; return `<button class="chip on" data-filter="${f}" aria-pressed="true" title="Прибрати фільтр «${l}»">${filterDot(f)}${l} <span class="n">${(n.get(f) ?? 0).toLocaleString('uk-UA')}</span><span class="x" aria-hidden="true">✕</span></button>`; }).join('');
     // «Ще ▾» comes first, where the eye looks for it; the chosen ones (the speaker, the statuses) follow it
-    return `<button class="chip more${host === '2' ? ' hm' : ''}${s.filters.length ? ' on' : ''}" id="more-${host}" data-more aria-haspopup="true" aria-expanded="false">Ще ▾</button>${lead}${chips}${s.filters.length ? '<button class="chip" data-reset title="Скинути всі фільтри">Скинути</button>' : ''}`;
+    return `<button class="chip more${host === '2' ? ' hm' : ''}${s.filters.length ? ' on' : ''}" id="more-${host}" data-more aria-haspopup="true" aria-expanded="false">Ще${SVG.caret}</button>${lead}${chips}${s.filters.length ? '<button class="chip" data-reset title="Скинути всі фільтри">Скинути</button>' : ''}`;
   }
   /** The popover «Ще ▾»: a box for each status with how many rows have it; the boxes can be mixed. */
   function moreHtml(): string {
@@ -614,7 +615,7 @@ export async function start(root: HTMLElement): Promise<void> {
       const b = $(id);
       b.setAttribute('aria-haspopup', 'true'); if (!b.hasAttribute('aria-expanded')) b.setAttribute('aria-expanded', 'false');
       b.classList.toggle('on', on);
-      b.innerHTML = `${esc(label)} ▾${on ? `<span class="x" data-clear="${clear}" title="Скинути" role="button" tabindex="0" aria-label="Скинути фільтр">✕</span>` : ''}`;
+      b.innerHTML = `${esc(label)}${SVG.caret}${on ? `<span class="x" data-clear="${clear}" title="Скинути" role="button" tabindex="0" aria-label="Скинути фільтр">✕</span>` : ''}`;
     };
     set('#spkbtn', s.speaker !== null, s.speaker === null ? 'Мовець' : s.speaker || 'Без мовця', 'speaker');
     set('#lenbtn', s.lenFilter !== 'all', s.lenFilter === 'all' ? 'Довжина' : LEN_LABEL[s.lenFilter], 'len');
@@ -734,7 +735,7 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#lp-rows').classList.toggle('has-active', active);
     $('#rs-menu').classList.toggle('dot', active);
     syncRowsSearch();
-    $('#sortbtn').textContent = 'Вигляд ▾';
+    $('#sortbtn').innerHTML = `Вигляд${SVG.caret}`;
     $('#sortbtn').title = $('#sortbtn').ariaLabel = `Вигляд: порядок «${SORT_LABEL[s.sort]}»`;
     $('#sortbtn').classList.toggle('on', s.sort !== 'order');
     const v = ctx.view();

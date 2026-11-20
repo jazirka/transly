@@ -58,7 +58,7 @@ export function renderDiscuss(ctx: Ctx, row: string, e: Entry | undefined): void
   const closedWasOpen = !!document.querySelector('#cm-list details.thr-closed[open]');
   $('#cm-list').innerHTML = threads.length
     ? open.map(threadHtml).join('') + (closed.length ? `<details class="thr-closed"${closedWasOpen ? ' open' : ''}><summary>Розв’язані · ${closed.length}</summary>${closed.map(threadHtml).join('')}</details>` : '')
-    : '<div class="hint">Коментарів немає</div>';
+    : '<div class="pn-mid">Брак коментарів</div>';
   $('#cm-badge').textContent = String(open.length);
   $('#cm-badge').hidden = !open.length;
   $('#cm-badge').title = open.length ? `Відкритих обговорень: ${open.length}` : '';

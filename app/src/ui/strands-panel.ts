@@ -150,9 +150,11 @@ export function renderStrands(ctx: Ctx, u: Unit | undefined, target: string): vo
   // the chip of the rows with the same original stands beside the label of the translation in the editing view, and first among the cards where there is no editor
   const html = u ? strandsHtml(ctx, u, target, ctx.s.mode !== 'edit') : '';
   sec.dataset.empty = html ? '' : '1';
-  if (html === lastHtml) return;
-  lastHtml = html;
-  body.innerHTML = html;
+  // nothing related: the tab says so, in the middle (not an empty dark panel)
+  const shown = html || '<div class="pn-mid">Брак пов’язаного</div>';
+  if (shown === lastHtml) return;
+  lastHtml = shown;
+  body.innerHTML = shown;
 }
 
 /** Clicks on the cards' own buttons. */

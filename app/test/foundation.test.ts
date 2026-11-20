@@ -121,3 +121,13 @@ describe('issues', () => {
     expect(emptyProject('x').terms).toEqual([]);
   });
 });
+
+describe('event labels', () => {
+  it('an event named just as its number is labelled with the number alone', async () => {
+    const { eventLabel } = await import('../src/core/rpgmaker');
+    expect(eventLabel(8, 'EV008')).toBe('EV008');
+    expect(eventLabel(8, 'ev008')).toBe('EV008');
+    expect(eventLabel(14, 'Старий солдат')).toBe('EV014 · Старий солдат');
+    expect(eventLabel(3, '')).toBe('EV003');
+  });
+});

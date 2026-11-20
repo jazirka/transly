@@ -21,9 +21,9 @@ const sec = (id: string, title: string, body: string, extra = ''): string => `<s
 
 /** Static markup of the panel (the discussion keeps its own field so what is typed in it survives redraws). */
 export const ROW_PANEL_HTML = ['<div class="pn-empty-all hint">Оберіть рядок</div>',
-  sec('tr', 'Переклад: українська', '<div class="pn-b" id="pn-tr"></div>'),
+  sec('tr', 'Стан і дії', '<div class="pn-b" id="pn-tr"></div>'),
   sec('ac', 'Активність у рядку', '<div class="pn-b"><div class="act" id="hist-list"></div></div>'),
-  sec('th', 'Пов’язане: слова, конструкції, назви, однакові рядки, пам’ять', '<div class="pn-b" id="pn-th"></div>'),
+  sec('th', 'Пов’язане', '<div class="pn-b" id="pn-th"></div>'),
   sec('cm', 'Обговорення', `<div class="pn-b" id="pn-cm"><div id="cm-list" class="cm-list"></div>
     <div class="cm-new"><textarea class="cmin" id="cm-in" placeholder="Нове обговорення цього рядка…" aria-label="Новий коментар"></textarea>
     <div class="actions" style="margin-top:0"><button class="btn" id="cm-add">Коментувати</button><span class="hint">Ctrl+Enter</span></div></div></div>`, '<span class="cnt" id="pn-cm-n" hidden>0</span>'),
@@ -37,10 +37,6 @@ export const setRowTab = (t: RowTab): void => { rtab = t; try { localStorage.set
 
 /** Sections the translator folded. */
 const folded = new Set<string>();
-/** Rows whose translation card is shown in full (the card shows three lines of a long text). */
-const expanded = new Set<string>();
-/** A text longer than this (characters, or lines) is cut to three lines until «Показати повністю». */
-const LONG = 150;
 
 const when = (t: number): string => new Date(t).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 const ICON = {
@@ -49,18 +45,14 @@ const ICON = {
   clear: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5v-1.5h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/></svg>',
 };
 
-/** The translation the row holds now, as a card. */
+/** The state of the row and what can be done with it (proofread, send back, clear), in a line: the text itself stands in the table or in the scene card. */
 function versionCard(ctx: Ctx, u: Unit, e: Entry | undefined): string {
   if (!e?.target) return '<div class="hint pn-none">Немає перекладу</div>';
   const st = shownStatus(ctx, u, e);
   const last = e.history?.[e.history.length - 1];
   const who = last?.who ?? ctx.s.who, at = last?.at ?? e.mt;
   const label = e.returned && e.status === 'draft' ? 'Повернено на доопрацювання' : st === 'appr' ? 'Вичитано' : STATUS_CAP[st];
-  const long = e.target.length > LONG || e.target.split('\n').length > 3;
-  const open = expanded.has(`${ctx.s.current}|${u.key}`);
-  return `<div class="pn-ver ${st}">
-    <div class="pn-text ${long && !open ? 'clamp' : ''}">${esc(e.target)}</div>
-    ${long ? `<button class="pn-more" type="button" data-pa="more" aria-expanded="${open}">${open ? 'Згорнути' : 'Показати повністю'}</button>` : ''}
+  return `<div class="pn-ver slim ${st}">
     <div class="pn-meta"><b>${esc(who)}</b><span class="dot" aria-hidden="true"></span>${when(at)}<span class="pn-st ${st}">${st === 'appr' ? '✔ ' : ''}${esc(label)}</span>
     <span class="pn-acts">
       ${st === 'appr' ? '' : `<button class="pn-ic ok" type="button" data-pa="approve" title="Вичитати переклад" aria-label="Вичитати переклад">${ICON.ok}</button>`}
@@ -94,7 +86,7 @@ export function renderRowPanel(ctx: Ctx, u: Unit | undefined, e: Entry | undefin
   renderStrands(ctx, u, ctx.s.mode === 'edit' && ta && ta.dataset.key === u.key ? ta.value : target);
   document.querySelector<HTMLElement>('.pn-sec[data-sec="th"]')!.hidden = rtab !== 'row';
   const file = ctx.s.current;
-  if (file) renderHistory(ctx, `${file}|${u.key}`, e, card);
+  if (file) renderHistory(ctx, `${file}|${u.key}`, e);
 }
 
 /** Approve the open row (a draft is sent first, so the history says both). */
@@ -132,7 +124,6 @@ export function rowPanelClick(ctx: Ctx, t: HTMLElement, setText: (u: Unit, text:
   const ents = ctx.entries(s.current), cur = ents[u.key];
   switch (a.dataset.pa) {
     case 'approve': approve(ctx, u); break;
-    case 'more': { const k = `${s.current}|${u.key}`; if (expanded.has(k)) expanded.delete(k); else expanded.add(k); ctx.render(); break; }
     case 'back':
       if (cur) sendBackOpenRow(ctx, u);
       break;

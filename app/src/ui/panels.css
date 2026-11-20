@@ -350,11 +350,6 @@ button.cc:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .pn-none{padding:2px 0}
 .pn-ver{display:flex;flex-direction:column;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r2);background:var(--panel)}
 .pn-ver.appr{border-color:rgba(76,195,138,.45)}
-.pn-text{font-size:14px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
-.pn-text.clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.pn-more{align-self:flex-start;margin-top:2px;padding:2px 0;border:0;background:none;color:var(--accent-text);font:inherit;font-size:12.5px;cursor:pointer}
-.pn-more:hover{text-decoration:underline}
-.pn-more:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .pn-meta{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin-top:6px;font-size:12px;color:var(--mute)}
 .pn-meta .dot{width:3px;height:3px;border-radius:50%;background:var(--dim)}
 .pn-st{margin-left:auto;font-size:12px}
@@ -802,3 +797,6 @@ span.thc2-b{cursor:default}
 .bs small.w{color:var(--warn)}
 .bs .acts{display:flex;gap:8px;margin-top:8px}
 .bs .btn{height:26px;padding:0 11px}
+
+/* the state of the row in the table and in the scene: one flat line, the text itself stands in the table or in the scene card */
+.pn-ver.slim{border:0;background:none;padding:2px 0}

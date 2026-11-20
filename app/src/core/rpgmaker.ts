@@ -33,6 +33,12 @@ const DB_KIND: Record<string, Unit['kind']> = { name: 'name', nickname: 'name', 
  * A game file that was copied or sent on usually comes back renamed: "Map001 (1).json", "map001.json", "Items.json.txt".
  * Returns the name the game uses, or null when this is not an RPG Maker file at all.
  */
+/** `EV003`, or `EV003 · Старий солдат` when the event has a name of its own (an event named just as its number is `EV003`, not `EV003 · EV003`). */
+export const eventLabel = (id: number, name: string): string => {
+  const num = `EV${String(id).padStart(3, '0')}`;
+  return name && name.trim().toLowerCase() !== num.toLowerCase() ? `${num} · ${name}` : num;
+};
+
 export function canonicalRpgMakerName(name: string): string | null {
   const base = (name.split(/[\\/]/).pop() ?? name).replace(/\.(txt|bak)$/i, '').replace(/\s*\(\d+\)(?=\.[^.]*$|$)/, '');
   const stem = base.replace(/\.json$/i, '');
@@ -90,7 +96,7 @@ function extractMap(json: unknown, opts: ExtractOptions): Unit[] {
     const evId = typeof ev.id === 'number' ? ev.id : ei;
     ev.pages.forEach((page, pi) => {
       if (!isObj(page) || !Array.isArray(page.list)) return;
-      const rows = extractList(page.list as unknown as Cmd[], `events[${ei}].pages[${pi}].list`, `EV${String(evId).padStart(3, '0')}${evName ? ' · ' + evName : ''}`, evName, opts);
+      const rows = extractList(page.list as unknown as Cmd[], `events[${ei}].pages[${pi}].list`, eventLabel(evId, evName), evName, opts);
       if (rows[0]) rows[0].page = pageInfo(page, ev);
       out.push(...rows);
     });

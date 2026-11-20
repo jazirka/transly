@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { branchNames, branchOf, createBranch, defaultDecision, deleteBranch, deserialize, diffBranches, emptyProject, mergeProjects, nameProblem, planMerge, renameBranch, rowId, serialize, settleBase, switchBranch } from '../src/core';
+import { branchNames, branchOf, createBranch, defaultDecision, deleteBranch, deserialize, diffBranches, emptyProject, mergeProjects, nameProblem, planMerge, renameBranch, rowId, serialize, switchBranch } from '../src/core';
 import type { Entry, SavedProject } from '../src/core';
 
 const ent = (target: string, status: Entry['status'] = 'draft', mt = 1): Entry => ({ target, status, mt });
@@ -96,18 +96,6 @@ describe('branches: compare and merge', () => {
     const plan = planMerge(p, rows.filter(r => r.key === 'k4'), () => ({ take: 'theirs' }), 100);
     expect(plan.changes).toEqual([]);
     expect(plan.skipped).toEqual([{ file: 'F.json', key: 'k4', reason: 'proofread' }]);
-  });
-  it('a settled row is not offered again, a row left alone is; a rejected row comes back, as a conflict, only when they change it', () => {
-    let p = scene();
-    const rows = diffBranches(p, 'olya');
-    const plan = planMerge(p, rows, r => (r.key === 'k2' ? { take: 'mine' } : defaultDecision(r)), 100);
-    for (const c of plan.changes) p.files[c.file]![c.key] = c.next;
-    // settled: k0 and k1 (taken), k2 (rejected); k4 was left alone
-    p = settleBase(p, 'olya', [rows[0]!, rows[1]!, rows.find(r => r.key === 'k2')!].map(r => ({ file: r.file, key: r.key })));
-    expect(diffBranches(p, 'olya').map(r => r.key)).toEqual(['k4']);
-    // she changes k2 again: main still differs from where they parted, so both changed it since: a conflict again
-    p.branches!.olya!.files!['F.json']!.k2 = ent('Ще інакше', 'draft', 200);
-    expect(diffBranches(p, 'olya').map(r => `${r.key}:${r.kind}`).sort()).toEqual(['k2:conflict', 'k4:changed']);
   });
   it('without a common ground two different translations are a conflict, an empty row is new', () => {
     const p: SavedProject = { ...emptyProject('Гра'), files: { 'F.json': { a: ent('1'), b: ent('') } }, branch: 'x', branches: { x: { at: 5 }, main: { at: 0, files: { 'F.json': { a: ent('2'), b: ent('3'), c: ent('4') } } } } };

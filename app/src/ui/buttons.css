@@ -1,0 +1,64 @@
+/*
+ * One system of buttons, loaded after every other stylesheet.
+ *   sizes   S 24 px (panels, cards, the bar of a row) · M 28 px (the top bar, dialogs, tables) · L 36 px (the main action of a screen)
+ *   kinds   primary (the colour of the project) · outlined (one hairline) · quiet (no outline; the icons of a bar)
+ *   radius  8 px for every button; a segment inside another control follows it (8 − the padding); chips that filter keep their pill; a table has none
+ *   states  hover is a grey fill, chosen is a grey fill with the ring of the project (see states.css), focus is its own ring
+ * The classes `.b` (+ `.s` `.l` `.o` `.q` `.p` `.i`) are for new screens; the rules below bring the older classes to the same sizes.
+ */
+:root{--b-s:24px;--b-m:28px;--b-l:36px;--b-r:8px;--b-line:#4a4d54;--wctl-w:122px}
+
+.b{display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:none;height:var(--b-m);padding:0 12px;border:1px solid transparent;border-radius:var(--b-r);background:none;color:var(--text);font:inherit;font-size:13px;white-space:nowrap;cursor:pointer}
+.b.s{height:var(--b-s);padding:0 9px;font-size:12px}
+.b.l{height:var(--b-l);padding:0 16px;font-weight:600}
+.b.o{border-color:var(--b-line)}
+.b.q{color:var(--mute)}
+.b.p{background:var(--accent-solid);border-color:transparent;color:var(--on-accent);font-weight:600}
+.b.i{width:var(--b-m);padding:0}.b.i.s{width:var(--b-s)}.b.i.l{width:var(--b-l)}
+.b:hover{background:var(--hv);color:var(--text)}
+.b.p:hover{background:var(--accent-hi)}
+.b.on,.b[aria-pressed=true]{background:var(--on-bg);box-shadow:inset 0 0 0 1px var(--accent);border-color:transparent;color:var(--text)}
+.b:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.b:disabled{opacity:.5;cursor:default}
+.b svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* the top bar: icons, the project and build buttons, the mode switch, the window controls */
+.topbar .tb-ic{width:var(--b-m);height:var(--b-m);border-radius:var(--b-r)}
+.tpill{height:var(--b-m);border-radius:var(--b-r)}
+.seg{padding:2px;border-radius:var(--b-r)}
+.seg button{height:var(--b-s);border-radius:calc(var(--b-r) - 2px)}
+.wc button{width:36px;height:var(--b-m);margin:0 1px;border-radius:var(--b-r);align-self:center}
+.wc{align-items:center;padding:0 6px 0 2px}
+.wc button:last-child:hover{background:#c42b1c}
+
+/* the rail of the left panels */
+.strip button{width:var(--b-m);height:var(--b-m);border-radius:var(--b-r)}
+
+/* the field of the translation: icons are M, the send button is the main action of the screen (L) */
+.ib{width:var(--b-m);height:var(--b-m);border-radius:var(--b-r)}
+.ib.lab{width:auto;padding:0 9px}
+.ib svg{width:16px;height:16px}
+.saveb{width:var(--b-l);height:var(--b-l);border-radius:var(--b-r)}
+
+/* dialogs and cards: outlined by default, primary with .p */
+.btn{height:var(--b-m);padding:0 12px;border:1px solid var(--b-line);border-radius:var(--b-r);background:none;color:var(--text)}
+.btn:hover{background:var(--hv)}
+.btn.p{background:var(--accent-solid);border-color:transparent}
+.btn.p:hover{background:var(--accent-hi)}
+.btn:disabled{opacity:.5}
+
+/* small things: the icons of a panel's header, the arrows of the row, the buttons of the bulk bar and of the bar under the row */
+.ph .ico,.ico-btn{width:var(--b-s);height:var(--b-s);border-radius:var(--b-r)}
+.fhd .nav button{width:var(--b-s);height:var(--b-s);border-color:var(--b-line);border-radius:var(--b-r);background:none}
+.fhd .nav button:hover{background:var(--hv)}
+.bulk button{height:var(--b-s);border-radius:var(--b-r)}
+button.cc{height:var(--b-s);padding:0 9px;border-color:var(--b-line);border-radius:var(--b-r)}
+.sbtn{border-radius:var(--b-r)}
+
+/* the rules above are not enough where an older rule is stronger (an id, a state of the top bar): the same sizes again, firmly */
+.topbar #seg{padding:2px}
+.topbar #seg button{height:var(--b-m)!important;margin:0 2px!important;border-radius:var(--b-r)!important}
+.topbar .tpill{height:var(--b-m)!important;border-radius:var(--b-r)!important}
+#run-btn.tb-ic.play{width:var(--b-m);height:var(--b-m);border-radius:var(--b-r)}
+.adlg .acts>.btn,.adlg .acts>.b{align-self:center}
+.st-bar .btn{height:var(--b-m);padding:0 16px}

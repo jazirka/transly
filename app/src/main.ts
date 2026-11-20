@@ -4,6 +4,8 @@ import './ui/app.css';
 import './ui/shell.css';
 import './ui/panels.css';
 import './ui/states.css';
+import './ui/buttons.css';
+import './ui/merge.css';
 import { toast } from './ui/dom';
 import { start } from './ui/app';
 import { restoreNativeChrome } from './ui/winctl';

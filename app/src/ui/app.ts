@@ -1,4 +1,4 @@
-import { builtDrift, inboxOf, syncTheme, isAutoFilled, autoNote, planIngest, looksLikeAnotherGame, ingestQuiet, ingestNote, Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, jumpTarget, qaOf, termsStamp, adoptSynced, applyPlan, planOf, reconcileChanges, pct, progressOf, rowState, sumProgress, QUEUE_LABEL, nextIn, positionOf, queueRows, ago, copyLine, stamp, stampOf } from '../core';
+import { branchOf, builtDrift, inboxOf, syncTheme, isAutoFilled, autoNote, planIngest, looksLikeAnotherGame, ingestQuiet, ingestNote, Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, jumpTarget, qaOf, termsStamp, adoptSynced, applyPlan, planOf, reconcileChanges, pct, progressOf, rowState, sumProgress, QUEUE_LABEL, nextIn, positionOf, queueRows, ago, copyLine, stamp, stampOf } from '../core';
 import type { InboxItem, IngestReport, QaOptions, QueueKind, WrapPlan } from '../core';
 import { pxMeasure } from './measure';
 import { openWrapTool } from './wrap-dialog';
@@ -58,6 +58,9 @@ import { initResize, initRightResize } from './resize';
 import { mountRows, patchRow, reveal } from './chunks';
 import { pagesClick, planRows, renderPager, takeWantTop, wirePages } from './pages';
 import { buildAndRunGame, playInGame } from './play';
+import { BRANCH_ICON, branchMenuClick, branchMenuHtml, chooseMerge } from './branches';
+import type { BranchActions } from './branches';
+import { openMergeScreen } from './merge-screen';
 import { invalidateUsage, renderStrands, wireStrands } from './strands-panel';
 import { wireMine } from './mine-panel';
 
@@ -100,6 +103,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
     <button class="tb-ic" id="hamb" title="Головне меню" aria-haspopup="menu" aria-expanded="false">${SVG.menu}</button>
     <nav class="menubar" id="menubar" role="menubar" aria-label="Головне меню" hidden></nav>
     <button class="tpill" id="proj-btn" aria-haspopup="menu" aria-expanded="false" title="Проєкт: відкрити іншу гру, налаштування"><span class="pj" id="proj-av" aria-hidden="true">T</span><span id="proj-name">Проєкт</span><span class="dd" aria-hidden="true">${SVG.caret}</span></button>
+    <button class="tpill br-btn" id="br-btn" aria-haspopup="menu" aria-expanded="false" title="Гілка перекладу: перемкнути, створити, злити"><span class="br-ic" aria-hidden="true">${BRANCH_ICON}</span><span id="br-name">main</span><span class="dd" aria-hidden="true">${SVG.caret}</span></button>
     <div class="seg" id="seg" role="group" aria-label="Режим">
       <button aria-pressed="true" data-m="table" class="on"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM2.5 7h11M6.5 3.5v9"/></svg>Таблиця</button>
       <button aria-pressed="false" data-m="edit"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM6 3.5v9M6 8h7.5"/></svg>Редагування</button>
@@ -165,6 +169,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
 </div></div>
 <div class="scrim" id="scrim"></div>
 <div class="pop cfgpop projpop" id="projpop" role="menu" aria-label="Проєкт" hidden></div>
+<div class="pop cfgpop projpop" id="brpop" role="menu" aria-label="Гілки перекладу" hidden></div>
 <div class="pop cfgpop" id="cfgpop" role="menu" aria-label="Що запускати" hidden></div>
 <div class="pop cfgpop inboxpop" id="inboxpop" role="menu" aria-label="Сповіщення" hidden></div>
 <div class="pop" id="fpop" role="dialog" aria-label="Параметри" hidden></div>
@@ -851,6 +856,8 @@ export async function start(root: HTMLElement): Promise<void> {
     syncTheme(document.documentElement, s.saved);
     $('#proj-name').textContent = s.saved.name;
     $('#proj-av').textContent = (Array.from(s.saved.name.trim())[0] ?? 'T').toUpperCase();
+    $('#br-name').textContent = branchOf(s.saved);
+    syncGlow();
     // the four states of a row (see core/progress.ts): without text, draft, sent (not proofread yet), proofread
     const prog = sumProgress(s.views.map(v => progressOf(v.units, s.saved.files[v.name] ?? {})));
     const total = prog.total, A = prog.approved, D = prog.sent, W = prog.draft;
@@ -1387,6 +1394,28 @@ export async function start(root: HTMLElement): Promise<void> {
     if (had) restoreOpener();
   };
   const closeProjMenu = (): void => { hidePop($('#projpop')); $('#proj-btn').setAttribute('aria-expanded', 'false'); };
+  /** The glow of the window starts at the project's icon, a little to the right of it. */
+  function syncGlow(): void {
+    const av = $('#proj-av').getBoundingClientRect();
+    if (av.width) $('#ide').style.setProperty('--gx', `${Math.round(av.left + av.width / 2 + 60)}px`);
+  }
+  window.addEventListener('resize', syncGlow);
+  /** What the branch dialogs act on: the project stands as `next` now (saved, redrawn), and the merge screen. */
+  const branchActions: BranchActions = {
+    saved: () => s.saved,
+    apply: (next, note) => { s.saved = next; closeMerge?.(); adopt(); toast(note); },
+    merge: source => { closeMerge = openMergeScreen(ctx, source, () => { closeMerge = null; adopt(); }); },
+  };
+  let closeMerge: (() => void) | null = null;
+  function openBranchMenu(): void {
+    const pop = $('#brpop'), btn = $('#br-btn');
+    if (!pop.hidden) { closeBranchMenu(); return; }
+    pop.innerHTML = branchMenuHtml(s.saved);
+    const r = btn.getBoundingClientRect();
+    pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 340))}px`; pop.style.top = `${r.bottom + 6}px`;
+    rememberOpener(btn); pop.hidden = false; btn.setAttribute('aria-expanded', 'true'); focusFirst(pop); refreshScrollbars();
+  }
+  const closeBranchMenu = (): void => { hidePop($('#brpop')); $('#br-btn').setAttribute('aria-expanded', 'false'); };
   const closeCfgMenu = (): void => { hidePop($('#cfgpop')); $('#cfg-btn').setAttribute('aria-expanded', 'false'); };
   const runCfgNow = (k: RunCfg): void => {
     if (!s.views.length) { toast('Спершу відкрийте гру'); return; }
@@ -1485,7 +1514,7 @@ export async function start(root: HTMLElement): Promise<void> {
     window.clearTimeout(subTimer);
     subTimer = window.setTimeout(() => { if (b.dataset.sub) openSub(b, false); else closeSubs(level, false); }, b.dataset.sub ? 120 : 250);
   });
-  const closePops = () => { closeSubs(0, false); hidePop(fpop()); closeCfgMenu(); closeProjMenu(); closeInbox(); };
+  const closePops = () => { closeSubs(0, false); hidePop(fpop()); closeCfgMenu(); closeProjMenu(); closeBranchMenu(); closeInbox(); };
   const groupsApi = { pop: (a: HTMLElement, html: string) => showPop(a, html), closePops: () => closePops() };
   /** A menu at the pointer. */
   function popAt(x: number, y: number, html: string): void {
@@ -1606,7 +1635,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const MENUS: Record<string, MenuItem[]> = {
     'Файл': [{ t: 'Відкрити папку гри…', fn: () => void openFolder() }, { t: 'Відкрити файли або вставити JSON…', fn: openImportDlg }, '-', { t: 'Зібрати…', fn: doBuild }, { t: 'Запустити вибране', fn: runSelected, sc: 'F5' }, '-', { t: 'Налаштування…', fn: () => openSettingsDlg() }],
     'Перехід': [{ t: 'Наступний рядок без перекладу', fn: () => jump('untranslated', 1), sc: 'Alt+⇧+↓' }, { t: 'Наступна помилка QA', fn: () => jump('error', 1), sc: 'F8' }, { t: 'Наступна порада', fn: () => jump('advice', 1) }, { t: 'Наступний на вичитку', fn: () => jump('unreviewed', 1) }, { t: 'Наступний зі зміненим оригіналом', fn: () => jump('sourceChanged', 1) }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: 'Ctrl+K' }],
-    'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Оновити за глосарієм…', fn: () => openTermSyncTool(ctx) }, { t: 'Автозаповнення…', fn: () => openAutofill(ctx, () => openLinkTool(ctx)) }, { t: 'Активність…', fn: () => openActivity(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенесення рядків…', fn: () => openWrapTool(ctx, { wrapFile }) }, { t: 'Правила QA…', fn: () => openQaRules(ctx) }],
+    'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Оновити за глосарієм…', fn: () => openTermSyncTool(ctx) }, { t: 'Автозаповнення…', fn: () => openAutofill(ctx, () => openLinkTool(ctx)) }, { t: 'Злити гілку…', fn: () => chooseMerge(branchActions) }, { t: 'Активність…', fn: () => openActivity(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенесення рядків…', fn: () => openWrapTool(ctx, { wrapFile }) }, { t: 'Правила QA…', fn: () => openQaRules(ctx) }],
   };
   /** The phone has no title bar: its «Ще» list is the same menus plus what the title bar offers on the desktop. */
   const PHONE_MENUS: Record<string, MenuItem[]> = {
@@ -1820,7 +1849,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const t = e.target as HTMLElement;
     const off = t.closest<HTMLElement>('[aria-disabled="true"][data-why]');
     if (off) { toast(off.dataset.why!); return; }
-    if (!t.closest('#fpop,#spkbtn,#lenbtn,#sortbtn,[data-more],#bnav,#cfgpop,#cfg-btn,#projpop,#proj-btn,#inboxpop,#bell,#rs-menu,#fs-menu,#sc-menu,.pop.sub')) closePops();
+    if (!t.closest('#fpop,#spkbtn,#lenbtn,#sortbtn,[data-more],#bnav,#cfgpop,#cfg-btn,#projpop,#proj-btn,#brpop,#br-btn,#inboxpop,#bell,#rs-menu,#fs-menu,#sc-menu,.pop.sub')) closePops();
     if (!t.closest('#keypop,#hk')) $('#keypop').hidden = true;
     if (pagesClick(t)) return;
     if (t.closest('#open2,#fb-repick')) { void openFolder(); return; }
@@ -1835,7 +1864,11 @@ export async function start(root: HTMLElement): Promise<void> {
     }
     if (!t.closest('#cfgpop,#cfg-btn')) closeCfgMenu();
     if (!t.closest('#projpop,#proj-btn')) closeProjMenu();
+    if (!t.closest('#brpop,#br-btn')) closeBranchMenu();
     if (t.closest('#proj-btn')) { openProjMenu(); return; }
+    if (t.closest('#br-btn')) { openBranchMenu(); return; }
+    const bi = t.closest<HTMLElement>('#brpop [data-br],#brpop [data-bra]');
+    if (bi) { closeBranchMenu(); branchMenuClick(branchActions, bi); return; }
     if (t.closest('#bell')) { openInbox(); return; }
     const ib = t.closest<HTMLElement>('#inboxpop [data-ib]');
     if (ib) {
@@ -2118,7 +2151,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (e.key === 'Escape') {
       if (!$('#sd').hidden) { closeSearch(); return; }
       if (subEls.length) { closeSubs(subEls.length - 1); return; }
-      if (!$('#fpop').hidden || !$('#cfgpop').hidden || !$('#projpop').hidden || !$('#inboxpop').hidden || !$('#keypop').hidden) {
+      if (!$('#fpop').hidden || !$('#cfgpop').hidden || !$('#projpop').hidden || !$('#brpop').hidden || !$('#inboxpop').hidden || !$('#keypop').hidden) {
         closePops(); hidePop($('#keypop'));
         return;
       }
@@ -2128,7 +2161,7 @@ export async function start(root: HTMLElement): Promise<void> {
     }
     if (document.querySelector('dialog[open]')) return;
     // Menus, popovers, the menu bar and the file tree answer the arrows.
-    const pop = t.closest<HTMLElement>('#projpop,#cfgpop,#fpop,.pop.sub,#keypop,#mdd');
+    const pop = t.closest<HTMLElement>('#projpop,#brpop,#cfgpop,#fpop,.pop.sub,#keypop,#mdd');
     if (pop && !pop.hidden) {
       if (e.key === 'ArrowRight' && t.closest('.pop [data-sub]')) { e.preventDefault(); openSub(t.closest<HTMLElement>('[data-sub]')!, true); return; }
       if (e.key === 'ArrowLeft' && pop.classList.contains('sub')) { e.preventDefault(); closeSubs(subEls.indexOf(pop)); return; }

@@ -394,7 +394,6 @@ td .term{color:#d9c3ee}
 /* ===== chrome glow from the project icon, floating rounded panels ===== */
 .ide{background:
   radial-gradient(ellipse 520px 90px at var(--gx,105px) 0,rgba(var(--accent-rgb),.16),rgba(var(--accent-rgb),0)) 0 0 no-repeat,
-  radial-gradient(ellipse 160px 520px at 0 40px,rgba(var(--accent-rgb),.12),rgba(var(--accent-rgb),0)) no-repeat,
   #25272a}
 .topbar{background:none;border-bottom:0}
 .strip{background:none;border-right:0}

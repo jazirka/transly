@@ -192,18 +192,6 @@ export function planMerge(p: SavedProject, rows: DiffRow[], decide: (r: DiffRow)
   return planOf(file => p.files[file] ?? {}, changes, 'merge', 'skip');
 }
 
-/**
- * After a merge: the rows the translator settled are remembered as settled (the other branch's row becomes their common ground), so
- * a row that was left alone is offered again and a rejected one does not come back until the other branch changes it.
- */
-export function settleBase(p: SavedProject, source: string, settled: { file: string; key: string }[]): SavedProject {
-  const s = p.branches?.[source];
-  if (!s?.files) return p;
-  const base: Files = clone(baseFor(p, source) ?? {});
-  for (const r of settled) { const t = s.files[r.file]?.[r.key]; if (t) (base[r.file] ??= {})[r.key] = clone(t); }
-  return { ...p, branches: { ...(p.branches ?? {}), [source]: { ...s, from: branchOf(p), base } } };
-}
-
 // ---------- merging two copies of a project that has branches ----------
 
 /** Merge the parked branches of two copies of a project (both already have the same current branch `cur`). */

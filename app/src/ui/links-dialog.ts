@@ -1,4 +1,4 @@
-import { applyPlan, linkChanges, linkModeOf, linkView, planLinkSync, planOf, reviewClusters, setMain } from '../core';
+import { applyPlan, diffWords, linkChanges, linkModeOf, linkView, planLinkSync, planOf, reviewClusters, setMain } from '../core';
 import type { LinkRowView, LinkState, Protect } from '../core';
 import { $, esc, plural, toast } from './dom';
 import { oneLine } from './hintcards';
@@ -6,6 +6,12 @@ import { dialog } from './settings';
 import { undoToast } from './undo-toast';
 import { STATUS_LABEL } from './state';
 import type { Ctx } from './state';
+
+/** What an update would do to a row, in one line: the words that go are struck, the words that come are underlined. */
+export function cmpHtml(was: string, will: string): string {
+  const segs = diffWords(oneLine(was, 200), oneLine(will, 200));
+  return segs.map(g => (g.t === 'same' ? esc(g.text) : g.t === 'add' ? `<ins>${esc(g.text)}</ins>` : `<del>${esc(g.text)}</del>`)).join('') || '—';
+}
 
 /** The words for the state of a row next to its twins. */
 export const LINK_LABEL: Record<LinkState, string> = { main: 'еталон', same: 'такий самий', empty: 'без перекладу', differs: 'інший', edited: 'змінено пізніше', unlinked: 'відв’язано', draft: 'чернетка' };
@@ -46,7 +52,7 @@ export function openLinkRows(ctx: Ctx, file: string, key: string): void {
     $('#lk-sum', dlg).textContent = `Вибрано ${n} з ${items.length}. Зніміть позначку з рядків, які мають лишитися як є.${plan.edited.length ? ' Рядки, змінені пізніше за еталон, не позначені.' : ''}${reviewed ? ` Вичитані (${reviewed}) не позначені: позначте, якщо їх теж треба замінити.` : ''}`;
     ($('#lk-go', dlg) as HTMLButtonElement).disabled = !n;
   };
-  $('#lk-list', dlg).innerHTML = items.map((r, i) => `<label class="sp-row fr-row"><input type="checkbox" data-i="${i}" ${off.has(r.ref) ? '' : 'checked'} aria-label="Оновити ${esc(ctx.fileTitle(r.file))}"><div class="sp-b"><span class="hint">${esc(ctx.fileTitle(r.file))} · ${LINK_LABEL[r.state]}${r.status === 'appr' ? ' · вичитано (стане чернеткою)' : ''}</span><div class="fr-b">${esc(oneLine(r.target, 160)) || '—'}</div><div class="fr-a">${esc(oneLine(reference, 160))}</div></div></label>`).join('');
+  $('#lk-list', dlg).innerHTML = items.map((r, i) => `<label class="sp-row fr-row"><input type="checkbox" data-i="${i}" ${off.has(r.ref) ? '' : 'checked'} aria-label="Оновити ${esc(ctx.fileTitle(r.file))}"><div class="sp-b"><span class="hint">${esc(ctx.fileTitle(r.file))} · ${LINK_LABEL[r.state]}${r.status === 'appr' ? ' · вичитано (стане чернеткою)' : ''}</span><div class="fr-cmp" title="Було → стане: закреслене зникне, підкреслене з’явиться">${cmpHtml(r.target, reference)}</div></div></label>`).join('');
   dlg.addEventListener('change', e => { const t = e.target as HTMLInputElement; if (t.dataset.i === undefined) return; const r = items[Number(t.dataset.i)]!; if (t.checked) off.delete(r.ref); else off.add(r.ref); draw(); });
   $('#lk-go', dlg).addEventListener('click', () => { const n = applyLinks(ctx, reference, items.filter(r => !off.has(r.ref)), undefined, 'include'); if (n) dlg.close(); });
   draw();

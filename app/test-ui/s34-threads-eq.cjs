@@ -43,10 +43,10 @@ const put = ({ text, snapshot }) => new Promise((res, rej) => {
 
   // a click opens the card with the others, the differing words marked
   await chip.click(); await sleep(300);
-  const rows = await page.locator('.rows-pop .pn-lrow').count();
-  check('a click opens the card with this row and the others', rows === 3 && (await chip.getAttribute('aria-expanded')) === 'true', String(rows));
-  const marks = await page.locator('.rows-pop .pn-lx mark.df').allInnerTexts();
-  check('the words that this row does not have are marked in the others', marks.includes('капелюх') && marks.includes('шапку') && !marks.includes('Зніми'), JSON.stringify(marks));
+  const btns = await page.locator('.rows-pop button.btn').count();
+  check('a click opens one page with one button (no card for each of the others)', (await page.locator('.rows-pop .pn-lrow').count()) === 0 && btns === 1 && (await chip.getAttribute('aria-expanded')) === 'true', String(btns));
+  const st = await page.locator('.rows-pop .lk-st').innerText();
+  check('the page says that rows do not agree, how many of them, and the button asks to compare them', /Не сходяться 1 з 2/.test(st) && /Звірити \(1\)/.test(await page.locator('.rows-pop button.btn').innerText()), st);
   check('the card stands under the chip, inside the window', await page.evaluate(() => { const r = document.querySelector('.rows-pop').getBoundingClientRect(), c = document.querySelector('#f-eq .eqchip').getBoundingClientRect(); return r.top >= c.bottom && r.right <= window.innerWidth && r.left >= 0; }));
   await page.keyboard.press('Escape'); await sleep(250);
   check('Esc puts it away', (await page.locator('.rows-pop').count()) === 0);

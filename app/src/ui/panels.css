@@ -817,3 +817,14 @@ span.thc2-b{cursor:default}
 .tpill .dd,#proj-btn .dd,#cfg-btn .dd{display:inline-flex;align-items:center}
 .tpill .dd .caret{margin-left:0}
 button.chip .caret{margin-left:5px;vertical-align:middle;position:relative;top:-1px}
+
+/* the rows with the same original: one page, one button; and the dialog that puts the rows side by side with the reference */
+.rows-pop .lk-st{margin:2px 0 0;font-size:14px}
+.rows-pop .lk-st.ok{color:var(--ok)}
+.rows-pop .lk-st.warn{color:var(--warn)}
+.rows-pop .lk-ref{margin:0;color:var(--mute);font-size:13px;line-height:1.4;overflow-wrap:anywhere}
+.rows-pop .lk-one{align-self:flex-start;margin-top:4px}
+#pn-th .rows-pop,#pn-th .thb .rows-pop{position:static;width:auto;max-height:none;margin-top:6px;box-shadow:none}
+.fr-cmp{font-size:13.5px;line-height:1.45;overflow-wrap:anywhere}
+.fr-cmp ins{text-decoration:none;background:rgba(95,184,101,.22);color:#c6f0cb;border-radius:3px;padding:0 1px}
+.fr-cmp del{background:rgba(247,84,100,.2);color:#ffb3bb;text-decoration:line-through;border-radius:3px;padding:0 1px}

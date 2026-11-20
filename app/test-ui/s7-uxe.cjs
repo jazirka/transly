@@ -84,7 +84,7 @@ const load = async (browser, sources) => {
     await page.reload(); await sleep(1500);
     await page.locator('.gr .src').nth(0).click(); await sleep(700);
     await page.locator('#pn-th .eqchip').click(); await sleep(300);
-    await page.getByRole('button', { name: /Оновити зв’язані/ }).click(); await sleep(700);
+    await page.getByRole('button', { name: /Звірити/ }).click(); await sleep(700);
     const boxes = await page.$$eval('#lk-list input[type=checkbox]', b => b.map(x => x.checked));
     const labels = await page.$$eval('#lk-list .hint', h => h.map(x => x.textContent));
     check('the dialog lists the sent row ticked and the proofread row not ticked', boxes.length === 2 && boxes.filter(Boolean).length === 1, JSON.stringify(boxes) + ' ' + JSON.stringify(labels));

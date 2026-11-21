@@ -41,7 +41,7 @@ const project = () => ({ version: 1, name: 'P', sourceLang: 'en', targetLang: 'u
   check('the manager opens from the menu', (await dlg.count()) === 1);
   const names = await dlg.locator('.ex-row .ex-t b').allInnerTexts();
   check('the built-in plugins are listed (RPG Maker and the text formats)', names.some(n => /RPG Maker/.test(n)) && names.some(n => /Текстові формати/.test(n)), names.join(' | '));
-  check('and they are on', (await dlg.locator('.ex-row input[data-act="toggle"]:checked').count()) === 2);
+  check('and they are on (the two formats plugins and the English pack)', (await dlg.locator('.ex-row input[data-act="toggle"]:checked').count()) === 3);
   await dlg.locator('.st-ti', { hasText: 'Підтримувані ігри й формати' }).click(); await sleep(250);
   const sup = await dlg.locator('#ex-body').innerText();
   check('the support page lists the engines and the formats', /RPG Maker/.test(sup) && /Ren/.test(sup) && /\.po/.test(sup) && /\.rpy/.test(sup));
@@ -140,7 +140,7 @@ const project = () => ({ version: 1, name: 'P', sourceLang: 'en', targetLang: 'u
   await dlg.locator('[data-act="remove"]').click(); await sleep(700);
   check('the plugin is gone from the list', !(await dlg.locator('#ex-body').innerText()).includes('English interface'));
   await dlg.locator('.st-ti', { hasText: 'Мова інтерфейсу' }).click(); await sleep(250);
-  check('and its language is gone too', (await dlg.locator('input[name="ex-lang"]').count()) === 1);
+  check('and its language is gone too (the built-in English stays)', (await dlg.locator('input[name="ex-lang"]').count()) === 2);
   await dlg.locator('#ex-done').click(); await sleep(300);
 
   check('no page errors', errors.length === 0, errors.join(' | '));

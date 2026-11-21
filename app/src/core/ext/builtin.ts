@@ -2,6 +2,8 @@ import { applyCsv, extractCsv } from '../formats/csv';
 import { applyLocaleJson, extractLocaleJson, looksLikeLocaleFile } from '../formats/i18njson';
 import { applyPo, extractPo } from '../formats/po';
 import { applyRenpy, extractRenpy } from '../formats/renpy';
+import { BUNDLED_LANGUAGES } from '../../lang';
+import type { BundledLanguage } from '../../lang';
 import type { GameFile } from '../model';
 import { applyRpgMaker, extractRpgMaker, isRpgMakerFile } from '../rpgmaker';
 import { checkManifest } from './manifest';
@@ -84,8 +86,22 @@ export function textFormatsPlugin(): Pick<PluginRecord, 'manifest' | 'handlers'>
   };
 }
 
+export const langPluginId = (code: string): string => `transly.lang-${code.toLowerCase()}`;
+
+/** A language pack that comes with the application: the same kind of plugin a user installs, only its catalog is inside the application. */
+export function languagePlugin(l: BundledLanguage): Pick<PluginRecord, 'manifest' | 'handlers'> & { files: Map<string, string> } {
+  const file = `lang/${l.code}.po`;
+  const m = manifest({
+    id: langPluginId(l.code), name: `${l.nativeName}: мова інтерфейсу`,
+    description: `Переклад інтерфейсу застосунку (${l.name}). Рядки, яких тут немає, лишаються українською.`,
+    contributes: { languages: [{ code: l.code, name: l.name, nativeName: l.nativeName, catalogs: [{ file }] }] },
+  });
+  return { manifest: m, handlers: [], files: new Map([[file, l.po]]) };
+}
+
 /** Put the built-in plugins into a registry (switched on; the user may switch them off in the manager). */
 export function registerBuiltins(reg: PluginRegistry): void {
   for (const p of [rpgMakerPlugin(), textFormatsPlugin()]) reg.add({ manifest: p.manifest, handlers: p.handlers, builtin: true, enabled: true, files: new Map(), source: { kind: 'builtin' } }, false);
+  for (const l of BUNDLED_LANGUAGES) { const p = languagePlugin(l); reg.add({ manifest: p.manifest, handlers: p.handlers, builtin: true, enabled: true, files: p.files, source: { kind: 'builtin' } }, false); }
   reg.refresh();
 }

@@ -1,4 +1,4 @@
-import { touchTerms, almost, autoBatches, reviewClusters, autoUndone, batchTitle, batchUndoLabel, edit, journalBatches, learnWords, proposals, sendBatches, undoAuto, undoBatch, undoJournal, undoReport, undoneBatches } from '../core';
+import { touchTerms, almost, autoBatches, reviewClusters, autoUndone, batchTitle, batchUndoLabel, edit, journalBatches, learnWords, proposals, sendBatches, undoAuto, undoBatch, undoJournal, undoReport, undoneBatches, uiLocale } from '../core';
 import type { JournalBatch, JournalItem, RowChange } from '../core';
 import { dialog } from './settings';
 import { undoBatch as undoViaStack } from './undo-toast';
@@ -107,11 +107,11 @@ export function openActivity(ctx: Ctx): void {
     evs = events();
     const dayKey = (t: number): string => new Date(t).toDateString();
     const today = dayKey(Date.now()), yest = dayKey(Date.now() - 86400000);
-    const dayName = (t: number): string => (dayKey(t) === today ? 'Сьогодні' : dayKey(t) === yest ? 'Вчора' : new Date(t).toLocaleDateString('uk-UA', { day: 'numeric', month: 'long' }));
+    const dayName = (t: number): string => (dayKey(t) === today ? 'Сьогодні' : dayKey(t) === yest ? 'Вчора' : new Date(t).toLocaleDateString(uiLocale(), { day: 'numeric', month: 'long' }));
     let last = '';
     $('#ac-list', dlg).innerHTML = evs.map((e, i) => {
       const head = dayKey(e.at) !== last ? `<h3>${dayName(e.at)}</h3>` : ''; last = dayKey(e.at);
-      return `${head}<div class="sp-row ac-ev"><div class="sp-b"><b>${esc(e.text)}</b><span class="hint">${new Date(e.at).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })}${e.sub ? ' · ' + esc(e.sub) : ''}</span>
+      return `${head}<div class="sp-row ac-ev"><div class="sp-b"><b>${esc(e.text)}</b><span class="hint">${new Date(e.at).toLocaleTimeString(uiLocale(), { hour: '2-digit', minute: '2-digit' })}${e.sub ? ' · ' + esc(e.sub) : ''}</span>
         ${e.undo ? `<div class="cs-v"><button class="btn" type="button" data-undo="${i}">${esc(e.undoLabel ?? 'Скасувати')}</button>${e.rows ? `<button class="btn" type="button" data-open="${i}">${open.has(e.id) ? 'Сховати рядки' : 'Показати рядки'}</button>` : ''}</div>` : ''}
         ${open.has(e.id) && e.rows ? e.rows.map(r => `<div class="fr-b">${esc(r.source.replace(/\s+/g, ' ').slice(0, 90))}</div><div class="fr-a">${esc(r.target.replace(/\s+/g, ' ').slice(0, 110))}</div>`).join('') : ''}</div></div>`;
     }).join('') || '<p class="hint">Активності ще немає</p>';

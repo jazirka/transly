@@ -1,4 +1,4 @@
-import { DEFAULT_PAGES, clampPage, normalizePages, normalizePlaces, pageCount, pageOfIndex, pageOfKey, pageRange, rememberPlace } from '../core';
+import { DEFAULT_PAGES, clampPage, normalizePages, normalizePlaces, pageCount, pageOfIndex, pageOfKey, pageRange, rememberPlace, uiLocale } from '../core';
 import type { PagesPrefs, Place } from '../core';
 import { reveal } from './chunks';
 
@@ -99,7 +99,7 @@ export function renderPager(bubble: HTMLElement | null, host: HTMLElement | null
   host?.classList.toggle('has-pager', show);
   if (!show) { bubble.innerHTML = ''; return; }
   const p = plan.page + 1;
-  const range = plan.mode === 'pages' ? `${(plan.from + 1).toLocaleString('uk-UA')}–${plan.to.toLocaleString('uk-UA')} з ${plan.total.toLocaleString('uk-UA')}` : `${plan.size} рядків на сторінці`;
+  const range = plan.mode === 'pages' ? `${(plan.from + 1).toLocaleString(uiLocale())}–${plan.to.toLocaleString(uiLocale())} з ${plan.total.toLocaleString(uiLocale())}` : `${plan.size} рядків на сторінці`;
   bubble.classList.toggle('flow', plan.mode === 'flow');
   bubble.innerHTML = `${plan.mode === 'pages' ? `<button type="button" class="pg-a" data-pg="prev" aria-label="Попередня сторінка"${plan.page === 0 ? ' disabled' : ''}>‹</button>` : ''}<button type="button" class="pg-n" data-pg="jump" title="${range}. Клік — перейти до сторінки" aria-label="Сторінка ${p} з ${plan.pages}. Перейти до сторінки">${p} / ${plan.pages}</button>${plan.mode === 'pages' ? `<button type="button" class="pg-a" data-pg="next" aria-label="Наступна сторінка"${plan.page >= plan.pages - 1 ? ' disabled' : ''}>›</button>` : ''}`;
 }

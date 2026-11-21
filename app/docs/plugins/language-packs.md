@@ -2,6 +2,12 @@
 
 A **language pack** is a plugin whose job is to translate the interface of Transly, and the strings of other plugins, into another language. You do not have to be a programmer to make one: a pack is a text file of translations (`.po`, the format translators already use) and a short manifest.
 
+## What comes with the application
+
+**English** is built in: it is on from the first start, appears in **Мова інтерфейсу** next to Ukrainian, and can be switched off like any built-in plugin. It lives in `src/lang/en.po` (context `core`, which also holds the names, descriptions and help of the built-in plugins) and is registered as the plugin `transly.lang-en`. Whatever the pack lacks is shown in Ukrainian.
+
+To add another language to the application itself (rather than as an installable pack): put `src/lang/<code>.po` next to `en.po` and add one line to `BUNDLED_LANGUAGES` in `src/lang/index.ts`; the plugin `transly.lang-<code>` is made from it. Two checks keep a bundled pack honest (`test/lang-en.test.ts`): every `{1}`/`{name}` of the source is kept in the translation, and every string of the built-in plugins has a translation. Counts follow the language: a pack may give both forms of a count word (`msgid "{1} рядок"`, `msgstr[0] "{1} row"`, `msgstr[1] "{1} rows"`) and «1 рядок», «5 рядків» both find it.
+
 ## How the interface is translated
 
 The program's own texts are written in **Ukrainian** (the *source language*). A pack says what each text is in another language. A text is found by its words (the *message id*) inside a **context**:

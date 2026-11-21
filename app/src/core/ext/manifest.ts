@@ -244,7 +244,8 @@ export function checkManifest(input: string | unknown, opts: { builtin?: boolean
   if (!r.errors.length) {
     // every file a manifest points to must be in the package and its checksum must be listed
     const files = (m.files ?? {}) as Record<string, string>;
-    for (const c of contributes.languages ?? []) for (const cat of c.catalogs) if (!(cat.file in files)) r.bad('files', t('файл «{p}» не має контрольної суми', { p: cat.file }));
+    // a built-in plugin's files are inside the application, so there is nothing to check them against
+    if (!opts.builtin) for (const c of contributes.languages ?? []) for (const cat of c.catalogs) if (!(cat.file in files)) r.bad('files', t('файл «{p}» не має контрольної суми', { p: cat.file }));
     for (const h of contributes.help ?? []) if (h.file && !(h.file in files)) r.bad('files', t('файл «{p}» не має контрольної суми', { p: h.file }));
   }
   if (r.errors.length) return { ok: false, errors: r.errors };

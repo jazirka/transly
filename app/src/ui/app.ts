@@ -1,4 +1,4 @@
-import { branchOf, projectTitle, iconLetters, nameFromFolder, builtDrift, inboxOf, syncTheme, isAutoFilled, autoNote, planIngest, looksLikeAnotherGame, ingestQuiet, ingestNote, Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, jumpTarget, qaOf, termsStamp, adoptSynced, applyPlan, planOf, reconcileChanges, pct, progressOf, rowState, sumProgress, QUEUE_LABEL, nextIn, positionOf, queueRows, ago, copyLine, stamp, stampOf } from '../core';
+import { branchOf, projectTitle, iconLetters, nameFromFolder, builtDrift, inboxOf, syncTheme, isAutoFilled, autoNote, planIngest, looksLikeAnotherGame, ingestQuiet, ingestNote, Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, jumpTarget, qaOf, termsStamp, adoptSynced, applyPlan, planOf, reconcileChanges, pct, progressOf, rowState, sumProgress, QUEUE_LABEL, nextIn, positionOf, queueRows, ago, copyLine, stamp, stampOf, uiLocale } from '../core';
 import type { InboxItem, IngestReport, QaOptions, QueueKind, WrapPlan } from '../core';
 import { pxMeasure } from './measure';
 import { openWrapTool } from './wrap-dialog';
@@ -381,7 +381,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const flow = (t: string): string => t.replace(/\n/g, ' ');
   /** A table cell shows the beginning of a very long text (the whole of it is in the editor): laying out a hundred thousand letters in a narrow cell takes the browser half a minute. */
   const CELL_MAX = 2000;
-  const cellText = (t: string): string => (t.length > CELL_MAX ? `${t.slice(0, CELL_MAX)}… (ще ${(t.length - CELL_MAX).toLocaleString('uk-UA')} символів)` : t);
+  const cellText = (t: string): string => (t.length > CELL_MAX ? `${t.slice(0, CELL_MAX)}… (ще ${(t.length - CELL_MAX).toLocaleString(uiLocale())} символів)` : t);
   const lenCls = (u: Unit, e: Entry | undefined): string => {
     if (!e?.target) return '';
     const d = Math.abs(lengthDeviation(u.source, e.target)), tol = s.saved.settings.tolerancePct;
@@ -630,14 +630,14 @@ export async function start(root: HTMLElement): Promise<void> {
   function chipsHtml(host: string, lead = ''): string {
     if (!ctx.view()) return '';
     const n = filterCounts();
-    const chips = s.filters.map(f => { const l = FILTERS.find(x => x[0] === f)?.[1] ?? f; return `<button class="chip on" data-filter="${f}" aria-pressed="true" title="Прибрати фільтр «${l}»">${filterDot(f)}${l} <span class="n">${(n.get(f) ?? 0).toLocaleString('uk-UA')}</span><span class="x" aria-hidden="true">✕</span></button>`; }).join('');
+    const chips = s.filters.map(f => { const l = FILTERS.find(x => x[0] === f)?.[1] ?? f; return `<button class="chip on" data-filter="${f}" aria-pressed="true" title="Прибрати фільтр «${l}»">${filterDot(f)}${l} <span class="n">${(n.get(f) ?? 0).toLocaleString(uiLocale())}</span><span class="x" aria-hidden="true">✕</span></button>`; }).join('');
     // «Ще ▾» comes first, where the eye looks for it; the chosen ones (the speaker, the statuses) follow it
     return `<button class="chip more${host === '2' ? ' hm' : ''}${s.filters.length ? ' on' : ''}" id="more-${host}" data-more aria-haspopup="true" aria-expanded="false">Ще${SVG.caret}</button>${lead}${chips}${s.filters.length ? '<button class="chip" data-reset title="Скинути всі фільтри">Скинути</button>' : ''}`;
   }
   /** The popover «Ще ▾»: a box for each status with how many rows have it; the boxes can be mixed. */
   function moreHtml(): string {
     const n = filterCounts();
-    const row = ([f, l]: [Filter, string]): string => { const on = s.filters.includes(f), idle = !on && !(n.get(f) ?? 0); return `<button class="fi${on ? ' on' : ''}${idle ? ' idle' : ''}" data-filter="${f}" role="menuitemcheckbox" aria-checked="${on}"${idle ? ' disabled' : ''}><span class="cb" aria-hidden="true">${on ? '✓' : ''}</span>${filterDot(f)}<span class="fl">${l}</span><span class="n">${(n.get(f) ?? 0).toLocaleString('uk-UA')}</span></button>`; };
+    const row = ([f, l]: [Filter, string]): string => { const on = s.filters.includes(f), idle = !on && !(n.get(f) ?? 0); return `<button class="fi${on ? ' on' : ''}${idle ? ' idle' : ''}" data-filter="${f}" role="menuitemcheckbox" aria-checked="${on}"${idle ? ' disabled' : ''}><span class="cb" aria-hidden="true">${on ? '✓' : ''}</span>${filterDot(f)}<span class="fl">${l}</span><span class="n">${(n.get(f) ?? 0).toLocaleString(uiLocale())}</span></button>`; };
     return `<div class="group">Статус</div>${STATUS_FILTERS.map(row).join('')}<hr><div class="group">Додатково</div>${EXTRA_FILTERS.map(row).join('')}${s.filters.length ? '<hr><button data-reset>Скинути всі фільтри</button>' : ''}`;
   }
 
@@ -898,7 +898,7 @@ export async function start(root: HTMLElement): Promise<void> {
     $('#pg-a').style.width = total ? `${(100 * A) / total}%` : '0';
     $('#pg-b').style.width = total ? `${(100 * D) / total}%` : '0';
     $('#pg-c').style.width = total ? `${(100 * W) / total}%` : '0';
-    $('#pg-txt').textContent = total ? `Перекладено ${pct(prog.translated, total)}% (${prog.translated.toLocaleString('uk-UA')} з ${total.toLocaleString('uk-UA')}) · надіслано ${pct(prog.sent + prog.approved, total)}% · вичитано ${pct(A, total)}%` : 'Папку гри не відкрито';
+    $('#pg-txt').textContent = total ? `Перекладено ${pct(prog.translated, total)}% (${prog.translated.toLocaleString(uiLocale())} з ${total.toLocaleString(uiLocale())}) · надіслано ${pct(prog.sent + prog.approved, total)}% · вичитано ${pct(A, total)}%` : 'Папку гри не відкрито';
     $('#pg').setAttribute('aria-valuenow', String(pct(prog.translated, total)));
     $('#pg').setAttribute('aria-valuetext', $('#pg-txt').textContent ?? '');
     $('#pg').title = total ? `Вичитано ${pct(A, total)}% · Надіслано, ще не вичитано ${pct(D, total)}% · Чернетки ${pct(W, total)}% · Без перекладу ${pct(prog.untranslated, total)}%` : '';
@@ -924,7 +924,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const opts = qaOpts();
     if (v) for (const u of v.units) { const e = ents[u.key]; if (e && e.target) { if (activeIssues(u, e, opts).some(i => i.severity === 'bad')) qa++; if (hasAdvice(u, e, opts)) adv++; } }
     const sv = $('#sb-save');
-    sv.textContent = !s.saveOk ? '○ Не збережено: повторю спробу' : s.savedAt ? '● Збережено о ' + new Date(s.savedAt).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '● Зміни зберігаються автоматично';
+    sv.textContent = !s.saveOk ? '○ Не збережено: повторю спробу' : s.savedAt ? '● Збережено о ' + new Date(s.savedAt).toLocaleTimeString(uiLocale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '● Зміни зберігаються автоматично';
     sv.className = s.saveOk ? 'ok' : 'bad';
     $('#sb-fmt').textContent = s.current && s.current !== GROUP ? FORMAT_LABEL[s.current.split('.').pop() ?? ''] ?? '' : '';
     $('#sb-qa').textContent = qa ? plural(qa, ['помилка QA', 'помилки QA', 'помилок QA']) : 'Помилок QA немає';
@@ -1366,7 +1366,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const icon = (d: string): string => `<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
     if (!built) return `<div class="pj-h">Остання збірка</div><div class="bs"><span class="bi">${icon('M2.5 5.5h11v7h-11zM2 3.5h12v2H2zM6.5 8h3')}</span><div><b>Збірки ще не було</b><small>Тут буде видно, чи зібраний переклад актуальний</small></div></div><hr>`;
     const d = builtDrift(s.saved, built.mt);
-    const when = `${new Date(built.mt).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} · ${ago(built.mt, Date.now())}${built.n !== undefined ? ` · ${plural(built.n, ['рядок', 'рядки', 'рядків'])}` : ''}`;
+    const when = `${new Date(built.mt).toLocaleString(uiLocale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} · ${ago(built.mt, Date.now())}${built.n !== undefined ? ` · ${plural(built.n, ['рядок', 'рядки', 'рядків'])}` : ''}`;
     if (!d.n) return `<div class="pj-h">Остання збірка</div><div class="bs"><span class="bi ok">${icon('M3 8.5l3.2 3.2L13 4.8')}</span><div><b>Збірка свіжа</b><small>${esc(when)}</small><small>Після неї нічого не змінювалось</small></div></div><hr>`;
     const parts = [d.approved ? `${d.approved} вичитано` : '', d.sent ? `${d.sent} надіслано` : ''].filter(Boolean).join(', ');
     return `<div class="pj-h">Остання збірка</div><div class="bs"><span class="bi">${icon('M8 2.5L14 13H2zM8 7v3M8 11.5v.2')}</span><div><b>Збірка застаріла</b><small>${esc(when)}</small><small class="w">Після неї змінено ${plural(d.n, ['рядок', 'рядки', 'рядків'])}: ${esc(parts)}</small><div class="acts"><button class="btn p" type="button" data-bs="build">Зібрати зараз</button><button class="btn" type="button" data-bs="changes">Що змінилося</button></div></div></div><hr>`;
@@ -1380,7 +1380,7 @@ export async function start(root: HTMLElement): Promise<void> {
     pop.innerHTML = `<button role="menuitem" data-pj="folder"><span class="cfg-t">Відкрити папку гри…</span></button>
       <button role="menuitem" data-pj="files"><span class="cfg-t">Відкрити файли або вставити JSON…</span></button>
       <hr><div class="pj-h">Поточний проєкт</div>
-      <div class="pj-card"><span class="pj lg${Array.from(iconLetters(s.saved)).length > 1 ? ' two' : ''}">${esc(iconLetters(s.saved))}</span><div><b>${esc(projectTitle(s.saved))}</b><small class="${folder.kind === 'missing' || folder.kind === 'other' ? 'warn' : ''}" title="${esc(folderLine(folder, remembered))}">${esc(folderLine(folder, remembered))}</small><small>${total ? `Перекладено ${done.toLocaleString('uk-UA')} з ${total.toLocaleString('uk-UA')}` : 'Файлів ще немає'}</small></div></div>
+      <div class="pj-card"><span class="pj lg${Array.from(iconLetters(s.saved)).length > 1 ? ' two' : ''}">${esc(iconLetters(s.saved))}</span><div><b>${esc(projectTitle(s.saved))}</b><small class="${folder.kind === 'missing' || folder.kind === 'other' ? 'warn' : ''}" title="${esc(folderLine(folder, remembered))}">${esc(folderLine(folder, remembered))}</small><small>${total ? `Перекладено ${done.toLocaleString(uiLocale())} з ${total.toLocaleString(uiLocale())}` : 'Файлів ще немає'}</small></div></div>
       <hr><button role="menuitem" data-pj="project"><span class="cfg-t">Налаштування проєкту…</span></button>
       <button role="menuitem" data-pj="settings"><span class="cfg-t">Налаштування застосунку…</span></button>`;
     const r = btn.getBoundingClientRect();
@@ -2048,7 +2048,7 @@ export async function start(root: HTMLElement): Promise<void> {
       const counts = new Map<string, number>();
       if (v) for (const f of s.views) for (const u of f.units) { const n = ctx.speaker(u); counts.set(n, (counts.get(n) ?? 0) + 1); }
       const names = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'uk'));
-      showPop(t.closest<HTMLElement>('#spkbtn')!, `<div class="group">Мовець · у всіх файлах</div>${s.speaker !== null ? '<button data-clear="speaker">Усі мовці</button>' : ''}${names.slice(0, 80).map(([n, c]) => `<button data-spk="${esc(n)}" ${s.speaker === n ? 'class="on"' : ''}>${esc(n || 'без мовця')} <span class="hint">${c.toLocaleString('uk-UA')}</span></button>`).join('')}<div class="msep" role="separator"></div>${s.speaker !== null && s.current !== GROUP && s.views.length > 1 ? '<button data-act="group-all">Показати в усіх файлах разом</button>' : ''}<button data-act="speakers">Визначити мовців…</button>`);
+      showPop(t.closest<HTMLElement>('#spkbtn')!, `<div class="group">Мовець · у всіх файлах</div>${s.speaker !== null ? '<button data-clear="speaker">Усі мовці</button>' : ''}${names.slice(0, 80).map(([n, c]) => `<button data-spk="${esc(n)}" ${s.speaker === n ? 'class="on"' : ''}>${esc(n || 'без мовця')} <span class="hint">${c.toLocaleString(uiLocale())}</span></button>`).join('')}<div class="msep" role="separator"></div>${s.speaker !== null && s.current !== GROUP && s.views.length > 1 ? '<button data-act="group-all">Показати в усіх файлах разом</button>' : ''}<button data-act="speakers">Визначити мовців…</button>`);
       return;
     }
     if (t.closest('[data-act=speakers]')) { closePops(); openSpeakers(ctx); return; }

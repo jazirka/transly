@@ -101,13 +101,13 @@ export const parseCatalog = (name: string, text: string): CatalogData => (/\.jso
 
 const subst = (s: string, p?: Params): string => (p ? s.replace(/\{(\w+)\}/g, (m, k: string) => (k in p ? String(p[k]) : m)) : s);
 
-/** A message id with `{name}` or `{1}` in it is a template: the pattern it matches and the names it takes. */
+/** A message id with `{name}` or `{1}` in it is a template: the pattern it matches and the names it takes (`{1}`, `{2}`… stand for numbers, `{name}` for any text). */
 interface Template { re: RegExp; names: string[]; ctx: string; id: string; weight: number }
 const compile = (id: string, ctx: string): Template | null => {
   const names: string[] = [];
   let weight = 0, last = 0, src = '';
   const esc = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  for (const m of id.matchAll(/\{(\w+)\}/g)) { src += esc(id.slice(last, m.index)); weight += m.index! - last; src += '(.+?)'; names.push(m[1]!); last = m.index! + m[0].length; }
+  for (const m of id.matchAll(/\{(\w+)\}/g)) { src += esc(id.slice(last, m.index)); weight += m.index! - last; src += /^\d+$/.test(m[1]!) ? '(\\d[\\d\\s.,]*\\d|\\d)' : '(.+?)'; names.push(m[1]!); last = m.index! + m[0].length; }
   if (!names.length) return null;
   src += esc(id.slice(last)); weight += id.length - last;
   return { re: new RegExp(`^${src}$`, 's'), names, ctx, id, weight };
@@ -131,6 +131,9 @@ export class I18n {
   private negative = new Set<string>();
   private listeners = new Set<() => void>();
   private rev = 0;
+  /** The forms of the count words the program uses (`рядок`, `рядки`, `рядків`), so that «5 рядків» can be matched by the template «{1} рядок». */
+  private forms = new Map<string, string>();
+  private formsRe: RegExp | null = null;
   /** When false the strings that are not found are not remembered (a cost the application pays only while a translator asks for the list). */
   capture = true;
 
@@ -180,6 +183,12 @@ export class I18n {
   get revision(): number { return this.rev; }
   private changed(): void { this.tpl = null; this.negative.clear(); this.rev++; for (const cb of [...this.listeners]) { try { cb(); } catch { /* a listener must not stop the others */ } } }
 
+  /** The index of the plural form of the language that holds `key`. */
+  private pluralIndex(key: string, n: number): number {
+    const code = this.chain.find(c => this.langs.get(c)!.layers.some(x => x.entries.get(key)?.some(v => v !== '')));
+    return code === undefined ? 0 : this.langs.get(code)!.plural(n);
+  }
+
   private lookup(key: string): string[] | null {
     for (const code of this.chain) {
       const l = this.langs.get(code)!;
@@ -209,6 +218,13 @@ export class I18n {
     return subst(forms[Math.min(i, forms.length - 1)]!, p);
   }
 
+  /** Tell that these are the forms (one, few, many) of a count word: the text `5 рядків` is then understood as the number 5 and the word `рядок`. */
+  countWord(forms: readonly string[]): void {
+    const first = forms[0];
+    if (!first) return;
+    for (const f of forms) if (f && !this.forms.has(f)) { this.forms.set(f, first); this.formsRe = null; this.negative.clear(); }
+  }
+
   has(msgid: string, ctx: string = CORE): boolean { return this.lookup(keyOf(msgid, ctx)) !== null; }
 
   private templates(): Template[] {
@@ -232,13 +248,28 @@ export class I18n {
     const exact = this.lookup(keyOf(text, ctx));
     if (exact) return exact[0]!;
     if (this.negative.has(text)) return null;
-    for (const t of this.templates()) {
-      if (t.ctx !== ctx) continue;
-      const m = t.re.exec(text);
-      if (!m) continue;
-      const f = this.lookup(keyOf(t.id, ctx));
-      if (!f) continue;
-      return f[0]!.replace(/\{(\w+)\}/g, (all, k: string) => { const i = t.names.indexOf(k); return i >= 0 ? m[i + 1]! : all; });
+    const viaTemplate = (src: string, count: number | null): string | null => {
+      for (const t of this.templates()) {
+        if (t.ctx !== ctx) continue;
+        const m = t.re.exec(src);
+        if (!m) continue;
+        const key = keyOf(t.id, ctx), f = this.lookup(key);
+        if (!f) continue;
+        const first = Number(m[1]);
+        const n = count ?? (t.names[0] !== undefined && /^\d+$/.test(m[1] ?? '') ? first : null);
+        const form = n !== null && f.length > 1 ? f[Math.min(this.pluralIndex(key, n), f.length - 1)] ?? f[0]! : f[0]!;
+        return form.replace(/\{(\w+)\}/g, (all, k: string) => { const i = t.names.indexOf(k); return i >= 0 ? m[i + 1]! : all; });
+      }
+      return null;
+    };
+    const direct = viaTemplate(text, null);
+    if (direct !== null) return direct;
+    // «5 рядків чекають» → «5 рядок чекає»: the same template as «1 рядок чекає», with the form of the language of the pack chosen by the number
+    if (this.forms.size) {
+      this.formsRe ??= new RegExp(`(\\d+(?:[ ,.\\u00a0\\u202f]\\d{3})*) (${[...this.forms.keys()].sort((a, b) => b.length - a.length).map(x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?![\\p{L}])`, 'gu');
+      let count: number | null = null;
+      const norm = text.replace(this.formsRe, (_all, num: string, word: string) => { count ??= Number(num.replace(/\D/g, '')); return `${num} ${this.forms.get(word) ?? word}`; });
+      if (count !== null && norm !== text) { const r = viaTemplate(norm, count); if (r !== null) return r; }
     }
     if (this.negative.size > 8000) this.negative.clear();
     this.negative.add(text);
@@ -267,6 +298,8 @@ export class I18n {
 
 /** The interface language of the application. */
 export const i18n = new I18n();
+/** The locale for dates and numbers: that of the interface language (the Ukrainian one while the interface is in the source language). */
+export const uiLocale = (): string => (i18n.language === i18n.source ? 'uk-UA' : i18n.language);
 /** The string in the language of the interface (see `I18n.t`). */
 export const t = (msgid: string, params?: Params, ctx?: string): string => i18n.t(msgid, params, ctx);
 /** The strings of a plugin: a function that always asks inside the context of that plugin. */

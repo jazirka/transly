@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { RELEASE_TAG, parseRelease, pickAsset, platformOf, sameBuild, updateAvailable, withTimeout } from '../core';
+import { RELEASE_TAG, parseRelease, pickAsset, platformOf, sameBuild, updateAvailable, withTimeout, uiLocale } from '../core';
 import type { Platform, ReleaseAsset, ReleaseInfo } from '../core';
 import { androidBridge } from './android';
 import { backgroundRound } from './bgupdate';
@@ -67,7 +67,7 @@ export async function installUpdate(cfg: UpdateConfig, c: UpdateCheck, onState: 
 
 /** "A new version is available": download and install it, or not now. */
 export function openUpdateDialog(cfg: UpdateConfig, c: UpdateCheck): void {
-  const when = c.release.published ? new Date(c.release.published).toLocaleString('uk-UA') : '';
+  const when = c.release.published ? new Date(c.release.published).toLocaleString(uiLocale()) : '';
   const dlg = dialog(`<form method="dialog"><h2 id="up-t">Є нова версія</h2>
     <p class="hint">Опубліковано ${when || 'нещодавно'}. ${c.asset ? `Файл: ${c.asset.name}${c.asset.size ? ` (${Math.round(c.asset.size / 1048576 * 10) / 10} МБ)` : ''}.` : 'Для цієї системи файлу в релізі немає.'} Ваш переклад зберігається, встановлення його не торкається.</p>
     <p class="sum" id="up-state" role="status" hidden></p>

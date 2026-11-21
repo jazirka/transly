@@ -1,0 +1,2348 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: en\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Source-Language: uk\n"
+"Project-Id-Version: Transly\n"
+
+msgctxt "core"
+msgid "Головне меню"
+msgstr "Main menu"
+
+msgctxt "core"
+msgid "Файл"
+msgstr "File"
+
+msgctxt "core"
+msgid "Перехід"
+msgstr "Go"
+
+msgctxt "core"
+msgid "Інструменти"
+msgstr "Tools"
+
+msgctxt "core"
+msgid "Проєкт: відкрити іншу гру, налаштування"
+msgstr "Project: open another game, settings"
+
+msgctxt "core"
+msgid "Гілка перекладу: перемкнути, створити, злити"
+msgstr "Translation branch: switch, create, merge"
+
+msgctxt "core"
+msgid "Режим"
+msgstr "Mode"
+
+msgctxt "core"
+msgid "Таблиця: усі рядки файлу"
+msgstr "Table: all rows of the file"
+
+msgctxt "core"
+msgid "Таблиця"
+msgstr "Table"
+
+msgctxt "core"
+msgid "Редагування: один рядок"
+msgstr "Editing: one row"
+
+msgctxt "core"
+msgid "Редагування"
+msgstr "Editing"
+
+msgctxt "core"
+msgid "У цьому файлі немає сцен: режим «Сцена» працює для файлів із подіями гри"
+msgstr "This file has no scenes: the «Scene» mode works for files with game events"
+
+msgctxt "core"
+msgid "Сцена"
+msgstr "Scene"
+
+msgctxt "core"
+msgid "Вичитано {1}% · Надіслано, ще не вичитано {2}% · Чернетки {3}% · Без перекладу {4}%"
+msgstr "Proofread {1}% · Sent, not proofread yet {2}% · Drafts {3}% · Untranslated {4}%"
+
+msgctxt "core"
+msgid "Прогрес перекладу"
+msgstr "Translation progress"
+
+msgctxt "core"
+msgid "Перекладено {1}% ({2} з {3}) · надіслано {4}% · вичитано {5}%"
+msgstr "Translated {1}% ({2} of {3}) · sent {4}% · proofread {5}%"
+
+msgctxt "core"
+msgid "Що запускає кнопка ▶"
+msgstr "What the ▶ button runs"
+
+msgctxt "core"
+msgid "Що запускає кнопка ▶: Збірка (файл)"
+msgstr "What the ▶ button runs: Build (file)"
+
+msgctxt "core"
+msgid "Збірка (файл)"
+msgstr "Build (file)"
+
+msgctxt "core"
+msgid "Запустити «Збірка (файл)» (F{1})"
+msgstr "Run «Build (file)» (F{1})"
+
+msgctxt "core"
+msgid "Запустити «Збірка (файл)»"
+msgstr "Run «Build (file)»"
+
+msgctxt "core"
+msgid "Сповіщення: що потребує уваги й що змінили інші"
+msgstr "Notifications: what needs attention and what others changed"
+
+msgctxt "core"
+msgid "Сповіщення: {1}"
+msgstr "Notifications: {1}"
+
+msgctxt "core"
+msgid "Гарячі клавіші"
+msgstr "Keyboard shortcuts"
+
+msgctxt "core"
+msgid "{1} / {2} вичитано"
+msgstr "{1} / {2} proofread"
+
+msgctxt "core"
+msgid "Пошук скрізь"
+msgstr "Search everywhere"
+
+msgctxt "core"
+msgid "Бічні панелі"
+msgstr "Side panels"
+
+msgctxt "core"
+msgid "Файли гри"
+msgstr "Game files"
+
+msgctxt "core"
+msgid "Рядки файлу"
+msgstr "Rows of the file"
+
+msgctxt "core"
+msgid "Сцени файлу"
+msgstr "Scenes of the file"
+
+msgctxt "core"
+msgid "Пов’язане: слова, конструкції, однакові рядки"
+msgstr "Related: words, constructions, identical rows"
+
+msgctxt "core"
+msgid "Пов’язане"
+msgstr "Related"
+
+msgctxt "core"
+msgid "Бічна панель: файли й рядки"
+msgstr "Side panel: files and rows"
+
+msgctxt "core"
+msgid "Бічна панель"
+msgstr "Side panel"
+
+msgctxt "core"
+msgid "Файли"
+msgstr "Files"
+
+msgctxt "core"
+msgid "Рядки"
+msgstr "Rows"
+
+msgctxt "core"
+msgid "Сцени"
+msgstr "Scenes"
+
+msgctxt "core"
+msgid "Відкрити файли або вставити JSON"
+msgstr "Open files or paste JSON"
+
+msgctxt "core"
+msgid "Очистити пошук"
+msgstr "Clear search"
+
+msgctxt "core"
+msgid "Пошук (Ctrl+F)"
+msgstr "Search (Ctrl+F)"
+
+msgctxt "core"
+msgid "Меню вікна «Файли гри»: пошук"
+msgstr "Menu of the «Game files» window: search"
+
+msgctxt "core"
+msgid "Знайти скрізь (Ctrl+K або двічі Shift)"
+msgstr "Search everywhere (Ctrl+K or double Shift)"
+
+msgctxt "core"
+msgid "Знайти скрізь (Ctrl+K)"
+msgstr "Search everywhere (Ctrl+K)"
+
+msgctxt "core"
+msgid "Сховати панель"
+msgstr "Hide panel"
+
+msgctxt "core"
+msgid "Сховати"
+msgstr "Hide"
+
+msgctxt "core"
+msgid "Сховати панель «Файли гри»"
+msgstr "Hide the «Game files» panel"
+
+msgctxt "core"
+msgid "Створити"
+msgstr "Create"
+
+msgctxt "core"
+msgid "Потягніть, щоб змінити співвідношення (подвійний клік — навпіл)"
+msgstr "Drag to change the ratio (double-click: half and half)"
+
+msgctxt "core"
+msgid "Розділ між файлами й рядками"
+msgstr "Divider between files and rows"
+
+msgctxt "core"
+msgid "Вигляд, фільтри, пошук (Ctrl+F)"
+msgstr "View, filters, search (Ctrl+F)"
+
+msgctxt "core"
+msgid "Меню вікна «Рядки»: вигляд, фільтри, пошук"
+msgstr "Menu of the «Rows» window: view, filters, search"
+
+msgctxt "core"
+msgid "Сховати панель «Рядки файлу»"
+msgstr "Hide the «Rows of the file» panel"
+
+msgctxt "core"
+msgid "↕ За порядком"
+msgstr "↕ In order"
+
+msgctxt "core"
+msgid "Меню вікна «Сцени»: пошук"
+msgstr "Menu of the «Scenes» window: search"
+
+msgctxt "core"
+msgid "Сховати панель «Сцени»"
+msgstr "Hide the «Scenes» panel"
+
+msgctxt "core"
+msgid "Сховати панель «Глосарій»"
+msgstr "Hide the «Glossary» panel"
+
+msgctxt "core"
+msgid "Вид записів"
+msgstr "Kind of entries"
+
+msgctxt "core"
+msgid "＋ Додати"
+msgstr "＋ Add"
+
+msgctxt "core"
+msgid "Новий термін"
+msgstr "New term"
+
+msgctxt "core"
+msgid "Оригінал (EN)"
+msgstr "Original (EN)"
+
+msgctxt "core"
+msgid "Переклад (UK)"
+msgstr "Translation (UK)"
+
+msgctxt "core"
+msgid "Інші прийнятні переклади"
+msgstr "Other acceptable translations"
+
+msgctxt "core"
+msgid "Категорія"
+msgstr "Category"
+
+msgctxt "core"
+msgid "Примітка"
+msgstr "Note"
+
+msgctxt "core"
+msgid "Перевіряти термін під час QA"
+msgstr "Check the term during QA"
+
+msgctxt "core"
+msgid "Зберегти"
+msgstr "Save"
+
+msgctxt "core"
+msgid "Скасувати"
+msgstr "Cancel"
+
+msgctxt "core"
+msgid "Потягніть, щоб змінити ширину (подвійний клік — стандартна)"
+msgstr "Drag to change the width (double-click: default)"
+
+msgctxt "core"
+msgid "Ширина бічної панелі"
+msgstr "Side panel width"
+
+msgctxt "core"
+msgid "Закрити вкладку Map{1}.json"
+msgstr "Close tab Map{1}.json"
+
+msgctxt "core"
+msgid "Ще"
+msgstr "More"
+
+msgctxt "core"
+msgid "Мовець"
+msgstr "Speaker"
+
+msgctxt "core"
+msgid "Довжина"
+msgstr "Length"
+
+msgctxt "core"
+msgid "вибрано"
+msgstr "selected"
+
+msgctxt "core"
+msgid "Надіслати вибрані переклади"
+msgstr "Send the selected translations"
+
+msgctxt "core"
+msgid "Надіслати"
+msgstr "Send"
+
+msgctxt "core"
+msgid "Вичитати вибрані переклади (рядки, що ще не надіслано, надсилаються й вичитуються разом)"
+msgstr "Proofread the selected translations (rows not sent yet are sent and proofread together)"
+
+msgctxt "core"
+msgid "Вичитати"
+msgstr "Proofread"
+
+msgctxt "core"
+msgid "Підставити збіг із пам’яті перекладів (від {1}%) у порожні вибрані рядки"
+msgstr "Fill the empty selected rows with a translation-memory match (from {1}%)"
+
+msgctxt "core"
+msgid "З пам’яті"
+msgstr "From memory"
+
+msgctxt "core"
+msgid "Скасувати вибір"
+msgstr "Clear selection"
+
+msgctxt "core"
+msgid "Статус"
+msgstr "Status"
+
+msgctxt "core"
+msgid "Ключ"
+msgstr "Key"
+
+msgctxt "core"
+msgid "Оригінал · EN"
+msgstr "Original · EN"
+
+msgctxt "core"
+msgid "Переклад · UK"
+msgstr "Translation · UK"
+
+msgctxt "core"
+msgid "Кількість знаків: переклад / оригінал (без керівних кодів). Рекомендація: якнайближче до оригіналу"
+msgstr "Number of characters: translation / original (without control codes). Recommendation: as close to the original as possible"
+
+msgctxt "core"
+msgid "К-сть зн."
+msgstr "Chars"
+
+msgctxt "core"
+msgid "Цей рядок не входить у поточний фільтр або пошук."
+msgstr "This row is not in the current filter or search."
+
+msgctxt "core"
+msgid "Показати всі рядки"
+msgstr "Show all rows"
+
+msgctxt "core"
+msgid "Зауваження до рядка"
+msgstr "Notes on the row"
+
+msgctxt "core"
+msgid "Зауваження"
+msgstr "Notes"
+
+msgctxt "core"
+msgid "Внески до цього рядка"
+msgstr "Contributions to this row"
+
+msgctxt "core"
+msgid "Внески"
+msgstr "Contributions"
+
+msgctxt "core"
+msgid "Панель рядка"
+msgstr "Row panel"
+
+msgctxt "core"
+msgid "Ширина правої панелі"
+msgstr "Right panel width"
+
+msgctxt "core"
+msgid "Права панель"
+msgstr "Right panel"
+
+msgctxt "core"
+msgid "Активність у рядку: хто, коли й що змінював"
+msgstr "Activity on the row: who changed what and when"
+
+msgctxt "core"
+msgid "Активність"
+msgstr "Activity"
+
+msgctxt "core"
+msgid "Пов’язане: слова, конструкції, назви, однакові рядки, пам’ять"
+msgstr "Related: words, constructions, names, identical rows, memory"
+
+msgctxt "core"
+msgid "Обговорення рядка"
+msgstr "Discussion of the row"
+
+msgctxt "core"
+msgid "Обговорення"
+msgstr "Discussion"
+
+msgctxt "core"
+msgid "Перевірка рядка"
+msgstr "Row check"
+
+msgctxt "core"
+msgid "Оберіть рядок"
+msgstr "Choose a row"
+
+msgctxt "core"
+msgid "Коментувати"
+msgstr "Comment"
+
+msgctxt "core"
+msgid "Розділи"
+msgstr "Sections"
+
+msgctxt "core"
+msgid "Редактор"
+msgstr "Editor"
+
+msgctxt "core"
+msgid "Вказівки"
+msgstr "Hints"
+
+msgctxt "core"
+msgid "● Зміни зберігаються автоматично"
+msgstr "● Changes are saved automatically"
+
+msgctxt "core"
+msgid "Перейти до наступної помилки QA у проєкті (F{1})"
+msgstr "Go to the next QA error in the project (F{1})"
+
+msgctxt "core"
+msgid "Помилок QA немає"
+msgstr "No QA errors"
+
+msgctxt "core"
+msgid "Показати рядки з порадами"
+msgstr "Show rows with advice"
+
+msgctxt "core"
+msgid "Нову версію завантажено й перевірено. Натисніть, щоб оновитися зараз: застосунок закриється, оновиться без вікон і сам запуститься знову"
+msgstr "The new version is downloaded and checked. Click to update now: the app closes, updates without windows and starts again"
+
+msgctxt "core"
+msgid "↻ Оновлення готове"
+msgstr "↻ Update ready"
+
+msgctxt "core"
+msgid "Проєкт зберігається лише в цьому браузері. Збережіть копію у файл («Налаштування → Застосунок») або синхронізуйте"
+msgstr "The project is kept only in this browser. Save a copy to a file («Settings → App») or sync"
+
+msgctxt "core"
+msgid "Копії поза браузером ще не було"
+msgstr "No copy outside the browser yet"
+
+msgctxt "core"
+msgid "Зібрати (F{1})"
+msgstr "Build (F{1})"
+
+msgctxt "core"
+msgid "Файл: {1} / {2} вичитано · {3} чекає вичитки"
+msgstr "File: {1} / {2} proofread · {3} waiting for proofreading"
+
+msgctxt "core"
+msgid "Сесія: {1} рядок змінено · {2} хв"
+msgid_plural "Сесія: {1} рядок змінено · {2} хв"
+msgstr[0] "Session: {1} row changed · {2} min"
+msgstr[1] "Session: {1} rows changed · {2} min"
+
+msgctxt "core"
+msgid "Проєкт"
+msgstr "Project"
+
+msgctxt "core"
+msgid "Гілки перекладу"
+msgstr "Translation branches"
+
+msgctxt "core"
+msgid "Що запускати"
+msgstr "What to run"
+
+msgctxt "core"
+msgid "Сповіщення"
+msgstr "Notifications"
+
+msgctxt "core"
+msgid "Параметри"
+msgstr "Options"
+
+msgctxt "core"
+msgid "Гарячі клавіші й позначки"
+msgstr "Keyboard shortcuts and marks"
+
+msgctxt "core"
+msgid "Відкрити рядок у редагуванні"
+msgstr "Open the row in editing"
+
+msgctxt "core"
+msgid "Наступний / попередній рядок"
+msgstr "Next / previous row"
+
+msgctxt "core"
+msgid "У редагуванні: наступний / попередній у списку"
+msgstr "In editing: next / previous in the list"
+
+msgctxt "core"
+msgid "Надіслати й далі"
+msgstr "Send and go on"
+
+msgctxt "core"
+msgid "Вичитати й перейти до наступного на вичитку"
+msgstr "Proofread and go to the next one waiting for proofreading"
+
+msgctxt "core"
+msgid "Наступний / попередній рядок без перекладу (по всьому проєкту)"
+msgstr "Next / previous untranslated row (across the project)"
+
+msgctxt "core"
+msgid "Наступна / попередня помилка QA (по всьому проєкту)"
+msgstr "Next / previous QA error (across the project)"
+
+msgctxt "core"
+msgid "Скасувати / повернути останню масову дію (поза полем вводу)"
+msgstr "Undo / redo the last bulk action (outside an input field)"
+
+msgctxt "core"
+msgid "Змінити переклад у комірці таблиці"
+msgstr "Edit the translation in a table cell"
+
+msgctxt "core"
+msgid "У комірці: зберегти й до наступного рядка"
+msgstr "In a cell: save and go to the next row"
+
+msgctxt "core"
+msgid "У комірці: новий рядок тексту"
+msgstr "In a cell: new line of text"
+
+msgctxt "core"
+msgid "Запустити вибрану збірку (файл або гра)"
+msgstr "Run the chosen build (file or game)"
+
+msgctxt "core"
+msgid "Знайти скрізь"
+msgstr "Search everywhere"
+
+msgctxt "core"
+msgid "Закрити вікно чи меню"
+msgstr "Close a window or menu"
+
+msgctxt "core"
+msgid "Позначки рядків"
+msgstr "Row marks"
+
+msgctxt "core"
+msgid "без перекладу"
+msgstr "untranslated"
+
+msgctxt "core"
+msgid "чернетка"
+msgstr "draft"
+
+msgctxt "core"
+msgid "надіслано"
+msgstr "sent"
+
+msgctxt "core"
+msgid "вичитано"
+msgstr "proofread"
+
+msgctxt "core"
+msgid "є помилка QA"
+msgstr "has a QA error"
+
+msgctxt "core"
+msgid "Розділи результатів"
+msgstr "Result sections"
+
+msgctxt "core"
+msgid "Усе"
+msgstr "All"
+
+msgctxt "core"
+msgid "Терміни"
+msgstr "Terms"
+
+msgctxt "core"
+msgid "Результати"
+msgstr "Results"
+
+msgctxt "core"
+msgid "вибрати"
+msgstr "select"
+
+msgctxt "core"
+msgid "відкрити"
+msgstr "open"
+
+msgctxt "core"
+msgid "розділ"
+msgstr "section"
+
+msgctxt "core"
+msgid "закрити"
+msgstr "close"
+
+msgctxt "core"
+msgid "Керування вікном"
+msgstr "Window controls"
+
+msgctxt "core"
+msgid "Згорнути"
+msgstr "Minimize"
+
+msgctxt "core"
+msgid "Згорнути вікно"
+msgstr "Minimize window"
+
+msgctxt "core"
+msgid "Розгорнути"
+msgstr "Maximize"
+
+msgctxt "core"
+msgid "Розгорнути вікно"
+msgstr "Maximize window"
+
+msgctxt "core"
+msgid "Закрити"
+msgstr "Close"
+
+msgctxt "core"
+msgid "Закрити вікно"
+msgstr "Close window"
+
+msgctxt "core"
+msgid "Відкрити папку гри…"
+msgstr "Open game folder…"
+
+msgctxt "core"
+msgid "Відкрити файли або вставити JSON…"
+msgstr "Open files or paste JSON…"
+
+msgctxt "core"
+msgid "Зібрати…"
+msgstr "Build…"
+
+msgctxt "core"
+msgid "Запустити вибране"
+msgstr "Run the chosen"
+
+msgctxt "core"
+msgid "Розширення…"
+msgstr "Extensions…"
+
+msgctxt "core"
+msgid "Налаштування…"
+msgstr "Settings…"
+
+msgctxt "core"
+msgid "Підказка"
+msgstr "Tip"
+
+msgctxt "core"
+msgid "Розділи розширень"
+msgstr "Extension sections"
+
+msgctxt "core"
+msgid "Розширення"
+msgstr "Extensions"
+
+msgctxt "core"
+msgid "Встановлені"
+msgstr "Installed"
+
+msgctxt "core"
+msgid "Додати"
+msgstr "Add"
+
+msgctxt "core"
+msgid "Мова й підтримка"
+msgstr "Language and support"
+
+msgctxt "core"
+msgid "Мова інтерфейсу"
+msgstr "Interface language"
+
+msgctxt "core"
+msgid "Підтримувані ігри й формати"
+msgstr "Supported games and formats"
+
+msgctxt "core"
+msgid "Розширення:"
+msgstr "Extensions:"
+
+msgctxt "core"
+msgid "Мовні пакети встановлюються як розширення. Те, чого немає в пакеті, показується українською."
+msgstr "Language packs are installed as extensions. What is not in a pack is shown in Ukrainian."
+
+msgctxt "core"
+msgid "Українська"
+msgstr "Ukrainian"
+
+msgctxt "core"
+msgid "Додати мову…"
+msgstr "Add a language…"
+
+msgctxt "core"
+msgid "Для перекладачів"
+msgstr "For translators"
+
+msgctxt "core"
+msgid "Оберіть мову, пройдіться застосунком і збережіть шаблон: у ньому всі рядки, яких ще немає в пакеті. Його можна перекласти в Poedit, Weblate чи самому Transly."
+msgstr "Choose a language, go through the app and save the template: it holds every string that is not in the pack yet. It can be translated in Poedit, Weblate or in Transly itself."
+
+msgctxt "core"
+msgid "Рядків без перекладу: {1}"
+msgstr "Strings without a translation: {1}"
+
+msgctxt "core"
+msgid "Зберегти шаблон (.pot)"
+msgstr "Save template (.pot)"
+
+msgctxt "core"
+msgid "Готово"
+msgstr "Done"
+
+msgctxt "core"
+msgid "Розширення «Stub» встановлено"
+msgstr "Extension «Stub» installed"
+
+msgctxt "core"
+msgid "Рядків без перекладу: {n}"
+msgstr "Strings without a translation: {n}"
+
+msgctxt "core"
+msgid "Розширення додають підтримку інших ігор і форматів, мови інтерфейсу та довідку. Вбудовані можна вимкнути, але не видалити."
+msgstr "Extensions add support for other games and formats, interface languages and help. Built-in ones can be switched off but not removed."
+
+msgctxt "core"
+msgid "Ігри на RPG Maker MV і MZ: діалоги, вибори, бази даних, події мап, сцени, запуск гри на потрібній сцені, мовці, тексти з плагінів гри."
+msgstr "Games made with RPG Maker MV and MZ: dialogues, choices, databases, map events, scenes, running the game at the chosen scene, speakers, texts from the game's plugins."
+
+msgctxt "core"
+msgid "Увімкнено"
+msgstr "Enabled"
+
+msgctxt "core"
+msgid "Вбудоване"
+msgstr "Built-in"
+
+msgctxt "core"
+msgid "Рушій"
+msgstr "Engine"
+
+msgctxt "core"
+msgid "Формати"
+msgstr "Formats"
+
+msgctxt "core"
+msgid "Довідка"
+msgstr "Help"
+
+msgctxt "core"
+msgid "Докладніше"
+msgstr "Details"
+
+msgctxt "core"
+msgid "Увімкнути «{name}»"
+msgstr "Enable «{name}»"
+
+msgctxt "core"
+msgid "Текстові формати: gettext, CSV, JSON локалізації, Ren’Py"
+msgstr "Text formats: gettext, CSV, JSON locale files, Ren’Py"
+
+msgctxt "core"
+msgid "Файли перекладу й тексти ігор у відкритих форматах: .po/.pot, таблиці .csv/.tsv, JSON з рядками інтерфейсу (en.json…) і скрипти Ren’Py (.rpy)."
+msgstr "Translation files and game texts in open formats: .po/.pot, .csv/.tsv tables, JSON with interface strings (en.json…) and Ren’Py scripts (.rpy)."
+
+msgctxt "core"
+msgid "Мова"
+msgstr "Language"
+
+msgctxt "core"
+msgid "ТФ"
+msgstr "TF"
+
+msgctxt "core"
+msgid "Розширення — це папка або архів із файлом transly-plugin.json. Спершу ви побачите, що воно додає й чого просить: нічого не записується без вашої згоди."
+msgstr "An extension is a folder or an archive with a transly-plugin.json file. First you will see what it adds and what it asks for: nothing is written without your consent."
+
+msgctxt "core"
+msgid "Репозиторій"
+msgstr "Repository"
+
+msgctxt "core"
+msgid "Можна вказати версію й папку: автор/репозиторій@v1.2.0#папка. Без версії береться останній випуск."
+msgstr "You can give a version and a folder: author/repository@v1.2.0#folder. Without a version the latest release is used."
+
+msgctxt "core"
+msgid "Перевірити"
+msgstr "Check"
+
+msgctxt "core"
+msgid "За адресою"
+msgstr "By address"
+
+msgctxt "core"
+msgid "Адреса (https)"
+msgstr "Address (https)"
+
+msgctxt "core"
+msgid "З файлу"
+msgstr "From a file"
+
+msgctxt "core"
+msgid "Архів .zip чи .transly-plugin, або всі файли розширення разом."
+msgstr "A .zip or .transly-plugin archive, or all the files of the extension together."
+
+msgctxt "core"
+msgid "Вибрати файли…"
+msgstr "Choose files…"
+
+msgctxt "core"
+msgid "Пошук на GitHub"
+msgstr "Search on GitHub"
+
+msgctxt "core"
+msgid "Шукає репозиторії з темою transly-plugin."
+msgstr "Looks for repositories with the topic transly-plugin."
+
+msgctxt "core"
+msgid "Що шукати"
+msgstr "What to look for"
+
+msgctxt "core"
+msgid "Шукати"
+msgstr "Search"
+
+msgctxt "core"
+msgid "Можна вказати версію й папку: автор/репозиторій@v{1}#папка. Без версії береться останній випуск."
+msgstr "You can give a version and a folder: author/repository@v{1}#folder. Without a version the latest release is used."
+
+msgctxt "core"
+msgid "Ось що застосунок уміє відкривати зараз. Не знайшли свою гру? Додайте розширення для неї."
+msgstr "This is what the app can open now. Can't find your game? Add an extension for it."
+
+msgctxt "core"
+msgid "Ігрові рушії"
+msgstr "Game engines"
+
+msgctxt "core"
+msgid "Формати файлів"
+msgstr "File formats"
+
+msgctxt "core"
+msgid "JSON локалізації (en.json, strings.json…)"
+msgstr "JSON locale files (en.json, strings.json…)"
+
+msgctxt "core"
+msgid "Таблиця CSV/TSV (ключ, оригінал, переклад)"
+msgstr "CSV/TSV table (key, original, translation)"
+
+msgctxt "core"
+msgid "Додати розширення…"
+msgstr "Add an extension…"
+
+msgctxt "core"
+msgid "Увімкнено ·"
+msgstr "Enabled ·"
+
+msgctxt "core"
+msgid "Усі розширення"
+msgstr "All extensions"
+
+msgctxt "core"
+msgid "Ідентифікатор"
+msgstr "Identifier"
+
+msgctxt "core"
+msgid "Ліцензія"
+msgstr "License"
+
+msgctxt "core"
+msgid "Входить до застосунку"
+msgstr "Part of the app"
+
+msgctxt "core"
+msgid "Джерело"
+msgstr "Source"
+
+msgctxt "core"
+msgid "Не просить нічого"
+msgstr "Asks for nothing"
+
+msgctxt "core"
+msgid "Дозволи"
+msgstr "Permissions"
+
+msgctxt "core"
+msgid "Файли гри лежать у папці data (для MV часто www/data): Map001.json, System.json, Actors.json…"
+msgstr "The game files are in the data folder (for MV often www/data): Map001.json, System.json, Actors.json…"
+
+msgctxt "core"
+msgid "Можливості"
+msgstr "Abilities"
+
+msgctxt "core"
+msgid "код розширення"
+msgstr "extension code"
+
+msgctxt "core"
+msgid "Як відкрити гру на RPG Maker"
+msgstr "How to open an RPG Maker game"
+
+msgctxt "core"
+msgid "Оберіть папку гри (там, де лежить Game.exe), а не окремий файл.\n\n- Для MV файли лежать у `www/data`, для MZ — у `data`.\n- Файли JSON з розширених ігор зі змінами в плагінах можуть містити додаткові тексти: їх додають у «Налаштування → Гра і мови → Тексти плагінів».\n- Оригінальні файли гри не змінюються: збірка кладе переклад окремо або (на ПК) із копією оригіналів."
+msgstr "Choose the game folder (where Game.exe is), not a single file.\n\n- For MV the files are in `www/data`, for MZ in `data`.\n- JSON files of extended games with changes made by plugins may hold extra texts: add them in «Settings → Game and languages → Plugin texts».\n- The game's original files are not changed: the build puts the translation aside or (on PC) with a copy of the originals."
+
+msgctxt "core"
+msgid "Рядки для перекладу (.pot)"
+msgstr "Strings to translate (.pot)"
+
+msgctxt "core"
+msgid "‹ Усі розширення"
+msgstr "‹ All extensions"
+
+msgctxt "core"
+msgid "— Файли гри лежать у папці data (для MV часто www/data): Map{1}.json, System.json, Actors.json…"
+msgstr "— Game files are in the data folder (for MV often www/data): Map{1}.json, System.json, Actors.json…"
+
+msgctxt "core"
+msgid "Можливості: scenes, play-scene, speakers, plugin-texts, game-window, game-images, game-names"
+msgstr "Abilities: scenes, play-scene, speakers, plugin-texts, game-window, game-images, game-names"
+
+msgctxt "core"
+msgid "JSON · код розширення"
+msgstr "JSON · extension code"
+
+msgctxt "core"
+msgid "Оберіть папку гри (там, де лежить Game.exe), а не окремий файл."
+msgstr "Pick the game folder (where Game.exe is), not a single file."
+
+msgctxt "core"
+msgid "Для MV файли лежать у"
+msgstr "For MV the files are in"
+
+msgctxt "core"
+msgid ", для MZ — у"
+msgstr ", for MZ in"
+
+msgctxt "core"
+msgid "Файли JSON з розширених ігор зі змінами в плагінах можуть містити додаткові тексти: їх додають у «Налаштування → Гра і мови → Тексти плагінів»."
+msgstr "JSON files of extended games with changes made by plugins may hold extra texts: add them in «Settings → Game and languages → Plugin texts»."
+
+msgctxt "core"
+msgid "Оригінальні файли гри не змінюються: збірка кладе переклад окремо або (на ПК) із копією оригіналів."
+msgstr "The game's original files are not changed: the build puts the translation aside or (on PC) with a copy of the originals."
+
+msgctxt "core"
+msgid "Вигляд: порядок «За порядком»"
+msgstr "View: order «In order»"
+
+msgctxt "core"
+msgid "Вигляд"
+msgstr "View"
+
+msgctxt "core"
+msgid "Чернетка"
+msgstr "Draft"
+
+msgctxt "core"
+msgid "Тип рядка"
+msgstr "Kind of row"
+
+msgctxt "core"
+msgid "діалог"
+msgstr "dialogue"
+
+msgctxt "core"
+msgid "Хто говорить"
+msgstr "Who speaks"
+
+msgctxt "core"
+msgid "Ширина рядка в грі. Гра переносить рядки сама"
+msgstr "Row width in the game. The game wraps lines itself"
+
+msgctxt "core"
+msgid "рядок до {1} зн."
+msgstr "row up to {1} chars"
+
+msgctxt "core"
+msgid "Брак пов’язаного"
+msgstr "Nothing related"
+
+msgctxt "core"
+msgid "Зауваження відкладено"
+msgstr "Note postponed"
+
+msgctxt "core"
+msgid "Брак активності"
+msgstr "No activity"
+
+msgctxt "core"
+msgid "Брак коментарів"
+msgstr "No comments"
+
+msgctxt "core"
+msgid "Файл: Map{1} › рядок {2} з {3} · чернетка"
+msgstr "File: Map{1} › row {2} of {3} · draft"
+
+msgctxt "core"
+msgid "Map{1} · ви зупинилися на рядку {2}"
+msgstr "Map{1} · you stopped at row {2}"
+
+msgctxt "core"
+msgid "Файл: Map{1} › рядок {2} з {3} · надіслано"
+msgstr "File: Map{1} › row {2} of {3} · sent"
+
+msgctxt "core"
+msgid "Розділи налаштувань"
+msgstr "Settings sections"
+
+msgctxt "core"
+msgid "Загальні"
+msgstr "General"
+
+msgctxt "core"
+msgid "Гра і мови"
+msgstr "Game and languages"
+
+msgctxt "core"
+msgid "Пов’язане й пам’ять"
+msgstr "Related and memory"
+
+msgctxt "core"
+msgid "Імпорт глосарію"
+msgstr "Glossary import"
+
+msgctxt "core"
+msgid "Імпорт пам’яті перекладів"
+msgstr "Translation memory import"
+
+msgctxt "core"
+msgid "Перевірка"
+msgstr "Checks"
+
+msgctxt "core"
+msgid "Правила QA"
+msgstr "QA rules"
+
+msgctxt "core"
+msgid "Перенесення рядків"
+msgstr "Line wrapping"
+
+msgctxt "core"
+msgid "Синхронізація"
+msgstr "Sync"
+
+msgctxt "core"
+msgid "Власний сервер"
+msgstr "Own server"
+
+msgctxt "core"
+msgid "Застосунок"
+msgstr "App"
+
+msgctxt "core"
+msgid "Небезпечна зона"
+msgstr "Danger zone"
+
+msgctxt "core"
+msgid "Налаштування:"
+msgstr "Settings:"
+
+msgctxt "core"
+msgid "Радити, коли переклад відрізняється від оригіналу понад, % (від {1} до {2})"
+msgstr "Advise when the translation differs from the original by more than, % ({1} to {2})"
+
+msgctxt "core"
+msgid "Ваше ім’я в коментарях та історії"
+msgstr "Your name in comments and history"
+
+msgctxt "core"
+msgid "Інші мови додаються як розширення (мовні пакети)."
+msgstr "Other languages are added as extensions (language packs)."
+
+msgctxt "core"
+msgid "Не надсилати рядок із помилкою QA"
+msgstr "Do not send a row with a QA error"
+
+msgctxt "core"
+msgid "Автозаповнення однакових рядків після «Надіслати»"
+msgstr "Auto-fill identical rows after «Send»"
+
+msgctxt "core"
+msgid "Порожні зв’язані рядки заповнюються одразу після надсилання чернетками з позначкою «авто» (цю дію можна відмінити в повідомленні). Вичитаний рядок і рядок, який ви змінили пізніше, не перезаписуються без вашого вибору."
+msgstr "Empty related rows are filled right after sending, as drafts marked «auto» (you can undo this in the message). A proofread row and a row you changed later are not overwritten without your choice."
+
+msgctxt "core"
+msgid "Назва, значок і колір проєкту"
+msgstr "Project name, icon and colour"
+
+msgctxt "core"
+msgid "Тепер вони в окремому вікні налаштувань проєкту: колір береться з назви проєкту (назви папки гри), якщо його не вибрано вручну."
+msgstr "They now live in the separate project settings window: the colour comes from the project name (the game folder name) unless it is chosen by hand."
+
+msgctxt "core"
+msgid "Налаштування проєкту…"
+msgstr "Project settings…"
+
+msgctxt "core"
+msgid "Список рядків"
+msgstr "List of rows"
+
+msgctxt "core"
+msgid "Як показувати довгий список"
+msgstr "How to show a long list"
+
+msgctxt "core"
+msgid "Рядків на сторінці"
+msgstr "Rows per page"
+
+msgctxt "core"
+msgid "Пам’ятати місце (сторінку, рядок і прокрутку) для кожного файлу й набору фільтрів"
+msgstr "Remember the place (page, row and scroll) for every file and set of filters"
+
+msgctxt "core"
+msgid "Малюється лише одна сторінка, тож великі файли відкриваються швидше, а в кожного рядка є місце, до якого легко повернутися. Застосовується одразу."
+msgstr "Only one page is drawn, so large files open faster and every row has a place that is easy to come back to. Applied at once."
+
+msgctxt "core"
+msgid "Тексти плагінів"
+msgstr "Plugin texts"
+
+msgctxt "core"
+msgid "Частина ігор показує текст командами плагінів, а не вікнами повідомлень. Поки нічого не увімкнено."
+msgstr "Some games show text with plugin commands instead of message windows. Nothing is switched on yet."
+
+msgctxt "core"
+msgid "Обрати команди з текстом…"
+msgstr "Choose commands with text…"
+
+msgctxt "core"
+msgid "Мовці"
+msgstr "Speakers"
+
+msgctxt "core"
+msgid "Імен мовців у грі на RPG Maker MV немає. Їх можна визначити за обличчям персонажа й подією."
+msgstr "RPG Maker MV games have no speaker names. They can be worked out from the character's face and the event."
+
+msgctxt "core"
+msgid "Визначити мовців…"
+msgstr "Detect speakers…"
+
+msgctxt "core"
+msgid "Довідкові мови"
+msgstr "Reference languages"
+
+msgctxt "core"
+msgid "Додайте ту саму гру іншими мовами (наприклад, російською, польською): кожна з’явиться під оригіналом як підказка. Мов можна додати скільки завгодно. Рядки вирівнюються автоматично, навіть якщо в тій версії є додані чи прибрані репліки."
+msgstr "Add the same game in other languages (for example Russian or Polish): each appears under the original"
+
+msgctxt "core"
+msgid "Довідок ще немає"
+msgstr "No references yet"
+
+msgctxt "core"
+msgid "Код мови"
+msgstr "Language code"
+
+msgctxt "core"
+msgid "Додати мову: обрати папку довідкової версії…"
+msgstr "Add a language: choose the folder of the reference version…"
+
+msgctxt "core"
+msgid "З файлу: таблиця Google Sheets, збережена як веб-сторінка (.html), або .csv / .tsv із колонками «Оригінал», «Переклад {1}…», «Опис», «Розділ»."
+msgstr "From a file: a Google Sheets table saved as a web page (.html), or .csv / .tsv with the columns «Original», «Translation {1}…», «Description», «Section»."
+
+msgctxt "core"
+msgid "Перевіряти ці терміни в QA (для великого глосарію краще вимкнути: він лише підказує)"
+msgstr "Check these terms in QA (for a large glossary better switch off: it only suggests)"
+
+msgctxt "core"
+msgid "Імпортувати з файлу…"
+msgstr "Import from a file…"
+
+msgctxt "core"
+msgid "Або вставте рядки «англійською, табуляція, українською»:"
+msgstr "Or paste lines «English, tab, Ukrainian»:"
+
+msgctxt "core"
+msgid "Імпортувати вставлені терміни"
+msgstr "Import the pasted terms"
+
+msgctxt "core"
+msgid "Рядки «оригінал, табуляція, переклад»."
+msgstr "Lines «original, tab, translation»."
+
+msgctxt "core"
+msgid "Імпортувати пари"
+msgstr "Import pairs"
+
+msgctxt "core"
+msgid "Правила перевірки тексту (літери, пробіли, апостроф, коди)"
+msgstr "Text check rules (letters, spaces, apostrophe, codes)"
+
+msgctxt "core"
+msgid "Налаштувати…"
+msgstr "Configure…"
+
+msgctxt "core"
+msgid "Які перевірки ввімкнено й що вони вважають помилкою чи порадою. Довжина тексту не обмежується: застосунок лише радить."
+msgstr "Which checks are on and what they treat as an error or advice. The length of the text is not limited: the app only advises."
+
+msgctxt "core"
+msgid "Перенесення рядків у повідомленнях гри"
+msgstr "Line wrapping in game messages"
+
+msgctxt "core"
+msgid "Коли й за якою шириною рядки розбиваються, чи переносяться слова з дефісом, коли попереджати про четвертий рядок."
+msgstr "When and at what width lines are broken, whether hyphenated words are wrapped, when to warn about the fourth line."
+
+msgctxt "core"
+msgid "Спільна база цього артефакта працює на всіх ваших пристроях, де відкрито цей самий артефакт: ПК, телефон. Не потрібні ні файли, ні свій сервер, ні GitHub. Натисніть «Синхронізувати» тут, потім відкрийте артефакт на іншому пристрої й натисніть там те саме: приїдуть переклад, глосарій, пам’ять та оригінальні рядки гри."
+msgstr "The shared database of this artifact works on all your devices where this same artifact is open: PC, phone…"
+
+msgctxt "core"
+msgid "Автоматично"
+msgstr "Automatically"
+
+msgctxt "core"
+msgid "Синхронізувати через Claude зараз"
+msgstr "Sync through Claude now"
+
+msgctxt "core"
+msgid "Ще не синхронізовано"
+msgstr "Not synced yet"
+
+msgctxt "core"
+msgid "Токен лишається тільки у цьому браузері"
+msgstr "The token stays only in this browser"
+
+msgctxt "core"
+msgid "Дайте йому доступ лише до репозиторію з перекладом (право «Contents: Read and write»). Він не потрапляє у файл проєкту."
+msgstr "Give it access only to the repository with the translation («Contents: Read and write» permission). It does not get into the project file."
+
+msgctxt "core"
+msgid "Переклад зберігається у вашому репозиторії GitHub (краще приватному) звичайними файлами, а історія комітів показує, що й коли змінилося. Створіть репозиторій із файлом README, потім токен: GitHub → Settings → Developer settings → Fine-grained tokens."
+msgstr "The translation is kept in your GitHub repository (better a private one) as ordinary files, and the commit history shows…"
+
+msgctxt "core"
+msgid "Репозиторій (власник/назва)"
+msgstr "Repository (owner/name)"
+
+msgctxt "core"
+msgid "Токен доступу"
+msgstr "Access token"
+
+msgctxt "core"
+msgid "Гілка (необов’язково)"
+msgstr "Branch (optional)"
+
+msgctxt "core"
+msgid "Папка в репозиторії (необов’язково)"
+msgstr "Folder in the repository (optional)"
+
+msgctxt "core"
+msgid "Зберігати в репозиторії оригінальні рядки гри (лише для приватного; без них пристрій без гри, наприклад телефон, не покаже оригінал)"
+msgstr "Keep the game's original rows in the repository (private only; without them a device without the game, such as a phone, will not show the original)"
+
+msgctxt "core"
+msgid "Додатково"
+msgstr "More"
+
+msgctxt "core"
+msgid "Адреса API (для GitHub Enterprise)"
+msgstr "API address (for GitHub Enterprise)"
+
+msgctxt "core"
+msgid "Синхронізувати з GitHub зараз"
+msgstr "Sync with GitHub now"
+
+msgctxt "core"
+msgid "Якщо пише, що немає з’єднання, а інтернет є: сторінка, у якій відкрито застосунок, може забороняти запити до GitHub (так працює вбудований перегляд). Користуйтеся застосунком як сайтом або настільною версією."
+msgstr "If it says there is no connection while the internet works: the page the app is open in may forbid requests to GitHub (the built-in viewer does). Use the app as a site or the desktop version."
+
+msgctxt "core"
+msgid "Для адреси в інтернеті потрібен https"
+msgstr "An address on the internet needs https"
+
+msgctxt "core"
+msgid "Дані шифруються паролем на пристроях: сервер лише передає їх і забуває. Адреса в домашній мережі може бути й http."
+msgstr "Data is encrypted with a password on the devices: the server only relays it and forgets it. An address in a home network may also be http."
+
+msgctxt "core"
+msgid "Через ваш власний проміжний сервер ("
+msgstr "Through your own relay server ("
+
+msgctxt "core"
+msgid "). Без чужих хмар."
+msgstr "). No third-party clouds."
+
+msgctxt "core"
+msgid "Адреса сервера"
+msgstr "Server address"
+
+msgctxt "core"
+msgid "Пароль синхронізації (однаковий на всіх пристроях)"
+msgstr "Sync password (the same on all devices)"
+
+msgctxt "core"
+msgid "Синхронізувати зараз"
+msgstr "Sync now"
+
+msgctxt "core"
+msgid "Файл містить переклад, глосарій, пам’ять і оригінальні рядки, без файлів гри. Імпорт зливає зміни по рядках: лишається новіша правка."
+msgstr "The file holds the translation, glossary, memory and the original rows, without the game files. Import merges changes row by row: the newer edit stays."
+
+msgctxt "core"
+msgid "Зберегти проєкт у файл"
+msgstr "Save the project to a file"
+
+msgctxt "core"
+msgid "Застосунок може сам знаходити нову збірку в релізах приватного репозиторію. Потрібен токен лише для читання: GitHub → Settings → Developer settings → Fine-grained tokens → доступ до репозиторію"
+msgstr "The app can find a new build in the releases of a private repository by itself. It needs a read-only token: GitHub → Settings → Developer settings → Fine-grained tokens → access to the repository"
+
+msgctxt "core"
+msgid ", право «Contents: Read-only». Токен лишається на цьому пристрої."
+msgstr ", «Contents: Read-only» permission. The token stays on this device."
+
+msgctxt "core"
+msgid "Репозиторій зі збірками"
+msgstr "Repository with builds"
+
+msgctxt "core"
+msgid "Токен (лише читання)"
+msgstr "Token (read only)"
+
+msgctxt "core"
+msgid "Шукати оновлення під час запуску"
+msgstr "Look for updates at start"
+
+msgctxt "core"
+msgid "Перевірити оновлення зараз"
+msgstr "Check for updates now"
+
+msgctxt "core"
+msgid "Версія збірки: локальна"
+msgstr "Build version: local"
+
+msgctxt "core"
+msgid "Скинути проєкт"
+msgstr "Reset the project"
+
+msgctxt "core"
+msgid "Видаляє весь переклад, глосарій та імпортовану пам’ять у цьому браузері. Файли гри не змінюються."
+msgstr "Deletes the whole translation, glossary and imported memory in this browser. The game files are not changed."
+
+msgctxt "core"
+msgid "Скинути проєкт…"
+msgstr "Reset the project…"
+
+msgctxt "core"
+msgid "Є незастосовані зміни"
+msgstr "There are unapplied changes"
+
+msgctxt "core"
+msgid "Застосувати"
+msgstr "Apply"
+
+msgctxt "core"
+msgid "Наступний рядок без перекладу"
+msgstr "Next untranslated row"
+
+msgctxt "core"
+msgid "Наступна помилка QA"
+msgstr "Next QA error"
+
+msgctxt "core"
+msgid "Наступна порада"
+msgstr "Next advice"
+
+msgctxt "core"
+msgid "Наступний на вичитку"
+msgstr "Next to proofread"
+
+msgctxt "core"
+msgid "Наступний зі зміненим оригіналом"
+msgstr "Next with a changed original"
+
+msgctxt "core"
+msgid "Пошук скрізь…"
+msgstr "Search everywhere…"
+
+msgctxt "core"
+msgid "Порад немає"
+msgstr "No advice"
+
+msgctxt "core"
+msgid "На вичитку: {1} з {2}"
+msgstr "To proofread: {1} of {2}"
+
+msgctxt "core"
+msgid "Рядків зі зміненим оригіналом немає"
+msgstr "No rows with a changed original"
+
+msgctxt "core"
+msgid "{1} результат"
+msgid_plural "{1} результат"
+msgstr[0] "{1} result"
+msgstr[1] "{1} results"
+
+msgctxt "core"
+msgid "Знайти й замінити…"
+msgstr "Find and replace…"
+
+msgctxt "core"
+msgid "Оновити за глосарієм…"
+msgstr "Update by glossary…"
+
+msgctxt "core"
+msgid "Автозаповнення…"
+msgstr "Autofill…"
+
+msgctxt "core"
+msgid "Злити гілку…"
+msgstr "Merge branch…"
+
+msgctxt "core"
+msgid "Активність…"
+msgstr "Activity…"
+
+msgctxt "core"
+msgid "Тексти плагінів…"
+msgstr "Plugin texts…"
+
+msgctxt "core"
+msgid "Перенесення рядків…"
+msgstr "Move rows…"
+
+msgctxt "core"
+msgid "Правила QA…"
+msgstr "QA rules…"
+
+msgctxt "core"
+msgid "Знайти й замінити в перекладах"
+msgstr "Find and replace in translations"
+
+msgctxt "core"
+msgid "Знайти"
+msgstr "Find"
+
+msgctxt "core"
+msgid "Замінити на"
+msgstr "Replace with"
+
+msgctxt "core"
+msgid "Лише ціле слово"
+msgstr "Whole word only"
+
+msgctxt "core"
+msgid "Враховувати регістр"
+msgstr "Match case"
+
+msgctxt "core"
+msgid "Змінити й вичитані (вони стануть чернетками)"
+msgstr "Change proofread rows too (they become drafts)"
+
+msgctxt "core"
+msgid "Введіть, що шукати"
+msgstr "Enter what to look for"
+
+msgctxt "core"
+msgid "Замінити вибрані"
+msgstr "Replace selected"
+
+msgctxt "core"
+msgid "Оновити за глосарієм"
+msgstr "Update by glossary"
+
+msgctxt "core"
+msgid "Оберіть термін і напишіть, яким був його переклад раніше (наприклад «меч»). Знайдуться всі рядки зі старою формою в будь-якому відмінку, і ви побачите, чим їх замінити."
+msgstr "Choose a term and write how it was translated before (for example “sword”). Every row with the old form in any case will be found, and you will see what to replace it with."
+
+msgctxt "core"
+msgid "Термін"
+msgstr "Term"
+
+msgctxt "core"
+msgid "Старий переклад"
+msgstr "Old translation"
+
+msgctxt "core"
+msgid "Автозаповнення"
+msgstr "Autofill"
+
+msgctxt "core"
+msgid "Застосунок заповнює порожні рядки сам, але завжди чернетками з позначкою «авто»: їх варто переглянути, а в «Активності» можна скасувати. Джерела: однакові оригінали (вони заповнюються й після «Надіслати») і слова з уже перекладених рядків."
+msgstr "The app fills empty rows on its own, but always as drafts marked “auto”: they are worth reviewing, and you can undo them in “Activity”. Sources: identical originals (they are also filled after “Send”) and words from rows that are already translated."
+
+msgctxt "core"
+msgid "Однакові оригінали"
+msgstr "Identical originals"
+
+msgctxt "core"
+msgid "Усе узгоджено"
+msgstr "Everything is consistent"
+
+msgctxt "core"
+msgid "Переглянути…"
+msgstr "Review…"
+
+msgctxt "core"
+msgid "За словами"
+msgstr "By words"
+
+msgctxt "core"
+msgid "Короткі рядки без перекладу, у яких усі слова вже зустрічалися в перекладених рядках, збираються по словах."
+msgstr "Short untranslated rows whose words have all appeared in translated rows are put together word by word."
+
+msgctxt "core"
+msgid "Поки нічого не вдається скласти: перекладіть більше рядків або додайте терміни"
+msgstr "Nothing can be put together yet: translate more rows or add terms"
+
+msgctxt "core"
+msgid "Майже готові: не вистачає слів"
+msgstr "Almost ready: some words are missing"
+
+msgctxt "core"
+msgid "Слово неоднозначне, коли в перекладених рядках воно перекладене по-різному: оберіть варіант, і він стане терміном."
+msgstr "A word is ambiguous when it was translated differently in the translated rows: choose a variant and it becomes a term."
+
+msgctxt "core"
+msgid "Зняти всі"
+msgstr "Clear all"
+
+msgctxt "core"
+msgid "Вписати вибрані"
+msgstr "Insert selected"
+
+msgctxt "core"
+msgid "Масові дії (надсилання, автозаповнення, заміни, перенесення рядків, очищення) можна скасувати, поки рядки не змінено, і потім повторити. Якщо дія була на іншому пристрої, спершу синхронізуйте проєкт."
+msgstr "Bulk actions (sending, autofill, replacements, moving rows, clean-up) can be undone while the rows have not been changed, and then redone. If the action was on another device, sync the project first."
+
+msgctxt "core"
+msgid "Ви надіслали {1} рядок"
+msgid_plural "Ви надіслали {1} рядок"
+msgstr[0] "You sent {1} row"
+msgstr[1] "You sent {1} rows"
+
+msgctxt "core"
+msgid "{1}:{2} · Запису про надсилання немає, знайдено за часом зміни"
+msgstr "{1}:{2} · There is no record of sending, found by modification time"
+
+msgctxt "core"
+msgid "Скасувати відправлення"
+msgstr "Undo sending"
+
+msgctxt "core"
+msgid "Показати рядки"
+msgstr "Show rows"
+
+msgctxt "core"
+msgid "Деякі ігри показують текст не у вікнах повідомлень, а командами плагінів (спливаючі репліки, пункти меню). Позначте команди, чий текст бачить гравець: вони з’являться в перекладі як окремі рядки. Назва команди та числа в ній лишаються як були."
+msgstr "Some games show text not in message windows but with plugin commands (pop-up lines, menu items). Mark the commands whose text the player sees: they will appear in the translation as separate rows. The command name and the numbers in it stay as they were."
+
+msgctxt "core"
+msgid "Файлів гри зараз немає (проєкт відкрито зі збереженого файлу). Команди можна вибрати на комп’ютері, коли відкрито папку гри."
+msgstr "There are no game files now (the project was opened from a saved file). Commands can be chosen on the computer when the game folder is open."
+
+msgctxt "core"
+msgid "● Збережено о {1}:{2}:{3}"
+msgstr "● Saved at {1}:{2}:{3}"
+
+msgctxt "core"
+msgid "Вікно повідомлення в грі не переносить рядки саме. Тут обираєте, хто це робить і як. Зміни застосовуються одразу; довжина перекладу ніколи не обмежується, це лише рекомендації."
+msgstr "The game's message window does not wrap lines by itself. Here you choose who does it and how. Changes apply at once; the length of a translation is never limited, these are only recommendations."
+
+msgctxt "core"
+msgid "Коли переносити"
+msgstr "When to wrap"
+
+msgctxt "core"
+msgid "Під час збірки й запуску гри"
+msgstr "While building and launching the game"
+
+msgctxt "core"
+msgid "(рекомендовано)"
+msgstr "(recommended)"
+
+msgctxt "core"
+msgid "Текст у проєкті лишається без розривів, розриви ставляться тільки у файлах гри."
+msgstr "The text in the project stays without breaks; breaks are put only into the game files."
+
+msgctxt "core"
+msgid "У тексті, коли надсилаю рядок"
+msgstr "In the text, when I send a row"
+
+msgctxt "core"
+msgid "Розриви стають частиною перекладу; пам’ять перекладів і пошук їх не помічають."
+msgstr "Breaks become part of the translation; translation memory and search do not notice them."
+
+msgctxt "core"
+msgid "Не переносити"
+msgstr "Do not wrap"
+
+msgctxt "core"
+msgid "Лише попереджати про задовгі рядки; ставите розриви самі."
+msgstr "Only warn about overlong rows; you put the breaks yourself."
+
+msgctxt "core"
+msgid "Ширина рядка"
+msgstr "Row width"
+
+msgctxt "core"
+msgid "Рахувати в"
+msgstr "Count in"
+
+msgctxt "core"
+msgid "Ширина"
+msgstr "Width"
+
+msgctxt "core"
+msgid "Символів у рядку"
+msgstr "Characters per row"
+
+msgctxt "core"
+msgid "Ширина вікна гри, px"
+msgstr "Game window width, px"
+
+msgctxt "core"
+msgid "Шрифт гри, px"
+msgstr "Game font, px"
+
+msgctxt "core"
+msgid "Не обмежувати ширину"
+msgstr "Do not limit the width"
+
+msgctxt "core"
+msgid "Символи однакові на всіх пристроях. Пікселі враховують справжню ширину літер, але шрифт гри невідомий, тож вимір приблизний. Поруч із портретом персонажа текст вужчий, це враховується."
+msgstr "Characters are the same on all devices. Pixels take the real width of letters into account, but the game font is unknown, so the measure is approximate. Next to a character portrait the text is narrower, and this is accounted for."
+
+msgctxt "core"
+msgid "Переніс слів"
+msgstr "Word hyphenation"
+
+msgctxt "core"
+msgid "Слово по складах, з дефісом"
+msgstr "Word by syllables, with a hyphen"
+
+msgctxt "core"
+msgid "Знак переносу"
+msgstr "Hyphenation mark"
+
+msgctxt "core"
+msgid "Літер перед переносом, не менше"
+msgstr "Letters before the break, at least"
+
+msgctxt "core"
+msgid "Літер після переносу, не менше"
+msgstr "Letters after the break, at least"
+
+msgctxt "core"
+msgid "Слова з латинкою, цифрами чи керівними кодами всередині, а також слова з дефісом не розбиваються. «Лише коли треба» (рекомендовано) означає: слово довше за рядок або рядок виходить надто коротким."
+msgstr "Words with Latin letters, digits or control codes inside, and words with a hyphen are not split. “Only when needed” (recommended) means: the word is longer than the row or the row turns out too short."
+
+msgctxt "core"
+msgid "Розриви, які поставили ви"
+msgstr "Breaks you put yourself"
+
+msgctxt "core"
+msgid "Зберігати, переносити лише задовгі повідомлення"
+msgstr "Keep them, wrap only overlong messages"
+
+msgctxt "core"
+msgid "Охайно розбитий текст не чіпається."
+msgstr "Neatly split text is not touched."
+
+msgctxt "core"
+msgid "Збирати текст заново завжди"
+msgstr "Always rebuild the text"
+
+msgctxt "core"
+msgid "Старі розриви ігноруються."
+msgstr "Old breaks are ignored."
+
+msgctxt "core"
+msgid "Попереджати, коли рядків у повідомленні більше, ніж"
+msgstr "Warn when a message has more rows than"
+
+msgctxt "core"
+msgid "Вікно показує {1} рядки; довше повідомлення гра покаже на кількох сторінках. Нічого не обрізається, це лише попередження. {2} вимикає його."
+msgstr "The window shows {1} rows; a longer message will be shown by the game on several pages. Nothing is cut off, this is only a warning. {2} turns it off."
+
+msgctxt "core"
+msgid "Приклад"
+msgstr "Example"
+
+msgctxt "core"
+msgid "Текст для перевірки"
+msgstr "Text to check"
+
+msgctxt "core"
+msgid "Поруч портрет персонажа"
+msgstr "Character portrait next to it"
+
+msgctxt "core"
+msgid "Так гра покаже цей текст; у проєкті він лишається без розривів. · Рядків: {1} · ширина до {2} символів."
+msgstr "This is how the game will show this text; in the project it stays without breaks. · Rows: {1} · width up to {2} characters."
+
+msgctxt "core"
+msgid "Перевірити файл"
+msgstr "Check the file"
+
+msgctxt "core"
+msgid "Розриви стануть частиною тексту цього файлу; це можна скасувати"
+msgstr "Breaks will become part of this file's text; this can be undone"
+
+msgctxt "core"
+msgid "Записати розриви в текст файлу"
+msgstr "Write the breaks into the file text"
+
+msgctxt "core"
+msgid "Правила дивляться на форму тексту: літери не з того алфавіту, невидимі символи, пробіли, апостроф, пошкоджені керівні коди. «Порада» нічого не блокує, а «Помилка» не дає надіслати й зібрати рядок, доки його не виправлено. Зміни застосовуються одразу."
+msgstr "The rules look at the form of the text: letters from the wrong alphabet, invisible characters, spaces, apostrophe, damaged control codes. “Advice” blocks nothing, and “Error” does not let you send or build a row until it is fixed. Changes apply at once."
+
+msgctxt "core"
+msgid "Лічильники: у файлі «Map{1}»."
+msgstr "Counters: in file “Map{1}”."
+
+msgctxt "core"
+msgid "Пошкоджений керівний код"
+msgstr "Damaged control code"
+
+msgctxt "core"
+msgid "Керівний код гри (\\C[{1}], \\N[{2}]) написано з помилкою: кирилична літера замість латинської, зайвий пробіл, немає дужки чи не число. Гра покаже його текстом або зламає рядок."
+msgstr "A game control code (\\C[{1}], \\N[{2}]) is written with a mistake: a Cyrillic letter instead of a Latin one, an extra space, a missing bracket or a non-number. The game will show it as text or break the row."
+
+msgctxt "core"
+msgid "Рядків у відкритому файлі, де правило щось знайшло"
+msgstr "Rows in the open file where the rule found something"
+
+msgctxt "core"
+msgid "немає"
+msgstr "none"
+
+msgctxt "core"
+msgid "Латинські літери в українському слові"
+msgstr "Latin letters in a Ukrainian word"
+
+msgctxt "core"
+msgid "Латинська літера, схожа на кириличну (a, c, e, i, o, p, x), потрапила всередину українського слова, або навпаки. Текст виглядає правильно, але пошук, переноси й перевірка слів її не впізнають."
+msgstr "A Latin letter that looks like a Cyrillic one (a, c, e, i, o, p, x) got inside a Ukrainian word, or the other way round. The text looks right, but search, hyphenation and word checks do not recognise it."
+
+msgctxt "core"
+msgid "Літери, яких немає в українській"
+msgstr "Letters that do not exist in Ukrainian"
+
+msgctxt "core"
+msgid "Літери ы, э, ъ, ё (та інша кирилиця поза українським алфавітом) потрапили в текст, найчастіше з російської. Українською: ы → и, э → е, ъ → ’, ё → е або йо."
+msgstr "The letters ы, э, ъ, ё (and other Cyrillic outside the Ukrainian alphabet) got into the text, most often from Russian. In Ukrainian: ы → и, э → е, ъ → ’, ё → е or йо."
+
+msgctxt "core"
+msgid "Літера з двох символів"
+msgstr "A letter made of two characters"
+
+msgctxt "core"
+msgid "Літери й та ї записано розкладеними (и + знак, і + дві крапки). На екрані вони схожі на звичайні, але пошук і порівняння їх не впізнають."
+msgstr "The letters й and ї are written decomposed (и + mark, і + two dots). On screen they look like normal ones, but search and comparison do not recognise them."
+
+msgctxt "core"
+msgid "Невидимі символи"
+msgstr "Invisible characters"
+
+msgctxt "core"
+msgid "У тексті є символи, яких не видно: нульової ширини, м’який перенос, нестандартні пробіли. Вони ламають перенесення рядків і пошук, а в деяких шрифтах показуються квадратиками."
+msgstr "The text has characters that cannot be seen: zero-width, soft hyphen, non-standard spaces. They break line wrapping and search, and in some fonts show up as little squares."
+
+msgctxt "core"
+msgid "Пробіли на краях"
+msgstr "Spaces at the edges"
+
+msgctxt "core"
+msgid "На початку чи в кінці перекладу пробілів або переходів на новий рядок не стільки, скільки в оригіналі. У назвах, термінах і текстах плагінів гра склеює рядок з іншим текстом, тому зайвий або загублений пробіл видно на екрані. У репліках діалогів лише зайві пробіли й переходи на новий рядок: оригінал часто має хвостові пробіли, які нічого не значать."
+msgstr "At the start or end of the translation there are not as many spaces or line breaks as in the original. In names, terms and plugin texts the game glues the row to other text, so an extra or lost space is visible on screen. In dialogue lines only extra spaces and line breaks count: the original often has trailing spaces that mean nothing."
+
+msgctxt "core"
+msgid "Подвійні пробіли"
+msgstr "Double spaces"
+
+msgctxt "core"
+msgid "Між словами два й більше пробілів, а в оригіналі їх нема. Найчастіше це випадковий зайвий пробіл."
+msgstr "Two or more spaces between words while the original has none. Most often it is an accidental extra space."
+
+msgctxt "core"
+msgid "Апостроф"
+msgstr "Apostrophe"
+
+msgctxt "core"
+msgid "Між двома українськими літерами стоїть не апостроф (наприклад, ` ´ ‘ або лапка). Правильний апостроф: ’ (U+{1}), ʼ (U+{2}BC) або ' з клавіатури; один знак на весь проєкт обирається в налаштуваннях правил."
+msgstr "Between two Ukrainian letters there is not an apostrophe (for example ` ´ ‘ or a quote mark). The right apostrophe: ’ (U+{1}), ʼ (U+{2}BC) or ' from the keyboard; one mark for the whole project is chosen in the rule settings."
+
+msgctxt "core"
+msgid "Латинські слова, які можна лишати в українському тексті"
+msgstr "Latin words that may stay in Ukrainian text"
+
+msgctxt "core"
+msgid "По одному слову на рядок. Слова з оригіналу, HP, MP, NPC, одиниці виміру й римські цифри дозволені завжди."
+msgstr "One word per line. Words from the original, HP, MP, NPC, units of measure and Roman numerals are always allowed."
+
+msgctxt "core"
+msgid "Апостроф у проєкті"
+msgstr "Apostrophe in the project"
+
+msgctxt "core"
+msgid "Поточний проєкт"
+msgstr "Current project"
+
+msgctxt "core"
+msgid "Папку гри не вибрано"
+msgstr "No game folder chosen"
+
+msgctxt "core"
+msgid "Перекладено {1} з {2}"
+msgstr "Translated {1} of {2}"
+
+msgctxt "core"
+msgid "Налаштування застосунку…"
+msgstr "App settings…"
+
+msgctxt "core"
+msgid "основна · {1} рядок"
+msgid_plural "основна · {1} рядок"
+msgstr[0] "main · {1} row"
+msgstr[1] "main · {1} rows"
+
+msgctxt "core"
+msgid "＋ Нова гілка від «main»…"
+msgstr "＋ New branch from “main”…"
+
+msgctxt "core"
+msgid "⇄ Злити гілку в «main»…"
+msgstr "⇄ Merge branch into “main”…"
+
+msgctxt "core"
+msgid "Видалити гілку…"
+msgstr "Delete branch…"
+
+msgctxt "core"
+msgid "Остання збірка"
+msgstr "Last build"
+
+msgctxt "core"
+msgid "Збірки ще не було"
+msgstr "No build yet"
+
+msgctxt "core"
+msgid "Тут буде видно, чи зібраний переклад актуальний"
+msgstr "Here you will see whether the built translation is up to date"
+
+msgctxt "core"
+msgid "ZIP, папка або запис у файли гри"
+msgstr "ZIP, folder or writing into the game files"
+
+msgctxt "core"
+msgid "Збірка (гра)"
+msgstr "Build (game)"
+
+msgctxt "core"
+msgid "Лише в застосунку на ПК"
+msgstr "Only in the PC app"
+
+msgctxt "core"
+msgid "Поточна сцена"
+msgstr "Current scene"
+
+msgctxt "core"
+msgid "Налаштувати збірку…"
+msgstr "Configure the build…"
+
+msgctxt "core"
+msgid "Потребує уваги"
+msgstr "Needs attention"
+
+msgctxt "core"
+msgid "{1} рядок чекає вичитки"
+msgid_plural "{1} рядок чекає вичитки"
+msgstr[0] "{1} row waits for proofreading"
+msgstr[1] "{1} rows wait for proofreading"
+
+msgctxt "core"
+msgid "надіслано, ще не вичитано"
+msgstr "sent, not proofread yet"
+
+msgctxt "core"
+msgid "{1} чернетка не надіслано"
+msgid_plural "{1} чернетка не надіслано"
+msgstr[0] "{1} draft not sent"
+msgstr[1] "{1} drafts not sent"
+
+msgctxt "core"
+msgid "показати всі"
+msgstr "show all"
+
+msgctxt "core"
+msgid "Розділи налаштувань проєкту"
+msgstr "Project settings sections"
+
+msgctxt "core"
+msgid "Назва й вигляд"
+msgstr "Name and look"
+
+msgctxt "core"
+msgid "Гілки"
+msgstr "Branches"
+
+msgctxt "core"
+msgid "Підключення"
+msgstr "Connection"
+
+msgctxt "core"
+msgid "Мови"
+msgstr "Languages"
+
+msgctxt "core"
+msgid "Обережно"
+msgstr "Careful"
+
+msgctxt "core"
+msgid "Налаштування проєкту:"
+msgstr "Project settings:"
+
+msgctxt "core"
+msgid "Так проєкт виглядає в шапці й у меню"
+msgstr "This is how the project looks in the header and in the menu"
+
+msgctxt "core"
+msgid "Назва проєкту"
+msgstr "Project name"
+
+msgctxt "core"
+msgid "Звідки береться назва"
+msgstr "Where the name comes from"
+
+msgctxt "core"
+msgid "З папки гри"
+msgstr "From the game folder"
+
+msgctxt "core"
+msgid "З назви в грі"
+msgstr "From the name in the game"
+
+msgctxt "core"
+msgid "гра не називає себе"
+msgstr "the game does not name itself"
+
+msgctxt "core"
+msgid "Своя назва"
+msgstr "Own name"
+
+msgctxt "core"
+msgid "Назва лише підпис: переклад, злиття й синхронізація від неї не залежать, тож її можна міняти будь-коли."
+msgstr "The name is only a label: translation, merging and sync do not depend on it, so you can change it any time."
+
+msgctxt "core"
+msgid "Значок і колір"
+msgstr "Icon and colour"
+
+msgctxt "core"
+msgid "Літери значка ({1}–{2})"
+msgstr "Icon letters ({1}–{2})"
+
+msgctxt "core"
+msgid "Порожньо: перші літери назви (DG)."
+msgstr "Empty: the first letters of the name (DG)."
+
+msgctxt "core"
+msgid "Колір акценту"
+msgstr "Accent colour"
+
+msgctxt "core"
+msgid "Колір береться з назви проєкту: {1}°"
+msgstr "The colour comes from the project name: {1}°"
+
+msgctxt "core"
+msgid "Як за назвою"
+msgstr "As by the name"
+
+msgctxt "core"
+msgid "Готові кольори"
+msgstr "Ready colours"
+
+msgctxt "core"
+msgid "Відтінок {1}°"
+msgstr "Hue {1}°"
+
+msgctxt "core"
+msgid "Колір береться з холодної частини кола, щоб його не сплутати зі статусами. Він міняється в усьому застосунку одразу і лишається, коли ви збережете."
+msgstr "The colour is taken from the cool part of the wheel so that it is not confused with statuses. It changes across the whole app at once and stays when you save."
+
+msgctxt "core"
+msgid "＋ Нова гілка…"
+msgstr "＋ New branch…"
+
+msgctxt "core"
+msgid "⇄ Злити гілку…"
+msgstr "⇄ Merge branch…"
+
+msgctxt "core"
+msgid "Папка гри цього проєкту"
+msgstr "Game folder of this project"
+
+msgctxt "core"
+msgid "Змінити…"
+msgstr "Change…"
+
+msgctxt "core"
+msgid "Забути"
+msgstr "Forget"
+
+msgctxt "core"
+msgid "Папка запам’ятовується для проєкту й відновлюється під час запуску. Її назва стає назвою проєкту, поки ви не оберете іншу."
+msgstr "The folder is remembered for the project and restored at launch. Its name becomes the project name until you choose another."
+
+msgctxt "core"
+msgid "Репозиторій, токен, гілка й папка в репозиторії, і синхронізація. Вони не залежать від самого проєкту: той самий токен годиться для кількох проєктів."
+msgstr "Repository, token, branch and folder in the repository, and sync. They do not depend on the project itself: the same token works for several projects."
+
+msgctxt "core"
+msgid "Налаштування GitHub…"
+msgstr "GitHub settings…"
+
+msgctxt "core"
+msgid "Тексти плагінів, мовці та довідкові мови (та сама гра іншими мовами)."
+msgstr "Plugin texts, speakers and reference languages (the same game in other languages)."
+
+msgctxt "core"
+msgid "Гра і мови…"
+msgstr "Game and languages…"
+
+msgctxt "core"
+msgid "Видаляє весь переклад, глосарій та імпортовану пам’ять у цьому браузері. Назва, колір і папка гри лишаються. Відновити неможливо: спершу збережіть проєкт у файл."
+msgstr "Deletes the whole translation, glossary and imported memory in this browser. The name, colour and game folder stay. It cannot be restored: save the project to a file first."
+
+msgctxt "core"
+msgid "Гілка"
+msgstr "Branch"
+
+msgctxt "core"
+msgid "Від"
+msgstr "From"
+
+msgctxt "core"
+msgid "Рядків"
+msgstr "Rows"
+
+msgctxt "core"
+msgid "Дії"
+msgstr "Actions"
+
+msgctxt "core"
+msgid "основна"
+msgstr "main"
+
+msgctxt "core"
+msgid "{1} рядок"
+msgid_plural "{1} рядок"
+msgstr[0] "{1} row"
+msgstr[1] "{1} rows"
+
+msgctxt "core"
+msgid "поточна ✓"
+msgstr "current ✓"
+
+msgctxt "core"
+msgid "Надіслано"
+msgstr "Sent"
+
+msgctxt "core"
+msgid "Файли й рядки"
+msgstr "Files and rows"
+
+msgctxt "core"
+msgid "Файли й сцени"
+msgstr "Files and scenes"
+
+msgctxt "core"
+msgid "У цьому файлі немає сцен"
+msgstr "There are no scenes in this file"
+
+msgctxt "core"
+msgid "Сцени є лише в картах, спільних подіях і боях: у базі даних рядки не складаються в сцени."
+msgstr "Scenes exist only in maps, common events and battles: in the database the rows do not form scenes."
+
+msgctxt "core"
+msgid "Слова"
+msgstr "Words"
+
+msgctxt "core"
+msgid "Конструкції"
+msgstr "Constructions"
+
+msgctxt "core"
+msgid "Пам’ять"
+msgstr "Memory"
+
+msgctxt "core"
+msgid "Розбіжності"
+msgstr "Mismatches"
+
+msgctxt "core"
+msgid "{1} запис"
+msgid_plural "{1} запис"
+msgstr[0] "{1} entry"
+msgstr[1] "{1} entries"
+
+msgctxt "core"
+msgid "ключ"
+msgstr "key"
+
+msgctxt "core"
+msgid "слово"
+msgstr "word"
+
+msgctxt "core"
+msgid "{1} рядок · усюди як у записі"
+msgid_plural "{1} рядок · усюди як у записі"
+msgstr[0] "{1} row · the same as in the entry everywhere"
+msgstr[1] "{1} rows · the same as in the entry everywhere"
+
+msgctxt "core"
+msgid "Перевіряється під час QA"
+msgstr "Checked during QA"
+
+msgctxt "core"
+msgid "Змінити"
+msgstr "Edit"
+
+msgctxt "core"
+msgid "Видалити"
+msgstr "Delete"
+
+msgctxt "core"
+msgid "Без перекладу"
+msgstr "Untranslated"
+
+msgctxt "core"
+msgid "Чернетки"
+msgstr "Drafts"
+
+msgctxt "core"
+msgid "Авто"
+msgstr "Auto"
+
+msgctxt "core"
+msgid "Надіслані"
+msgstr "Sent"
+
+msgctxt "core"
+msgid "Вичитані"
+msgstr "Proofread"
+
+msgctxt "core"
+msgid "Помилки"
+msgstr "Errors"
+
+msgctxt "core"
+msgid "З порадами"
+msgstr "With advice"
+
+msgctxt "core"
+msgid "З коментарями"
+msgstr "With comments"
+
+msgctxt "core"
+msgid "Мовець · у всіх файлах"
+msgstr "Speaker · in all files"
+
+msgctxt "core"
+msgid "Довжина відносно оригіналу"
+msgstr "Length relative to the original"
+
+msgctxt "core"
+msgid "далеко від оригіналу"
+msgstr "far from the original"
+
+msgctxt "core"
+msgid "довші за оригінал"
+msgstr "longer than the original"
+
+msgctxt "core"
+msgid "коротші за оригінал"
+msgstr "shorter than the original"
+
+msgctxt "core"
+msgid "Нова гілка"
+msgstr "New branch"
+
+msgctxt "core"
+msgid "Гілка — окрема копія перекладу «main»: у ній можна вичитувати чи пробувати інший стиль, не чіпаючи решти. Потім гілки порівнюють і зливають."
+msgstr "A branch is a separate copy of the “main” translation: you can proofread in it or try another style without touching the rest. Later branches are compared and merged."
+
+msgctxt "core"
+msgid "Назва"
+msgstr "Name"
+
+msgctxt "core"
+msgid "Назва гілки не може бути порожньою"
+msgstr "The branch name cannot be empty"
+
+
+msgctxt "core"
+msgid "{1} файл"
+msgid_plural "{1} файл"
+msgstr[0] "{1} file"
+msgstr[1] "{1} files"
+
+msgctxt "core"
+msgid "{1} рядку"
+msgid_plural "{1} рядку"
+msgstr[0] "{1} row"
+msgstr[1] "{1} rows"
+
+msgctxt "core"
+msgid "{1} репліка"
+msgid_plural "{1} репліка"
+msgstr[0] "{1} line"
+msgstr[1] "{1} lines"
+
+msgctxt "core"
+msgid "{1} помилка QA"
+msgid_plural "{1} помилка QA"
+msgstr[0] "{1} QA error"
+msgstr[1] "{1} QA errors"
+
+msgctxt "core"
+msgid "{1} однаковий рядок"
+msgid_plural "{1} однаковий рядок"
+msgstr[0] "{1} identical row"
+msgstr[1] "{1} identical rows"
+
+msgctxt "core"
+msgid "{1} чернетка"
+msgid_plural "{1} чернетка"
+msgstr[0] "{1} draft"
+msgstr[1] "{1} drafts"
+
+msgctxt "core"
+msgid "{1} файлі"
+msgid_plural "{1} файлі"
+msgstr[0] "{1} file"
+msgstr[1] "{1} files"
+
+msgctxt "core"
+msgid "{1} сцена"
+msgid_plural "{1} сцена"
+msgstr[0] "{1} scene"
+msgstr[1] "{1} scenes"
+
+msgctxt "core"
+msgid "{1} повідомлення"
+msgid_plural "{1} повідомлення"
+msgstr[0] "{1} message"
+msgstr[1] "{1} messages"
+
+msgctxt "core"
+msgid "{1} переклад"
+msgid_plural "{1} переклад"
+msgstr[0] "{1} translation"
+msgstr[1] "{1} translations"
+
+msgctxt "core"
+msgid "{1} переклад повідомлення"
+msgid_plural "{1} переклад повідомлення"
+msgstr[0] "{1} message translation"
+msgstr[1] "{1} message translations"
+
+msgctxt "core"
+msgid "{1} пара"
+msgid_plural "{1} пара"
+msgstr[0] "{1} pair"
+msgstr[1] "{1} pairs"
+
+msgctxt "core"
+msgid "{1} пару"
+msgid_plural "{1} пару"
+msgstr[0] "{1} pair"
+msgstr[1] "{1} pairs"
+
+msgctxt "core"
+msgid "{1} новий коментар"
+msgid_plural "{1} новий коментар"
+msgstr[0] "{1} new comment"
+msgstr[1] "{1} new comments"
+
+msgctxt "core"
+msgid "{1} команда з текстом"
+msgid_plural "{1} команда з текстом"
+msgstr[0] "{1} command with text"
+msgstr[1] "{1} commands with text"
+
+msgctxt "core"
+msgid "{1} група"
+msgid_plural "{1} група"
+msgstr[0] "{1} group"
+msgstr[1] "{1} groups"
+
+msgctxt "core"
+msgid "{1} група однакових рядків"
+msgid_plural "{1} група однакових рядків"
+msgstr[0] "{1} group of identical rows"
+msgstr[1] "{1} groups of identical rows"
+
+msgctxt "core"
+msgid "{1} варіанта"
+msgid_plural "{1} варіанта"
+msgstr[0] "{1} variant"
+msgstr[1] "{1} variants"
+
+msgctxt "core"
+msgid "{1} рядка"
+msgid_plural "{1} рядка"
+msgstr[0] "{1} row"
+msgstr[1] "{1} rows"
+
+msgctxt "core"
+msgid "Візуальні новели на Ren’Py: скрипти лежать у папці game (.rpy)."
+msgstr "Visual novels made with Ren’Py: the scripts are in the game folder (.rpy)."
+
+msgctxt "core"
+msgid "English: мова інтерфейсу"
+msgstr "English: interface language"
+
+msgctxt "core"
+msgid "Переклад інтерфейсу застосунку (English). Рядки, яких тут немає, лишаються українською."
+msgstr "Translation of the application’s interface (English). Strings that are not here stay in Ukrainian."

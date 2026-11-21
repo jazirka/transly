@@ -1,4 +1,4 @@
-import { PERMISSIONS, authorOf, i18n, plugins, pluginTemplate, t } from '../core';
+import { PERMISSIONS, authorOf, i18n, plugins, pluginTemplate, t, uiLocale } from '../core';
 import type { InstallPlan, PluginPermission, PluginRecord, PluginState } from '../core';
 import { InstallError } from '../core';
 import { $, CRUMB, esc, toast } from './dom';
@@ -108,7 +108,7 @@ export function openExtensions(acts: ExtensionActions, first: Page = 'installed'
     const link = (u?: string): string => (u ? `<a href="${esc(u)}" data-ext-link rel="noopener noreferrer">${esc(u)}</a>` : '');
     const deps = Object.entries(m.dependencies ?? {}).map(([id, range]) => { const d = plugins.get(id); return `${esc(d ? tp(d, d.manifest.name) : id)} ${esc(range)} — ${esc(d ? t(STATE[d.state][0]) : t('не встановлено'))}`; }).join('<br>');
     const perms = (m.permissions ?? []).map(p => `<b>${esc(t(PERM[p][0]))}</b>: ${esc(t(PERM[p][1]))}`).join('<br>') + (m.network ? `<br>${esc(t('Сервери'))}: ${esc(m.network.hosts.join(', '))}` : '');
-    const stored = r.source.installedAt ? new Date(r.source.installedAt).toLocaleString('uk-UA') : '';
+    const stored = r.source.installedAt ? new Date(r.source.installedAt).toLocaleString(uiLocale()) : '';
     const sets = (c.settings ?? []).map((s, i) => `<div class="st-sub"><h3>${esc(tp(r, s.title))}</h3>${s.description ? `<p class="hint">${esc(tp(r, s.description))}</p>` : ''}${s.fields.map(f => fieldHtml(r, String(i), f)).join('')}</div>`).join('');
     const upd = updates.get(m.id);
     return `<button class="btn s" type="button" data-act="back">‹ ${esc(t('Усі розширення'))}</button>
@@ -122,7 +122,7 @@ export function openExtensions(acts: ExtensionActions, first: Page = 'installed'
       ${c.languages?.length ? `<div class="st-sub"><h3>${esc(t('Мови інтерфейсу'))}</h3>${c.languages.map(l => `<p><b>${esc(l.nativeName ?? l.name)}</b> <code>${esc(l.code)}</code> <button class="btn s" type="button" data-act="use-lang" data-code="${esc(l.code)}">${esc(t('Використовувати'))}</button></p>`).join('')}</div>` : ''}
       ${c.help?.length ? `<div class="st-sub"><h3>${esc(t('Довідка'))}</h3>${c.help.map(h => { const text = h.body ?? (h.file ? r.files.get(h.file) : undefined) ?? ''; return `<details><summary>${esc(tp(r, h.title))}</summary><div class="ex-md">${miniMarkdown(tp(r, text))}</div></details>`; }).join('')}</div>` : ''}
       ${sets}
-      ${r.errors.length ? `<div class="st-sub"><h3>${esc(t('Збої'))}</h3>${r.errors.slice(-5).map(e => `<p class="hint bad">${esc(new Date(e.at).toLocaleTimeString('uk-UA'))} — ${esc(e.what)}</p>`).join('')}</div>` : ''}
+      ${r.errors.length ? `<div class="st-sub"><h3>${esc(t('Збої'))}</h3>${r.errors.slice(-5).map(e => `<p class="hint bad">${esc(new Date(e.at).toLocaleTimeString(uiLocale()))} — ${esc(e.what)}</p>`).join('')}</div>` : ''}
       <div class="acts l">
         ${r.builtin ? '' : `<button class="btn" type="button" data-act="check" data-id="${esc(m.id)}" ${busy ? 'disabled' : ''}>${esc(t('Перевірити оновлення'))}</button>${upd ? `<button class="btn p" type="button" data-act="update" data-id="${esc(m.id)}">${esc(t('Оновити до {v}', { v: upd }))}</button>` : ''}`}
         <button class="btn" type="button" data-act="pot" data-id="${esc(m.id)}">${esc(t('Рядки для перекладу (.pot)'))}</button>

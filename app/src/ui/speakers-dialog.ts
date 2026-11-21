@@ -1,4 +1,4 @@
-import { speakerCandidates, speakerOf } from '../core';
+import { speakerCandidates, speakerOf, uiLocale } from '../core';
 import { $, el, esc, plural, toast } from './dom';
 import { showDialog } from './modal';
 import type { Ctx } from './state';
@@ -20,7 +20,7 @@ export function openSpeakers(ctx: Ctx): void {
   const covered = () => {
     let total = 0, named = 0;
     for (const v of s.views) for (const u of v.units) if (u.kind === 'dialogue') { total++; if (speakerOf(u, s.saved.speakers)) named++; }
-    return `Мовця визначено для ${named.toLocaleString('uk-UA')} із ${total.toLocaleString('uk-UA')} реплік.`;
+    return `Мовця визначено для ${named.toLocaleString(uiLocale())} із ${total.toLocaleString(uiLocale())} реплік.`;
   };
   dlg.innerHTML = `<form method="dialog"><h2 id="sp-t">Хто говорить</h2>
     <p class="hint">У грі на RPG Maker MV імен мовців немає. Підказують <b>обличчя</b> персонажа в діалозі, <b>позначка</b> розробників (коментар перед текстом, наприклад «MARCOH») і <b>подія</b>, до якої належить репліка (часто це сам NPC). Вкажіть ім’я один раз: воно підставиться в усі репліки з тією самою ознакою.</p>

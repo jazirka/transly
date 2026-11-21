@@ -1,4 +1,4 @@
-import { i18n, touchTerms, stamp, DEFAULT_SETTINGS, emptyProject, linkModeOf, parseDelimited, parseHtmlTable, parseTerms, referenceSets, serialize, termsFromTable, withoutReference } from '../core';
+import { i18n, touchTerms, stamp, DEFAULT_SETTINGS, emptyProject, linkModeOf, parseDelimited, parseHtmlTable, parseTerms, referenceSets, serialize, termsFromTable, withoutReference, uiLocale } from '../core';
 import type { GlossaryTerm, LinkMode } from '../core';
 import { $, CRUMB, el, esc, plural, toast } from './dom';
 import { isDesktop } from './desktop';
@@ -134,7 +134,7 @@ export function openSettings(ctx: Ctx, { extensions: onExtensions, project: onPr
     ${page('claude', 'data-sec="cl"', `<p class="hint">Спільна база цього артефакта працює на всіх ваших пристроях, де відкрито цей самий артефакт: ПК, телефон. Не потрібні ні файли, ні свій сервер, ні GitHub. Натисніть «Синхронізувати» тут, потім відкрийте артефакт на іншому пристрої й натисніть там те саме: приїдуть переклад, глосарій, пам’ять та оригінальні рядки гри.</p>
       <div class="grid"><label for="cl-every">Автоматично</label><select id="cl-every">${every(cl.everyMin)}</select></div>
       <div class="acts l"><button class="btn p" type="button" id="cl-go">Синхронізувати через Claude зараз</button></div>
-      <p class="hint" id="cl-state" role="status">${cl.last ? 'Остання синхронізація: ' + new Date(cl.last).toLocaleString('uk-UA') : 'Ще не синхронізовано'}</p>`)}
+      <p class="hint" id="cl-state" role="status">${cl.last ? 'Остання синхронізація: ' + new Date(cl.last).toLocaleString(uiLocale()) : 'Ще не синхронізовано'}</p>`)}
     ${page('github', 'data-sec="gh"', `${warn(`Токен лишається тільки ${where}`, 'Дайте йому доступ лише до репозиторію з перекладом (право «Contents: Read and write»). Він не потрапляє у файл проєкту.')}
       <p class="hint">Переклад зберігається у вашому репозиторії GitHub (краще приватному) звичайними файлами, а історія комітів показує, що й коли змінилося. Створіть репозиторій із файлом README, потім токен: GitHub → Settings → Developer settings → Fine-grained tokens.</p>
       <div class="grid"><label for="gh-repo">Репозиторій (власник/назва)</label><input id="gh-repo" placeholder="ivan/my-translation" autocomplete="off" spellcheck="false" value="${esc(gh.repo)}">
@@ -145,14 +145,14 @@ export function openSettings(ctx: Ctx, { extensions: onExtensions, project: onPr
       <label class="achk"><input type="checkbox" id="gh-orig" ${gh.originals ? 'checked' : ''}> Зберігати в репозиторії оригінальні рядки гри (лише для приватного; без них пристрій без гри, наприклад телефон, не покаже оригінал)</label>
       <details><summary>Додатково</summary><div class="grid"><label for="gh-api">Адреса API (для GitHub Enterprise)</label><input id="gh-api" type="url" autocomplete="off" spellcheck="false" value="${esc(gh.api)}"></div></details>
       <div class="acts l"><button class="btn p" type="button" id="gh-go">Синхронізувати з GitHub зараз</button></div>
-      <p class="hint" id="gh-state" role="status">${gh.last ? 'Остання синхронізація: ' + new Date(gh.last).toLocaleString('uk-UA') : 'Ще не синхронізовано'}</p>
+      <p class="hint" id="gh-state" role="status">${gh.last ? 'Остання синхронізація: ' + new Date(gh.last).toLocaleString(uiLocale()) : 'Ще не синхронізовано'}</p>
       ${isDesktop() ? '' : '<p class="hint">Якщо пише, що немає з’єднання, а інтернет є: сторінка, у якій відкрито застосунок, може забороняти запити до GitHub (так працює вбудований перегляд). Користуйтеся застосунком як сайтом або настільною версією.</p>'}`)}
     ${page('server', 'data-sec="sy"', `${warn('Для адреси в інтернеті потрібен https', 'Дані шифруються паролем на пристроях: сервер лише передає їх і забуває. Адреса в домашній мережі може бути й http.')}
       <p class="hint">Через ваш власний проміжний сервер (<code>node server/relay.ts</code>). Без чужих хмар.</p>
       <div class="grid"><label for="sy-url">Адреса сервера</label><input id="sy-url" type="url" placeholder="https://sync.example.com або http://192.168.0.14:7421" value="${esc(sync.url)}">
         <label for="sy-pass">Пароль синхронізації (однаковий на всіх пристроях)</label><input id="sy-pass" type="password" autocomplete="off" minlength="8" value="${esc(sync.passphrase)}">
         <label for="sy-every">Автоматично</label><select id="sy-every">${every(sync.everyMin)}</select></div>
-      <div class="acts l"><button class="btn p" type="button" id="sy-go">Синхронізувати зараз</button></div><p class="hint" id="sy-state" role="status">${sync.last ? 'Остання синхронізація: ' + new Date(sync.last).toLocaleString('uk-UA') : 'Ще не синхронізовано'}</p>`)}
+      <div class="acts l"><button class="btn p" type="button" id="sy-go">Синхронізувати зараз</button></div><p class="hint" id="sy-state" role="status">${sync.last ? 'Остання синхронізація: ' + new Date(sync.last).toLocaleString(uiLocale()) : 'Ще не синхронізовано'}</p>`)}
     ${page('file', '', `<p class="hint">Файл містить переклад, глосарій, пам’ять і оригінальні рядки, без файлів гри. Імпорт зливає зміни по рядках: лишається новіша правка.</p>
       <div class="acts l"><button class="btn" type="button" id="st-export">Зберегти проєкт у файл</button><button class="btn" type="button" id="st-import">Імпортувати з файлу…</button><button class="btn" type="button" id="st-files">Відкрити файли або вставити JSON…</button></div><input type="file" id="st-file" accept="application/json,.json" hidden>`)}
     ${page('update', 'data-sec="up"', updateSectionHtml(loadUpdateConfig()))}

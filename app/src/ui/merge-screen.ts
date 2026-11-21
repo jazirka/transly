@@ -1,4 +1,4 @@
-import { applyPlan, branchOf, defaultDecision, diffBranches, diffWords, planMerge, planMessage, rowId } from '../core';
+import { applyPlan, branchOf, defaultDecision, diffBranches, diffWords, planMerge, planMessage, rowId, uiLocale } from '../core';
 import type { Decision, DiffKind, DiffRow, Unit } from '../core';
 import { $, esc, plural, toast } from './dom';
 import { oneLine } from './hintcards';
@@ -168,18 +168,18 @@ export function openMergeScreen(ctx: Ctx, source: string, onClose: () => void): 
     for (const r of rows) { const e = byFile.get(r.file) ?? { n: 0, red: 0 }; e.n++; if (!r.locked && r.kind === 'conflict' && !decisionOf(r)) e.red++; byFile.set(r.file, e); }
     const ic = (n: string): [string, string] => (/^Map\d+\.json$/.test(n) ? ['map', 'MAP'] : n.endsWith('.json') ? ['json', '{}'] : ['gl', 'Aa']);
     const total = rows.length, red = [...byFile.values()].reduce((a, v) => a + v.red, 0);
-    $('#mg-tree', root).innerHTML = `<div class="node ${file === null ? 'cur' : ''}" style="--d:0" role="treeitem" tabindex="0" data-f="" aria-selected="${file === null}"><span class="chev"></span><span class="ic dir">▤</span><span class="nm">Усі файли</span>${red ? '<i class="rd"></i>' : ''}<span class="pc">${total.toLocaleString('uk-UA')}</span></div>`
-      + [...byFile].sort((x, y) => (ctx.fileTitle(x[0]) < ctx.fileTitle(y[0]) ? -1 : 1)).map(([f, v]) => { const [k, t] = ic(f); return `<div class="node ${file === f ? 'cur' : ''}" style="--d:1" role="treeitem" tabindex="-1" data-f="${esc(f)}" aria-selected="${file === f}"><span class="chev"></span><span class="ic ${k}">${t}</span><span class="nm">${esc(ctx.fileTitle(f))}</span>${v.red ? '<i class="rd"></i>' : ''}<span class="pc">${v.n.toLocaleString('uk-UA')}</span></div>`; }).join('');
+    $('#mg-tree', root).innerHTML = `<div class="node ${file === null ? 'cur' : ''}" style="--d:0" role="treeitem" tabindex="0" data-f="" aria-selected="${file === null}"><span class="chev"></span><span class="ic dir">▤</span><span class="nm">Усі файли</span>${red ? '<i class="rd"></i>' : ''}<span class="pc">${total.toLocaleString(uiLocale())}</span></div>`
+      + [...byFile].sort((x, y) => (ctx.fileTitle(x[0]) < ctx.fileTitle(y[0]) ? -1 : 1)).map(([f, v]) => { const [k, t] = ic(f); return `<div class="node ${file === f ? 'cur' : ''}" style="--d:1" role="treeitem" tabindex="-1" data-f="${esc(f)}" aria-selected="${file === f}"><span class="chev"></span><span class="ic ${k}">${t}</span><span class="nm">${esc(ctx.fileTitle(f))}</span>${v.red ? '<i class="rd"></i>' : ''}<span class="pc">${v.n.toLocaleString(uiLocale())}</span></div>`; }).join('');
   };
 
   const renderSum = (): void => {
     const c = counts();
-    $('#mg-sum', root).innerHTML = `<div class="mg-fh" style="padding:0 0 4px">ПІДСУМОК</div><div class="sr"><span>Піде в «${esc(cur)}»</span><b>${c.goes.toLocaleString('uk-UA')}</b></div><div class="sr"><span>Лишиться як є</span><b>${c.keeps.toLocaleString('uk-UA')}</b></div><div class="sr"><span>Без рішення</span><b class="${c.pending ? 'bad' : ''}">${c.pending.toLocaleString('uk-UA')}</b></div><div class="sr"><span>Вичитані — не чіпаємо</span><b>${c.locked.toLocaleString('uk-UA')}</b></div>`;
+    $('#mg-sum', root).innerHTML = `<div class="mg-fh" style="padding:0 0 4px">ПІДСУМОК</div><div class="sr"><span>Піде в «${esc(cur)}»</span><b>${c.goes.toLocaleString(uiLocale())}</b></div><div class="sr"><span>Лишиться як є</span><b>${c.keeps.toLocaleString(uiLocale())}</b></div><div class="sr"><span>Без рішення</span><b class="${c.pending ? 'bad' : ''}">${c.pending.toLocaleString(uiLocale())}</b></div><div class="sr"><span>Вичитані — не чіпаємо</span><b>${c.locked.toLocaleString(uiLocale())}</b></div>`;
   };
 
   const renderToolbar = (): void => {
     const n = (c: Chip): number => rows.filter(r => chipOf(r) === c).length;
-    const chips = CHIPS.filter(c => n(c.id)).map(c => `<button type="button" class="chip${filters.has(c.id) ? ' on' : ''}" data-chip="${c.id}" aria-pressed="${filters.has(c.id)}">${c.id === 'locked' ? ICON.lock : esc(c.label)} · ${n(c.id).toLocaleString('uk-UA')}</button>`).join('');
+    const chips = CHIPS.filter(c => n(c.id)).map(c => `<button type="button" class="chip${filters.has(c.id) ? ' on' : ''}" data-chip="${c.id}" aria-pressed="${filters.has(c.id)}">${c.id === 'locked' ? ICON.lock : esc(c.label)} · ${n(c.id).toLocaleString(uiLocale())}</button>`).join('');
     const tb = $('#mg-tb', root);
     const had = document.activeElement?.id === 'mg-q';
     tb.innerHTML = `<div class="filters"><div class="fin">${ICON.search}<input class="qin" id="mg-q" placeholder="Фільтр у змінах" aria-label="Фільтр у змінах" value="${esc(query)}" autocomplete="off"></div>${chips}
@@ -191,9 +191,9 @@ export function openMergeScreen(ctx: Ctx, source: string, onClose: () => void): 
   const renderBand = (): void => {
     const c = counts(), sel = selected.size;
     $('#mg-band', root).innerHTML = `<div class="mg-hint"><span><kbd>${ICON.up}</kbd><kbd>${ICON.down}</kbd> рядок</span><span><kbd>${ICON.plus.replace(/ width="14" height="14"/, '')}</kbd> взяти</span><span><kbd>${ICON.minus.replace(/ width="14" height="14"/, '')}</kbd> відкинути</span><span><kbd>Enter</kbd> свій</span><span><kbd>Esc</kbd> вийти</span></div><span class="sp"></span>
-      ${sel ? `<span>Обрано <b>${sel.toLocaleString('uk-UA')}</b>:</span><button type="button" class="b o" data-sel="mine">${ICON.minus} Відкинути</button><button type="button" class="b o" data-sel="theirs">${ICON.plus} Взяти</button><span style="width:8px"></span>` : ''}
+      ${sel ? `<span>Обрано <b>${sel.toLocaleString(uiLocale())}</b>:</span><button type="button" class="b o" data-sel="mine">${ICON.minus} Відкинути</button><button type="button" class="b o" data-sel="theirs">${ICON.plus} Взяти</button><span style="width:8px"></span>` : ''}
       <button type="button" class="b o l" id="mg-skip"${c.pending ? '' : ' disabled'}>Пропустити конфлікт</button>
-      <button type="button" class="b p l" id="mg-go"${c.goes ? '' : ' disabled'}>Злити «${esc(source)}» у «${esc(cur)}» · ${c.goes.toLocaleString('uk-UA')}</button>`;
+      <button type="button" class="b p l" id="mg-go"${c.goes ? '' : ' disabled'}>Злити «${esc(source)}» у «${esc(cur)}» · ${c.goes.toLocaleString(uiLocale())}</button>`;
   };
 
   const renderAll = (): void => { refilter(); renderToolbar(); renderTree(); renderSum(); renderRows(); renderBand(); };

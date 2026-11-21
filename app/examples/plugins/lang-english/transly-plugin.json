@@ -1,0 +1,35 @@
+{
+  "manifestVersion": 1,
+  "id": "example.lang-english",
+  "name": "English interface (example language pack)",
+  "version": "1.0.0",
+  "description": "A language pack: the interface of Transly in English. A few strings only: what is not here is shown in Ukrainian.",
+  "sourceLanguage": "en",
+  "author": "Transly examples",
+  "license": "MIT",
+  "keywords": [
+    "language",
+    "example"
+  ],
+  "requires": {
+    "transly": ">=0.1.0",
+    "api": "^1.0.0"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "code": "en",
+        "name": "English",
+        "nativeName": "English",
+        "catalogs": [
+          {
+            "file": "i18n/en.po"
+          }
+        ]
+      }
+    ]
+  },
+  "files": {
+    "i18n/en.po": "sha256-42200d6cba00fae66fd3917dd4c3a8fd2fb2e58ed51f06641528da7acb8240da"
+  }
+}

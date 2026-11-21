@@ -111,6 +111,8 @@ export interface ProjectSettings {
   qa?: QaSettings;
   /** The accent hue picked by hand (degrees); missing = the hue the project's name gives (see `theme.ts`). */
   hue?: number;
+  /** The values of the parameters plugins keep in the project (shared with the other devices): plugin id → parameter → value. */
+  pluginSettings?: Record<string, Record<string, string | number | boolean>>;
   /** Where the shown name comes from: the game's folder (the default), the game's own title or a name written by hand (see `projname.ts`). */
   nameFrom?: 'folder' | 'game' | 'custom';
   /** The name written by hand. */

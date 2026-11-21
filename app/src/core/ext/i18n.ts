@@ -168,7 +168,8 @@ export class I18n {
   setLanguage(code: string, fallback: string[] = []): void {
     const base = this.active === code && code.includes('-') ? [code.split('-')[0]!] : [];
     this.active = [code, code.split('-')[0]!].find(c => c === this.source || this.langs.has(c)) ?? this.source;
-    this.chain = this.active === this.source ? [] : [this.active, ...base, ...fallback].filter((c, i, a) => c !== this.source && a.indexOf(c) === i && this.langs.has(c));
+    // the source language has a chain only when a pack brought something for it (a rewording of the interface, or the strings of a plugin written in another language)
+    this.chain = [this.active, ...base, ...fallback].filter((c, i, a) => a.indexOf(c) === i && this.langs.has(c));
     this.negative.clear();
     this.changed();
   }
@@ -190,7 +191,7 @@ export class I18n {
   /** The string in the language of the interface, with `{name}` replaced by `params`. */
   t(msgid: string, params?: Params, ctx: string = CORE): string {
     const f = this.chain.length ? this.lookup(keyOf(msgid, ctx)) : null;
-    if (!f && this.chain.length) this.remember(msgid, ctx, msgid);
+    if (!f && this.active !== this.source) this.remember(msgid, ctx, msgid);
     return subst(f?.[0] ?? msgid, params);
   }
 
@@ -202,7 +203,7 @@ export class I18n {
       const l = this.langs.get(this.chain.find(c => this.langs.get(c)!.layers.some(x => x.entries.get(keyOf(forms[0]!, ctx))?.some(s => s !== '')))!)!;
       return subst(f[Math.min(l.plural(n), f.length - 1)] ?? f[0]!, p);
     }
-    if (this.chain.length) this.remember(forms[0]!, ctx, forms[0]!);
+    if (this.active !== this.source) this.remember(forms[0]!, ctx, forms[0]!);
     const m10 = n % 10, m100 = n % 100;
     const i = m10 === 1 && m100 !== 11 ? 0 : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 1 : 2;
     return subst(forms[Math.min(i, forms.length - 1)]!, p);
@@ -241,7 +242,7 @@ export class I18n {
     }
     if (this.negative.size > 8000) this.negative.clear();
     this.negative.add(text);
-    if (CYRILLIC.test(text)) this.remember(templated(text), ctx, text);
+    if (this.active !== this.source && CYRILLIC.test(text)) this.remember(templated(text), ctx, text);
     return null;
   }
 

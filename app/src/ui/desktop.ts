@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { readableExtensions } from '../core';
 import type { PickedFile } from './folder';
 
 /** True inside the Tauri desktop shell; in a plain browser everything here is unavailable. */
@@ -38,11 +39,17 @@ const read = (base: string): string | null => get(k(base));
 export const rememberedGameDir = (): string | null => read(LS_DIR);
 export const rememberedExe = (): string | null => read(LS_EXE);
 
+/** The names of all the files of the folder picked last on the desktop (for the guidance about a game that cannot be read). */
+export let desktopNames: string[] = [];
+
 export async function pickGameDirDesktop(): Promise<PickedFile[] | null> {
   const dir = await invoke<string | null>('pick_dir');
   if (!dir) return null;
   set(k(LS_DIR), dir);
-  return toPicked(await invoke<JsonFile[]>('list_json', { dir }));
+  const files = toPicked(await invoke<JsonFile[]>('list_json', { dir, exts: readableExtensions() }));
+  const all = await invoke<string[]>('list_names', { dir }).catch(() => null);
+  desktopNames = Array.isArray(all) ? all : files.map(f => f.rel ?? f.name);
+  return files;
 }
 
 /** The remembered game folder, found again for this session (`ok`), or the reason it could not be. `null` when the project has none. */
@@ -53,7 +60,7 @@ export async function reopenGameDir(): Promise<Reopened | null> {
   if (!root) return null;
   try { await invoke('allow_again', { path: root }); }
   catch (e) { return { ok: false, root, reason: String(e).includes('не існує') ? 'missing' : 'failed' }; }
-  try { return { ok: true, root, files: toPicked(await invoke<JsonFile[]>('list_json', { dir: root })) }; }
+  try { return { ok: true, root, files: toPicked(await invoke<JsonFile[]>('list_json', { dir: root, exts: readableExtensions() })) }; }
   catch { return { ok: false, root, reason: 'failed' }; }
 }
 

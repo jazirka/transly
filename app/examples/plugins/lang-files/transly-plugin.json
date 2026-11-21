@@ -1,0 +1,51 @@
+{
+  "manifestVersion": 1,
+  "id": "example.lang-files",
+  "name": "Lang files (key=value)",
+  "version": "1.0.0",
+  "description": "Reads and writes .lang files: one `key=value` per line. A format described by data: no code.",
+  "sourceLanguage": "en",
+  "author": "Transly examples",
+  "license": "MIT",
+  "keywords": [
+    "format",
+    "example"
+  ],
+  "requires": {
+    "transly": ">=0.1.0",
+    "api": "^1.0.0"
+  },
+  "contributes": {
+    "formats": [
+      {
+        "id": "lang",
+        "label": "Lang file (.lang)",
+        "extensions": [
+          ".lang"
+        ],
+        "text": true,
+        "spec": {
+          "type": "keyvalue",
+          "separator": "=",
+          "comments": [
+            "#",
+            ";"
+          ],
+          "unescape": true
+        },
+        "help": "about"
+      }
+    ],
+    "help": [
+      {
+        "id": "about",
+        "title": "Translating .lang files",
+        "topic": "general",
+        "file": "help/about.md"
+      }
+    ]
+  },
+  "files": {
+    "help/about.md": "sha256-cb5b1f5dff0491e2a576838dada4078e1fb6d6bac48ec5dcb077bac0c2feba6b"
+  }
+}

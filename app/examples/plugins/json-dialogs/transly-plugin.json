@@ -1,0 +1,81 @@
+{
+  "manifestVersion": 1,
+  "id": "example.json-dialogs",
+  "name": "JSON dialogues (example engine)",
+  "version": "1.0.0",
+  "description": "A made-up engine whose scripts are JSON files: shows how an engine is detected from the files of a folder and how a format picks the texts out of a JSON tree.",
+  "sourceLanguage": "en",
+  "author": "Transly examples",
+  "license": "MIT",
+  "keywords": [
+    "engine",
+    "format",
+    "example"
+  ],
+  "requires": {
+    "transly": ">=0.1.0",
+    "api": "^1.0.0"
+  },
+  "contributes": {
+    "formats": [
+      {
+        "id": "scenes",
+        "label": "Scene script (scenes/*.json)",
+        "extensions": [
+          ".json"
+        ],
+        "files": [
+          "**/scenes/*.json"
+        ],
+        "text": false,
+        "priority": 10,
+        "spec": {
+          "type": "json",
+          "rules": [
+            {
+              "path": "title",
+              "kind": "name"
+            },
+            {
+              "path": "lines[*].text",
+              "kind": "dialogue",
+              "speaker": "who"
+            },
+            {
+              "path": "lines[*].choices[*].label",
+              "kind": "choice"
+            }
+          ]
+        },
+        "help": "open"
+      }
+    ],
+    "engines": [
+      {
+        "id": "json-dialogs",
+        "label": "JSON dialogues",
+        "description": "A made-up engine: a folder `scenes` with one JSON file per scene.",
+        "formats": [
+          "scenes"
+        ],
+        "dataFolders": [
+          "scenes"
+        ],
+        "detect": {
+          "files": [
+            "**/scenes/*.json"
+          ]
+        },
+        "help": "open"
+      }
+    ],
+    "help": [
+      {
+        "id": "open",
+        "title": "How to open a game of this engine",
+        "topic": "engine:json-dialogs",
+        "body": "Pick the folder that contains `scenes`.\n\n- Every `scenes/*.json` becomes a file of the project.\n- Titles, spoken lines (with the name of the speaker) and the labels of choices are taken out as rows."
+      }
+    ]
+  }
+}

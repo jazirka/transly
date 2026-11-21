@@ -44,7 +44,7 @@ export function openBuild(ctx: Ctx, dataDir: string | null, onBuilt: (n: number)
       ? ` Перенесення рядків: ${plural(w.messages, ['повідомлення', 'повідомлення', 'повідомлень'])}${w.hyphens ? `, слів із переносом ${w.hyphens}` : ''}${w.tooMany ? `. Понад ${max} рядки: ${w.tooMany} (гра покаже їх на кількох сторінках)` : ''}${w.over ? `. Слово не вміщається в рядок у ${w.over}` : ''}.`
       : '';
     $('#bd-sum', dlg).textContent = r.included
-      ? `У збірку потрапить ${plural(r.included, ['рядок', 'рядки', 'рядків'])} у ${plural(r.files.length, ['файлі', 'файлах', 'файлах'])}. Пропущено: ${r.skipped}${r.blocked.length ? ` (з них через помилки QA: ${r.blocked.length})` : ''}.${wrapNote}`
+      ? `У збірку потрапить ${plural(r.included, ['рядок', 'рядки', 'рядків'])} у ${plural(r.files.length, ['файлі', 'файлах', 'файлах'])}. Пропущено: ${r.skipped}${r.blocked.length ? ` (з них через помилки QA: ${r.blocked.length})` : ''}.${wrapNote}${r.unsupported.length ? ` Не записано, бо немає увімкненого розширення для файлів: ${r.unsupported.slice(0, 4).join(', ')}${r.unsupported.length > 4 ? ` і ще ${r.unsupported.length - 4}` : ''} (Файл → Розширення…).` : ''}`
       : 'У збірку поки нічого не потрапить: немає надісланих чи вичитаних рядків.';
     dlg.querySelectorAll<HTMLButtonElement>('#bd-dir,#bd-zip,#bd-play,#bd-apply').forEach(b => { b.disabled = !r.included; });
   };

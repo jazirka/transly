@@ -1,6 +1,6 @@
 import { readableExtensions, formatOf, isRpgMakerFile, isTextFormat } from '../core';
 import type { GameFile } from '../core';
-import { isDesktop, pickGameDirDesktop } from './desktop';
+import { isDesktop, pickGameDirDesktop, desktopNames } from './desktop';
 
 /** A file chosen by the user, not read yet. */
 export interface PickedFile { name: string; path: string; /** Path relative to the picked folder, with `/`. */ rel?: string; read: () => Promise<string>; /** The text comes from the app's backup of the game's untouched originals. */ fromBackup?: boolean }
@@ -11,17 +11,17 @@ export type DirHandle = {
 type PickerWindow = Window & { showDirectoryPicker?: () => Promise<DirHandle> };
 
 /** Prefer the File System Access API (Chromium); fall back to a hidden <input webkitdirectory>. */
-export interface Picked { files: PickedFile[]; handle: DirHandle | null }
+export interface Picked { files: PickedFile[]; handle: DirHandle | null; /** Paths of all the files seen in the picked place (also the ones that cannot be read): for telling what kind of game it is. */ names?: string[] }
 
 export async function pickGameFolder(input: HTMLInputElement): Promise<Picked | null> {
-  if (isDesktop()) { const files = await pickGameDirDesktop(); return files ? { files, handle: null } : null; }
+  if (isDesktop()) { const files = await pickGameDirDesktop(); return files ? { files, handle: null, names: desktopNames } : null; }
   const w = window as PickerWindow;
   if (w.showDirectoryPicker && !input.dataset.forceInput && !document.documentElement.dataset.forceInput) {
     try {
       const dir = await w.showDirectoryPicker();
-      const out: PickedFile[] = [];
-      await walk(dir, '', out, 0);
-      return { files: choose(out), handle: dir };
+      const out: PickedFile[] = [], names: string[] = [];
+      await walk(dir, '', out, 0, names);
+      return { files: choose(out), handle: dir, names };
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') return null;
       // Inside an embedded frame the picker is refused (SecurityError): fall back to the plain folder input.
@@ -33,20 +33,21 @@ export async function pickGameFolder(input: HTMLInputElement): Promise<Picked | 
       const files = [...(input.files ?? [])];
       input.value = '';
       if (!files.length) return resolve(null);
-      resolve({ files: choose(files.map(f => ({ name: f.name, path: f.webkitRelativePath || f.name, rel: (f.webkitRelativePath || f.name).split('/').slice(1).join('/') || f.name, read: () => f.text() }))), handle: null });
+      resolve({ files: choose(files.map(f => ({ name: f.name, path: f.webkitRelativePath || f.name, rel: (f.webkitRelativePath || f.name).split('/').slice(1).join('/') || f.name, read: () => f.text() }))), handle: null, names: files.slice(0, 4000).map(f => (f.webkitRelativePath || f.name).split('/').slice(1).join('/') || f.name) });
     };
     input.click();
   });
 }
 
-async function walk(dir: DirHandle, prefix: string, out: PickedFile[], depth: number): Promise<void> {
+async function walk(dir: DirHandle, prefix: string, out: PickedFile[], depth: number, names?: string[]): Promise<void> {
   for await (const entry of dir.values()) {
+    if (entry.kind === 'file' && names && names.length < 4000) names.push(prefix + entry.name);
     if (entry.kind === 'file' && isReadable(entry.name) && entry.getFile) {
       // bound to its handle: a native FileSystemFileHandle throws «Illegal invocation» when getFile is called without it
       const getFile = entry.getFile.bind(entry);
       out.push({ name: entry.name, path: prefix + entry.name, rel: prefix + entry.name, read: async () => (await getFile()).text() });
     } else if (entry.kind === 'directory' && depth < 3 && !/^(node_modules|\.)/.test(entry.name)) {
-      await walk(entry as unknown as DirHandle, prefix + entry.name + '/', out, depth + 1);
+      await walk(entry as unknown as DirHandle, prefix + entry.name + '/', out, depth + 1, names);
     }
   }
 }

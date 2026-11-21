@@ -87,6 +87,7 @@ function repairSettings(raw: unknown, n: Counts): void {
   fix('lineLimit', num); fix('linkMode', v => v === 'off' || v === 'ask' || v === 'auto');
   fix('wrap', isObj); fix('qa', isObj); fix('hue', v => num(v) && (v as number) >= 0 && (v as number) < 360);
   fix('nameFrom', v => v === 'folder' || v === 'game' || v === 'custom'); fix('title', v => typeof v === 'string' && v.length <= 80); fix('folderName', v => typeof v === 'string' && v.length <= 80); fix('iconText', v => typeof v === 'string' && v.length <= 4);
+  fix('pluginSettings', v => isObj(v) && Object.keys(v as object).length <= 64 && Object.values(v as Record<string, unknown>).every(o => isObj(o) && Object.keys(o as object).length <= 64 && Object.values(o as Record<string, unknown>).every(x => typeof x === 'string' ? x.length <= 500 : typeof x === 'number' ? Number.isFinite(x) : typeof x === 'boolean')));
 }
 
 /**

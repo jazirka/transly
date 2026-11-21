@@ -25,6 +25,8 @@ export interface BuildResult {
   skipped: number;
   /** Keys (`file::key`) left out because of QA errors. */
   blocked: string[];
+  /** Files that have translations but that no plugin that is switched on can write (their plugin was switched off or removed): they are left out, and this says so. */
+  unsupported: string[];
   /** The line wrapping done by the build (mode «at build»; the project's own text is never changed). */
   wrap: { /** Messages whose lines were rearranged. */ messages: number; /** Hyphens put into words. */ hyphens: number; /** Messages that have more lines than the window shows. */ tooMany: number; /** Messages with a word that still does not fit a line. */ over: number };
 }
@@ -42,12 +44,13 @@ function wrapped(plan: NonNullable<QaOptions['wrap']>, u: FileView['units'][numb
 
 export function build(game: GameFile[], views: FileView[], saved: SavedProject, opts: BuildOptions): BuildResult {
   const byName = new Map(game.map(f => [f.name, f]));
-  const out: BuildResult = { files: [], included: 0, skipped: 0, blocked: [], wrap: { messages: 0, hyphens: 0, tooMany: 0, over: 0 } };
+  const out: BuildResult = { files: [], included: 0, skipped: 0, blocked: [], unsupported: [], wrap: { messages: 0, hyphens: 0, tooMany: 0, over: 0 } };
   const plan = opts.qa.wrap, wrapping = !!plan && plan.settings.mode === 'build';
   for (const v of views) {
     const file = byName.get(v.name);
     const entries = saved.files[v.name];
     if (!file || !entries) continue;
+    if (formatOf(file) === null) { if (Object.values(entries).some(e => e.target.trim())) out.unsupported.push(v.name); continue; }
     const use: Translations = {};
     for (const u of v.units) {
       const e: Entry | undefined = entries[u.key];

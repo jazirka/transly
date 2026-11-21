@@ -107,7 +107,26 @@ struct OutFile {
     content: String,
 }
 
-fn walk(dir: &Path, depth: u8, out: &mut Vec<JsonFile>) {
+/// Whether a file name ends with one of the extensions (lower case, with the dot) the app can read now.
+fn ext_ok(name: &str, exts: &[String]) -> bool {
+    let lower = name.to_lowercase();
+    exts.iter().any(|e| lower.ends_with(e.as_str()))
+}
+
+/// The extensions the page asks for, checked: a dot and letters or digits, at most 32 of them; `.json` is always read.
+fn clean_exts(asked: Option<Vec<String>>) -> Vec<String> {
+    let mut out = vec![".json".to_string()];
+    for e in asked.unwrap_or_default().into_iter().take(32) {
+        let e = e.to_lowercase();
+        let ok = e.len() >= 2 && e.len() <= 17 && e.starts_with('.') && e[1..].chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+        if ok && !out.contains(&e) {
+            out.push(e);
+        }
+    }
+    out
+}
+
+fn walk(dir: &Path, depth: u8, out: &mut Vec<JsonFile>, exts: &[String]) {
     let Ok(rd) = fs::read_dir(dir) else { return };
     let written = read_written(dir);
     for e in rd.flatten() {
@@ -115,9 +134,9 @@ fn walk(dir: &Path, depth: u8, out: &mut Vec<JsonFile>) {
         let name = e.file_name().to_string_lossy().to_string();
         if p.is_dir() {
             if depth < 3 && !name.starts_with('.') && name != "node_modules" && !name.ends_with(".transly-orig") {
-                walk(&p, depth + 1, out);
+                walk(&p, depth + 1, out, exts);
             }
-        } else if name.ends_with(".json") {
+        } else if ext_ok(&name, exts) {
             let orig = original_of(dir, &name, &written);
             out.push(JsonFile { name, path: p.to_string_lossy().to_string(), orig });
         }
@@ -242,10 +261,37 @@ fn allow_again(roots: State<'_, Roots>, picked: State<'_, Picked>, path: String)
 }
 
 #[tauri::command]
-fn list_json(roots: State<'_, Roots>, dir: String) -> Result<Vec<JsonFile>, String> {
+fn list_json(roots: State<'_, Roots>, dir: String, exts: Option<Vec<String>>) -> Result<Vec<JsonFile>, String> {
     let d = roots.check_read(&dir)?;
     let mut out = Vec::new();
-    walk(&d, 0, &mut out);
+    walk(&d, 0, &mut out, &clean_exts(exts));
+    Ok(out)
+}
+
+fn names_in(base: &Path, dir: &Path, depth: u8, out: &mut Vec<String>) {
+    let Ok(rd) = fs::read_dir(dir) else { return };
+    for e in rd.flatten() {
+        if out.len() >= 4000 {
+            return;
+        }
+        let p = e.path();
+        let name = e.file_name().to_string_lossy().to_string();
+        if p.is_dir() {
+            if depth < 4 && !name.starts_with('.') && name != "node_modules" && !name.ends_with(".transly-orig") {
+                names_in(base, &p, depth + 1, out);
+            }
+        } else if let Ok(rel) = p.strip_prefix(base) {
+            out.push(rel.to_string_lossy().replace('\\', "/"));
+        }
+    }
+}
+
+/// The paths of all the files of a picked folder (names only, nothing is read): for telling what kind of game it is when it cannot be read.
+#[tauri::command]
+fn list_names(roots: State<'_, Roots>, dir: String) -> Result<Vec<String>, String> {
+    let d = roots.check_read(&dir)?;
+    let mut out = Vec::new();
+    names_in(&d, &d, 0, &mut out);
     Ok(out)
 }
 
@@ -769,7 +815,7 @@ pub fn run() {
             app.manage(Picked::open(file));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![pick_dir, pick_exe, allow_again, list_json, read_text, read_image, apply_data, restore_data, apply_jump, restore_jump, install_update, prefetch_update, pending_update, clear_pending_update, set_update_mode, relaunch_on_exit, launch, open_url])
+        .invoke_handler(tauri::generate_handler![pick_dir, pick_exe, allow_again, list_json, list_names, read_text, read_image, apply_data, restore_data, apply_jump, restore_jump, install_update, prefetch_update, pending_update, clear_pending_update, set_update_mode, relaunch_on_exit, launch, open_url])
         .build(tauri::generate_context!())
         .expect("error while building Transly")
         .run(|app, event| {
@@ -951,7 +997,7 @@ mod tests {
         fs::create_dir_all(&backup).unwrap();
         fs::write(backup.join("A.json"), "\"Body\"").unwrap();
         let mut out = Vec::new();
-        walk(&base, 0, &mut out);
+        walk(&base, 0, &mut out, &[".json".to_string()]);
         out.sort_by(|a, b| a.name.cmp(&b.name));
         assert_eq!(out.len(), 2, "the backup folder must not be listed");
         assert!(out[0].path.ends_with("A.json") && out[0].path.contains("data") && !out[0].path.contains("transly-orig"));
@@ -1187,5 +1233,30 @@ mod tests {
     fn only_a_checked_installer_exe_is_fetched_in_the_background() {
         assert!(allowed_update_from("https://api.github.com/repos/o/r/releases/assets/1", "Transly_setup.exe", None).is_ok());
         assert!(allowed_update_from("https://example.com/Transly_setup.exe", "Transly_setup.exe", None).is_err());
+    }
+
+    #[test]
+    fn walk_reads_the_extensions_asked_for_and_names_are_listed() {
+        let base = std::env::temp_dir().join(format!("transly-exts-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let game = base.join("game");
+        fs::create_dir_all(&game).unwrap();
+        fs::write(game.join("a.json"), "{}").unwrap();
+        fs::write(game.join("script.RPY"), "label start:").unwrap();
+        fs::write(game.join("x.lang"), "k=v").unwrap();
+        fs::write(game.join("pic.png"), "png").unwrap();
+        let mut out = Vec::new();
+        walk(&base, 0, &mut out, &clean_exts(None));
+        assert_eq!(out.len(), 1, "without asking only json is listed");
+        let mut out = Vec::new();
+        walk(&base, 0, &mut out, &clean_exts(Some(vec![".rpy".into(), ".lang".into(), "bad".into(), "..x".into(), ".a/b".into()])));
+        let mut names: Vec<_> = out.iter().map(|f| f.name.clone()).collect();
+        names.sort();
+        assert_eq!(names, vec!["a.json", "script.RPY", "x.lang"], "case does not matter and odd extensions are ignored");
+        let mut all = Vec::new();
+        names_in(&base, &base, 0, &mut all);
+        all.sort();
+        assert_eq!(all, vec!["game/a.json", "game/pic.png", "game/script.RPY", "game/x.lang"]);
+        let _ = fs::remove_dir_all(&base);
     }
 }

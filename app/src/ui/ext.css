@@ -1,0 +1,25 @@
+/* The manager of extensions (ui/ext-dialog.ts). It wears the frame of the settings: a list of pages on the left, the page on the right. */
+.adlg.st-dlg.exd-dlg[data-app]{width:min(960px,calc(100% - 24px));height:min(700px,calc(100% - var(--tb-h) - 24px))}
+.ex-list{display:flex;flex-direction:column;gap:8px;margin:8px 0}
+.ex-row{display:flex;gap:12px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r3,10px);background:var(--bg)}
+.ex-row.lang{cursor:pointer;align-items:center}.ex-row.lang.on{box-shadow:inset 0 0 0 1px var(--accent);background:var(--accent-soft,transparent)}
+.ex-row.disabled .ex-info,.ex-row.incompatible .ex-info{opacity:.82}
+.ex-ic{flex:none;width:36px;height:36px;border-radius:var(--r2);display:grid;place-items:center;background:var(--accent-solid);color:var(--on-accent);font:600 13px var(--ui)}
+.ex-ic.lg{width:48px;height:48px;font-size:16px}
+.ex-info{flex:1;min-width:0}
+.ex-t{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}.ex-t b{font-weight:600}.ex-t small{color:var(--mute);font-size:12px}
+.ex-d{margin:2px 0 6px;color:var(--mute);font-size:12.5px}
+.ex-why{margin:6px 0 0;color:var(--warn);font-size:12.5px}
+.ex-tags{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:4px}
+.ex-tag,.ex-st{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:999px;font-size:11.5px;background:rgba(255,255,255,.07);color:var(--mute)}
+.ex-st.ok{background:rgba(95,184,101,.16);color:#8fd69a}.ex-st.bad{background:rgba(229,83,75,.16);color:#f0928c}.ex-st.warn{background:rgba(229,160,75,.16);color:#e8b56e}.ex-tag.new{background:var(--accent-soft,rgba(255,255,255,.1));color:var(--text)}
+.ex-act{flex:none;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.ex-sw{display:inline-flex;gap:6px;align-items:center;font-size:12.5px;color:var(--mute);cursor:pointer}
+.ex-head{display:flex;gap:14px;align-items:center;margin:12px 0}.ex-head>div:nth-child(2){flex:1;min-width:0}.ex-head h3{margin:0}
+.ex-meta{width:100%;border-collapse:collapse;margin:8px 0;font-size:13px}
+.ex-meta th,.ex-meta td{position:static;padding:6px 10px 6px 0;text-align:left;vertical-align:top;border:0;border-bottom:1px solid var(--line);background:transparent;font-size:13px;color:var(--text)}
+.ex-meta th{width:150px;color:var(--mute);font-weight:400}
+.ex-md{padding:4px 0 8px;font-size:13px}.ex-md p{margin:6px 0}.ex-md ul{margin:6px 0;padding-left:20px}
+.ex-md a,.ex-meta a{color:var(--accent-hi,var(--accent))}
+.exd details{margin:4px 0}.exd summary{cursor:pointer}
+.exd .achk{display:flex;gap:8px;align-items:flex-start;margin:6px 0}

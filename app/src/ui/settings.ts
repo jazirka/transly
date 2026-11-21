@@ -1,7 +1,8 @@
-import { touchTerms, stamp, DEFAULT_SETTINGS, emptyProject, linkModeOf, parseDelimited, parseHtmlTable, parseTerms, referenceSets, serialize, termsFromTable, withoutReference } from '../core';
+import { i18n, touchTerms, stamp, DEFAULT_SETTINGS, emptyProject, linkModeOf, parseDelimited, parseHtmlTable, parseTerms, referenceSets, serialize, termsFromTable, withoutReference } from '../core';
 import type { GlossaryTerm, LinkMode } from '../core';
 import { $, CRUMB, el, esc, plural, toast } from './dom';
 import { isDesktop } from './desktop';
+import { setInterfaceLanguage } from './ext';
 import { showDialog } from './modal';
 import { nativeChrome, setNativeChrome } from './winctl';
 import { forgetPlaces, pagesPrefs, setPagesPrefs } from './pages';
@@ -43,7 +44,7 @@ export function resetProject(ctx: Ctx, onReset: () => void): void {
 }
 
 /** Things the settings dialog starts but the shell owns. */
-export interface SettingsActions { project: () => void; reset: () => void; adopt: () => void; plugins: () => void; wrap: () => void; qa: () => void; importFiles: () => void; folder: { text: () => string; change: () => void; forget: () => void } }
+export interface SettingsActions { extensions: () => void; project: () => void; reset: () => void; adopt: () => void; plugins: () => void; wrap: () => void; qa: () => void; importFiles: () => void; folder: { text: () => string; change: () => void; forget: () => void } }
 
 /** The pages of the settings, as the tree on the left lists them. */
 export type SettingsTab = 'general' | 'look' | 'folder' | 'lang' | 'terms' | 'tm' | 'qa' | 'wrap' | 'claude' | 'github' | 'server' | 'file' | 'update' | 'danger';
@@ -80,7 +81,7 @@ const mark = (t: string, s: string): string => {
  * below. What is typed waits until it is applied (the accent colour is tried on the whole app at once and goes back if it is cancelled); the buttons
  * that do something (imports, saving to a file, reset, checking for an update) act at once.
  */
-export function openSettings(ctx: Ctx, { project: onProject, reset: onReset, adopt: onImport, plugins: onPlugins, wrap: onWrap, qa: onQa, importFiles: onFiles, folder: onFolder }: SettingsActions, tab?: SettingsTab): void {
+export function openSettings(ctx: Ctx, { extensions: onExtensions, project: onProject, reset: onReset, adopt: onImport, plugins: onPlugins, wrap: onWrap, qa: onQa, importFiles: onFiles, folder: onFolder }: SettingsActions, tab?: SettingsTab): void {
   const st = ctx.s.saved.settings;
   const gh = loadGithubConfig();
   const sync = loadSyncConfig();
@@ -98,6 +99,8 @@ export function openSettings(ctx: Ctx, { project: onProject, reset: onReset, ado
       <div class="st-content">
     ${page('general', 'data-sec="gen"', `<div class="grid"><label for="st-tol">Радити, коли переклад відрізняється від оригіналу понад, % (від 5 до 100)</label><input id="st-tol" type="number" min="5" max="100" step="5" value="${esc(String(st.tolerancePct))}" aria-describedby="st-tol-err">
       <label for="st-who">Ваше ім’я в коментарях та історії</label><input id="st-who" maxlength="40" value="${esc(String(st.who))}"></div>
+    <div class="grid" data-now><label for="st-lang">Мова інтерфейсу</label><select id="st-lang">${i18n.languages().map(l => `<option value="${esc(l.code)}" ${l.code === i18n.language ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select></div>
+    <p class="hint" data-now>Інші мови додаються як розширення (мовні пакети). <button class="btn s" type="button" id="st-ext">Розширення…</button></p>
     <p class="hint bad st-err" id="st-tol-err" role="alert"></p>
     <label class="achk"><input type="checkbox" id="st-block" ${st.blockErrors ? 'checked' : ''}> Не надсилати рядок із помилкою QA</label>
     <div class="grid"><label for="st-link">Автозаповнення однакових рядків після «Надіслати»</label><select id="st-link"><option value="ask" ${linkModeOf(st) === 'ask' ? 'selected' : ''}>заповнювати порожні чернетками, про різні питати (рекомендовано)</option><option value="auto" ${linkModeOf(st) === 'auto' ? 'selected' : ''}>заповнювати порожні й самому оновлювати різні (вичитані не чіпає)</option><option value="off" ${linkModeOf(st) === 'off' ? 'selected' : ''}>не заповнювати</option></select></div>
@@ -290,6 +293,8 @@ export function openSettings(ctx: Ctx, { project: onProject, reset: onReset, ado
   });
 
   $('#st-proj', dlg).addEventListener('click', () => away(onProject));
+  $('#st-ext', dlg).addEventListener('click', () => away(onExtensions));
+  $('#st-lang', dlg).addEventListener('change', e => { setInterfaceLanguage((e.target as HTMLSelectElement).value); });
   $('#st-wrap', dlg).addEventListener('click', () => away(onWrap));
   $('#st-qa', dlg).addEventListener('click', () => away(onQa));
   $('#st-plug', dlg).addEventListener('click', () => away(onPlugins));

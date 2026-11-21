@@ -61,6 +61,9 @@ import { buildAndRunGame, playInGame } from './play';
 import { BRANCH_ICON, branchMenuClick, branchMenuHtml, chooseMerge } from './branches';
 import type { BranchActions } from './branches';
 import { openProjectSettings } from './project-settings';
+import { openExtensions } from './ext-dialog';
+import type { ExtensionActions } from './ext-dialog';
+import { openGuidance } from './guidance';
 import type { ProjectTab } from './project-settings';
 import { openMergeScreen } from './merge-screen';
 import { invalidateUsage, renderStrands, wireStrands } from './strands-panel';
@@ -1105,8 +1108,9 @@ export async function start(root: HTMLElement): Promise<void> {
    * Read the picked game files. With `keep`, they are added to what is already open (files with the same name are
    * replaced) instead of replacing the whole project: a phone that opens one file must not lose the others.
    */
-  async function loadFiles(picked: PickedFile[], keep = false): Promise<void> {
-    if (!picked.length) { toast('У вибраній папці немає файлів, які я вмію перекладати (RPG Maker JSON, .po, .csv, .rpy)'); return; }
+  async function loadFiles(picked: PickedFile[], keep = false, names?: string[]): Promise<void> {
+    lastNames = names ?? picked.map(f => f.rel ?? f.name);
+    if (!picked.length) { openGuidance({ names: lastNames, why: 'nothing', addExtension: () => openExt('add') }); return; }
     try { await loadPicked(picked, keep); }
     catch (err) { toast(`Не вдалося відкрити файли: ${err instanceof Error ? err.message : 'невідома помилка'}`); renderAll(); }
   }
@@ -1135,7 +1139,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const reset = ingest(files, keep);
     const ingested = lastIngest;
     dataDir = isDesktop() ? dataDirOf(picked) : null;
-    if (!s.views.length) { s.current = null; renderAll(); toast('У цих файлах немає тексту для перекладу'); return; }
+    if (!s.views.length) { s.current = null; renderAll(); openGuidance({ names: lastNames, why: 'empty', addExtension: () => openExt('add') }); return; }
     if (failed.length) toast(`Не вдалося прочитати: ${failed.slice(0, 4).join(', ')}${failed.length > 4 ? ` і ще ${failed.length - 4}` : ''}. Файл пошкоджений або не є JSON: його рядків у проєкті не буде`, { sticky: true });
     const fromBackup = picked.filter(f => f.fromBackup).length;
     const translated = sumProgress(s.views.map(v => progressOf(v.units, s.saved.files[v.name] ?? {}))).translated;
@@ -1232,7 +1236,7 @@ export async function start(root: HTMLElement): Promise<void> {
     noteFolderName(isDesktop() ? rememberedGameDir() ?? '' : picked.handle?.name ?? (first.includes('/') ? first.split('/')[0]! : ''));
     if (picked.handle) { lastHandle = picked.handle as typeof lastHandle; void saveHandle('default', picked.handle).catch(() => undefined); }
     folderSeq++; // a folder chosen by hand beats the automatic restore that may still be running
-    await loadFiles(picked.files);
+    await loadFiles(picked.files, false, picked.names);
     if (isDesktop()) {
       const root = rememberedGameDir();
       folder = root ? { kind: 'ok', root, dataDir, files: picked.files } : { kind: 'none' };
@@ -1497,11 +1501,19 @@ export async function start(root: HTMLElement): Promise<void> {
     change: () => { void openFolder(); },
     forget: () => { forgetGameDir(); folderSeq++; folder = { kind: 'none' }; dataDir = null; renderFolderBar(); renderTop(); },
   };
+  /** The names of the files of the last place that was picked (for telling what kind of game it is when nothing could be read). */
+  let lastNames: string[] = [];
+  const extActions: ExtensionActions = {
+    projectValues: () => (s.saved.settings.pluginSettings ??= {}),
+    saveProjectValues: () => { s.saved.settingsAt = Date.now(); ctx.persist(); },
+  };
+  function openExt(page: 'installed' | 'add' | 'lang' | 'support' = 'installed'): void { openExtensions(extActions, page); }
   function openProjectDlg(tab?: ProjectTab): void {
     openProjectSettings(ctx, { branches: branchActions, folder: folderActions, reset: afterReset, app: t => openSettingsDlg(t) }, tab);
   }
   function openSettingsDlg(tab?: SettingsTab): void {
     openSettings(ctx, {
+      extensions: () => openExt(),
       project: () => openProjectDlg(),
       reset: afterReset,
       adopt,
@@ -1679,7 +1691,7 @@ export async function start(root: HTMLElement): Promise<void> {
   type MenuItem = '-' | { t: string; fn: () => void; sc?: string };
   /** The menu bar of the desktop: what is already a button of the title bar (the modes, the shortcuts) is not repeated here. */
   const MENUS: Record<string, MenuItem[]> = {
-    'Файл': [{ t: 'Відкрити папку гри…', fn: () => void openFolder() }, { t: 'Відкрити файли або вставити JSON…', fn: openImportDlg }, '-', { t: 'Зібрати…', fn: doBuild }, { t: 'Запустити вибране', fn: runSelected, sc: 'F5' }, '-', { t: 'Налаштування…', fn: () => openSettingsDlg() }],
+    'Файл': [{ t: 'Відкрити папку гри…', fn: () => void openFolder() }, { t: 'Відкрити файли або вставити JSON…', fn: openImportDlg }, '-', { t: 'Зібрати…', fn: doBuild }, { t: 'Запустити вибране', fn: runSelected, sc: 'F5' }, '-', { t: 'Розширення…', fn: () => openExt() }, { t: 'Налаштування…', fn: () => openSettingsDlg() }],
     'Перехід': [{ t: 'Наступний рядок без перекладу', fn: () => jump('untranslated', 1), sc: 'Alt+⇧+↓' }, { t: 'Наступна помилка QA', fn: () => jump('error', 1), sc: 'F8' }, { t: 'Наступна порада', fn: () => jump('advice', 1) }, { t: 'Наступний на вичитку', fn: () => jump('unreviewed', 1) }, { t: 'Наступний зі зміненим оригіналом', fn: () => jump('sourceChanged', 1) }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: 'Ctrl+K' }],
     'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Оновити за глосарієм…', fn: () => openTermSyncTool(ctx) }, { t: 'Автозаповнення…', fn: () => openAutofill(ctx, () => openLinkTool(ctx)) }, { t: 'Злити гілку…', fn: () => chooseMerge(branchActions) }, { t: 'Активність…', fn: () => openActivity(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенесення рядків…', fn: () => openWrapTool(ctx, { wrapFile }) }, { t: 'Правила QA…', fn: () => openQaRules(ctx) }],
   };

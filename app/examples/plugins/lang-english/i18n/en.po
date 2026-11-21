@@ -1,0 +1,47 @@
+# English interface for Transly (an example: a handful of strings).
+# The message ids are the Ukrainian texts of the program; {name} and {1} stand for values that are put in.
+msgid ""
+msgstr ""
+"Project-Id-Version: transly-lang-english 1.0.0\n"
+"Language: en\n"
+"Language-Team: English\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgctxt "core"
+msgid "Файл"
+msgstr "File"
+
+msgctxt "core"
+msgid "Інструменти"
+msgstr "Tools"
+
+msgctxt "core"
+msgid "Розширення…"
+msgstr "Extensions…"
+
+msgctxt "core"
+msgid "Налаштування…"
+msgstr "Settings…"
+
+msgctxt "core"
+msgid "Скасувати"
+msgstr "Cancel"
+
+msgctxt "core"
+msgid "Зберегти"
+msgstr "Save"
+
+msgctxt "core"
+msgid "Готово"
+msgstr "Done"
+
+msgctxt "core"
+msgid "Рядків без перекладу: {n}"
+msgstr "Strings without a translation: {n}"
+
+# Strings of the example plugins (contexts of other plugins can be translated from the same file)
+msgctxt "plugin:example.lang-files"
+msgid "Lang file (.lang)"
+msgstr "Файл .lang"

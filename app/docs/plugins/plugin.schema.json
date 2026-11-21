@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jazirka/transly/blob/main/app/docs/plugins/plugin.schema.json",
+  "title": "Transly plugin manifest (transly-plugin.json), manifest version 1",
+  "type": "object",
+  "required": ["manifestVersion", "id", "name", "version"],
+  "additionalProperties": true,
+  "properties": {
+    "$schema": { "type": "string" },
+    "manifestVersion": { "const": 1 },
+    "id": { "type": "string", "maxLength": 64, "pattern": "^[a-z0-9][a-z0-9-]*(\\.[a-z0-9][a-z0-9-]*)+$", "description": "author.name; the part `transly` is reserved for the built-in plugins." },
+    "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "version": { "type": "string", "maxLength": 40, "pattern": "^v?\\d+(\\.\\d+){0,2}(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$" },
+    "description": { "type": "string", "maxLength": 600 },
+    "sourceLanguage": { "$ref": "#/$defs/lang" },
+    "author": { "oneOf": [{ "type": "string", "maxLength": 80 }, { "type": "object", "required": ["name"], "properties": { "name": { "type": "string", "maxLength": 80 }, "url": { "$ref": "#/$defs/https" } } }] },
+    "license": { "type": "string", "maxLength": 80 },
+    "homepage": { "$ref": "#/$defs/https" },
+    "repository": { "type": "string", "maxLength": 300, "description": "owner/repo, or an https address." },
+    "keywords": { "type": "array", "maxItems": 16, "items": { "type": "string", "maxLength": 40 } },
+    "requires": { "type": "object", "properties": { "transly": { "type": "string" }, "api": { "type": "string" } }, "additionalProperties": false },
+    "dependencies": { "type": "object", "maxProperties": 16, "propertyNames": { "pattern": "^[a-z0-9][a-z0-9-]*(\\.[a-z0-9][a-z0-9-]*)+$" }, "additionalProperties": { "type": "string" } },
+    "permissions": { "type": "array", "uniqueItems": true, "items": { "enum": ["network", "storage", "notify"] }, "description": "For plugins with code only." },
+    "network": { "type": "object", "required": ["hosts"], "properties": { "hosts": { "type": "array", "minItems": 1, "maxItems": 8, "items": { "type": "string", "pattern": "^[a-z0-9]([a-z0-9.-]{0,120}[a-z0-9])?$" } } } },
+    "main": { "type": "string", "pattern": "\\.m?js$", "description": "The code of the plugin. Not run in this version of the application (see security.md)." },
+    "contributes": {
+      "type": "object",
+      "properties": {
+        "formats": { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/format" } },
+        "engines": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/engine" } },
+        "languages": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/language" } },
+        "help": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/help" } },
+        "settings": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/settings" } }
+      }
+    },
+    "files": { "type": "object", "maxProperties": 200, "propertyNames": { "$ref": "#/$defs/path" }, "additionalProperties": { "type": "string", "pattern": "^sha256-[0-9a-f]{64}$" }, "description": "Every file of the package except this one, with its SHA-256. Written by scripts/plugin-pack.mjs." }
+  },
+  "$defs": {
+    "lang": { "type": "string", "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,2}$" },
+    "https": { "type": "string", "maxLength": 300, "pattern": "^https://" },
+    "path": { "type": "string", "maxLength": 160, "pattern": "^(?!/)(?!.*\\.\\.)(?!.*\\\\)[^.][^/]*(/[^./][^/]*)*$" },
+    "kind": { "enum": ["dialogue", "choice", "scroll", "name", "description", "message", "term"] },
+    "column": { "oneOf": [{ "type": "string", "minLength": 1, "maxLength": 80 }, { "type": "integer", "minimum": 0, "maximum": 999 }] },
+    "format": {
+      "type": "object",
+      "required": ["id", "label", "extensions", "text"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$" },
+        "label": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "extensions": { "type": "array", "minItems": 1, "maxItems": 8, "items": { "type": "string", "pattern": "^\\.[a-z0-9][a-z0-9_-]{0,15}$" } },
+        "files": { "type": "array", "maxItems": 16, "items": { "type": "string", "maxLength": 120 } },
+        "text": { "type": "boolean" },
+        "priority": { "type": "number", "minimum": -50, "maximum": 50 },
+        "help": { "type": "string" },
+        "handler": { "type": "string", "pattern": "^[A-Za-z_$][\\w$]{0,60}$" },
+        "spec": {
+          "oneOf": [
+            { "type": "object", "required": ["type"], "properties": { "type": { "const": "keyvalue" }, "separator": { "type": "string", "minLength": 1, "maxLength": 3 }, "comments": { "type": "array", "maxItems": 8, "items": { "type": "string", "maxLength": 4 } }, "unescape": { "type": "boolean" } }, "additionalProperties": false },
+            { "type": "object", "required": ["type", "key", "source", "target"], "properties": { "type": { "const": "table" }, "delimiter": { "enum": [",", ";", "\t", "auto"] }, "header": { "type": "boolean" }, "key": { "oneOf": [{ "$ref": "#/$defs/column" }, { "type": "array", "minItems": 1, "maxItems": 4, "items": { "$ref": "#/$defs/column" } }] }, "source": { "$ref": "#/$defs/column" }, "target": { "$ref": "#/$defs/column" }, "speaker": { "$ref": "#/$defs/column" }, "context": { "$ref": "#/$defs/column" }, "kind": { "$ref": "#/$defs/kind" } }, "additionalProperties": false },
+            { "type": "object", "required": ["type", "rules"], "properties": { "type": { "const": "json" }, "rules": { "type": "array", "minItems": 1, "maxItems": 64, "items": { "type": "object", "required": ["path"], "properties": { "path": { "type": "string", "maxLength": 200, "pattern": "^[\\w$\\[\\]*.\\- ]+$" }, "kind": { "$ref": "#/$defs/kind" }, "speaker": { "type": "string" }, "context": { "type": "string" } }, "additionalProperties": false } } }, "additionalProperties": false }
+          ]
+        }
+      }
+    },
+    "engine": {
+      "type": "object",
+      "required": ["id", "label"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$" },
+        "label": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "description": { "type": "string", "maxLength": 600 },
+        "formats": { "type": "array", "maxItems": 16, "items": { "type": "string" } },
+        "detect": { "type": "object", "properties": { "files": { "$ref": "#/$defs/globs" }, "anyFiles": { "$ref": "#/$defs/globs" }, "excludeFiles": { "$ref": "#/$defs/globs" }, "min": { "type": "integer", "minimum": 1, "maximum": 32 } }, "additionalProperties": false },
+        "dataFolders": { "type": "array", "maxItems": 8, "items": { "type": "string", "maxLength": 80 } },
+        "features": { "type": "array", "maxItems": 32, "items": { "type": "string", "maxLength": 40 } },
+        "help": { "type": "string" }
+      }
+    },
+    "globs": { "type": "array", "maxItems": 32, "items": { "type": "string", "maxLength": 120 } },
+    "language": {
+      "type": "object",
+      "required": ["code", "name", "catalogs"],
+      "properties": {
+        "code": { "$ref": "#/$defs/lang" },
+        "name": { "type": "string", "maxLength": 80 },
+        "nativeName": { "type": "string", "maxLength": 80 },
+        "plural": { "type": "string", "maxLength": 300 },
+        "fallback": { "type": "array", "maxItems": 4, "items": { "$ref": "#/$defs/lang" } },
+        "catalogs": { "type": "array", "minItems": 1, "maxItems": 16, "items": { "type": "object", "required": ["file"], "properties": { "file": { "type": "string", "pattern": "\\.(po|pot|json)$" }, "context": { "type": "string", "pattern": "^(core|plugin:[a-z0-9.-]{1,64})$" } }, "additionalProperties": false } }
+      }
+    },
+    "help": {
+      "type": "object",
+      "required": ["id", "title"],
+      "anyOf": [{ "required": ["body"] }, { "required": ["file"] }],
+      "properties": { "id": { "type": "string" }, "title": { "type": "string", "maxLength": 80 }, "body": { "type": "string", "maxLength": 20000 }, "file": { "type": "string" }, "topic": { "type": "string", "pattern": "^(general|engine:[a-z0-9_-]{1,40})$" }, "order": { "type": "number" } }
+    },
+    "settings": {
+      "type": "object",
+      "required": ["id", "title", "fields"],
+      "properties": {
+        "id": { "type": "string" }, "title": { "type": "string" }, "description": { "type": "string" },
+        "fields": { "type": "array", "minItems": 1, "maxItems": 64, "items": { "type": "object", "required": ["key", "type", "label"], "properties": { "key": { "type": "string", "pattern": "^[a-zA-Z]\\w{0,39}$" }, "type": { "enum": ["boolean", "string", "number", "select"] }, "label": { "type": "string" }, "description": { "type": "string" }, "default": { "type": ["string", "number", "boolean"] }, "options": { "type": "array", "items": { "type": "object", "required": ["value", "label"], "properties": { "value": { "type": "string" }, "label": { "type": "string" } } } }, "min": { "type": "number" }, "max": { "type": "number" }, "scope": { "enum": ["app", "project"] } } } }
+      }
+    }
+  }
+}

@@ -7,6 +7,7 @@ import './ui/states.css';
 import './ui/buttons.css';
 import './ui/merge.css';
 import './ui/projset.css';
+import './ui/topbar.css';
 import { toast } from './ui/dom';
 import { start } from './ui/app';
 import { restoreNativeChrome } from './ui/winctl';

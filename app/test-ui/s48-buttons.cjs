@@ -32,7 +32,7 @@ const box = sel => document => [...document.querySelectorAll(sel)].filter(e => e
   const seg = await m('.topbar #seg button');
   check('the buttons of the mode switch are M too', seg.length === 3 && seg.every(b => b.h === 28 && b.r === '8px'), JSON.stringify(seg));
   const rail = await m('.strip button');
-  check('the rail of the panels: M, radius 8', rail.length >= 3 && rail.every(b => b.w === 28 && b.h === 28 && b.r === '8px'), JSON.stringify(rail));
+  check('the rail of the panels: M, radius 8', rail.length >= 2 && rail.every(b => b.w === 28 && b.h === 28 && b.r === '8px'), JSON.stringify(rail));
   const carets = await page.evaluate(() => ['#proj-btn', '#br-btn', '#cfg-btn'].map(s => { const r = document.querySelector(s + ' .caret').getBoundingClientRect(); return `${Math.round(r.width)}x${Math.round(r.height)}`; }));
   check('the arrows of the project, branch and build buttons are the same size', new Set(carets).size === 1, carets.join(' '));
   // the window controls: the same shape as the icons (M, rounded), not a flat slab

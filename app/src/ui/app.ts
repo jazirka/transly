@@ -101,24 +101,26 @@ const FORMAT_LABEL: Record<string, string> = { json: 'RPG Maker MV · UTF-8', po
 
 const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide">
   <header class="topbar">
-    <div class="logo" aria-hidden="true">T</div>
-    <button class="tb-ic" id="hamb" title="Головне меню" aria-haspopup="menu" aria-expanded="false">${SVG.menu}</button>
-    <nav class="menubar" id="menubar" role="menubar" aria-label="Головне меню" hidden></nav>
-    <button class="tpill" id="proj-btn" aria-haspopup="menu" aria-expanded="false" title="Проєкт: відкрити іншу гру, налаштування"><span class="pj" id="proj-av" aria-hidden="true">T</span><span id="proj-name">Проєкт</span><span class="dd" aria-hidden="true">${SVG.caret}</span></button>
-    <button class="tpill br-btn" id="br-btn" aria-haspopup="menu" aria-expanded="false" title="Гілка перекладу: перемкнути, створити, злити"><span class="br-ic" aria-hidden="true">${BRANCH_ICON}</span><span id="br-name">main</span><span class="dd" aria-hidden="true">${SVG.caret}</span></button>
-    <div class="seg" id="seg" role="group" aria-label="Режим">
-      <button aria-pressed="true" data-m="table" class="on"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM2.5 7h11M6.5 3.5v9"/></svg>Таблиця</button>
-      <button aria-pressed="false" data-m="edit"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM6 3.5v9M6 8h7.5"/></svg>Редагування</button>
-      <button aria-pressed="false" data-m="scene" id="m-scene"><svg viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="6" rx="1.5"/><rect x="2.5" y="11" width="7" height="2.5" rx="1"/></svg>Сцена</button>
+    <div class="tb-l">
+      <div class="logo" aria-hidden="true">T</div>
+      <button class="tb-ic" id="hamb" title="Головне меню" aria-haspopup="menu" aria-expanded="false">${SVG.menu}</button>
+      <nav class="menubar" id="menubar" role="menubar" aria-label="Головне меню" hidden></nav>
+      <button class="tpill" id="proj-btn" aria-haspopup="menu" aria-expanded="false" title="Проєкт: відкрити іншу гру, налаштування"><span class="pj" id="proj-av" aria-hidden="true">T</span><span id="proj-name">Проєкт</span><span class="dd" aria-hidden="true">${SVG.caret}</span></button>
+      <button class="tpill br-btn" id="br-btn" aria-haspopup="menu" aria-expanded="false" title="Гілка перекладу: перемкнути, створити, злити"><span class="br-ic" aria-hidden="true">${BRANCH_ICON}</span><span id="br-name">main</span><span class="dd" aria-hidden="true">${SVG.caret}</span></button>
+      <div class="seg" id="seg" role="group" aria-label="Режим">
+        <button aria-pressed="true" data-m="table" class="on" title="Таблиця: усі рядки файлу" aria-label="Таблиця"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM2.5 7h11M6.5 3.5v9"/></svg></button>
+        <button aria-pressed="false" data-m="edit" title="Редагування: один рядок" aria-label="Редагування"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM6 3.5v9M6 8h7.5"/></svg></button>
+        <button aria-pressed="false" data-m="scene" id="m-scene" title="Сцена: репліки подій поспіль" aria-label="Сцена"><svg viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="6" rx="1.5"/><rect x="2.5" y="11" width="7" height="2.5" rx="1"/></svg></button>
+      </div>
     </div>
-    <div class="grow"></div>
     <div class="prog" id="pg" title="" role="progressbar" aria-label="Прогрес перекладу" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="bar"><i class="a" id="pg-a"></i><i class="b" id="pg-b"></i><i class="c" id="pg-c"></i></div><span id="pg-txt" style="font-family:var(--mono);font-size:11.5px"></span></div>
-    <div class="tsep"></div>
-    <button class="tpill run" id="cfg-btn" aria-haspopup="menu" aria-expanded="false" title="Що запускає кнопка ▶">${SVG.build}<span id="cfg-name">Збірка (файл)</span><span class="dd" aria-hidden="true">${SVG.caret}</span></button>
-    <button class="tb-ic play" id="run-btn" title="Запустити (F5)" aria-label="Запустити">${SVG.play}</button>
-    <div class="tsep"></div>
-    <button class="tb-ic bellb" id="bell" title="Сповіщення: що потребує уваги й що змінили інші" aria-label="Сповіщення" aria-haspopup="menu" aria-expanded="false">${SVG.bell}<b id="bell-n" hidden>0</b></button>
-    <button class="tb-ic" id="hk" title="Гарячі клавіші" aria-label="Гарячі клавіші">${SVG.keys}</button>
+    <div class="tb-r">
+      <button class="tpill run" id="cfg-btn" aria-haspopup="menu" aria-expanded="false" title="Що запускає кнопка ▶">${SVG.build}<span id="cfg-name">Збірка (файл)</span><span class="dd" aria-hidden="true">${SVG.caret}</span></button>
+      <button class="tb-ic play" id="run-btn" title="Запустити (F5)" aria-label="Запустити">${SVG.play}</button>
+      <div class="tsep"></div>
+      <button class="tb-ic bellb" id="bell" title="Сповіщення: що потребує уваги й що змінили інші" aria-label="Сповіщення" aria-haspopup="menu" aria-expanded="false">${SVG.bell}<b id="bell-n" hidden>0</b></button>
+      <button class="tb-ic" id="hk" title="Гарячі клавіші" aria-label="Гарячі клавіші">${SVG.keys}</button>
+    </div>
   </header>
   <header class="appbar">
     <div class="abt"><b id="ab-title">Transly</b><small id="ab-sub"></small></div>
@@ -460,9 +462,32 @@ export async function start(root: HTMLElement): Promise<void> {
 
   /* ---------- rendering ---------- */
   const lp = (): LeftTab | null => (s.leftOpen ? s.leftTab[s.mode] : null);
+  /** The windows of the left rail a mode has: the table is the rows already, and the scene mode shows its own lines instead of the list of rows. */
+  const leftTabsOf = (mode: Mode): LeftTab[] => (s.phone ? ['files', 'rows', 'scenes', 'glossary'] : mode === 'table' ? ['files', 'glossary'] : mode === 'scene' ? ['files', 'scenes', 'glossary'] : ['files', 'rows', 'scenes', 'glossary']);
+  /** What was chosen in another mode may not exist in this one: it falls back to the files (the scenes in the scene mode). */
+  function fitLeftTab(): void {
+    if (s.phone) return;
+    if (!leftTabsOf(s.mode).includes(s.leftTab[s.mode])) s.leftTab[s.mode] = s.mode === 'scene' ? 'scenes' : 'files';
+    if (s.mode === 'table') s.leftBoth = false;
+    else if (s.mode === 'scene' && s.leftBoth && s.leftTab[s.mode] === 'files') s.leftTab[s.mode] = 'scenes';
+  }
+  /** The buttons of the rail are the windows of this mode; a hairline stands only between two buttons that are shown. */
+  function showRail(): void {
+    const has = leftTabsOf(s.mode);
+    let sep: HTMLElement | null = null, seen = false;
+    for (const el of [...$('#strip').children] as HTMLElement[]) {
+      if (el.tagName === 'HR') { el.hidden = true; sep = el; continue; }
+      const on = has.includes(el.dataset.lp as LeftTab);
+      el.hidden = !on;
+      if (on) { if (seen && sep) sep.hidden = false; seen = true; sep = null; }
+    }
+    document.querySelectorAll<HTMLElement>('#mtabs [data-lt]').forEach(b => { b.hidden = !has.includes(b.dataset.lt as LeftTab); });
+  }
 
   function renderLayout(): void {
     const ide = $('#ide');
+    fitLeftTab();
+    showRail();
     const l = lp();
     const over = narrow.matches && !s.phone && s.sideOn.length > 0;
     ide.className = `ide mode-${s.mode === 'table' ? 'table' : 'focus'}${s.mode === 'scene' ? ' scene-mode' : ''} ${l ? 'lp-open' : 'lp-closed'}${s.phone ? ' sz-s' : ''}${s.rightOpen ? ' sheet-open' : ''}${(!s.sideOn.length || over) && !s.phone ? ' rp-collapsed' : ''}${over ? ' rp-over' : ''}${s.compact ? ' compact' : ''}${s.kb ? ' kb' : ''}`;

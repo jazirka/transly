@@ -98,6 +98,8 @@ const MAP2 = { displayName: 'Cave', events: [null, ev(1, 'miner', 'Mind the dark
   check('«Зняти позначки» clears the picks and the dot', !(await page.locator('#fs-menu').evaluate(e => e.classList.contains('dot'))));
 
   // ---- the scenes under the files: each window has its own header and its own field
+  await page.locator('[data-m="edit"]').click(); await sleep(450);
+  if (!(await page.locator('#strip button[data-lp="files"].on').count())) { await page.locator('#strip [data-lp="files"]').click(); await sleep(350); }
   await page.locator('#strip [data-lp="scenes"]').click(); await sleep(450);
   check('the scenes stand under the files, each with its own menu ⋮ in its own card', (await page.locator('[data-card="scenes"] #sc-menu').isVisible()) && (await page.locator('[data-card="files"] #fs-menu').isVisible()) && (await page.locator('#lp-sc .fh #sc-q').count()) === 0);
   const scenes = () => page.locator('#sc-list .sc-item').count();

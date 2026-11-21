@@ -3,7 +3,7 @@
   radial-gradient(ellipse 520px 190px at var(--gx,105px) 0,rgba(var(--accent-rgb),.16) 0,rgba(var(--accent-rgb),.075) 48%,rgba(var(--accent-rgb),0) 100%) 0 0 no-repeat,
   #25272a}
 #proj-btn,#br-btn{background:none;box-shadow:none;border:0;gap:8px;padding:0 6px 0 4px}
-#br-btn{order:-2;margin-left:-2px;padding:0 6px 0 6px}
+#br-btn{padding:0 6px}
 #proj-btn:hover,#br-btn:hover{background:var(--hv)}
 #proj-btn .pj{width:26px;height:26px;border-radius:50%;font:700 11.5px var(--mono)}
 #br-btn .br-ic{display:inline-flex;color:var(--mute)}
@@ -15,7 +15,7 @@
 /* ===== the merge screen ===== */
 .main{position:relative}
 .ide.merging .main>*:not(.strip):not(.mgx){visibility:hidden}
-.ide.merging #pg,.ide.merging #pg+.tsep{display:none}
+.ide.merging #pg{display:none}
 .mg-cap{order:-2;display:inline-flex;align-items:center;gap:8px;height:var(--b-m);padding:0 4px 0 10px;margin-left:2px;border-radius:var(--b-r);background:var(--accent-soft);font-size:13px}
 .mg-cap>span{display:inline-flex;align-items:center;gap:7px}
 .mg-cap .from{color:var(--accent-text)}.mg-cap .to-ar{color:var(--dim)}
@@ -84,7 +84,6 @@
 .mg-band .b.l{height:34px}
 
 /* the branch button takes room next to the name: the progress text yields to the mode switch a little earlier */
-@media (min-width:1200px){.topbar #pg{max-width:calc(50% - 530px)}}
 #brpop .cfg-t svg{fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px;margin-right:8px;color:var(--mute);width:16px;height:16px}
 .mg-grid .gr{content-visibility:visible;contain:none}
 .mg-grid .gr .tr.edc{align-self:stretch}

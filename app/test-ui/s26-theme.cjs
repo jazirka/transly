@@ -57,14 +57,18 @@ async function pcPart(browser) {
   check('the choice in the centre is now grey (the window is not in use)', tab.bg === GREY && /rgba\(255, 255, 255, 0\.26\)/.test(tab.sh), JSON.stringify(tab));
   check('and so is the right rail button', (await read('#stabs button.on')).bg === GREY);
   // two tool windows stacked in the left column are two windows: only the one you work in is lit
-  await page.locator('.gr').nth(1).click(); await sleep(250); // a row is chosen again (opening a file clears the choice)
+  // the rows window belongs to the editing mode (the table is the rows already): there the files and the rows are stacked
+  await page.locator('[data-m="edit"]').click(); await sleep(400);
+  if (!(await page.locator('.strip button[data-lp="files"].on').count())) { await page.locator('.strip [data-lp="files"]').click(); await sleep(300); }
+  await page.locator('#slist .si').first().click(); await sleep(250); // a row is chosen again (opening a file clears the choice)
   if (!(await page.locator('#lp-rows').isVisible())) { await page.locator('.strip [data-lp="rows"]').click(); await sleep(300); } else { await page.locator('#rs-menu').click(); await sleep(200); await page.locator('#fpop [data-rm="find"]').click(); await sleep(200); }
   check('the rows window became the working window, and not the files', (await pane()) === 'rows', String(await pane()));
   const rowsRail = await read('.strip button[data-lp="rows"].on'), filesRail = await read('.strip button[data-lp="files"].on');
   check('its rail button is in colour and the rail button of the files stays grey', rowsRail && rowsRail.bg === ACC && filesRail && filesRail.bg === GREY, JSON.stringify([rowsRail && rowsRail.bg, filesRail && filesRail.bg]));
   check('the file in the tree is grey while you work in the rows', (await read('#tree .node.cur')).bg === GREY);
-  check('the chosen row of the table and its cell are grey too (the centre is not in use)', (await read('.gr.sel')).bg === GREY && (await read('.gr.sel .tr')).bg !== ACC);
+  check('the open tab of the centre is grey too (the centre is not in use)', (await read('.tab.on')).bg === GREY);
   if (await page.locator('#lp-rows').isVisible()) { await page.locator('.strip [data-lp="rows"]').click(); await sleep(200); } // folds the rows window
+  await page.locator('[data-m="table"]').click(); await sleep(400);
   await page.locator('#stabs button.on').click(); await sleep(150); // folds the panel
   await page.locator('#stabs [data-p="rel"]').click(); await sleep(250);
   check('a click on the right rail makes the right panel the working window', (await pane()) === 'right' && (await read('#stabs button.on')).bg === ACC, String(await pane()));

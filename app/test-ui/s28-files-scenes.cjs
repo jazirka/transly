@@ -35,6 +35,10 @@ const MAP = { displayName: 'Town', events: [null, { id: 1, name: 'cook', x: 1, y
   const rail = lp => page.locator(`#strip [data-lp="${lp}"]`).click().then(() => sleep(350));
 
   check('to begin with only the files are open', (await vis('#tree')) && !(await vis('#lp-sc')) && !(await vis('#lp-rows')) && (await on()) === 'files', await on());
+  // the rows and the scenes belong to the editing mode: the table is the rows already (its rail has only the files and the related window)
+  check('in the table the rail has no «Рядки» and no «Сцени»', !(await page.locator('#strip [data-lp="rows"]').isVisible()) && !(await page.locator('#strip [data-lp="scenes"]').isVisible()));
+  await page.locator('[data-m="edit"]').click(); await sleep(450);
+  await rail('rows'); await rail('files');
   await rail('scenes');
   check('«Сцени» opens under the files, not instead of them', (await vis('#tree')) && (await vis('#lp-sc')) && !(await vis('#lp-rows')), `${await vis('#tree')} ${await vis('#lp-sc')}`);
   check('both buttons of the rail are on, and the title says so', (await on()) === 'files,scenes' && /Файли й сцени/.test(await title()), `${await on()} | ${await title()}`);

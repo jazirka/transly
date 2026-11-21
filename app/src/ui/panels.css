@@ -673,7 +673,7 @@ span.thc2-b{cursor:default}
 .qacard .btn,.qacard .ign,.qacard .fix{height:26px;padding:0 11px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--text);margin:0}
 .qacard .qa-row.bad{background:rgba(247,84,100,.06)}
 
-#lp-rows{position:relative}
+#lp-rows,#lp-sc{position:relative}
 
 /* ---------- the pages of the list of rows: a bubble at the bottom of the window, a mark where each page begins in the continuous list ---------- */
 .pgb{position:absolute!important;left:50%;bottom:12px;transform:translateX(-50%);z-index:4;display:flex;align-items:center;gap:2px;height:32px;padding:0 6px;border-radius:999px;border:1px solid #4a4d54;background:#2b2d30;color:var(--text);box-shadow:0 6px 16px rgba(0,0,0,.45);white-space:nowrap}
@@ -685,7 +685,7 @@ span.thc2-b{cursor:default}
 .pgb .pg-a{font-size:15px;padding:0 6px}
 .pgb .pg-in{width:64px;height:24px;margin:0 4px;border:1px solid var(--accent);border-radius:8px;background:var(--bg);color:var(--text);text-align:center;font:inherit;font-size:12.5px}
 .pgb.flow{padding:0 4px}
-#lp-rows.has-pager .sl-body{padding-bottom:56px}
+#lp-rows.has-pager .sl-body,#lp-sc.has-pager .sl-body{padding-bottom:56px}
 .si.pg-first::before{content:"Сторінка " attr(data-page);grid-column:1/-1;display:block;margin:0 0 6px;padding-top:2px;color:var(--mute);font-size:11.5px;letter-spacing:.02em;border-top:1px solid var(--line);text-align:center}
 .si.pg-first[data-page="1"]::before{border-top:0}
 
@@ -831,3 +831,8 @@ button.chip .caret{margin-left:5px;vertical-align:middle;position:relative;top:-
 .fr-cmp{font-size:13.5px;line-height:1.45;overflow-wrap:anywhere}
 .fr-cmp ins{text-decoration:none;background:rgba(95,184,101,.22);color:#c6f0cb;border-radius:3px;padding:0 1px}
 .fr-cmp del{background:rgba(247,84,100,.2);color:#ffb3bb;text-decoration:line-through;border-radius:3px;padding:0 1px}
+
+/* threads, simpler: a word is a dot and «en → uk», nothing else; a word still missing from the translation is dimmed; the small button of the card shows when the chip is pointed at */
+.thc2 .thc2-m{opacity:0;transition:opacity .12s}
+.thc2:hover .thc2-m,.thc2:focus-within .thc2-m,.thc2.on .thc2-m{opacity:1}
+.thc2.miss .thc2-b b:last-of-type{opacity:.55}

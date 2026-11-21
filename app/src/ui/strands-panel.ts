@@ -99,10 +99,10 @@ function usageHtml(u: TermUsage | null): string {
 /** One thread as a chip: a click on its body keeps the thread drawn, the pointer over it draws it (see `links.ts`), the small button opens the card. */
 function chipHtml(ctx: Ctx, st: ReturnType<typeof strandsOf>[number], row: { file: string; key: string }): string {
   const t = st.term as GlossaryTerm, use = usageOf(ctx, t, row);
-  const mark = st.state === 'pending' ? '' : st.state === 'missing' ? '<span class="thc2-v warn" title="Немає в перекладі">▲</span>' : `<span class="thc2-v ok" title="${st.state === 'alt' ? 'Альтернатива' : 'Є в перекладі'}">✔</span>`;
-  const tip = [`${t.en} → ${t.uk}`, KIND_WORD[st.kind], usageLine(use)].filter(Boolean).join(' · ');
-  const fix = use && use.other ? `<button type="button" class="thc2-fix" data-th="fix" data-hk="${esc(t.en)}" title="Рядки, де «${esc(t.en)}» перекладено не так, як у записі: пройти їх по черзі">Узгодити (${use.other})</button>` : '';
-  return `<span class="thc2 sc${st.ci}${st.state === 'missing' ? ' miss' : ''}${isPinned(t.en) ? ' on' : ''}" data-ci="${st.ci}" data-ck="${esc(t.en)}"><button type="button" class="thc2-b" data-thp="${esc(t.en)}" aria-pressed="${isPinned(t.en)}" title="${esc(tip)}"><i class="thc2-dot" aria-hidden="true"></i><b>${esc(t.en)}</b><span class="arr" aria-hidden="true">→</span><b>${esc(t.uk)}</b>${mark}</button><button type="button" class="thc2-m" data-th="card" data-hk="${esc(t.en)}" aria-label="Картка: ${esc(t.en)}" title="Картка, форми, вживання">▾</button>${fix}</span>`;
+  // no marks of its own: a word that is not in the translation yet is dimmed, a click puts it in; the details are in the card (the small button, shown on hover)
+  const tip = [`${t.en} → ${t.uk}`, KIND_WORD[st.kind], st.state === 'missing' ? 'ще немає в перекладі: клік вставить' : '', usageLine(use)].filter(Boolean).join(' · ');
+  const fix = use && use.other ? `<button type="button" class="thc2-fix" data-th="fix" data-hk="${esc(t.en)}" title="Рядки, де «${esc(t.en)}» перекладено не так, як у записі: пройти їх по черзі">≠ ${use.other}</button>` : '';
+  return `<span class="thc2 sc${st.ci}${st.state === 'missing' ? ' miss' : ''}${isPinned(t.en) ? ' on' : ''}" data-ci="${st.ci}" data-ck="${esc(t.en)}"><button type="button" class="thc2-b" data-thp="${esc(t.en)}" aria-pressed="${isPinned(t.en)}" title="${esc(tip)}"><i class="thc2-dot" aria-hidden="true"></i><b>${esc(t.en)}</b><span class="arr" aria-hidden="true">→</span><b>${esc(t.uk)}</b></button><button type="button" class="thc2-m" data-th="card" data-hk="${esc(t.en)}" aria-label="Картка: ${esc(t.en)}" title="Картка, форми, вживання">▾</button>${fix}</span>`;
 }
 
 /**

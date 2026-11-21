@@ -78,7 +78,7 @@ const chips = page => page.locator('#gl-chips .chip').evaluateAll(els => els.map
   await page.locator('#mtabs [data-lt="rows"], nav [data-lp="rows"]').first().click(); await sleep(300);
   await page.locator('#lp-rows [data-key], .slist [data-key]').filter({ hasText: 'Take it off' }).first().click(); await sleep(900);
   const fixBtn = page.locator('#pn-th [data-th="fix"]');
-  check('the card of a construction used differently elsewhere has «Узгодити (1)»', (await fixBtn.count()) === 1 && /Узгодити \(1\)/.test(await fixBtn.innerText()), await page.locator('#pn-th').innerText());
+  check('the card of a construction used differently elsewhere has «≠ 1»', (await fixBtn.count()) === 1 && /≠ 1/.test(await fixBtn.innerText()), await page.locator('#pn-th').innerText());
   await fixBtn.click(); await sleep(700);
   const queue = await page.locator('#lp-rows [data-key]:visible').allInnerTexts();
   check('and it opens exactly the rows rendered differently', queue.length === 1 && /Take that off now/.test(queue[0].replace(/\s+/g, ' ')), JSON.stringify(queue));

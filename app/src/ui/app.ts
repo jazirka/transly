@@ -19,7 +19,7 @@ import { wireTermCard } from './termcard';
 import { wireLinks } from './links';
 import { wireRowsChip } from './links-panel';
 import { SCENE_HTML, bringCardIntoView, focusCard, hasScenes, renderSceneView, sceneClick, sceneFocus, sceneIdOf, sceneInput } from './scene-view';
-import { SCENES_HTML, renderScenesPanel, sceneQuery, scenesClick, setSceneQuery, wireScenes } from './scenes-panel';
+import { SCENES_HTML, renderScenesPanel, sceneQuery, scenePagesClick, scenesClick, setSceneQuery, wireScenes } from './scenes-panel';
 import { undoByKey, undoToast } from './undo-toast';
 import { FILES_DRAG, GROUPS_HTML, dragFiles, groupsClick, placeMenuHtml, renderGroupsBlock, startNewGroup, wireGroups } from './groups-panel';
 import type { PlaceTarget } from './groups-panel';
@@ -2099,7 +2099,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.id === 'sd') { closeSearch(); return; }
     const si = t.closest<HTMLElement>('.si[data-key]');
     if (si) { if (s.phone) { s.leftOpen = false; } ctx.select(si.dataset.key!, s.mode === 'table' ? 'edit' : undefined, { focus: false }); return; }
-    if (groupsClick(ctx, t, groupsApi) || glossaryClick(ctx, t) || scenesClick(ctx, t)) return;
+    if (groupsClick(ctx, t, groupsApi) || glossaryClick(ctx, t) || scenePagesClick(ctx, t) || scenesClick(ctx, t)) return;
     if (sideClick(ctx, t)) return;
     if (s.mode === 'scene' && sceneClick(ctx, t, key => { s.cur = key; send(ctx); })) return;
     if (s.mode !== 'table' && focusClick(ctx, t)) return;

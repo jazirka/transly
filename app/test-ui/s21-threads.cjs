@@ -70,9 +70,9 @@ async function addTerm(page, en, uk, alt = '') {
   await sleep(900);
   const cards = await page.locator('#pn-th .thc2[data-ck]').evaluateAll(els => els.map(e => ({ hk: e.dataset.ck, ci: e.dataset.ci, text: e.innerText.replace(/\s+/g, ' '), tip: e.querySelector('.thc2-b').title })));
   check('a chip for each entry of the row, in the colour of its thread', cards.length === 4 && cards.map(c => c.ci).join('') === '0123', JSON.stringify(cards.map(c => c.hk + ':' + c.ci)));
-  check('the chip says what is rendered as what, with the verdict for this row', /take … off/.test(cards[0].text) && /зняти/.test(cards[0].text) && /✔/.test(cards[0].text), cards[0] && cards[0].text);
+  check('the chip says what is rendered as what and has no marks of its own', /take … off/.test(cards[0].text) && /зняти/.test(cards[0].text) && !/[✔▲]/.test(cards[0].text), cards[0] && cards[0].text);
   check('the tip of a construction says what it is and where it is used across the game', /конструкція/.test(cards[0].tip) && /2 рядки/.test(cards[0].tip), cards[0] && cards[0].tip);
-  check('the verdict for an entry that is rendered by its alternative is on its chip', /✔/.test(cards[2].text), cards[2] && cards[2].text);
+  check('an entry rendered by its alternative is a plain chip, too', /pick … up/.test(cards[2].text) && !/[✔▲]/.test(cards[2].text), cards[2] && cards[2].text);
   // pointing at a chip draws its thread (and only that one)
   await page.locator('#pn-th .thc2[data-ck="take … off"] .thc2-b').hover(); await sleep(300);
   const hot = await page.evaluate(() => [...document.querySelectorAll('#te-links path')].map(p => ({ link: p.dataset.link, op: Number(getComputedStyle(p).opacity) })));

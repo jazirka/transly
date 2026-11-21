@@ -2,7 +2,7 @@ import { WordIndex, strandsOf, termUsage } from '../core';
 import type { GlossaryTerm, StrandKind, TermUsage, Unit } from '../core';
 import { esc, plural } from './dom';
 import { namesOfRow, oneLine, termView, tmFind } from './hintcards';
-import { isPinned, showPinned, togglePin } from './links';
+import { isPinned, numberTerms, showPinned, togglePin } from './links';
 import { eqChipHtml, linksClick } from './links-panel';
 import { invalidateMined, mineClick, suggestionsForRow } from './mine-panel';
 import { cardOpenOver, hideTermCard, showCard } from './termcard';
@@ -156,6 +156,7 @@ export function renderStrands(ctx: Ctx, u: Unit | undefined, target: string): vo
   if (shown === lastHtml) return;
   lastHtml = shown;
   body.innerHTML = shown;
+  numberTerms();
 }
 
 /** Clicks on the cards' own buttons. */

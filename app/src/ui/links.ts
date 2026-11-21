@@ -2,21 +2,16 @@ import { $ } from './dom';
 import type { Ctx } from './state';
 
 /**
- * Arrows between the original and the translation: from each glossary term of the original to where the translation
- * renders it, with a mark in the middle that says whether it is right (a tick), and for a term the translation lacks an
- * arrow that stops at the field with a warning. The mark is the way into the card of the term. A control code the
- * translation lost gets the same kind of arrow with a cross. Codes that are in place get no arrow: they would only be noise.
+ * Threads between the original and the translation. Every term of the row wears a small number, in the original and
+ * (when the translation has it) on its word in the translation, so the pairs can be told at a glance, however long the
+ * sentence is. A dashed line from the word to its place is drawn only while one of the pair is pointed at, and only for
+ * a term that has a pair in the text: a term the translation lacks, or a lost code, has no line, only its number in the
+ * warning look (the card of the word tells the rest).
  */
 
 const NS = 'http://www.w3.org/2000/svg';
 
-interface Link { key: string; kind: 'term' | 'code'; ok: boolean; ci?: string; primary: boolean; x1: number; y1: number; x2: number; y2: number; mx?: number; my?: number }
-
-/** A point of the arrow's curve (t from 0 at the original to 1 at the translation). */
-function at(l: Link, t: number): { x: number; y: number } {
-  const ym = (l.y1 + l.y2) / 2, u = 1 - t;
-  return { x: u * u * u * l.x1 + 3 * u * u * t * l.x1 + 3 * u * t * t * l.x2 + t * t * t * l.x2, y: u * u * u * l.y1 + 3 * u * u * t * ym + 3 * u * t * t * ym + t * t * t * l.y2 };
-}
+interface Link { key: string; ci?: string; primary: boolean; x1: number; y1: number; x2: number; y2: number }
 
 /** The threads kept drawn by a click on their chip (`data-thp`); they belong to one row and are let go when another row opens. */
 const pinned = new Set<string>();
@@ -43,45 +38,55 @@ export function showPinned(): void {
 
 const first = (el: Element): DOMRect => el.getClientRects()[0] ?? el.getBoundingClientRect();
 
-/** Draw the arrows for the open row. Nothing is drawn while the translation is empty (there is nothing to check yet). */
+/**
+ * Number the terms of the open row in the order they stand in the original: the number is put on the word of the original,
+ * on its place in the translation and on the dot of its chip. Returns the numbers by the term's key.
+ */
+export function numberTerms(): Map<string, number> {
+  const nums = new Map<string, number>();
+  document.querySelectorAll<HTMLElement>('#f-src [data-hc="term"]').forEach(el => {
+    const hk = el.dataset.hk ?? '';
+    if (!nums.has(hk)) nums.set(hk, nums.size + 1);
+    // a pattern with several parts (take … off) is numbered once, at its first part
+    if ((el.dataset.part ?? '0') === '0') el.dataset.tn = String(nums.get(hk)); else delete el.dataset.tn;
+  });
+  const seen = new Set<string>();
+  document.querySelectorAll<HTMLElement>('#te-layer mark[data-hc="term"]').forEach(el => {
+    const hk = el.dataset.hk ?? '', n = nums.get(hk);
+    if (n !== undefined && !seen.has(hk)) { seen.add(hk); el.dataset.tn = String(n); } else delete el.dataset.tn;
+  });
+  document.querySelectorAll<HTMLElement>('.thc2[data-ck] .thc2-dot').forEach(d => { const n = nums.get(d.parentElement?.closest<HTMLElement>('.thc2')?.dataset.ck ?? ''); d.textContent = n === undefined ? '' : String(n); });
+  return nums;
+}
+
+/** Draw the threads for the open row. Nothing is drawn while the translation is empty (there is nothing to pair yet); the numbers are put on regardless. */
 export function drawLinks(ctx: Ctx): void {
   rowIs(ctx.s.cur ?? '');
   const host = document.getElementById('te-links');
+  numberTerms();
   if (!host) return;
   host.replaceChildren();
   document.querySelector('.fc-in')?.classList.remove('weave');
   const ta = $('#i-tr') as HTMLTextAreaElement, layer = $('#te-layer');
   const base = host.getBoundingClientRect();
   if (!base.width || !ta.value.trim() || ta.disabled) return;
-  const field = ta.getBoundingClientRect();
-  const srcBottom = $('#f-src').getBoundingClientRect().bottom;
   const links: Link[] = [];
   const arcs: { key: string; ci?: string; x1: number; x2: number; y: number }[] = [];
-  // The parts of one entry (a pattern like «take … off» has several) are grouped: each part gets its arrow to the place in the translation.
+  // The parts of one entry (a pattern like «take … off» has several) are grouped: each part gets its line to the place in the translation.
   const groups = new Map<string, HTMLElement[]>();
-  document.querySelectorAll<HTMLElement>('#f-src [data-hc="term"], #f-src [data-hc="code"]').forEach(el => {
-    const id = (el.dataset.hc ?? '') + (el.dataset.hk ?? '');
+  document.querySelectorAll<HTMLElement>('#f-src [data-hc="term"]').forEach(el => {
+    const id = el.dataset.hk ?? '';
     const g = groups.get(id);
-    if (g) { if (el.dataset.hc === 'term' && el.dataset.part !== undefined && g[0]?.dataset.part !== undefined) g.push(el); } else groups.set(id, [el]);
+    if (g) { if (el.dataset.part !== undefined && g[0]?.dataset.part !== undefined) g.push(el); } else groups.set(id, [el]);
   });
   for (const els of groups.values()) {
-    const el0 = els[0]!, kind = el0.dataset.hc as 'term' | 'code', key = el0.dataset.hk ?? '', ci = el0.dataset.ci;
-    const hit = layer.querySelector<HTMLElement>(`mark[data-hc="${kind}"][data-hk="${CSS.escape(key)}"]`);
-    // A code that is in place needs no arrow.
-    if (kind === 'code' && hit) continue;
+    const el0 = els[0]!, key = el0.dataset.hk ?? '', ci = el0.dataset.ci;
+    const hit = layer.querySelector<HTMLElement>(`mark[data-hc="term"][data-hk="${CSS.escape(key)}"]`);
+    // A term the translation lacks has no pair, so no line: its number tells it (see the warning look of the number).
+    if (!hit) continue;
     els.forEach((el, n) => {
-      const r = first(el);
-      // The arrow leaves from under the word, at the lower edge of the original's box (a word in the middle of a long text would otherwise have a line drawn across the lines below it).
-      // A word on the last line of the original is left from its own underline; a word higher up would have the line drawn across the text below it, so that one leaves from the lower edge of the box.
-      const lastLine = srcBottom - r.bottom < 18;
-      const x1 = r.left + r.width / 2 - base.left, y1 = (lastLine ? r.bottom + 1 : Math.max(r.bottom, srcBottom) + 2) - base.top;
-      if (hit) {
-        const t = first(hit);
-        // A word on a later line of the translation is pointed at from above the field: the arrow does not cross the lines in between.
-        const firstLine = t.top - field.top < 32;
-        links.push({ key, kind, ok: true, ...(ci === undefined ? {} : { ci }), primary: n === 0, x1, y1, x2: t.left + t.width / 2 - base.left, y2: firstLine ? t.top - base.top - 1 : field.top - base.top - 2 });
-      }
-      else links.push({ key, kind, ok: false, ...(ci === undefined ? {} : { ci }), primary: n === 0, x1, y1, x2: Math.min(Math.max(x1, field.left - base.left + 14), field.right - base.left - 14), y2: field.top - base.top - 2 });
+      const r = first(el), t = first(hit);
+      links.push({ key, ...(ci === undefined ? {} : { ci }), primary: n === 0, x1: r.left + r.width / 2 - base.left, y1: r.bottom + 2 - base.top, x2: t.left + t.width / 2 - base.left, y2: t.top - base.top - 1 });
     });
     // The parts of a pattern are joined above the original by a dashed arc (when they stand on one line): the words between them are not part of it.
     if (els.length > 1) {
@@ -93,15 +98,15 @@ export function drawLinks(ctx: Ctx): void {
   if (!links.length && !arcs.length) { showPinned(); return; }
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('aria-hidden', 'true');
-  svg.innerHTML = `<defs><marker id="lk-ok" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="6" markerHeight="6"><circle cx="4" cy="4" r="3.4" class="lk-h ok"/></marker><marker id="lk-warn" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="6" markerHeight="6"><circle cx="4" cy="4" r="3.4" class="lk-h warn"/></marker></defs>`;
+  svg.innerHTML = '<defs><marker id="lk-ok" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="6" markerHeight="6"><circle cx="4" cy="4" r="3.4" class="lk-h ok"/></marker></defs>';
   for (const l of links) {
     const ym = (l.y1 + l.y2) / 2;
     const path = document.createElementNS(NS, 'path');
     path.setAttribute('d', `M${l.x1} ${l.y1} C${l.x1} ${ym}, ${l.x2} ${ym}, ${l.x2} ${l.y2}`);
-    path.setAttribute('class', `lk-p ${l.ok ? 'ok' : 'warn'}${l.ci === undefined ? '' : ` sc${l.ci}`}`);
-    // What is right needs no mark: a line that reaches its word is enough. A word the translation lacks ends in a dot of the warning colour.
-    if (!l.ok) path.setAttribute('marker-end', 'url(#lk-warn)');
-    path.dataset.link = l.kind + l.key;
+    path.setAttribute('class', `lk-p ok${l.ci === undefined ? '' : ` sc${l.ci}`}`);
+    path.setAttribute('marker-start', 'url(#lk-ok)');
+    path.setAttribute('marker-end', 'url(#lk-ok)');
+    path.dataset.link = 'term' + l.key;
     svg.appendChild(path);
   }
   for (const a of arcs) {
@@ -112,21 +117,6 @@ export function drawLinks(ctx: Ctx): void {
     svg.appendChild(path);
   }
   host.appendChild(svg);
-  // Marks close to each other would sit on top of one another: spread them out to the right.
-  // Only what needs a look gets a mark (a term the translation lacks, a lost code): what is right is told by the card under the translation.
-  const marked = links.filter(l => l.primary && !l.ok);
-  let lastX = -99;
-  for (const l of [...marked].sort((a, b) => a.x1 - b.x1)) { const m = at(l, 0.5); l.mx = Math.max(m.x, lastX + 22); lastX = l.mx; l.my = m.y; }
-  for (const l of marked) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = `lk ${l.ok ? 'ok' : l.kind === 'code' ? 'bad' : 'warn'}`;
-    b.dataset.hc = l.kind; b.dataset.hk = l.key; b.dataset.link = l.kind + l.key;
-    b.style.left = `${l.mx}px`; b.style.top = `${l.my}px`;
-    b.textContent = l.ok ? '✔' : l.kind === 'code' ? '✖' : '▲';
-    b.setAttribute('aria-label', l.ok ? `«${l.key}»: у перекладі є, відкрити картку` : l.kind === 'code' ? `Код ${l.key} загублено в перекладі, відкрити картку` : `«${l.key}»: у перекладі немає, відкрити картку`);
-    host.appendChild(b);
-  }
   showPinned();
 }
 
@@ -153,6 +143,8 @@ export function wireLinks(ctx: Ctx): void {
   };
   document.addEventListener('mouseover', e => lit(e, true));
   document.addEventListener('mouseout', e => lit(e, false));
+  document.addEventListener('focusin', e => lit(e, true));
+  document.addEventListener('focusout', e => lit(e, false));
 }
 
 /**

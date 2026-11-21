@@ -6,7 +6,7 @@
  *   states  hover is a grey fill, chosen is a grey fill with the ring of the project (see states.css), focus is its own ring
  * The classes `.b` (+ `.s` `.l` `.o` `.q` `.p` `.i`) are for new screens; the rules below bring the older classes to the same sizes.
  */
-:root{--b-s:24px;--b-m:28px;--b-l:36px;--b-r:8px;--b-line:#4a4d54;--wctl-w:122px}
+:root{--b-s:24px;--b-m:28px;--b-l:36px;--b-r:8px;--b-line:#4a4d54;--wctl-w:128px}
 
 .b{display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:none;height:var(--b-m);padding:0 12px;border:1px solid transparent;border-radius:var(--b-r);background:none;color:var(--text);font:inherit;font-size:13px;white-space:nowrap;cursor:pointer}
 .b.s{height:var(--b-s);padding:0 9px;font-size:12px}
@@ -29,7 +29,7 @@
 .seg button{height:var(--b-s);border-radius:calc(var(--b-r) - 2px)}
 .wc button{width:36px;height:var(--b-m);margin:0 1px;border-radius:var(--b-r);align-self:center}
 .wc{align-items:center;padding:0 0 0 2px}
-.wc button:last-child{width:34px;margin-right:0}
+.wc button:last-child{width:40px;margin-right:0}
 .wc button:last-child:hover{background:#c42b1c}
 
 /* the rail of the left panels */

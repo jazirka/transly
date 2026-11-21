@@ -39,7 +39,7 @@
 }
 
 /* ===== Own window frame (desktop app without the system title bar) ===== */
-:root{--tb-h:40px;--wctl-w:138px}
+:root{--tb-h:40px;--wctl-w:144px}
 .wdrag{display:none}
 .wctl[hidden]{display:none}
 html.chrome-own .wctl{display:flex;position:fixed;top:0;right:0;height:var(--tb-h);margin:0;z-index:93}

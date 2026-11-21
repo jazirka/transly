@@ -593,14 +593,14 @@ export async function start(root: HTMLElement): Promise<void> {
       if (n.t === 'd') {
         const c = !q && s.collapsed.has(n.name);
         if (c) skip = n.d;
-        return `<div class="node dir" style="--d:${n.d}" data-dir="${esc(n.name)}" role="treeitem" tabindex="-1" aria-level="${n.d + 1}" aria-expanded="${!c}"><span class="chev">${c ? '▸' : '▾'}</span><span class="ic dir">▤</span><span class="nm">${esc(n.label)}</span></div>`;
+        return `<div class="node dir" style="--d:${n.d}" data-dir="${esc(n.name)}" role="treeitem" tabindex="-1" aria-level="${n.d + 1}" aria-expanded="${!c}"><span class="chev"><svg viewBox="0 0 8 8" aria-hidden="true"><path d="M1.5 2.5L4 5.2l2.5-2.7"/></svg></span><span class="nm">${esc(n.label)}</span></div>`;
       }
       const v = s.views.find(x => x.name === n.name)!;
       const st = statsOf(v.units, s.saved.files[v.name] ?? {});
       const pc = pct(st.translated, st.total), pcA = pct(st.approved, st.total), full = st.total > 0 && st.approved === st.total;
       const [ic, lab] = fileIcon(n.name);
       const cur = n.name === s.current;
-      return `<div class="node ${cur ? 'cur' : ''} ${s.picked.has(n.name) ? 'pick' : ''} ${!st.translated ? 'idle' : ''}" style="--d:${n.d}" data-file="${esc(n.name)}" draggable="true" role="treeitem" tabindex="-1" aria-level="${n.d + 1}" aria-selected="${cur}" title="${cur ? 'Відкрито · ' : ''}${v.label ? esc(v.label) + ' · ' : ''}Перекладено ${pc}% · вичитано ${pcA}%"><span class="chev"></span><span class="ic ${ic}">${lab}</span><span class="nm">${fileGroupDot(n.name)}${v.label ? `${esc(v.label)}<span class="lc">${esc(n.label.replace(/\.json$/, ''))}</span>` : esc(n.label)}</span>${rowMemo()[n.name] && leftAt(n.name, v.units) ? `<span class="mem" title="Ви зупинилися на рядку ${leftAt(n.name, v.units)}">↩ ${leftAt(n.name, v.units)}</span>` : ''}<span class="mini"><i class="${full ? 'f' : ''}" style="width:${pc}%"></i></span><span class="pc ${full ? 'full' : ''}">${pc}%</span></div>`;
+      return `<div class="node ${cur ? 'cur' : ''} ${s.picked.has(n.name) ? 'pick' : ''} ${!st.translated ? 'idle' : ''}" style="--d:${n.d}" data-file="${esc(n.name)}" draggable="true" role="treeitem" tabindex="-1" aria-level="${n.d + 1}" aria-selected="${cur}" title="${cur ? 'Відкрито · ' : ''}${v.label ? esc(v.label) + ' · ' : ''}Перекладено ${pc}% · вичитано ${pcA}%"><span class="ic ${ic}">${lab}</span><span class="nm">${fileGroupDot(n.name)}${v.label ? `${esc(v.label)}<span class="lc">${esc(n.label.replace(/\.json$/, ''))}</span>` : esc(n.label)}</span>${rowMemo()[n.name] && leftAt(n.name, v.units) ? `<span class="mem" title="Ви зупинилися на рядку ${leftAt(n.name, v.units)}">↩ ${leftAt(n.name, v.units)}</span>` : ''}<span class="pc ${full ? 'full' : ''}">${pc}%</span><span class="mini"><i class="${full ? 'f' : ''}" style="width:${pc}%"></i></span></div>`;
     }).join('');
     // Picked files that stand one after another share one outline: only the first has its top corners rounded, only the last its bottom ones.
     box.querySelectorAll<HTMLElement>('.node.pick').forEach(n => { n.classList.toggle('pk-top', !n.previousElementSibling?.classList.contains('pick')); n.classList.toggle('pk-bot', !n.nextElementSibling?.classList.contains('pick')); });

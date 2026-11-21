@@ -1117,8 +1117,12 @@ html.ovsb ::-webkit-scrollbar{display:none}
 /* the groups have no title of their own: compact rows, no divider between them and the tree */
 /* the tree: the same inset on both sides, a rounded highlight inside it, a child under the icon of its parent */
 #tree-list{padding:4px 6px}
-.node{padding:0 8px 0 calc(6px + var(--d,0) * 12px);border-radius:8px}
-.node .chev{width:14px;font-size:11px}
+.node{padding:0 8px 0 calc(6px + var(--d,0) * 14px);border-radius:8px}
+.node .chev{width:8px;height:8px;flex:none;display:grid;place-items:center;font-size:0;color:var(--mute)}
+.node .chev svg{width:8px;height:8px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;transition:transform .12s}
+.node.dir[aria-expanded=false] .chev svg{transform:rotate(-90deg)}
+/* a file stands at the left of its folder's name: the badge ({}, MAP) under the first letter, the percentage before the bar */
+.node .pc{min-width:32px;text-align:right}
 .node[data-file] .chev{display:none}
 /* picked files share one outline: no lines between them, rounded corners only at the ends of the run */
 .node.pick{border-radius:0;background:var(--on-bg);--rg:var(--on-ring);box-shadow:inset 1px 0 var(--rg),inset -1px 0 var(--rg)}

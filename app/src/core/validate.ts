@@ -86,6 +86,7 @@ function repairSettings(raw: unknown, n: Counts): void {
   fix('propagate', v => typeof v === 'boolean'); fix('pluginCommands', strs); fix('pluginsAsked', v => typeof v === 'boolean');
   fix('lineLimit', num); fix('linkMode', v => v === 'off' || v === 'ask' || v === 'auto');
   fix('wrap', isObj); fix('qa', isObj); fix('hue', v => num(v) && (v as number) >= 0 && (v as number) < 360);
+  fix('nameFrom', v => v === 'folder' || v === 'game' || v === 'custom'); fix('title', v => typeof v === 'string' && v.length <= 80); fix('folderName', v => typeof v === 'string' && v.length <= 80); fix('iconText', v => typeof v === 'string' && v.length <= 4);
 }
 
 /**

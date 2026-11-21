@@ -50,7 +50,7 @@ export function branchMenuClick(a: BranchActions, item: HTMLElement): void {
 }
 
 /** A question with one field: the name of a branch (checked as it is typed). */
-function askName(a: BranchActions, title: string, ok: string, start: string, make: (name: string) => SavedProject, note: (name: string) => string): void {
+export function askName(a: BranchActions, title: string, ok: string, start: string, make: (name: string) => SavedProject, note: (name: string) => string): void {
   const p = a.saved();
   const dlg = dialog(`<form method="dialog"><h2 id="br-t">${esc(title)}</h2>
     ${start ? '' : `<p class="hint">Гілка — окрема копія перекладу «${esc(branchOf(p))}»: у ній можна вичитувати чи пробувати інший стиль, не чіпаючи решти. Потім гілки порівнюють і зливають.</p>`}

@@ -1,4 +1,4 @@
-import { applyTheme, themeHue, themeTokens, touchTerms, stamp, DEFAULT_SETTINGS, emptyProject, linkModeOf, parseDelimited, parseHtmlTable, parseTerms, referenceSets, serialize, termsFromTable, withoutReference } from '../core';
+import { touchTerms, stamp, DEFAULT_SETTINGS, emptyProject, linkModeOf, parseDelimited, parseHtmlTable, parseTerms, referenceSets, serialize, termsFromTable, withoutReference } from '../core';
 import type { GlossaryTerm, LinkMode } from '../core';
 import { $, CRUMB, el, esc, plural, toast } from './dom';
 import { isDesktop } from './desktop';
@@ -29,8 +29,21 @@ export function dialog(html: string, labelId: string): HTMLDialogElement {
 }
 
 
+/** What stays of the settings when the project is reset: how it is named and coloured is not translation. */
+const KEEP_ON_RESET = ['nameFrom', 'title', 'folderName', 'iconText', 'hue'] as const;
+
+/** Empty the project (the translation, the glossary, the memory); its name, colour and the folder of the game stay. */
+export function resetProject(ctx: Ctx, onReset: () => void): void {
+  const old = ctx.s.saved;
+  const fresh = { ...emptyProject(old.name), resetEpoch: Math.max(old.resetEpoch, Date.now()) };
+  for (const k of KEEP_ON_RESET) if (old.settings[k] !== undefined) (fresh.settings as unknown as Record<string, unknown>)[k] = old.settings[k];
+  ctx.s.saved = fresh;
+  ctx.invalidateTm(); onReset();
+  toast('Проєкт скинуто');
+}
+
 /** Things the settings dialog starts but the shell owns. */
-export interface SettingsActions { reset: () => void; adopt: () => void; plugins: () => void; wrap: () => void; qa: () => void; importFiles: () => void; folder: { text: () => string; change: () => void; forget: () => void } }
+export interface SettingsActions { project: () => void; reset: () => void; adopt: () => void; plugins: () => void; wrap: () => void; qa: () => void; importFiles: () => void; folder: { text: () => string; change: () => void; forget: () => void } }
 
 /** The pages of the settings, as the tree on the left lists them. */
 export type SettingsTab = 'general' | 'look' | 'folder' | 'lang' | 'terms' | 'tm' | 'qa' | 'wrap' | 'claude' | 'github' | 'server' | 'file' | 'update' | 'danger';
@@ -67,7 +80,7 @@ const mark = (t: string, s: string): string => {
  * below. What is typed waits until it is applied (the accent colour is tried on the whole app at once and goes back if it is cancelled); the buttons
  * that do something (imports, saving to a file, reset, checking for an update) act at once.
  */
-export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugins: onPlugins, wrap: onWrap, qa: onQa, importFiles: onFiles, folder: onFolder }: SettingsActions, tab?: SettingsTab): void {
+export function openSettings(ctx: Ctx, { project: onProject, reset: onReset, adopt: onImport, plugins: onPlugins, wrap: onWrap, qa: onQa, importFiles: onFiles, folder: onFolder }: SettingsActions, tab?: SettingsTab): void {
   const st = ctx.s.saved.settings;
   const gh = loadGithubConfig();
   const sync = loadSyncConfig();
@@ -89,10 +102,8 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
     <label class="achk"><input type="checkbox" id="st-block" ${st.blockErrors ? 'checked' : ''}> Не надсилати рядок із помилкою QA</label>
     <div class="grid"><label for="st-link">Автозаповнення однакових рядків після «Надіслати»</label><select id="st-link"><option value="ask" ${linkModeOf(st) === 'ask' ? 'selected' : ''}>заповнювати порожні чернетками, про різні питати (рекомендовано)</option><option value="auto" ${linkModeOf(st) === 'auto' ? 'selected' : ''}>заповнювати порожні й самому оновлювати різні (вичитані не чіпає)</option><option value="off" ${linkModeOf(st) === 'off' ? 'selected' : ''}>не заповнювати</option></select></div>
     <p class="hint">Порожні зв’язані рядки заповнюються одразу після надсилання чернетками з позначкою «авто» (цю дію можна відмінити в повідомленні). Вичитаний рядок і рядок, який ви змінили пізніше, не перезаписуються без вашого вибору.</p>`)}
-    ${page('look', '', `<div class="theme-set" data-sec="hue"><div class="grid"><label for="th-hue">Колір акценту</label><input id="th-hue" type="range" min="0" max="359" step="1" aria-describedby="th-hint"></div>
-      <div class="th-row"><span class="th-sw" id="th-sw" aria-hidden="true" style="background:${themeTokens(themeHue(ctx.s.saved.name, st.hue))['--accent']}"></span><span class="hint" id="th-hint" role="status">${st.hue === undefined ? `Колір береться з назви проєкту: ${themeHue(ctx.s.saved.name, st.hue)}°` : `Обрано вручну: ${themeHue(ctx.s.saved.name, st.hue)}°`}</span><button class="btn" type="button" id="th-reset"${st.hue === undefined ? ' disabled' : ''}>Взяти з назви проєкту</button></div>
-      <div class="th-pre" id="th-pre" role="group" aria-label="Готові кольори">${[185, 215, 245, 275, 305, 335].map(h => `<button type="button" data-h="${h}" aria-label="Відтінок ${h}°" aria-pressed="${h === themeHue(ctx.s.saved.name, st.hue)}" style="background:${themeTokens(h)['--accent']}"></button>`).join('')}</div></div>
-    <p class="hint">Колір береться з холодної частини кола, щоб його не сплутати зі статусами. Спробувати можна одразу: він міняється в усьому застосунку, а зберігається разом із проєктом лише після «Застосувати».</p>
+    ${page('look', '', `<div class="st-sub" data-now><h3>Назва, значок і колір проєкту</h3><p class="hint">Тепер вони в окремому вікні налаштувань проєкту: колір береться з назви проєкту (назви папки гри), якщо його не вибрано вручну.</p>
+      <div class="acts l"><button class="btn" type="button" id="st-proj">Налаштування проєкту…</button></div></div>
     <div class="st-sub" data-now><h3>Список рядків</h3>
       <div class="grid"><label for="st-pgm">Як показувати довгий список</label><select id="st-pgm"><option value="pages" ${pagesPrefs().mode === 'pages' ? 'selected' : ''}>сторінками: одна сторінка, кнопки ‹ ›</option><option value="flow" ${pagesPrefs().mode === 'flow' ? 'selected' : ''}>безперервно, зі знаками сторінок</option><option value="off" ${pagesPrefs().mode === 'off' ? 'selected' : ''}>безперервно, без сторінок</option></select>
         <label for="st-pgs">Рядків на сторінці</label><select id="st-pgs">${PAGE_SIZES.map(n => `<option value="${n}" ${pagesPrefs().size === n ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
@@ -241,29 +252,6 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
     ctx.s.who = st.who;
     return true;
   };
-  /* The accent colour: the hue of the project's name, or one picked by hand. It is tried on the whole app at once (see core/theme.ts)
-     and kept only when it is applied; closing the dialog any other way puts the saved colour back. */
-  let hue: number | undefined = st.hue;
-  const hueSlider = $('#th-hue', dlg) as HTMLInputElement, hueReset = $('#th-reset', dlg) as HTMLButtonElement, hueSwatches = $('#th-pre', dlg);
-  const paintTheme = (): void => {
-    const h = themeHue(ctx.s.saved.name, hue);
-    hueSlider.value = String(h);
-    $('#th-sw', dlg).style.background = themeTokens(h)['--accent']!;
-    $('#th-hint', dlg).textContent = hue === undefined ? `Колір береться з назви проєкту: ${h}°` : `Обрано вручну: ${h}°`;
-    hueReset.disabled = hue === undefined;
-    hueSwatches.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.h) === h)));
-  };
-  const setHue = (h: number | undefined): void => {
-    hue = h;
-    applyTheme(document.documentElement, themeHue(ctx.s.saved.name, hue));
-    paintTheme();
-    touched.add('hue'); setDirty(true);
-  };
-  hueSwatches.querySelectorAll('button').forEach(b => b.addEventListener('click', () => setHue(Number((b as HTMLElement).dataset.h))));
-  hueSlider.addEventListener('input', () => setHue(Number(hueSlider.value)));
-  hueReset.addEventListener('click', () => setHue(undefined));
-  paintTheme();
-
   /* Sync settings are read from the form when they are applied, over what is stored (the last-sync marks of a run that went on meanwhile stay). */
   const saveGh = () => {
     const base = loadGithubConfig();
@@ -278,8 +266,7 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
   /** Applies what waits. False (and the page with the mistake in front) when something is wrong. */
   const commit = (): boolean => {
     if (touched.has('gen') && !readGeneral()) return false;
-    if (touched.has('hue')) { if (hue === undefined) delete st.hue; else st.hue = hue; }
-    if (touched.has('gen') || touched.has('hue')) { ctx.s.saved.settingsAt = Date.now(); ctx.persist(); ctx.render(); }
+    if (touched.has('gen')) { ctx.s.saved.settingsAt = Date.now(); ctx.persist(); ctx.render(); }
     if (touched.has('gh')) saveGh();
     if (touched.has('sy')) saveSy();
     if (touched.has('cl')) saveCl();
@@ -301,9 +288,8 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
     e.preventDefault(); escAt = Date.now();
     dirtyEl.textContent = 'Є незастосовані зміни: Esc ще раз скасує їх'; dirtyEl.classList.remove('flash'); void dirtyEl.offsetWidth; dirtyEl.classList.add('flash');
   });
-  // however the dialog is closed, the page shows the saved colour (the one tried on it is gone)
-  dlg.addEventListener('close', () => { applyTheme(document.documentElement, themeHue(ctx.s.saved.name, ctx.s.saved.settings.hue)); });
 
+  $('#st-proj', dlg).addEventListener('click', () => away(onProject));
   $('#st-wrap', dlg).addEventListener('click', () => away(onWrap));
   $('#st-qa', dlg).addEventListener('click', () => away(onQa));
   $('#st-plug', dlg).addEventListener('click', () => away(onPlugins));
@@ -447,10 +433,7 @@ export function openSettings(ctx: Ctx, { reset: onReset, adopt: onImport, plugin
     // spot, so the second click of a double-click must not confirm it, and it lapses if the translator does not follow it up.
     if (!armed) { armed = true; armedAt = Date.now(); resetBtn.textContent = 'Так, видалити весь переклад'; armTimer = setTimeout(disarm, 6000); return; }
     if (Date.now() - armedAt < 1200) return;
-    const keep = ctx.s.saved.resetEpoch;
-    ctx.s.saved = { ...emptyProject(ctx.s.saved.name), resetEpoch: Math.max(keep, Date.now()) };
-    ctx.invalidateTm(); onReset(); setDirty(false); dlg.close();
-    toast('Проєкт скинуто');
+    resetProject(ctx, onReset); setDirty(false); dlg.close();
   });
 
   show(tab ?? lastPage);

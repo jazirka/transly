@@ -84,7 +84,7 @@
 .mg-band .b.l{height:34px}
 
 /* the branch button takes room next to the name: the progress text yields to the mode switch a little earlier */
-@media (min-width:1200px){.topbar #pg{max-width:calc(50% - 460px)}}
+@media (min-width:1200px){.topbar #pg{max-width:calc(50% - 530px)}}
 #brpop .cfg-t svg{fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px;margin-right:8px;color:var(--mute);width:16px;height:16px}
 .mg-grid .gr{content-visibility:visible;contain:none}
 .mg-grid .gr .tr.edc{align-self:stretch}

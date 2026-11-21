@@ -1,0 +1,40 @@
+/* The dialog of the project's own settings (ui/project-settings.ts). It wears the same frame as the settings of the app. */
+.st-gl{margin:12px 10px 2px;color:var(--mute);font-size:12px}
+.st-gl:first-child{margin-top:4px}
+.st-ti.flat{padding-left:10px}
+.pjs-prev{display:flex;gap:12px;align-items:center;padding:12px 14px;margin:0 0 12px;border:1px solid var(--line);border-radius:var(--r3,10px);background:var(--bg)}
+.pjs-prev>div{display:flex;flex-direction:column;min-width:0}
+.pjs-prev b{font-weight:600;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pjs-prev small{color:var(--mute);font-size:12px}
+.pjs-prev .pj.lg{width:40px;height:40px;font-size:16px}
+.pjs-from{display:flex;flex-direction:column;gap:6px;margin:4px 0 10px}
+.pjs-r{display:flex;align-items:flex-start;gap:8px;cursor:pointer}
+.pjs-r input{margin-top:3px}
+.pjs-r small{display:block;color:var(--mute);font-size:12px}
+.pjs-r small b{color:var(--text);font-weight:500}
+.pjs-r input:disabled+span{opacity:.6}
+.pjs-brt{width:100%;border-collapse:collapse;font-size:13px}
+.pjs-brt th,.pjs-brt td{position:static;padding:8px 10px;text-align:left;border:0;border-bottom:1px solid var(--line);background:transparent;font-weight:400;font-size:13px;color:var(--text)}
+.pjs-brt thead th{color:var(--mute);font-size:12px}
+.pjs-brt tbody th{font-weight:500}
+.pjs-brt tr.cur>*{background:var(--accent-soft,transparent)}
+.pjs-brt .cfg-t{display:flex;align-items:center;gap:8px}
+.pjs-brt .cfg-t svg{fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;color:var(--mute);width:16px;height:16px;flex:none}
+.pjs-brt .b,.pjs-brt .btn{margin:0}
+.pjs-act{text-align:right;white-space:nowrap}
+.pjs-act>*{margin-left:6px;vertical-align:middle}
+.pjs-act .ok{color:var(--ok);font-size:12px}
+.pj.two,#proj-btn .pj.two{letter-spacing:-.03em}
+#proj-btn .pj.two{font-size:10.5px}
+.pj.lg.two{font-size:12px}
+.pjs-prev .pj.lg.two{font-size:14px}
+
+.pjs-own{align-items:center;gap:10px}
+.pjs-own label{display:flex;align-items:center;gap:8px;cursor:pointer;flex:none}
+.pjs-own input[type=text],.pjs-own input:not([type]){flex:1;min-width:0}
+.pjs-dlg .st-sub{margin-top:10px}
+.pjs-dlg .st-sub h3{margin:0 0 6px}
+.pjs-dlg .st-sub .hint{margin:4px 0}
+.pjs-dlg .grid{margin:4px 0}
+.adlg.st-dlg.pjs-dlg[data-app]{height:min(700px,calc(100% - var(--tb-h) - 24px))}
+.adlg .pjs-own input[type=text],.adlg .pjs-own input:not([type]){height:30px;padding:0 8px;border:1px solid var(--line);border-radius:var(--r2);background:var(--bg)}

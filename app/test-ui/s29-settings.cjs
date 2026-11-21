@@ -78,28 +78,20 @@ const stored = page => page.evaluate(() => new Promise((res, rej) => { const o =
   check('a change turns «Застосувати» on and says so', !(await page.locator('#st-apply').isDisabled()) && (await page.locator('#st-dirty').isVisible()));
   let p = await stored(page);
   check('and it is not saved yet (the settings wait for «Застосувати»)', !p || p.settings?.who !== 'Тестер', JSON.stringify(p?.settings?.who));
-  await page.locator('.st-ti[data-p="look"]').click(); await sleep(100);
-  await page.locator('#th-pre button[data-h="305"]').click(); await sleep(200);
-  const a1 = await accentOf(page);
-  check('a colour is tried on the whole app at once', a1 !== a0, `${a0} -> ${a1}`);
   await page.locator('#st-cancel').click(); await sleep(400);
-  check('«Скасувати» closes the dialog and puts the colour back', !(await page.evaluate(() => !!document.querySelector('dialog[open]'))) && (await accentOf(page)) === a0, `${a0} / ${await accentOf(page)}`);
+  check('«Скасувати» closes the dialog and leaves the colour as it was', !(await page.evaluate(() => !!document.querySelector('dialog[open]'))) && (await accentOf(page)) === a0, `${a0} / ${await accentOf(page)}`);
   p = await stored(page);
-  check('and nothing was saved', !p || (p.settings?.who !== 'Тестер' && p.settings?.hue === undefined), JSON.stringify([p?.settings?.who, p?.settings?.hue]));
+  check('and nothing was saved', !p || p.settings?.who !== 'Тестер', JSON.stringify([p?.settings?.who]));
 
   await open();
-  check('the dialog opens on the page that was open last', /Вигляд/.test(await page.locator('#st-t').innerText()));
+  check('the dialog opens on the page that was open last', /Загальні/.test(await page.locator('#st-t').innerText()));
   await page.locator('.st-ti[data-p="general"]').click(); await sleep(100);
-  await page.locator('#st-who').fill('Тестер');
-  await page.locator('.st-ti[data-p="look"]').click(); await sleep(100);
-  await page.locator('#th-pre button[data-h="305"]').click(); await sleep(150);
+  await page.locator('#st-who').fill('Тестер'); await sleep(100);
   await page.locator('#st-apply').click(); await sleep(500);
   check('«Застосувати» applies and keeps the dialog open', (await page.evaluate(() => !!document.querySelector('dialog[open]'))) && await page.locator('#st-apply').isDisabled() && await page.locator('#st-dirty').isHidden());
-  const a2 = await accentOf(page);
-  check('the colour stays', a2 === a1, `${a1} / ${a2}`);
   await sleep(1000);
   p = await stored(page);
-  check('and the settings are saved with the project', !!p && p.settings.who === 'Тестер' && p.settings.hue === 305, JSON.stringify([p?.settings?.who, p?.settings?.hue]));
+  check('and the settings are saved with the project', !!p && p.settings.who === 'Тестер', JSON.stringify([p?.settings?.who]));
   // Esc with a change waiting: the first one only says so, the second one throws the change away
   await page.locator('.st-ti[data-p="general"]').click();
   await page.locator('#st-who').fill('Інший'); await sleep(100);

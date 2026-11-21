@@ -27,6 +27,7 @@ export * from './github';
 export * from './dbsync';
 export * from './links';
 export * from './branches';
+export * from './projname';
 export * from './ukmorph';
 export * from './termsync';
 export * from './termtable';

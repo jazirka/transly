@@ -1,4 +1,4 @@
-import { branchOf, builtDrift, inboxOf, syncTheme, isAutoFilled, autoNote, planIngest, looksLikeAnotherGame, ingestQuiet, ingestNote, Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, jumpTarget, qaOf, termsStamp, adoptSynced, applyPlan, planOf, reconcileChanges, pct, progressOf, rowState, sumProgress, QUEUE_LABEL, nextIn, positionOf, queueRows, ago, copyLine, stamp, stampOf } from '../core';
+import { branchOf, projectTitle, iconLetters, nameFromFolder, builtDrift, inboxOf, syncTheme, isAutoFilled, autoNote, planIngest, looksLikeAnotherGame, ingestQuiet, ingestNote, Autosave, LinkIndex, linkModeOf, pendingLinks, commitRows, threadsOf, GameNameIndex, buildUsage, sysNamesOf, activeIssues, autoLineLimit, displayLength, edit, emptyProject, labelsOf, flowText, isMessageUnit, lengthDeviation, note, pluginCandidates, readGame, snapshotOf, speakerOf, statsOf, submit, tooWide, viewsFromSnapshot, wrapMessage, wrapOf, hasAdvice, jumpTarget, qaOf, termsStamp, adoptSynced, applyPlan, planOf, reconcileChanges, pct, progressOf, rowState, sumProgress, QUEUE_LABEL, nextIn, positionOf, queueRows, ago, copyLine, stamp, stampOf } from '../core';
 import type { InboxItem, IngestReport, QaOptions, QueueKind, WrapPlan } from '../core';
 import { pxMeasure } from './measure';
 import { openWrapTool } from './wrap-dialog';
@@ -60,6 +60,8 @@ import { pagesClick, planRows, renderPager, takeWantTop, wirePages } from './pag
 import { buildAndRunGame, playInGame } from './play';
 import { BRANCH_ICON, branchMenuClick, branchMenuHtml, chooseMerge } from './branches';
 import type { BranchActions } from './branches';
+import { openProjectSettings } from './project-settings';
+import type { ProjectTab } from './project-settings';
 import { openMergeScreen } from './merge-screen';
 import { invalidateUsage, renderStrands, wireStrands } from './strands-panel';
 import { wireMine } from './mine-panel';
@@ -853,9 +855,10 @@ export async function start(root: HTMLElement): Promise<void> {
 
   let topTimer = 0;
   function renderTop(): void {
-    syncTheme(document.documentElement, s.saved);
-    $('#proj-name').textContent = s.saved.name;
-    $('#proj-av').textContent = (Array.from(s.saved.name.trim())[0] ?? 'T').toUpperCase();
+    const title = projectTitle(s.saved), letters = iconLetters(s.saved);
+    syncTheme(document.documentElement, { name: title, settings: s.saved.settings });
+    $('#proj-name').textContent = title;
+    $('#proj-av').textContent = letters; $('#proj-av').classList.toggle('two', Array.from(letters).length > 1);
     $('#br-name').textContent = branchOf(s.saved);
     syncGlow();
     // the four states of a row (see core/progress.ts): without text, draft, sent (not proofread yet), proofread
@@ -863,7 +866,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const total = prog.total, A = prog.approved, D = prog.sent, W = prog.draft;
     const cur = ctx.view();
     const nextU = cur && cur.name !== GROUP ? cur.units.find(u => !s.saved.files[cur.name]?.[u.key]?.target && u.kind !== 'name' && u.kind !== 'term') : undefined;
-    publishWidget({ name: s.saved.name, file: s.current === GROUP ? '' : s.current ?? '', total, approved: A, done: D, draft: W, ...(cur && nextU ? { next: { file: cur.name, key: nextU.key, text: nextU.source.replace(/\s+/g, ' ').slice(0, 160) } } : {}) });
+    publishWidget({ name: title, file: s.current === GROUP ? '' : s.current ?? '', total, approved: A, done: D, draft: W, ...(cur && nextU ? { next: { file: cur.name, key: nextU.key, text: nextU.source.replace(/\s+/g, ' ').slice(0, 160) } } : {}) });
     $('#pg-a').style.width = total ? `${(100 * A) / total}%` : '0';
     $('#pg-b').style.width = total ? `${(100 * D) / total}%` : '0';
     $('#pg-c').style.width = total ? `${(100 * W) / total}%` : '0';
@@ -1189,9 +1192,19 @@ export async function start(root: HTMLElement): Promise<void> {
     openPluginTexts(ctx, setPluginCommands);
   }
 
+  /** The name of the game's folder is what the project is called until the translator names it (see core/projname.ts). */
+  function noteFolderName(raw: string): void {
+    const n = nameFromFolder(raw);
+    if (!n || s.saved.settings.folderName === n) return;
+    s.saved.settings.folderName = n; s.saved.settingsAt = Date.now(); ctx.persist();
+  }
+
   async function openFolder(): Promise<void> {
     const picked = await pickGameFolder(input);
     if (!picked) return;
+    // the folder the files were picked from: its full path on the desktop, its name in the browser
+    const first = picked.files[0]?.path ?? '';
+    noteFolderName(isDesktop() ? rememberedGameDir() ?? '' : picked.handle?.name ?? (first.includes('/') ? first.split('/')[0]! : ''));
     if (picked.handle) { lastHandle = picked.handle as typeof lastHandle; void saveHandle('default', picked.handle).catch(() => undefined); }
     folderSeq++; // a folder chosen by hand beats the automatic restore that may still be running
     await loadFiles(picked.files);
@@ -1225,6 +1238,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const found = await reopenGameDir();
     if (seq !== folderSeq) return;
     folder = classifyFolder(found, s.views.map(v => v.name));
+    if (found?.ok) noteFolderName(found.root);
     // Nothing is written into a folder that is not this game's: without a data folder the build and the launch refuse.
     dataDir = folder.kind === 'ok' ? folder.dataDir : null;
     renderFolderBar(); renderTop();
@@ -1337,8 +1351,9 @@ export async function start(root: HTMLElement): Promise<void> {
     pop.innerHTML = `<button role="menuitem" data-pj="folder"><span class="cfg-t">Відкрити папку гри…</span></button>
       <button role="menuitem" data-pj="files"><span class="cfg-t">Відкрити файли або вставити JSON…</span></button>
       <hr><div class="pj-h">Поточний проєкт</div>
-      <div class="pj-card"><span class="pj lg">${esc((Array.from(s.saved.name.trim())[0] ?? 'T').toUpperCase())}</span><div><b>${esc(s.saved.name)}</b><small class="${folder.kind === 'missing' || folder.kind === 'other' ? 'warn' : ''}" title="${esc(folderLine(folder, remembered))}">${esc(folderLine(folder, remembered))}</small><small>${total ? `Перекладено ${done.toLocaleString('uk-UA')} з ${total.toLocaleString('uk-UA')}` : 'Файлів ще немає'}</small></div></div>
-      <hr><button role="menuitem" data-pj="settings"><span class="cfg-t">Налаштування…</span></button>`;
+      <div class="pj-card"><span class="pj lg${Array.from(iconLetters(s.saved)).length > 1 ? ' two' : ''}">${esc(iconLetters(s.saved))}</span><div><b>${esc(projectTitle(s.saved))}</b><small class="${folder.kind === 'missing' || folder.kind === 'other' ? 'warn' : ''}" title="${esc(folderLine(folder, remembered))}">${esc(folderLine(folder, remembered))}</small><small>${total ? `Перекладено ${done.toLocaleString('uk-UA')} з ${total.toLocaleString('uk-UA')}` : 'Файлів ще немає'}</small></div></div>
+      <hr><button role="menuitem" data-pj="project"><span class="cfg-t">Налаштування проєкту…</span></button>
+      <button role="menuitem" data-pj="settings"><span class="cfg-t">Налаштування застосунку…</span></button>`;
     const r = btn.getBoundingClientRect();
     pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 340))}px`; pop.style.top = `${r.bottom + 6}px`;
     rememberOpener(btn); pop.hidden = false; btn.setAttribute('aria-expanded', 'true'); focusFirst(pop); refreshScrollbars();
@@ -1444,22 +1459,28 @@ export async function start(root: HTMLElement): Promise<void> {
   const runSelected = (): void => runCfgNow(runCfg);
   const doBuild = () => openBuild(ctx, dataDir, n => { s.lastBuild = { at: Date.now(), n }; stamp(s.saved, 'build', 'збірка', Date.now(), n); ctx.persist(); renderTop(); }, () => void openFolder());
 
+  /** The project is empty again, so the game's strings have to be read into it afresh (plugin texts are off by default). */
+  function afterReset(): void {
+    if (s.game.length) { ingest(s.game); unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u])); if (s.cur && !unitMap.has(s.cur)) s.cur = null; }
+    // No game folder in memory (the files on screen came from the stored snapshot): the rows stay the project's game, so keep their snapshot.
+    else if (s.views.length) s.saved.snapshot = snapshotOf(s.views);
+    s.views.forEach(v => { s.saved.files[v.name] = {}; });
+    renderAll(); ctx.persist();
+  }
+  const folderActions = {
+    text: () => folderLine(folder, rememberedGameDir()),
+    change: () => { void openFolder(); },
+    forget: () => { forgetGameDir(); folderSeq++; folder = { kind: 'none' }; dataDir = null; renderFolderBar(); renderTop(); },
+  };
+  function openProjectDlg(tab?: ProjectTab): void {
+    openProjectSettings(ctx, { branches: branchActions, folder: folderActions, reset: afterReset, app: t => openSettingsDlg(t) }, tab);
+  }
   function openSettingsDlg(tab?: SettingsTab): void {
     openSettings(ctx, {
-      reset: () => {
-        // The project is empty again, so the game's strings have to be read into it afresh (plugin texts are off by default).
-        if (s.game.length) { ingest(s.game); unitMap = new Map((ctx.view()?.units ?? []).map(u => [u.key, u])); if (s.cur && !unitMap.has(s.cur)) s.cur = null; }
-        // No game folder in memory (the files on screen came from the stored snapshot): the rows stay the project's game, so keep their snapshot.
-        else if (s.views.length) s.saved.snapshot = snapshotOf(s.views);
-        s.views.forEach(v => { s.saved.files[v.name] = {}; });
-        renderAll(); ctx.persist();
-      },
+      project: () => openProjectDlg(),
+      reset: afterReset,
       adopt,
-      folder: {
-        text: () => folderLine(folder, rememberedGameDir()),
-        change: () => { void openFolder(); },
-        forget: () => { forgetGameDir(); folderSeq++; folder = { kind: 'none' }; dataDir = null; renderFolderBar(); renderTop(); },
-      },
+      folder: folderActions,
       plugins: () => openPluginTexts(ctx, setPluginCommands),
       wrap: () => openWrapTool(ctx, { wrapFile }),
       qa: () => openQaRules(ctx),
@@ -1887,7 +1908,7 @@ export async function start(root: HTMLElement): Promise<void> {
       return;
     }
     const pj = t.closest<HTMLElement>('#projpop [data-pj]');
-    if (pj) { closeProjMenu(); if (pj.dataset.pj === 'folder') void openFolder(); else if (pj.dataset.pj === 'files') openImportDlg(); else openSettingsDlg(); return; }
+    if (pj) { closeProjMenu(); if (pj.dataset.pj === 'folder') void openFolder(); else if (pj.dataset.pj === 'files') openImportDlg(); else if (pj.dataset.pj === 'project') openProjectDlg(); else openSettingsDlg(); return; }
     if (t.closest('#cfg-btn')) { openCfgMenu(); return; }
     const cfgRun = t.closest<HTMLElement>('#cfgpop [data-cfg-run]');
     if (cfgRun) { closeCfgMenu(); runCfgNow(cfgRun.dataset.cfgRun as RunCfg); return; }

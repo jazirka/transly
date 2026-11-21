@@ -98,9 +98,8 @@ async function pcPart(browser) {
   check('the extra filters (advice, comments) have no dot', dots.adv === '' && dots.cm === '', JSON.stringify(dots));
 
   // the accent colour in the settings
-  await fileMenu();
-  await page.locator('#mdd').getByText('Налаштування…').first().click(); await sleep(500);
-  await page.locator('.st-ti[data-p="look"]').click(); await sleep(150);
+  await page.locator('#proj-btn').click(); await sleep(200);
+  await page.locator('#projpop [data-pj="project"]').click(); await sleep(500);
   const hint0 = await page.locator('#th-hint').innerText();
   check('the settings say the colour comes from the name of the project', /назви проєкту/.test(hint0) && (await page.locator('#th-reset').isDisabled()), hint0);
   await page.locator('#th-hue').evaluate(e => { e.value = '40'; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); });
@@ -112,7 +111,7 @@ async function pcPart(browser) {
   const a2 = await accentOf(page);
   check('a ready colour works too', a2 !== a1 && /вручну: 245°/.test(await page.locator('#th-hint').innerText()), `${a1} -> ${a2}`);
   await page.locator('#th-reset').click(); await sleep(150);
-  check('«Взяти з назви проєкту» brings the first colour back', (await accentOf(page)) === a0 && /назви проєкту/.test(await page.locator('#th-hint').innerText()));
+  check('«Як за назвою» brings the first colour back', (await accentOf(page)) === a0 && /назви проєкту/.test(await page.locator('#th-hint').innerText()));
   check('no page errors on the PC', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }

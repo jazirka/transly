@@ -111,6 +111,14 @@ export interface ProjectSettings {
   qa?: QaSettings;
   /** The accent hue picked by hand (degrees); missing = the hue the project's name gives (see `theme.ts`). */
   hue?: number;
+  /** Where the shown name comes from: the game's folder (the default), the game's own title or a name written by hand (see `projname.ts`). */
+  nameFrom?: 'folder' | 'game' | 'custom';
+  /** The name written by hand. */
+  title?: string;
+  /** The name of the folder the game was last opened from. */
+  folderName?: string;
+  /** The letters of the icon (one or two), when they are not the initials of the name. */
+  iconText?: string;
 }
 
 export const DEFAULT_SETTINGS: ProjectSettings = { tolerancePct: 25, blockErrors: true, who: 'Ви', propagate: true, pluginCommands: [], pluginsAsked: false, lineLimit: 0 };

@@ -10,7 +10,7 @@ import type { Ctx } from './state';
  * goes into the row and the row is proofread; the tick of the approved one takes the approval back) and taken off the card (the bin; the one the row
  * holds is not taken off, it is the row's translation). Like the contributions of a string in an online editor.
  */
-const when = (t: number): string => new Date(t).toLocaleString(uiLocale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+const when = (t: number): string => new Date(t).toLocaleString(uiLocale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
 
 /** The sent translations of the open row, as the card shows them. */
 export const variantsOf = (ctx: Ctx, key: string): Variant[] => sentVariants(ctx.s.current ? ctx.entries(ctx.s.current)[key] : undefined);

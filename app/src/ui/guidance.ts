@@ -1,6 +1,7 @@
 import { i18n, plugins, t } from '../core';
 import { $, esc } from './dom';
 import { ext } from './ext';
+import { suggestForFiles } from './ext-catalog';
 import { miniMarkdown } from './minimd';
 import { dialog } from './settings';
 import { tp } from './ext-dialog';
@@ -14,8 +15,8 @@ export interface Guidance {
   names: string[];
   /** Why we are here: nothing readable at all, or files that were read but had no text. */
   why: 'nothing' | 'empty';
-  /** Open the manager of extensions (on the page that adds one). */
-  addExtension: () => void;
+  /** Open the manager of extensions: on the page that adds one, or (with the id of a plugin) on the catalog, looking for that plugin. */
+  addExtension: (catalogQuery?: string) => void;
 }
 
 export function openGuidance(g: Guidance): HTMLDialogElement {
@@ -35,7 +36,7 @@ export function openGuidance(g: Guidance): HTMLDialogElement {
   const none = found.length ? '' : `<p>${esc(t('Застосунок не впізнав цю гру. Можливо, для її рушія потрібне окреме розширення.'))}</p>
     <div class="acts l"><button class="btn p" type="button" data-g="add">${esc(t('Знайти розширення…'))}</button></div>`;
   const dlg = dialog(`<form method="dialog"><h2 id="gd-t">${esc(head)}</h2>
-    <div class="gd-body">${matches}${none}
+    <div class="gd-body">${matches}<div id="gd-sug"></div>${none}
       <div class="st-sub"><h3>${esc(t('Що застосунок уміє читати зараз'))}</h3>
         <p>${esc(engines.map(e => tp(plugins.get(e.plugin)!, e.label)).join(', ') || '—')}</p>
         <p class="hint">${esc(t('Формати файлів'))}: ${esc(plugins.extensions().join(' '))}</p></div>
@@ -47,7 +48,14 @@ export function openGuidance(g: Guidance): HTMLDialogElement {
     const b = (e.target as HTMLElement).closest<HTMLElement>('[data-g]');
     if (!b) return;
     if (b.dataset.g === 'enable') void ext.setEnabled(b.dataset.id!, true).then(() => { dlg.close(); });
+    else if (b.dataset.g === 'catalog') { dlg.close(); g.addExtension(b.dataset.id); }
     else { dlg.close(); g.addExtension(); }
+  });
+  // the catalog may know a plugin for this kind of folder (told from its files); the answer comes without the net
+  if (!found.length) void suggestForFiles(g.names).then(list => {
+    const box = dlg.querySelector('#gd-sug');
+    if (!box || !list.length) return;
+    box.innerHTML = `<div class="st-sub"><h3>${esc(t('Можливо, підійде з каталогу'))}</h3>${list.map(x => `<p><b>${esc(x.entry.name)}</b>${x.entry.description ? ` — ${esc(x.entry.description)}` : ''} <button class="btn s" type="button" data-g="catalog" data-id="${esc(x.entry.id)}">${esc(t('Показати в каталозі'))}</button></p>`).join('')}</div>`;
   });
   void i18n;
   void $;

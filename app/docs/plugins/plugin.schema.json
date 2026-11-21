@@ -30,7 +30,10 @@
         "engines": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/engine" } },
         "languages": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/language" } },
         "help": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/help" } },
-        "settings": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/settings" } }
+        "settings": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/settings" } },
+        "commands": { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/command" } },
+        "qaRules": { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/qaRule" } },
+        "glossaries": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/glossary" } }
       }
     },
     "files": { "type": "object", "maxProperties": 200, "propertyNames": { "$ref": "#/$defs/path" }, "additionalProperties": { "type": "string", "pattern": "^sha256-[0-9a-f]{64}$" }, "description": "Every file of the package except this one, with its SHA-256. Written by scripts/plugin-pack.mjs." }
@@ -101,6 +104,52 @@
       "properties": {
         "id": { "type": "string" }, "title": { "type": "string" }, "description": { "type": "string" },
         "fields": { "type": "array", "minItems": 1, "maxItems": 64, "items": { "type": "object", "required": ["key", "type", "label"], "properties": { "key": { "type": "string", "pattern": "^[a-zA-Z]\\w{0,39}$" }, "type": { "enum": ["boolean", "string", "number", "select"] }, "label": { "type": "string" }, "description": { "type": "string" }, "default": { "type": ["string", "number", "boolean"] }, "options": { "type": "array", "items": { "type": "object", "required": ["value", "label"], "properties": { "value": { "type": "string" }, "label": { "type": "string" } } } }, "min": { "type": "number" }, "max": { "type": "number" }, "scope": { "enum": ["app", "project"] } } } }
+      }
+    },
+    "textMatch": {
+      "type": "object",
+      "required": ["find"],
+      "properties": {
+        "find": { "type": "string", "minLength": 1, "maxLength": 120, "description": "Plain text, never a regular expression." },
+        "wholeWord": { "type": "boolean" }, "caseSensitive": { "type": "boolean" }, "replace": { "type": "string", "maxLength": 120 }
+      }
+    },
+    "command": {
+      "type": "object",
+      "required": ["id", "title", "action"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$" }, "title": { "type": "string", "maxLength": 80 }, "description": { "type": "string", "maxLength": 600 },
+        "action": { "enum": ["replace", "help", "link"] },
+        "steps": { "type": "array", "minItems": 1, "maxItems": 50, "description": "action replace: made in order on every translation (with a preview, and undoable).", "items": { "$ref": "#/$defs/textMatch", "required": ["find", "replace"] } },
+        "help": { "type": "string", "description": "action help: the local id of one of the plugin's help topics." },
+        "url": { "$ref": "#/$defs/https", "description": "action link." }
+      }
+    },
+    "qaRule": {
+      "type": "object",
+      "required": ["id", "title", "check"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$" }, "title": { "type": "string", "maxLength": 80 }, "description": { "type": "string", "maxLength": 600 },
+        "severity": { "enum": ["warn", "bad"], "description": "The level when the project has not chosen one." },
+        "kinds": { "type": "array", "maxItems": 16, "items": { "enum": ["dialogue", "choice", "scroll", "name", "description", "message", "term"] } },
+        "check": {
+          "oneOf": [
+            { "type": "object", "required": ["type", "items"], "properties": { "type": { "const": "forbid" }, "message": { "type": "string", "maxLength": 200 }, "items": { "type": "array", "minItems": 1, "maxItems": 50, "items": { "$ref": "#/$defs/textMatch" } } } },
+            { "type": "object", "required": ["type", "when", "then"], "properties": { "type": { "const": "require" }, "message": { "type": "string", "maxLength": 200 }, "when": { "$ref": "#/$defs/textMatch" }, "then": { "$ref": "#/$defs/textMatch" } } },
+            { "type": "object", "required": ["type", "max"], "properties": { "type": { "const": "maxLength" }, "message": { "type": "string", "maxLength": 200 }, "max": { "type": "integer", "minimum": 1, "maximum": 10000 } } },
+            { "type": "object", "required": ["type"], "properties": { "type": { "const": "sameAsSource" }, "message": { "type": "string", "maxLength": 200 } } }
+          ]
+        }
+      }
+    },
+    "glossary": {
+      "type": "object",
+      "required": ["id", "title"],
+      "anyOf": [{ "required": ["terms"] }, { "required": ["file"] }],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$" }, "title": { "type": "string", "maxLength": 80 }, "description": { "type": "string", "maxLength": 600 },
+        "terms": { "type": "array", "maxItems": 5000, "items": { "type": "object", "required": ["en", "uk"], "properties": { "en": { "type": "string", "maxLength": 200 }, "uk": { "type": "string", "maxLength": 200 }, "alt": { "type": "array", "maxItems": 16, "items": { "type": "string", "maxLength": 200 } }, "note": { "type": "string", "maxLength": 300 } } } },
+        "file": { "$ref": "#/$defs/path", "description": ".json (a list of the same objects) or .tsv: original, tab, translation, tab, alternatives with ';'." }
       }
     }
   }

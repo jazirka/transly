@@ -5,13 +5,19 @@ export interface FindMatch { file: string; key: string; source: string; before: 
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+/**
+ * The pattern for a piece of plain text (never a regular expression typed by someone): the apostrophe is written in several ways (' ’ ʼ `), and whichever
+ * one is typed finds all of them; a whole word ends at a space or a sign, not at an apostrophe or a hyphen between letters («сім» is not the start of «сім’я»).
+ */
+export function literalPattern(find: string, wholeWord = false, caseSensitive = false): RegExp {
+  const body = esc(find).replace(/['’ʼ`]/g, "['’ʼ`]");
+  return new RegExp(wholeWord ? `(?<![\\p{L}\\p{N}])(?<![\\p{L}\\p{N}]['’ʼ\`])${body}(?![\\p{L}\\p{N}])(?!['’ʼ\`][\\p{L}\\p{N}])` : body, caseSensitive ? 'gu' : 'giu');
+}
+
 /** Every translation containing the text, with what it would become. Nothing is changed here. */
 export function findReplace(views: FileView[], saved: SavedProject, o: FindOptions, limit = 2000): FindMatch[] {
   if (!o.find) return [];
-  // the apostrophe is written in several ways (' ’ ʼ `): whichever one is typed finds all of them
-  const body = esc(o.find).replace(/['’ʼ`]/g, "['’ʼ`]");
-  // a word ends at a space or a sign, not at an apostrophe or a hyphen between letters: «сім» is not the start of «сім’я»
-  const re = new RegExp(o.wholeWord ? `(?<![\\p{L}\\p{N}])(?<![\\p{L}\\p{N}]['’ʼ\`])${body}(?![\\p{L}\\p{N}])(?!['’ʼ\`][\\p{L}\\p{N}])` : body, o.caseSensitive ? 'gu' : 'giu');
+  const re = literalPattern(o.find, o.wholeWord, o.caseSensitive);
   const out: FindMatch[] = [];
   for (const v of views) {
     const ents = saved.files[v.name];

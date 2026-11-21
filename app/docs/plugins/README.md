@@ -9,6 +9,7 @@ RPG Maker MV/MZ and the open text formats (gettext, CSV/TSV, JSON locale files, 
 | write a plugin (a format, an engine, help, settings) | [plugin-api.md](plugin-api.md) |
 | translate Transly itself, or a plugin, into another language | [language-packs.md](language-packs.md) |
 | publish a plugin (GitHub, any server, a file) and keep it up to date | [publishing.md](publishing.md) |
+| list plugins for others to find (a catalog), or use one | [catalogs.md](catalogs.md) |
 | know what the application guarantees and what a plugin can do | [security.md](security.md) |
 | validate a manifest in an editor | [plugin.schema.json](plugin.schema.json) |
 | see working examples | [`../../examples/plugins/`](../../examples/plugins) |
@@ -35,6 +36,9 @@ A plugin is a **folder or a zip** with a `transly-plugin.json` (the *manifest*) 
 | `formats` | how a kind of file is read and written (described as **data**: `keyvalue`, `table`, `json`) |
 | `engines` | how a game is recognised from the list of its files, which formats it uses, which folder holds its data, the help about it |
 | `languages` | catalogs of strings for an interface language (`.po` or `.json`), for the core and for other plugins |
+| `qaRules` | rules of QA as data (forbid, require, maximum length, not-just-the-original); they work with the application's own rules |
+| `commands` | entries of the menu «Інструменти»: replacements with a preview and undo, a help topic, an https link |
+| `glossaries` | lists of terms a user adds to a project's glossary after looking at them |
 | `help` | help topics, shown in the manager and in the guidance about a game that cannot be read |
 | `settings` | parameters (switch, text, number, choice) kept on the device or in the project |
 

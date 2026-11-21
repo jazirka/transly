@@ -1,9 +1,10 @@
-import { PERMISSIONS, authorOf, i18n, plugins, pluginTemplate, t, uiLocale } from '../core';
-import type { InstallPlan, PluginPermission, PluginRecord, PluginState } from '../core';
+import { CATALOG_TAGS, PERMISSIONS, authorOf, catalogStatus, filterCatalog, i18n, plugins, pluginTemplate, qualified, t, uiLocale } from '../core';
+import type { CatalogEntry, CatalogTag, InstallPlan, PluginPermission, PluginRecord, PluginState } from '../core';
 import { InstallError } from '../core';
 import { $, CRUMB, esc, toast } from './dom';
 import { openLink } from './desktop';
 import { ext, interfaceLanguage, setInterfaceLanguage } from './ext';
+import { addCatalog, allEntries, bundledCatalog, cachedCatalogs, refreshCatalogs, removeCatalog, sourceOf } from './ext-catalog';
 import { miniMarkdown } from './minimd';
 import { saveFile } from './save';
 import { dialog } from './settings';
@@ -14,9 +15,9 @@ import { dialog } from './settings';
  * asks for is shown before it is installed, and nothing is written until the user agrees.
  */
 
-type Page = 'installed' | 'add' | 'lang' | 'support';
-const TITLES: Record<Page, string> = { installed: 'Встановлені', add: 'Додати', lang: 'Мова інтерфейсу', support: 'Підтримувані ігри й формати' };
-const GROUPS: [string, Page[]][] = [['Розширення', ['installed', 'add']], ['Мова й підтримка', ['lang', 'support']]];
+type Page = 'installed' | 'catalog' | 'add' | 'lang' | 'support';
+const TITLES: Record<Page, string> = { installed: 'Встановлені', catalog: 'Каталог', add: 'Додати', lang: 'Мова інтерфейсу', support: 'Підтримувані ігри й формати' };
+const GROUPS: [string, Page[]][] = [['Розширення', ['installed', 'catalog', 'add']], ['Мова й підтримка', ['lang', 'support']]];
 
 const STATE: Record<PluginState, [string, string]> = {
   enabled: ['Увімкнено', 'ok'], disabled: ['Вимкнено', 'off'], incompatible: ['Не підходить до цієї версії', 'bad'], 'missing-dependency': ['Потрібне інше розширення', 'warn'], error: ['Помилка', 'bad'],
@@ -33,7 +34,7 @@ export const tp = (rec: Pick<PluginRecord, 'manifest' | 'builtin'>, text: string
 const initials = (name: string): string => { const w = name.split(/[^\p{L}\p{N}]+/u).filter(Boolean); return (w.length > 1 ? w[0]![0]! + w[1]![0]! : (w[0] ?? '?').slice(0, 2)).toUpperCase(); };
 const tags = (r: PluginRecord): string[] => {
   const c = r.manifest.contributes ?? {};
-  return [r.builtin ? 'Вбудоване' : '', c.engines?.length ? 'Рушій' : '', c.formats?.length ? 'Формати' : '', c.languages?.length ? 'Мова' : '', c.help?.length ? 'Довідка' : '', c.settings?.length ? 'Параметри' : '', r.manifest.main ? 'Код' : ''].filter(Boolean);
+  return [r.builtin ? 'Вбудоване' : '', c.engines?.length ? 'Рушій' : '', c.formats?.length ? 'Формати' : '', c.languages?.length ? 'Мова' : '', c.help?.length ? 'Довідка' : '', c.settings?.length ? 'Параметри' : '', c.qaRules?.length ? 'Правила QA' : '', c.commands?.length ? 'Команди' : '', c.glossaries?.length ? 'Словники' : '', r.manifest.main ? 'Код' : ''].filter(Boolean);
 };
 const sourceLine = (r: PluginRecord): string => {
   const s = r.source;
@@ -41,13 +42,26 @@ const sourceLine = (r: PluginRecord): string => {
 };
 
 /** The place where a plugin's values are kept: this device (`app`) or the project (`project`). */
-export interface ExtensionActions { projectValues(): Record<string, Record<string, unknown>>; saveProjectValues(): void }
+export interface ExtensionActions {
+  projectValues(): Record<string, Record<string, unknown>>;
+  saveProjectValues(): void;
+  /** Run a command of a plugin (the reference is `<plugin id>/<id>`). */
+  runCommand(ref: string): void;
+  /** Look at a glossary of a plugin and add it to the project. */
+  addGlossary(plugin: string, glossary: string): void;
+}
 
 const SETTINGS_KEY = (id: string): string => `transly.ext.settings.${id}`;
 const readApp = (id: string): Record<string, unknown> => { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY(id)) ?? '{}') as Record<string, unknown>; } catch { return {}; } };
 
-export function openExtensions(acts: ExtensionActions, first: Page = 'installed'): HTMLDialogElement {
+const TAG_LABEL: Record<CatalogTag, string> = { language: 'Мови', engine: 'Рушії', format: 'Формати', qa: 'Правила QA', commands: 'Команди', glossary: 'Словники', help: 'Довідка' };
+
+export function openExtensions(acts: ExtensionActions, first: Page = 'installed', query = ''): HTMLDialogElement {
   let page: Page = first;
+  let catQ = query;
+  let catTag: CatalogTag | undefined;
+  let entries: CatalogEntry[] = [];
+  let catErrors = new Map<string, string>();
   let detail: string | null = null;
   let plan: InstallPlan | null = null;
   let busy = '';
@@ -108,7 +122,7 @@ export function openExtensions(acts: ExtensionActions, first: Page = 'installed'
     const link = (u?: string): string => (u ? `<a href="${esc(u)}" data-ext-link rel="noopener noreferrer">${esc(u)}</a>` : '');
     const deps = Object.entries(m.dependencies ?? {}).map(([id, range]) => { const d = plugins.get(id); return `${esc(d ? tp(d, d.manifest.name) : id)} ${esc(range)} — ${esc(d ? t(STATE[d.state][0]) : t('не встановлено'))}`; }).join('<br>');
     const perms = (m.permissions ?? []).map(p => `<b>${esc(t(PERM[p][0]))}</b>: ${esc(t(PERM[p][1]))}`).join('<br>') + (m.network ? `<br>${esc(t('Сервери'))}: ${esc(m.network.hosts.join(', '))}` : '');
-    const stored = r.source.installedAt ? new Date(r.source.installedAt).toLocaleString(uiLocale()) : '';
+    const stored = r.source.installedAt ? new Date(r.source.installedAt).toLocaleString(uiLocale(), { hour12: false }) : '';
     const sets = (c.settings ?? []).map((s, i) => `<div class="st-sub"><h3>${esc(tp(r, s.title))}</h3>${s.description ? `<p class="hint">${esc(tp(r, s.description))}</p>` : ''}${s.fields.map(f => fieldHtml(r, String(i), f)).join('')}</div>`).join('');
     const upd = updates.get(m.id);
     return `<button class="btn s" type="button" data-act="back">‹ ${esc(t('Усі розширення'))}</button>
@@ -121,8 +135,11 @@ export function openExtensions(acts: ExtensionActions, first: Page = 'installed'
       ${c.formats?.length ? `<div class="st-sub"><h3>${esc(t('Формати файлів'))}</h3>${c.formats.map(f => `<p><b>${esc(tp(r, f.label))}</b> <code>${esc(f.extensions.join(' '))}</code> <small>${esc(t(f.text ? 'текстовий файл' : 'JSON'))}${f.spec ? ` · ${esc(t('описано даними'))}` : ` · ${esc(t('код розширення'))}`}</small></p>`).join('')}</div>` : ''}
       ${c.languages?.length ? `<div class="st-sub"><h3>${esc(t('Мови інтерфейсу'))}</h3>${c.languages.map(l => `<p><b>${esc(l.nativeName ?? l.name)}</b> <code>${esc(l.code)}</code> <button class="btn s" type="button" data-act="use-lang" data-code="${esc(l.code)}">${esc(t('Використовувати'))}</button></p>`).join('')}</div>` : ''}
       ${c.help?.length ? `<div class="st-sub"><h3>${esc(t('Довідка'))}</h3>${c.help.map(h => { const text = h.body ?? (h.file ? r.files.get(h.file) : undefined) ?? ''; return `<details><summary>${esc(tp(r, h.title))}</summary><div class="ex-md">${miniMarkdown(tp(r, text))}</div></details>`; }).join('')}</div>` : ''}
+      ${c.qaRules?.length ? `<div class="st-sub"><h3>${esc(t('Правила QA'))}</h3>${c.qaRules.map(q => `<p><b>${esc(tp(r, q.title))}</b> <small>${esc(t(q.severity === 'bad' ? 'помилка' : 'порада'))}</small>${q.description ? `<br><small>${esc(tp(r, q.description))}</small>` : ''}</p>`).join('')}<p class="hint">${esc(t('Рівень кожного правила проєкт змінює в «Правилах QA».'))}</p></div>` : ''}
+      ${c.commands?.length ? `<div class="st-sub"><h3>${esc(t('Команди'))}</h3>${c.commands.map(k => `<p><b>${esc(tp(r, k.title))}</b>${k.description ? ` — ${esc(tp(r, k.description))}` : ''} <button class="btn s" type="button" data-act="run-cmd" data-ref="${esc(qualified(r, k.id))}" ${r.state === 'enabled' ? '' : 'disabled'}>${esc(t('Запустити'))}</button></p>`).join('')}<p class="hint">${esc(t('Команди також у меню «Інструменти».'))}</p></div>` : ''}
+      ${c.glossaries?.length ? `<div class="st-sub"><h3>${esc(t('Словники'))}</h3>${c.glossaries.map(g => `<p><b>${esc(tp(r, g.title))}</b>${g.description ? ` — ${esc(tp(r, g.description))}` : ''} <button class="btn s" type="button" data-act="add-gloss" data-id="${esc(m.id)}" data-gloss="${esc(g.id)}">${esc(t('Додати до проєкту…'))}</button></p>`).join('')}</div>` : ''}
       ${sets}
-      ${r.errors.length ? `<div class="st-sub"><h3>${esc(t('Збої'))}</h3>${r.errors.slice(-5).map(e => `<p class="hint bad">${esc(new Date(e.at).toLocaleTimeString(uiLocale()))} — ${esc(e.what)}</p>`).join('')}</div>` : ''}
+      ${r.errors.length ? `<div class="st-sub"><h3>${esc(t('Збої'))}</h3>${r.errors.slice(-5).map(e => `<p class="hint bad">${esc(new Date(e.at).toLocaleTimeString(uiLocale(), { hour12: false }))} — ${esc(e.what)}</p>`).join('')}</div>` : ''}
       <div class="acts l">
         ${r.builtin ? '' : `<button class="btn" type="button" data-act="check" data-id="${esc(m.id)}" ${busy ? 'disabled' : ''}>${esc(t('Перевірити оновлення'))}</button>${upd ? `<button class="btn p" type="button" data-act="update" data-id="${esc(m.id)}">${esc(t('Оновити до {v}', { v: upd }))}</button>` : ''}`}
         <button class="btn" type="button" data-act="pot" data-id="${esc(m.id)}">${esc(t('Рядки для перекладу (.pot)'))}</button>
@@ -144,7 +161,7 @@ export function openExtensions(acts: ExtensionActions, first: Page = 'installed'
       ${p.missing.length ? warn(t('Потрібні інші розширення'), t('Не встановлено: {list}. Без них це розширення не працюватиме.', { list: p.missing.join(', ') })) : ''}
       ${p.warnings.map(w => warn(t('Увага'), w)).join('')}
       <table class="ex-meta"><tbody><tr><th scope="row">${esc(t('Джерело'))}</th><td>${esc(p.source.kind === 'github' ? `GitHub: ${p.source.location}${p.source.ref ? ` @ ${p.source.ref.slice(0, 7)}` : ''}` : p.source.kind === 'url' ? p.source.location ?? '' : t('З файлу'))}</td></tr>
-        <tr><th scope="row">${esc(t('Додає'))}</th><td>${esc([c.engines?.length ? t('рушії: {n}', { n: c.engines.length }) : '', c.formats?.length ? t('формати: {n}', { n: c.formats.length }) : '', c.languages?.length ? t('мови: {n}', { n: c.languages.length }) : '', c.help?.length ? t('довідка: {n}', { n: c.help.length }) : '', c.settings?.length ? t('параметри: {n}', { n: c.settings.length }) : ''].filter(Boolean).join(', ') || '—')}</td></tr>
+        <tr><th scope="row">${esc(t('Додає'))}</th><td>${esc([c.engines?.length ? t('рушії: {n}', { n: c.engines.length }) : '', c.formats?.length ? t('формати: {n}', { n: c.formats.length }) : '', c.languages?.length ? t('мови: {n}', { n: c.languages.length }) : '', c.help?.length ? t('довідка: {n}', { n: c.help.length }) : '', c.settings?.length ? t('параметри: {n}', { n: c.settings.length }) : '', c.qaRules?.length ? t('правила QA: {n}', { n: c.qaRules.length }) : '', c.commands?.length ? t('команди: {n}', { n: c.commands.length }) : '', c.glossaries?.length ? t('словники: {n}', { n: c.glossaries.length }) : ''].filter(Boolean).join(', ') || '—')}</td></tr>
         <tr><th scope="row">${esc(t('Дозволи'))}</th><td>${p.permissions.length ? p.permissions.map(x => `<label class="achk"><input type="checkbox" data-grant="${x}" ${p.existing?.grants.includes(x) ? 'checked' : ''}> <b>${esc(t(PERM[x][0]))}</b>: ${esc(t(PERM[x][1]))}</label>`).join('') : esc(t('Не просить нічого'))}${m.network ? `<br><small>${esc(t('Сервери'))}: ${esc(m.network.hosts.join(', '))}</small>` : ''}</td></tr></tbody></table>
       ${p.hasCode ? `<label class="achk"><input type="checkbox" id="ex-trust"> ${esc(t('Я довіряю автору й розумію, що код розширення виконуватиметься'))}</label>` : ''}
       <div class="acts l"><button class="btn p" type="button" data-act="do-install" ${!p.compat.ok || busy ? 'disabled' : ''}>${esc(p.action === 'update' ? t('Оновити') : t('Встановити'))}</button><button class="btn" type="button" data-act="cancel-plan">${esc(t('Скасувати'))}</button></div>`;
@@ -162,6 +179,43 @@ export function openExtensions(acts: ExtensionActions, first: Page = 'installed'
       <div class="grid"><label for="ex-q">${esc(t('Що шукати'))}</label><input id="ex-q" placeholder="wolf, renpy, polski…" autocomplete="off"></div>
       <div class="acts l"><button class="btn" type="button" data-act="search" ${busy ? 'disabled' : ''}>${esc(t('Шукати'))}</button></div>
       ${found ? (found.length ? `<div class="ex-list">${found.map(f => `<div class="ex-row"><div class="ex-info"><div class="ex-t"><b>${esc(f.full)}</b><small>★ ${f.stars}</small></div><p class="ex-d">${esc(f.desc)}</p></div><div class="ex-act"><button class="btn s" type="button" data-act="from-found" data-repo="${esc(f.full)}">${esc(t('Перевірити'))}</button></div></div>`).join('')}</div>` : `<p class="hint">${esc(t('Нічого не знайдено'))}</p>`) : ''}</div>`;
+
+  const catListHtml = (): string => {
+    const list = filterCatalog(entries, { tag: catTag, q: catQ });
+    if (!list.length) return `<p class="hint">${esc(entries.length ? t('Нічого не знайдено') : t('Каталог порожній'))}</p>`;
+    return `<div class="ex-list">${list.map(e => {
+      const st = catalogStatus(e, plugins), have = plugins.get(e.id);
+      const act = st.status === 'installed' ? `<button class="btn s" type="button" data-act="open" data-id="${esc(e.id)}">${esc(t('Докладніше'))}</button>`
+        : st.status === 'update' ? `<button class="btn p s" type="button" data-act="cat-install" data-id="${esc(e.id)}" ${busy ? 'disabled' : ''}>${esc(t('Оновити до {v}', { v: e.version ?? '' }))}</button>`
+        : st.status === 'incompatible' ? `<button class="btn s" type="button" disabled title="${esc(st.reason ?? '')}">${esc(t('Не підходить'))}</button>`
+        : `<button class="btn p s" type="button" data-act="cat-install" data-id="${esc(e.id)}" ${busy ? 'disabled' : ''}>${esc(t('Встановити'))}</button>`;
+      return `<div class="ex-row" data-entry="${esc(e.id)}"><span class="ex-ic" aria-hidden="true">${esc(initials(e.name))}</span>
+        <div class="ex-info"><div class="ex-t"><b>${esc(e.name)}</b><small>${e.version ? `v${esc(e.version)}` : ''}${e.author ? ` · ${esc(e.author)}` : ''}</small></div>
+          ${e.description ? `<p class="ex-d">${esc(e.description)}</p>` : ''}
+          <div class="ex-tags">${have ? `<span class="ex-st ${have.state === 'enabled' ? 'ok' : 'off'}">${esc(t(st.status === 'update' ? 'Встановлено' : STATE[have.state][0]))}${st.installed ? ` v${esc(st.installed)}` : ''}</span>` : ''}${e.tags.map(x => `<span class="ex-tag">${esc(t(TAG_LABEL[x]))}</span>`).join('')}${e.languages?.length ? `<span class="ex-tag">${esc(e.languages.join(', '))}</span>` : ''}${e.origin ? `<span class="ex-tag">${esc(e.origin)}</span>` : ''}</div>
+          ${st.status === 'incompatible' && st.reason ? `<p class="ex-why">${esc(st.reason)}</p>` : ''}</div>
+        <div class="ex-act">${act}${e.homepage ? ` <a class="btn s" href="${esc(e.homepage)}" data-ext-link rel="noopener noreferrer">${esc(t('Сайт'))}</a>` : ''}</div></div>`;
+    }).join('')}</div>`;
+  };
+
+  const catalogHtml = (): string => {
+    const added = cachedCatalogs();
+    return `<p class="hint">${esc(t('Каталог — це список розширень, які хтось радить. Він лише описує їх і каже, де вони лежать: перед встановленням ви побачите, що розширення додає й чого просить, і нічого не запишеться без вашої згоди.'))}</p>
+      <div class="grid"><label for="ex-cq">${esc(t('Пошук'))}</label><input id="ex-cq" type="search" value="${esc(catQ)}" placeholder="${esc(t('назва, мова, рушій…'))}" autocomplete="off"></div>
+      <div class="ex-chips" role="group" aria-label="${esc(t('Що додає'))}"><button type="button" class="chip${catTag ? '' : ' on'}" data-act="cat-tag" data-tag="" aria-pressed="${!catTag}">${esc(t('Усе'))}</button>${CATALOG_TAGS.map(x => `<button type="button" class="chip${catTag === x ? ' on' : ''}" data-act="cat-tag" data-tag="${x}" aria-pressed="${catTag === x}">${esc(t(TAG_LABEL[x]))}</button>`).join('')}</div>
+      <div id="ex-clist">${catListHtml()}</div>
+      <div class="st-sub"><h3>${esc(t('Каталоги'))}</h3>
+        <p class="hint">${esc(t('Каталог — це файл transly-catalog.json у репозиторії GitHub або за адресою https. Мережа потрібна лише для оновлення списку.'))}</p>
+        <div class="ex-list"><div class="ex-row"><div class="ex-info"><div class="ex-t"><b>${esc(t('Приклади в застосунку'))}</b><small>${esc(t('вбудований'))}</small></div><p class="ex-d">${esc(t('Встановлюються без мережі.'))}</p></div></div>
+        ${added.map(c => `<div class="ex-row"><div class="ex-info"><div class="ex-t"><b>${esc(c.index?.name || c.ref.location)}</b><small>${esc(c.ref.location)}</small></div>
+          <p class="ex-d">${c.index ? esc(t('Розширень: {n}', { n: c.index.entries.length })) + (c.at ? ` · ${esc(new Date(c.at).toLocaleString(uiLocale(), { hour12: false }))}` : '') : esc(t('Ще не завантажено'))}${c.index?.warnings.length ? ` · ${esc(t('пропущено записів: {n}', { n: c.index.warnings.length }))}` : ''}</p>
+          ${catErrors.get(c.ref.id) ? `<p class="ex-why">${esc(catErrors.get(c.ref.id)!)}</p>` : ''}</div>
+          <div class="ex-act"><button class="btn s" type="button" data-act="cat-remove" data-ref="${esc(c.ref.id)}">${esc(t('Прибрати'))}</button></div></div>`).join('')}</div>
+        <div class="grid"><label for="ex-cat">${esc(t('Додати каталог'))}</label><input id="ex-cat" placeholder="автор/репозиторій або https://…/transly-catalog.json" autocomplete="off" spellcheck="false"></div>
+        <div class="acts l"><button class="btn" type="button" data-act="cat-add">${esc(t('Додати'))}</button><button class="btn" type="button" data-act="cat-refresh" ${busy || !added.length ? 'disabled' : ''}>${esc(t('Оновити списки'))}</button></div></div>`;
+  };
+
+  const loadCatalog = (): void => { void allEntries().then(e => { entries = e; if (dlg.open && page === 'catalog' && !plan && !busy) render(); }); void bundledCatalog(); };
 
   const langHtml = (): string => {
     const langs = i18n.languages(), cur = interfaceLanguage(), miss = i18n.missing().length;
@@ -189,11 +243,11 @@ export function openExtensions(acts: ExtensionActions, first: Page = 'installed'
     tree.innerHTML = GROUPS.map(([g, ids]) => `<p class="st-gl">${esc(t(g))}</p>${ids.map(id => `<button type="button" class="st-ti flat" data-p="${id}"${id === page ? ' aria-current="page"' : ''}>${esc(t(TITLES[id]))}</button>`).join('')}`).join('');
     const msg = message ? `<div class="st-warn${message.kind === 'bad' ? ' bad' : ''}" role="${message.kind === 'bad' ? 'alert' : 'status'}"><span class="wi" aria-hidden="true">${message.kind === 'bad' ? '!' : '✓'}</span><div><span>${esc(message.text).replace(/\n/g, '<br>')}</span></div></div>` : '';
     const spin = busy ? `<p class="hint" role="status">${esc(busy)}…</p>` : '';
-    const content = plan ? planHtml(plan) : page === 'installed' ? (detail && plugins.get(detail) ? detailHtml(plugins.get(detail)!) : listHtml()) : page === 'add' ? addHtml() : page === 'lang' ? langHtml() : supportHtml();
+    const content = plan ? planHtml(plan) : page === 'installed' ? (detail && plugins.get(detail) ? detailHtml(plugins.get(detail)!) : listHtml()) : page === 'catalog' ? catalogHtml() : page === 'add' ? addHtml() : page === 'lang' ? langHtml() : supportHtml();
     const val = (sel: string): string | undefined => dlg.querySelector<HTMLInputElement>(sel)?.value;
-    const keep = { gh: val('#ex-gh'), url: val('#ex-url'), q: val('#ex-q') };
+    const keep = { gh: val('#ex-gh'), url: val('#ex-url'), q: val('#ex-q'), cat: val('#ex-cat') };
     body.innerHTML = msg + spin + content;
-    for (const [id, v] of [['#ex-gh', keep.gh], ['#ex-url', keep.url], ['#ex-q', keep.q]] as const) { const i = body.querySelector<HTMLInputElement>(id); if (i && v) i.value = v; }
+    for (const [id, v] of [['#ex-gh', keep.gh], ['#ex-url', keep.url], ['#ex-q', keep.q], ['#ex-cat', keep.cat]] as const) { const i = body.querySelector<HTMLInputElement>(id); if (i && v) i.value = v; }
   }
 
   // ---------- doing ----------
@@ -216,12 +270,12 @@ export function openExtensions(acts: ExtensionActions, first: Page = 'installed'
     const link = tgt.closest<HTMLAnchorElement>('a[data-ext-link]');
     if (link) { e.preventDefault(); openLink(link.getAttribute('href') ?? ''); return; }
     const nav = tgt.closest<HTMLElement>('#ex-tree [data-p]');
-    if (nav) { page = nav.dataset.p as Page; detail = null; plan = null; message = null; armed = ''; render(); return; }
+    if (nav) { page = nav.dataset.p as Page; detail = null; plan = null; message = null; armed = ''; if (page === 'catalog') loadCatalog(); render(); return; }
     const b = tgt.closest<HTMLElement>('[data-act]');
     if (!b || b.tagName === 'INPUT' || b.tagName === 'SELECT') return;
     const id = b.dataset.id ?? '';
     switch (b.dataset.act) {
-      case 'open': detail = id; message = null; armed = ''; render(); break;
+      case 'open': page = 'installed'; detail = id; message = null; armed = ''; render(); break;
       case 'back': detail = null; message = null; armed = ''; render(); break;
       case 'cancel-plan': plan = null; message = null; render(); break;
       case 'go-add': page = 'add'; message = null; render(); break;
@@ -246,6 +300,13 @@ export function openExtensions(acts: ExtensionActions, first: Page = 'installed'
         break;
       case 'pot': { const r = plugins.get(id); if (r) { const lang = i18n.language !== i18n.source ? i18n.language : 'en'; void saveFile(`${id}.pot`, pluginTemplate(r.manifest, lang, p => r.files.get(p)), 'text/plain'); } break; }
       case 'lang-pot': void saveFile(`transly-${interfaceLanguage()}.pot`, i18n.template(interfaceLanguage()), 'text/plain'); break;
+      case 'cat-install': { const e = entries.find(x => x.id === id); if (e) void run(t('Завантажую'), async () => { plan = await ext.plan(await sourceOf(e)); message = null; }); break; }
+      case 'cat-tag': catTag = (b.dataset.tag || undefined) as CatalogTag | undefined; render(); break;
+      case 'cat-add': { const r = addCatalog(($('#ex-cat', body) as HTMLInputElement).value); if ('error' in r) { note({ kind: 'bad', text: r.error }); render(); break; } void run(t('Завантажую каталог'), async () => { catErrors = new Map((await refreshCatalogs()).map(x => [x.id, x.error])); entries = await allEntries(); note(catErrors.has(r.ref.id) ? { kind: 'bad', text: catErrors.get(r.ref.id)! } : { kind: 'ok', text: t('Каталог додано') }); }); break; }
+      case 'cat-remove': removeCatalog(b.dataset.ref ?? ''); catErrors.delete(b.dataset.ref ?? ''); void allEntries().then(e => { entries = e; render(); }); break;
+      case 'cat-refresh': void run(t('Оновлюю списки'), async () => { catErrors = new Map((await refreshCatalogs()).map(x => [x.id, x.error])); entries = await allEntries(); note(catErrors.size ? { kind: 'bad', text: [...catErrors.values()].join('\n') } : { kind: 'ok', text: t('Списки оновлено') }); }); break;
+      case 'run-cmd': acts.runCommand(b.dataset.ref ?? ''); break;
+      case 'add-gloss': acts.addGlossary(id, b.dataset.gloss ?? ''); break;
       case 'use-lang': setInterfaceLanguage(b.dataset.code ?? ''); render(); break;
     }
   });
@@ -277,10 +338,16 @@ export function openExtensions(acts: ExtensionActions, first: Page = 'installed'
     }
   });
 
+  dlg.addEventListener('input', e => {
+    const x = e.target as HTMLInputElement;
+    if (x.id === 'ex-cq') { catQ = x.value; const list = dlg.querySelector('#ex-clist'); if (list) list.innerHTML = catListHtml(); }
+  });
+
   $('#ex-done', dlg).addEventListener('click', () => dlg.close());
   const unsub = plugins.subscribe(() => { if (dlg.open && !busy) render(); });
   const unlang = i18n.onChange(() => { if (dlg.open) render(); });
   dlg.addEventListener('close', () => { unsub(); unlang(); });
+  if (page === 'catalog') loadCatalog();
   render();
   return dlg;
 }

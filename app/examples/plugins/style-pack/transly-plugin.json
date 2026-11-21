@@ -1,0 +1,140 @@
+{
+  "manifestVersion": 1,
+  "id": "example.style-pack",
+  "name": "Style pack",
+  "version": "1.0.0",
+  "description": "House style for a translation: rules of QA, a command that tidies punctuation, and a small glossary. All of it is data: the plugin has no code.",
+  "author": "Example",
+  "license": "MIT",
+  "sourceLanguage": "en",
+  "contributes": {
+    "help": [
+      {
+        "id": "guide",
+        "title": "About this style",
+        "file": "help/guide.md"
+      }
+    ],
+    "qaRules": [
+      {
+        "id": "no-slang",
+        "title": "No slang",
+        "description": "Words the house style does not use in dialogue; the ready fix puts the neutral word.",
+        "severity": "warn",
+        "check": {
+          "type": "forbid",
+          "message": "Slang",
+          "items": [
+            {
+              "find": "круто",
+              "replace": "чудово",
+              "wholeWord": true
+            },
+            {
+              "find": "ок",
+              "replace": "добре",
+              "wholeWord": true
+            }
+          ]
+        }
+      },
+      {
+        "id": "address-sir",
+        "title": "Address «Sir»",
+        "description": "When the original says «Sir», the translation addresses the person politely («пане»).",
+        "check": {
+          "type": "require",
+          "when": {
+            "find": "Sir",
+            "wholeWord": true,
+            "caseSensitive": true
+          },
+          "then": {
+            "find": "пан",
+            "caseSensitive": false
+          }
+        }
+      },
+      {
+        "id": "short-names",
+        "title": "Names fit the menu",
+        "description": "Names of items and skills are shown in a narrow column.",
+        "severity": "bad",
+        "kinds": [
+          "name"
+        ],
+        "check": {
+          "type": "maxLength",
+          "max": 24
+        }
+      },
+      {
+        "id": "not-translated",
+        "title": "Not left as it was",
+        "check": {
+          "type": "sameAsSource"
+        }
+      }
+    ],
+    "commands": [
+      {
+        "id": "tidy-punctuation",
+        "title": "Tidy punctuation",
+        "description": "Three dots become an ellipsis, a straight quote pair becomes guillemets.",
+        "action": "replace",
+        "steps": [
+          {
+            "find": "...",
+            "replace": "…"
+          },
+          {
+            "find": " - ",
+            "replace": " — "
+          }
+        ]
+      },
+      {
+        "id": "guide",
+        "title": "House style guide",
+        "action": "help",
+        "help": "guide"
+      },
+      {
+        "id": "orthography",
+        "title": "Ukrainian orthography (pravopys.net)",
+        "action": "link",
+        "url": "https://pravopys.net/"
+      }
+    ],
+    "glossaries": [
+      {
+        "id": "forms-of-address",
+        "title": "Forms of address",
+        "description": "A few terms of address, written in the manifest.",
+        "terms": [
+          {
+            "en": "Sir",
+            "uk": "пане"
+          },
+          {
+            "en": "Madam",
+            "uk": "пані",
+            "alt": [
+              "мадам"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "fantasy",
+        "title": "Fantasy basics",
+        "description": "From a file: original, tab, translation, tab, alternatives.",
+        "file": "terms.tsv"
+      }
+    ]
+  },
+  "files": {
+    "help/guide.md": "sha256-2b30404d3eefc047ba7db17d870c7b91e18bc9d62605eeaf42cd5e678dea848a",
+    "terms.tsv": "sha256-1fc1846a467072a53732e67186a7747457f7dacfc3476363d03f9eb44d975c36"
+  }
+}

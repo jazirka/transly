@@ -3,7 +3,7 @@ import type { InboxItem, IngestReport, QaOptions, QueueKind, WrapPlan } from '..
 import { pxMeasure } from './measure';
 import { openWrapTool } from './wrap-dialog';
 import { openQaRules } from './qarules-dialog';
-import { GroupIndex, KIND_LABEL, UndoStack, approveEntry, groupColor, groupRows, liveGroups, outboxRescue, takeOutbox } from '../core';
+import { GroupIndex, plugins, KIND_LABEL, UndoStack, approveEntry, groupColor, groupRows, liveGroups, outboxRescue, takeOutbox } from '../core';
 import type { Entry, FileView, GameFile, Group, RowChange, SavedProject, Unit } from '../core';
 import { openBuild } from './build-dialog';
 import { dataDirOf, forgetGameDir, isDesktop, rememberedGameDir, reopenGameDir, reopenGameDirDesktop, setProject } from './desktop';
@@ -62,6 +62,7 @@ import { BRANCH_ICON, branchMenuClick, branchMenuHtml, chooseMerge } from './bra
 import type { BranchActions } from './branches';
 import { openProjectSettings } from './project-settings';
 import { openExtensions } from './ext-dialog';
+import { extCommands, openGlossaryImport, runExtCommand } from './ext-commands';
 import type { ExtensionActions } from './ext-dialog';
 import { openGuidance } from './guidance';
 import type { ProjectTab } from './project-settings';
@@ -1110,7 +1111,7 @@ export async function start(root: HTMLElement): Promise<void> {
    */
   async function loadFiles(picked: PickedFile[], keep = false, names?: string[]): Promise<void> {
     lastNames = names ?? picked.map(f => f.rel ?? f.name);
-    if (!picked.length) { openGuidance({ names: lastNames, why: 'nothing', addExtension: () => openExt('add') }); return; }
+    if (!picked.length) { openGuidance({ names: lastNames, why: 'nothing', addExtension: q => (q ? openExt('catalog', q) : openExt('add')) }); return; }
     try { await loadPicked(picked, keep); }
     catch (err) { toast(`Не вдалося відкрити файли: ${err instanceof Error ? err.message : 'невідома помилка'}`); renderAll(); }
   }
@@ -1139,7 +1140,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const reset = ingest(files, keep);
     const ingested = lastIngest;
     dataDir = isDesktop() ? dataDirOf(picked) : null;
-    if (!s.views.length) { s.current = null; renderAll(); openGuidance({ names: lastNames, why: 'empty', addExtension: () => openExt('add') }); return; }
+    if (!s.views.length) { s.current = null; renderAll(); openGuidance({ names: lastNames, why: 'empty', addExtension: q => (q ? openExt('catalog', q) : openExt('add')) }); return; }
     if (failed.length) toast(`Не вдалося прочитати: ${failed.slice(0, 4).join(', ')}${failed.length > 4 ? ` і ще ${failed.length - 4}` : ''}. Файл пошкоджений або не є JSON: його рядків у проєкті не буде`, { sticky: true });
     const fromBackup = picked.filter(f => f.fromBackup).length;
     const translated = sumProgress(s.views.map(v => progressOf(v.units, s.saved.files[v.name] ?? {}))).translated;
@@ -1366,7 +1367,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const icon = (d: string): string => `<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
     if (!built) return `<div class="pj-h">Остання збірка</div><div class="bs"><span class="bi">${icon('M2.5 5.5h11v7h-11zM2 3.5h12v2H2zM6.5 8h3')}</span><div><b>Збірки ще не було</b><small>Тут буде видно, чи зібраний переклад актуальний</small></div></div><hr>`;
     const d = builtDrift(s.saved, built.mt);
-    const when = `${new Date(built.mt).toLocaleString(uiLocale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} · ${ago(built.mt, Date.now())}${built.n !== undefined ? ` · ${plural(built.n, ['рядок', 'рядки', 'рядків'])}` : ''}`;
+    const when = `${new Date(built.mt).toLocaleString(uiLocale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })} · ${ago(built.mt, Date.now())}${built.n !== undefined ? ` · ${plural(built.n, ['рядок', 'рядки', 'рядків'])}` : ''}`;
     if (!d.n) return `<div class="pj-h">Остання збірка</div><div class="bs"><span class="bi ok">${icon('M3 8.5l3.2 3.2L13 4.8')}</span><div><b>Збірка свіжа</b><small>${esc(when)}</small><small>Після неї нічого не змінювалось</small></div></div><hr>`;
     const parts = [d.approved ? `${d.approved} вичитано` : '', d.sent ? `${d.sent} надіслано` : ''].filter(Boolean).join(', ');
     return `<div class="pj-h">Остання збірка</div><div class="bs"><span class="bi">${icon('M8 2.5L14 13H2zM8 7v3M8 11.5v.2')}</span><div><b>Збірка застаріла</b><small>${esc(when)}</small><small class="w">Після неї змінено ${plural(d.n, ['рядок', 'рядки', 'рядків'])}: ${esc(parts)}</small><div class="acts"><button class="btn p" type="button" data-bs="build">Зібрати зараз</button><button class="btn" type="button" data-bs="changes">Що змінилося</button></div></div></div><hr>`;
@@ -1506,8 +1507,10 @@ export async function start(root: HTMLElement): Promise<void> {
   const extActions: ExtensionActions = {
     projectValues: () => (s.saved.settings.pluginSettings ??= {}),
     saveProjectValues: () => { s.saved.settingsAt = Date.now(); ctx.persist(); },
+    runCommand: ref => { const c = extCommands().find(x => x.ref === ref); if (c) runExtCommand(ctx, c); },
+    addGlossary: (plugin, glossary) => { const rec = plugins.get(plugin); if (rec) openGlossaryImport(ctx, rec, glossary); },
   };
-  function openExt(page: 'installed' | 'add' | 'lang' | 'support' = 'installed'): void { openExtensions(extActions, page); }
+  function openExt(page: 'installed' | 'catalog' | 'add' | 'lang' | 'support' = 'installed', query = ''): void { openExtensions(extActions, page, query); }
   function openProjectDlg(tab?: ProjectTab): void {
     openProjectSettings(ctx, { branches: branchActions, folder: folderActions, reset: afterReset, app: t => openSettingsDlg(t) }, tab);
   }
@@ -1546,7 +1549,7 @@ export async function start(root: HTMLElement): Promise<void> {
   function bottomNav(to: string, btn: HTMLElement): void {
     if (to === 'more') {
       // The phone has no menu bar: the same menus, as one list.
-      showPop(btn, Object.entries(PHONE_MENUS).map(([g, items]) => `<div class="group">${esc(g)}</div>${items.map((it, i) => (it === '-' ? '' : `<button data-pmi="${esc(g)}|${i}">${esc(it.t)}</button>`)).join('')}`).join(''));
+      showPop(btn, Object.entries(phoneMenus()).map(([g, items]) => `<div class="group">${esc(g)}</div>${items.map((it, i) => (it === '-' ? '' : `<button data-pmi="${esc(g)}|${i}">${esc(it.t)}</button>`)).join('')}`).join(''));
       return;
     }
     closePops();
@@ -1695,9 +1698,16 @@ export async function start(root: HTMLElement): Promise<void> {
     'Перехід': [{ t: 'Наступний рядок без перекладу', fn: () => jump('untranslated', 1), sc: 'Alt+⇧+↓' }, { t: 'Наступна помилка QA', fn: () => jump('error', 1), sc: 'F8' }, { t: 'Наступна порада', fn: () => jump('advice', 1) }, { t: 'Наступний на вичитку', fn: () => jump('unreviewed', 1) }, { t: 'Наступний зі зміненим оригіналом', fn: () => jump('sourceChanged', 1) }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: 'Ctrl+K' }],
     'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Оновити за глосарієм…', fn: () => openTermSyncTool(ctx) }, { t: 'Автозаповнення…', fn: () => openAutofill(ctx, () => openLinkTool(ctx)) }, { t: 'Злити гілку…', fn: () => chooseMerge(branchActions) }, { t: 'Активність…', fn: () => openActivity(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенесення рядків…', fn: () => openWrapTool(ctx, { wrapFile }) }, { t: 'Правила QA…', fn: () => openQaRules(ctx) }],
   };
+  /** The menu of a group: the fixed items, and under «Інструменти» the commands of the plugins that work (the name of the plugin is where a shortcut would be). */
+  const menuOf = (g: string): MenuItem[] => {
+    const own = MENUS[g] ?? [];
+    if (g !== 'Інструменти') return own;
+    const cmds = extCommands();
+    return cmds.length ? [...own, '-', ...cmds.map((c): MenuItem => ({ t: c.title, fn: () => runExtCommand(ctx, c), sc: c.pluginName }))] : own;
+  };
   /** The phone has no title bar: its «Ще» list is the same menus plus what the title bar offers on the desktop. */
-  const PHONE_MENUS: Record<string, MenuItem[]> = {
-    ...MENUS,
+  const phoneMenus = (): Record<string, MenuItem[]> => ({ ...Object.fromEntries(Object.keys(MENUS).map(g => [g, menuOf(g)])), ...PHONE_EXTRA });
+  const PHONE_EXTRA: Record<string, MenuItem[]> = {
     'Вигляд': [{ t: 'Таблиця', fn: () => setMode('table') }, { t: 'Редагування', fn: () => setMode('edit') }, { t: 'Сцена', fn: () => setMode('scene') }],
     'Довідка': [{ t: 'Гарячі клавіші', fn: () => toggleKeys() }],
   };
@@ -1758,7 +1768,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!btn) return;
     mbClose(); mbOpen = g; btn.classList.add('on'); btn.setAttribute('aria-expanded', 'true');
     const dd = mdd();
-    dd.innerHTML = MENUS[g]!.map((m, i) => m === '-' ? '<div class="msep" role="separator"></div>' : `<div class="mi" role="menuitem" tabindex="-1" data-mi="${g}|${i}"><span class="ml">${esc(m.t)}</span>${m.sc ? `<span class="ms">${esc(m.sc)}</span>` : ''}</div>`).join('');
+    dd.innerHTML = menuOf(g).map((m, i) => m === '-' ? '<div class="msep" role="separator"></div>' : `<div class="mi" role="menuitem" tabindex="-1" data-mi="${g}|${i}"><span class="ml">${esc(m.t)}</span>${m.sc ? `<span class="ms">${esc(m.sc)}</span>` : ''}</div>`).join('');
     dd.hidden = false;
     const r = btn.getBoundingClientRect();
     dd.style.left = Math.min(r.left, innerWidth - dd.offsetWidth - 8) + 'px'; dd.style.top = r.bottom + 4 + 'px';
@@ -1964,14 +1974,14 @@ export async function start(root: HTMLElement): Promise<void> {
     const mg = t.closest<HTMLElement>('#menubar [data-mg]');
     if (mg) { if (mbOpen === mg.dataset.mg) mbClose(); else if (e.detail === 0) mbEnter(mg.dataset.mg!); else mbShow(mg.dataset.mg!); return; }
     const mi = t.closest<HTMLElement>('#mdd [data-mi]');
-    if (mi) { const [g, i] = mi.dataset.mi!.split('|'); const it = MENUS[g!]![Number(i)]; mbToggle(false); if (it && it !== '-') setTimeout(() => it.fn(), 0); return; }
+    if (mi) { const [g, i] = mi.dataset.mi!.split('|'); const it = menuOf(g!)[Number(i)]; mbToggle(false); if (it && it !== '-') setTimeout(() => it.fn(), 0); return; }
     if (!t.closest('#menubar,#mdd,#hamb') && !$('#menubar').hidden) mbToggle(false);
     if (t.closest('#scrim')) { s.leftOpen = false; s.rightOpen = false; renderAll(); return; }
     const bn = t.closest<HTMLElement>('#bnav [data-bn]');
     if (bn) { bottomNav(bn.dataset.bn!, bn); return; }
     if (t.closest('#ab-search')) { openSearch(); return; }
     const pmi = t.closest<HTMLElement>('[data-pmi]');
-    if (pmi) { const [g, i] = pmi.dataset.pmi!.split('|'); closePops(); const it = PHONE_MENUS[g!]?.[Number(i)]; if (it && it !== '-') it.fn(); return; }
+    if (pmi) { const [g, i] = pmi.dataset.pmi!.split('|'); closePops(); const it = phoneMenus()[g!]?.[Number(i)]; if (it && it !== '-') it.fn(); return; }
     const lt = t.closest<HTMLElement>('#mtabs [data-lt]');
     if (lt) { s.leftTab[s.mode] = (['rows', 'glossary', 'scenes'] as const).find(x => x === lt.dataset.lt) ?? 'files'; renderAll(); return; }
     const hl = t.closest<HTMLElement>('[data-hide-left]');

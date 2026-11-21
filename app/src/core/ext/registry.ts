@@ -38,6 +38,23 @@ export interface EngineInfo { plugin: string; id: string; label: string; descrip
 export interface EngineMatch { engine: EngineInfo; score: number; matched: string[] }
 export interface HelpTopic { plugin: string; id: string; title: string; body: string; order: number }
 
+/**
+ * Whether the files of a folder look like a game, by a plugin's own description (`files` all there, `anyFiles` at least `min` of them, `excludeFiles` none):
+ * how well it fits (0..1) and which patterns matched; null when it does not fit. Paths are compared in lower case with `/`.
+ */
+export function matchDetect(d: EngineDetect, paths: readonly string[]): { score: number; matched: string[] } | null {
+  if (!d.files?.length && !d.anyFiles?.length) return null;
+  const low = paths.map(p => p.toLowerCase().replace(/\\/g, '/'));
+  const hit = (globs: string[] | undefined): string[] => (globs ?? []).filter(g => { const test = globTest(g); return low.some(test); });
+  if (hit(d.excludeFiles).length) return null;
+  const need = hit(d.files);
+  if (need.length !== (d.files?.length ?? 0)) return null;
+  const any = hit(d.anyFiles);
+  if ((d.anyFiles?.length ?? 0) > 0 && any.length < (d.min ?? 1)) return null;
+  const total = (d.files?.length ?? 0) + (d.anyFiles?.length ?? 0);
+  return { score: total ? (need.length + any.length) / total : 0, matched: [...need, ...any] };
+}
+
 /** The id the rest of the application uses for something a plugin names locally: the built-in ones keep their short names. */
 export const qualified = (rec: Pick<PluginRecord, 'manifest' | 'builtin'>, local: string): string => (rec.builtin ? local : `${rec.manifest.id}/${local}`);
 
@@ -192,19 +209,10 @@ export class PluginRegistry {
 
   /** Which engines the files of a picked folder look like (the best first). Plugins that are switched off are included: the answer to «what is this?» does not depend on it. */
   detect(paths: string[]): EngineMatch[] {
-    const low = paths.map(p => p.toLowerCase().replace(/\\/g, '/'));
-    const hit = (globs: string[] | undefined): string[] => (globs ?? []).filter(g => { const test = globTest(g); return low.some(test); });
     const out: EngineMatch[] = [];
     for (const engine of this.engines()) {
-      const d = engine.detect;
-      if (!d || (!d.files?.length && !d.anyFiles?.length)) continue;
-      if (hit(d.excludeFiles).length) continue;
-      const need = hit(d.files);
-      if (need.length !== (d.files?.length ?? 0)) continue;
-      const any = hit(d.anyFiles);
-      if ((d.anyFiles?.length ?? 0) > 0 && any.length < (d.min ?? 1)) continue;
-      const total = (d.files?.length ?? 0) + (d.anyFiles?.length ?? 0);
-      out.push({ engine, score: total ? (need.length + any.length) / total : 0, matched: [...need, ...any] });
+      const m = engine.detect ? matchDetect(engine.detect, paths) : null;
+      if (m) out.push({ engine, score: m.score, matched: m.matched });
     }
     return out.sort((a, b) => b.score - a.score);
   }

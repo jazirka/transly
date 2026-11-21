@@ -482,7 +482,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const dayKey = (t: number): string => new Date(t).toDateString();
     const today = dayKey(Date.now()), yest = dayKey(Date.now() - 86400000);
     const dayName = (t: number): string => (dayKey(t) === today ? 'Сьогодні' : dayKey(t) === yest ? 'Вчора' : new Date(t).toLocaleDateString(uiLocale(), { day: 'numeric', month: 'long' }));
-    const time = (t: number): string => new Date(t).toLocaleTimeString(uiLocale(), { hour: '2-digit', minute: '2-digit' });
+    const time = (t: number): string => new Date(t).toLocaleTimeString(uiLocale(), { hour: '2-digit', minute: '2-digit', hour12: false });
     let last = '';
     const html = evs.map(e => {
       const head = dayKey(e.at) !== last ? `<h3 class="act-day">${dayName(e.at)}</h3>` : ''; last = dayKey(e.at);
@@ -803,7 +803,7 @@ export async function start(root: HTMLElement): Promise<void> {
         <label class="m-lbl" for="g-token">Токен доступу</label><input id="g-token" class="m-input" type="password" value="${esc(gh.token)}" autocomplete="off" spellcheck="false">
         <details class="m-det"><summary>Додатково</summary><label class="m-lbl" for="g-branch">Гілка</label><input id="g-branch" class="m-input" value="${esc(gh.branch)}" placeholder="основна" autocomplete="off"><label class="m-lbl" for="g-dir">Папка в репозиторії</label><input id="g-dir" class="m-input" value="${esc(gh.dir)}" placeholder="корінь" autocomplete="off"></details>
         <label class="m-check"><input type="checkbox" id="gh-auto" ${gh.everyMin ? 'checked' : ''}> Синхронізувати автоматично (при запуску, після правок, при згортанні, кожні 5 хв)</label>
-        <button class="m-primary wide ${busy ? 'is-loading' : ''}" data-ghsync ${busy ? 'disabled' : ''}>${icon('sync')}<span>Синхронізувати</span></button><p class="m-hint" id="m-ghstate">${gh.last ? 'Востаннє: ' + new Date(gh.last).toLocaleString(uiLocale()) : 'Ще не синхронізовано'}</p></section>
+        <button class="m-primary wide ${busy ? 'is-loading' : ''}" data-ghsync ${busy ? 'disabled' : ''}>${icon('sync')}<span>Синхронізувати</span></button><p class="m-hint" id="m-ghstate">${gh.last ? 'Востаннє: ' + new Date(gh.last).toLocaleString(uiLocale(), { hour12: false }) : 'Ще не синхронізовано'}</p></section>
       <section class="m-card" id="m-claude" hidden><h3>Синхронізація через Claude</h3><p class="m-hint">Спільна база артефакту: працює між вашими пристроями.</p><button class="m-secondary wide ${busy ? 'is-loading' : ''}" data-clsync ${busy ? 'disabled' : ''}>${icon('sync')}<span>Синхронізувати через Claude</span></button></section>
       ${canUpdate() ? updateSection() : ''}
       <section class="m-card"><h3>Проєкт</h3><label class="m-lbl" for="m-who">Ваше ім’я в коментарях</label><input id="m-who" class="m-input" value="${esc(store.who)}" maxlength="40" autocomplete="off">
@@ -892,7 +892,7 @@ export async function start(root: HTMLElement): Promise<void> {
     return `<ol class="m-time">${rows.map(r => `<li class="${r.isCurrent ? 'cur' : ''}"><small>${r.rec.at ? fmtTime(r.rec.at) + ' · ' : ''}${esc(r.rec.who)}${r.isCurrent ? ' · зараз у полі' : ''}</small><span class="m-chipx">${esc(r.rec.what)}</span>${r.rec.text ? `<p class="m-diff">${r.before ? diffHtml(r.diff) : esc(r.rec.text)}</p>` : ''}
       <div class="m-cma">${r.canRestore ? `<button class="m-mini ghost" data-hv="restore" data-i="${r.index}">Відновити цю версію</button>` : ''}${r.canRestoreBefore ? `<button class="m-mini ghost" data-hv="before" data-i="${r.index}">Було до цього</button>` : ''}</div></li>`).join('')}</ol>`;
   }
-  const fmtTime = (t: number): string => new Date(t).toLocaleString(uiLocale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  const fmtTime = (t: number): string => new Date(t).toLocaleString(uiLocale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
   /** Side panel under the top bar: one topic at a time (glossary, memory, comments, history); the top-bar button that opened it closes it. */
   /** The control that opened the sheet or the menu, and whether the focus has been moved into them yet (a keyboard or switch user must land inside, and come back). */
   let sheetOpenerSel = '', sheetFocused = false;

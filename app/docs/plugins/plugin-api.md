@@ -133,6 +133,48 @@ An **engine** tells the application what kind of game a folder holds, so it can 
 ```
 Types: `boolean`, `string`, `number` (`min`, `max`), `select`. `scope: "app"` (default) is kept on the device; `"project"` is kept in the project (`settings.pluginSettings`) and travels with it. The values are shown in the plugin's page in the manager.
 
+## `contributes.qaRules`
+
+Rules of QA written as data. The application runs them with its own rules (they appear in **Правила QA** with the name of the plugin; the project can switch each off or make it an error, and the translator can ignore a remark of one like any other). The id of a rule in the project is `<plugin id>:<local id>`.
+
+```json
+{ "id": "no-slang", "title": "No slang", "severity": "warn",
+  "check": { "type": "forbid", "items": [{ "find": "круто", "replace": "чудово", "wholeWord": true }] } }
+{ "id": "address", "title": "Address Sir", "check": { "type": "require", "when": { "find": "Sir", "wholeWord": true }, "then": { "find": "пан" } } }
+{ "id": "short-names", "title": "Names fit", "severity": "bad", "kinds": ["name"], "check": { "type": "maxLength", "max": 24 } }
+{ "id": "translated", "title": "Not left as it was", "check": { "type": "sameAsSource" } }
+```
+* `forbid`: the translation must not contain any of the `items`. A word that stands in the original is the game's own and is left alone. When every item found has a `replace`, the remark carries a ready fix.
+* `require`: when the original has `when`, the translation must have `then`.
+* `maxLength`: the translation (without control codes) is not longer than `max` characters.
+* `sameAsSource`: the translation is not just the original (a row with fewer than four letters is never flagged).
+* `severity`: `warn` (an advice, the default) or `bad` (an error: the row cannot be sent or built until it is mended). `kinds` limits a rule to rows of those kinds. `message` is the plugin's own wording; without it the application's is used.
+
+A pattern is **plain text**: `wholeWord` and `caseSensitive` are the only options, the apostrophe `'` `’` `ʼ` is one letter, control codes (`\C[2]`) are not text. There are no regular expressions on purpose: a pattern written by a stranger could make the program hang. Several items do what an alternation would. A rule that fails is skipped and recorded against its plugin.
+
+## `contributes.commands`
+
+Commands shown in the menu **Інструменти** (under the fixed items, with the plugin's name) and in the plugin's page.
+
+```json
+{ "id": "tidy", "title": "Tidy punctuation", "action": "replace", "steps": [{ "find": "...", "replace": "…" }, { "find": " - ", "replace": " — " }] }
+{ "id": "guide", "title": "House style", "action": "help", "help": "guide" }
+{ "id": "site", "title": "Orthography", "action": "link", "url": "https://pravopys.net/" }
+```
+* `replace`: the `steps` are made in order on every translation of the project. A preview lists every change with a tick to leave one out; proofread rows are skipped unless asked (they become drafts); the result is one step in the history and can be undone.
+* `help`: opens one of the plugin's own help topics (`help` is its local id).
+* `link`: opens an `https` address in the browser.
+
+## `contributes.glossaries`
+
+Lists of terms to add to a project's glossary, from the plugin's page («Додати до проєкту…»).
+
+```json
+{ "id": "address", "title": "Forms of address", "terms": [{ "en": "Sir", "uk": "пане" }, { "en": "Madam", "uk": "пані", "alt": ["мадам"] }] }
+{ "id": "fantasy", "title": "Fantasy basics", "file": "terms.tsv" }
+```
+A file is a `.json` list of the same objects, or a `.tsv`: original, tab, translation, tab, alternatives with `;`, tab, a note (lines starting with `#` are comments). A preview shows what is new, what the project has the same way, and what it translates differently: **a term the project already has is never replaced**, only the new ones are added, and the glossary syncs between devices like any term.
+
 ## `contributes.languages`
 
 See [language-packs.md](language-packs.md).

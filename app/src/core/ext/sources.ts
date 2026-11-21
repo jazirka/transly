@@ -47,6 +47,9 @@ async function get(f: Fetcher, url: string, max: number, accept?: string): Promi
   return readLimited(res, max);
 }
 
+/** Download one address (https only, redirects checked, size limited). */
+export const fetchBytes = get;
+
 /** Download the files a manifest lists, a few at a time, from `base` (a directory address ending with `/`). */
 async function filesOf(f: Fetcher, base: string, files: string[]): Promise<Map<string, Uint8Array>> {
   const out = new Map<string, Uint8Array>();

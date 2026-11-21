@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jazirka/transly/blob/main/app/docs/plugins/catalog.schema.json",
+  "title": "Transly plugin catalog (transly-catalog.json), catalog version 1",
+  "type": "object",
+  "required": [
+    "catalogVersion",
+    "plugins"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "catalogVersion": {
+      "const": 1
+    },
+    "name": {
+      "type": "string",
+      "maxLength": 80
+    },
+    "plugins": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    }
+  },
+  "$defs": {
+    "globs": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120
+      }
+    },
+    "entry": {
+      "type": "object",
+      "required": [
+        "id",
+        "name"
+      ],
+      "oneOf": [
+        {
+          "required": [
+            "repo"
+          ]
+        },
+        {
+          "required": [
+            "url"
+          ]
+        }
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z0-9][a-z0-9-]*(\\.[a-z0-9][a-z0-9-]*)+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 600
+        },
+        "version": {
+          "type": "string",
+          "description": "A semantic version such as 1.2.0."
+        },
+        "author": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "homepage": {
+          "type": "string",
+          "pattern": "^https://"
+        },
+        "tags": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "enum": [
+              "language",
+              "engine",
+              "format",
+              "qa",
+              "commands",
+              "glossary",
+              "help"
+            ]
+          }
+        },
+        "languages": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,2}$"
+          }
+        },
+        "repo": {
+          "type": "string",
+          "description": "owner/repo[@ref][#folder]"
+        },
+        "url": {
+          "type": "string",
+          "pattern": "^https://",
+          "description": "The address of a transly-plugin.json or of a .zip / .transly-plugin package."
+        },
+        "detect": {
+          "type": "object",
+          "properties": {
+            "files": {
+              "$ref": "#/$defs/globs"
+            },
+            "anyFiles": {
+              "$ref": "#/$defs/globs"
+            },
+            "excludeFiles": {
+              "$ref": "#/$defs/globs"
+            },
+            "min": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16
+            }
+          }
+        },
+        "requires": {
+          "type": "object",
+          "properties": {
+            "transly": {
+              "type": "string",
+              "description": "A range of versions, e.g. >=0.1.0"
+            }
+          }
+        }
+      }
+    }
+  }
+}

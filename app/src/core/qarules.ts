@@ -48,8 +48,15 @@ export interface QaRule {
   def: RuleSeverity;
   /** Does the rule have a ready fix at all (for «Виправити в файлі»). */
   fixable: boolean;
+  /** The id of the plugin that brought the rule (the rules of the application itself have none). */
+  plugin?: string;
+  /** Only for rows of these kinds; every kind when missing. */
+  kinds?: readonly string[];
   run(c: RuleCtx): RuleOut | null;
 }
+
+/** What a rule gets to look at (the rules of plugins are written against this, not against the application's own internals). */
+export type { RuleCtx, RuleOut };
 
 /* ---------- the letters that look alike ---------- */
 
@@ -281,10 +288,29 @@ const ruleApostrophe: QaRule = {
   },
 };
 
-/** The rules in the order their remarks are made. */
-export const QA_RULES: QaRule[] = [ruleCodeMalformed, ruleHomoglyph, ruleForeignLetters, ruleNormalization, ruleHidden, ruleEdges, ruleDouble, ruleApostrophe];
+const OWN_RULES: readonly QaRule[] = [ruleCodeMalformed, ruleHomoglyph, ruleForeignLetters, ruleNormalization, ruleHidden, ruleEdges, ruleDouble, ruleApostrophe];
 
+/**
+ * The rules in the order their remarks are made: the application's own, then those of the working plugins. The array and the map are changed in place
+ * when plugins come and go (`setPluginQaRules`), so whoever reads them at the time of the call sees the rules of the moment.
+ */
+export const QA_RULES: QaRule[] = [...OWN_RULES];
 export const RULE_BY_ID: Record<string, QaRule> = Object.fromEntries(QA_RULES.map(r => [r.id, r]));
+
+let rulesRev = 0;
+/** A number that changes whenever the set of rules does (what is remembered about the rules is only good for the same number). */
+export const qaRulesRevision = (): number => rulesRev;
+
+/** Replace the rules of plugins. The id of such a rule is `<plugin id>:<local id>`, so it never clashes with the application's own or another plugin's. */
+export function setPluginQaRules(extra: readonly QaRule[]): void {
+  const same = extra.length === QA_RULES.length - OWN_RULES.length && extra.every((r, i) => QA_RULES[OWN_RULES.length + i] === r);
+  if (same) return;
+  QA_RULES.length = 0;
+  QA_RULES.push(...OWN_RULES, ...extra.filter(r => !OWN_RULES.some(o => o.id === r.id)));
+  for (const k of Object.keys(RULE_BY_ID)) delete RULE_BY_ID[k];
+  for (const r of QA_RULES) RULE_BY_ID[r.id] = r;
+  rulesRev++;
+}
 
 /** The remarks of the enabled rules for a translation, one per rule. */
 export function runRules(source: string, target: string, rules: QaRules, kind?: string): Issue[] {
@@ -295,7 +321,10 @@ export function runRules(source: string, target: string, rules: QaRules, kind?: 
   for (const r of QA_RULES) {
     const sev = rules.sev[r.id] ?? r.def;
     if (sev === 'off') continue;
-    const hit = r.run(ctx);
+    if (r.kinds && (kind === undefined || !r.kinds.includes(kind))) continue;
+    let hit: RuleOut | null = null;
+    // a rule from a plugin that fails must not stop the others (nor the check of the row)
+    try { hit = r.run(ctx); } catch (e) { if (!r.plugin) throw e; }
     if (!hit) continue;
     out.push({
       key: r.id, severity: sev === 'bad' ? 'bad' : 'warn', cat: sev === 'bad' ? 'error' : r.cat, message: hit.message,

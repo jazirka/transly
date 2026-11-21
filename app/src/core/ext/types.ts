@@ -97,12 +97,71 @@ export interface SettingField {
 }
 export interface SettingsContribution { id: string; title: string; description?: string; fields: SettingField[] }
 
+/** A piece of text to look for. Never a regular expression: a pattern that can hang the program has no place in a plugin without code. */
+export interface TextMatch { find: string; wholeWord?: boolean; caseSensitive?: boolean }
+
+/** One step of a replacing command: every translation with `find` gets `replace` in its place. */
+export interface ReplaceStep extends TextMatch { replace: string }
+
+/**
+ * A command of a plugin, in the menu «Інструменти → Розширення». `replace`: replacements in the translations of the whole project, with a preview and undo.
+ * `help`: opens a help topic of the plugin. `link`: opens an https page.
+ */
+export interface CommandContribution {
+  id: string;
+  title: string;
+  description?: string;
+  action: 'replace' | 'help' | 'link';
+  /** `replace`: the steps, made in order on every translation. */
+  steps?: ReplaceStep[];
+  /** `help`: the local id of one of the plugin's help topics. */
+  help?: string;
+  /** `link`: an https address. */
+  url?: string;
+}
+
+/**
+ * What a rule of QA checks, as data. `forbid`: the translation must not contain these (with a ready fix when `replace` is given). `require`: when the
+ * original has `when`, the translation must have `then`. `maxLength`: the translation is not longer than `max` characters. `sameAsSource`: the
+ * translation is not just the original.
+ */
+export type QaCheck =
+  | { type: 'forbid'; items: (TextMatch & { replace?: string })[]; message?: string }
+  | { type: 'require'; when: TextMatch; then: TextMatch; message?: string }
+  | { type: 'maxLength'; max: number; message?: string }
+  | { type: 'sameAsSource'; message?: string };
+
+export interface QaRuleContribution {
+  id: string;
+  title: string;
+  description?: string;
+  /** The level when the project has not chosen one: an advice (default) or an error. The project can change it in «Правила QA». */
+  severity?: 'warn' | 'bad';
+  /** Only for rows of these kinds (`dialogue`, `name`…); every kind when missing. */
+  kinds?: string[];
+  check: QaCheck;
+}
+
+/** A list of terms the plugin brings, to be added to a project's glossary after the user has looked at it. */
+export interface GlossaryContribution {
+  id: string;
+  title: string;
+  description?: string;
+  /** The terms themselves (a short list)… */
+  terms?: { en: string; uk: string; alt?: string[]; note?: string }[];
+  /** …or a file of the package: `.json` (a list of such objects) or `.tsv` (original, tab, translation, tab, alternatives with `;`). */
+  file?: string;
+}
+
 export interface Contributions {
   formats?: FormatContribution[];
   engines?: EngineContribution[];
   languages?: LanguageContribution[];
   help?: HelpContribution[];
   settings?: SettingsContribution[];
+  commands?: CommandContribution[];
+  qaRules?: QaRuleContribution[];
+  glossaries?: GlossaryContribution[];
 }
 
 export interface PluginManifest {

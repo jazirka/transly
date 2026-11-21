@@ -10,8 +10,8 @@ import type { Ctx } from './state';
  * itself written to the history with a snapshot, so it can be taken back the same way.
  */
 
-const when = (t: number): string => new Date(t).toLocaleString(uiLocale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-const clock = (t: number): string => new Date(t).toLocaleTimeString(uiLocale(), { hour: '2-digit', minute: '2-digit' });
+const when = (t: number): string => new Date(t).toLocaleString(uiLocale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+const clock = (t: number): string => new Date(t).toLocaleTimeString(uiLocale(), { hour: '2-digit', minute: '2-digit', hour12: false });
 
 const svg = (d: string): string => `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="${d}"/></svg>`;
 const ICON: Record<ActivityKind, string> = {

@@ -1,4 +1,4 @@
-import { QA_RULES, APOSTROPHES, applyPlan, fixRule, keepFromText, planOf, keepToText, qaOf, ruleStats, withRuleLevel } from '../core';
+import { QA_RULES, plugins, t, APOSTROPHES, applyPlan, fixRule, keepFromText, planOf, keepToText, qaOf, ruleStats, withRuleLevel } from '../core';
 import type { QaSettings, RuleSeverity, SavedProject } from '../core';
 import { $, esc, plural } from './dom';
 import { dialog } from './settings';
@@ -60,7 +60,8 @@ export function openQaRules(ctx: Ctx): void {
     $('#qr-list', dlg).innerHTML = QA_RULES.map(r => {
       const lvl = q.sev[r.id] ?? r.def, stat = stats.get(r.id);
       const n = stat?.rows ?? 0, fix = stat?.fixable ?? 0;
-      return `<div class="qr-row" data-rule="${esc(r.id)}"><div class="qr-main"><b id="qr-n-${esc(r.id)}">${esc(r.title)}</b><small class="hint">${esc(r.explain)}</small></div>
+      const via = r.plugin ? ` <span class="hint">· ${esc(t('розширення'))} «${esc(plugins.get(r.plugin)?.manifest.name ?? r.plugin)}»</span>` : '';
+      return `<div class="qr-row" data-rule="${esc(r.id)}"><div class="qr-main"><b id="qr-n-${esc(r.id)}">${esc(r.title)}</b>${via}<small class="hint">${esc(r.explain)}</small></div>
         <div class="qr-side"><select data-lvl="${esc(r.id)}" aria-labelledby="qr-n-${esc(r.id)}">${LEVELS.map(([v, l]) => `<option value="${v}" ${v === lvl ? 'selected' : ''}>${l}${v === r.def ? ' (типово)' : ''}</option>`).join('')}</select>
         <span class="qr-cnt" title="Рядків у відкритому файлі, де правило щось знайшло">${sc ? (n ? plural(n, ['рядок', 'рядки', 'рядків']) : 'немає') : '—'}</span>
         ${fix ? `<button type="button" class="btn" data-fixall="${esc(r.id)}" title="Виправити всі ${fix} знайдених місць одним кроком; це можна скасувати">Виправити в файлі (${fix})</button>` : ''}</div></div>`;

@@ -2346,3 +2346,679 @@ msgstr "English: interface language"
 msgctxt "core"
 msgid "Переклад інтерфейсу застосунку (English). Рядки, яких тут немає, лишаються українською."
 msgstr "Translation of the application’s interface (English). Strings that are not here stay in Ukrainian."
+
+msgctxt "core"
+msgid "Файл: Map{1} › рядок {2} з {3} · без перекладу"
+msgstr "File: Map{1} › row {2} of {3} · untranslated"
+
+msgctxt "core"
+msgid "Без перекладу: {1} з {2}"
+msgstr "Untranslated: {1} of {2}"
+
+msgctxt "core"
+msgid "У грі на RPG Maker MV імен мовців немає. Підказують"
+msgstr "RPG Maker MV games have no speaker names. Hints come from"
+
+msgctxt "core"
+msgid "обличчя"
+msgstr "the face"
+
+msgctxt "core"
+msgid "персонажа в діалозі,"
+msgstr "of the character in the dialogue,"
+
+msgctxt "core"
+msgid "позначка"
+msgstr "the mark"
+
+msgctxt "core"
+msgid "розробників (коментар перед текстом, наприклад «MARCOH») і"
+msgstr "left by the developers (a comment before the text, for example “MARCOH”) and"
+
+msgctxt "core"
+msgid "подія"
+msgstr "the event"
+
+msgctxt "core"
+msgid ", до якої належить репліка (часто це сам NPC). Вкажіть ім’я один раз: воно підставиться в усі репліки з тією самою ознакою."
+msgstr ", to which the line belongs (often the NPC itself). Enter the name once: it is put into every line with the same hint."
+
+msgctxt "core"
+msgid "Пошук"
+msgstr "Search"
+
+msgctxt "core"
+msgid "Мовця визначено для {1} із {2} реплік. Показано {3} із {4} варіантів."
+msgstr "The speaker is set for {1} of {2} lines. Showing {3} of {4} variants."
+
+msgctxt "core"
+msgid "Нічого не знайдено."
+msgstr "Nothing found."
+
+msgctxt "core"
+msgid "Не варто вживати"
+msgstr "Better not to use"
+
+msgctxt "core"
+msgid "В оригіналі є {when}: у перекладі має бути {then}"
+msgstr "The original has {when}: the translation should have {then}"
+
+msgctxt "core"
+msgid "Переклад довший за {max} знаків ({n})"
+msgstr "The translation is longer than {max} characters ({n})"
+
+msgctxt "core"
+msgid "Переклад збігається з оригіналом"
+msgstr "The translation is the same as the original"
+
+msgctxt "core"
+msgid "Команди"
+msgstr "Commands"
+
+msgctxt "core"
+msgid "Словники"
+msgstr "Glossaries"
+
+msgctxt "core"
+msgid "Запустити"
+msgstr "Run"
+
+msgctxt "core"
+msgid "Додати до проєкту…"
+msgstr "Add to the project…"
+
+msgctxt "core"
+msgid "Додати до проєкту"
+msgstr "Add to the project"
+
+msgctxt "core"
+msgid "Команди також у меню «Інструменти»."
+msgstr "The commands are also in the menu “Tools”."
+
+msgctxt "core"
+msgid "Рівень кожного правила проєкт змінює в «Правилах QA»."
+msgstr "A project sets the level of each rule in “QA rules”."
+
+msgctxt "core"
+msgid "помилка"
+msgstr "error"
+
+msgctxt "core"
+msgid "порада"
+msgstr "advice"
+
+msgctxt "core"
+msgid "правила QA: {n}"
+msgstr "QA rules: {n}"
+
+msgctxt "core"
+msgid "команди: {n}"
+msgstr "commands: {n}"
+
+msgctxt "core"
+msgid "словники: {n}"
+msgstr "glossaries: {n}"
+
+msgctxt "core"
+msgid "Довідки немає"
+msgstr "There is no such help topic"
+
+msgctxt "core"
+msgid "Зрозуміло"
+msgstr "Got it"
+
+msgctxt "core"
+msgid "Розширення «{name}»: кроки замін описані текстом, без коду."
+msgstr "Extension “{name}”: the steps are plain text, there is no code."
+
+msgctxt "core"
+msgid "Знайдено: {n}. Зніміть позначку з тих, які міняти не треба."
+msgstr "Found: {n}. Untick those that should stay as they are."
+
+msgctxt "core"
+msgid "Вичитаних: {n}, вони стануть чернетками."
+msgstr "Proofread: {n}, they will become drafts."
+
+msgctxt "core"
+msgid "Вичитаних пропущено: {n}."
+msgstr "Proofread rows skipped: {n}."
+
+msgctxt "core"
+msgid "вичитано, пропущено"
+msgstr "proofread, skipped"
+
+msgctxt "core"
+msgid "Нових термінів: {a}. Уже є так само: {b}. У вашому глосарії інакше (лишаються як є): {c}."
+msgstr "New terms: {a}. Already the same: {b}. Different in your glossary (kept as they are): {c}."
+
+msgctxt "core"
+msgid "Пропущено нечитабельних: {n}."
+msgstr "Unreadable skipped: {n}."
+
+msgctxt "core"
+msgid "… і ще {n}"
+msgstr "… and {n} more"
+
+msgctxt "core"
+msgid "Додано термінів: {n}"
+msgstr "Terms added: {n}"
+
+msgctxt "core"
+msgid "розширення"
+msgstr "extension"
+
+msgctxt "core"
+msgid "Нічого не знайдено"
+msgstr "Nothing found"
+
+msgctxt "core"
+msgid "Приклади в застосунку"
+msgstr "Examples in the application"
+
+msgctxt "core"
+msgid "Такого розширення в застосунку немає"
+msgstr "The application has no such extension"
+
+msgctxt "core"
+msgid "Напишіть автор/репозиторій або адресу https файлу transly-catalog.json"
+msgstr "Write author/repository or the https address of a transly-catalog.json file"
+
+msgctxt "core"
+msgid "Цей каталог уже додано"
+msgstr "This catalog is already added"
+
+msgctxt "core"
+msgid "Каталогів уже забагато (до 8)"
+msgstr "Too many catalogs already (up to 8)"
+
+msgctxt "core"
+msgid "має бути об’єктом"
+msgstr "must be an object"
+
+msgctxt "core"
+msgid "«id» — на кшталт автор.назва"
+msgstr "“id” — like author.name"
+
+msgctxt "core"
+msgid "«name» — непорожній рядок"
+msgstr "“name” — a non-empty string"
+
+msgctxt "core"
+msgid "потрібне одне з «repo» (автор/репозиторій) або «url» (https)"
+msgstr "one of “repo” (author/repository) or “url” (https) is needed"
+
+msgctxt "core"
+msgid "«{k}» — текст"
+msgstr "“{k}” — text"
+
+msgctxt "core"
+msgid "«author» — текст"
+msgstr "“author” — text"
+
+msgctxt "core"
+msgid "«version» — версія на кшталт 1.2.0"
+msgstr "“version” — a version like 1.2.0"
+
+msgctxt "core"
+msgid "«homepage» — адреса https"
+msgstr "“homepage” — an https address"
+
+msgctxt "core"
+msgid "«languages» — коди мов"
+msgstr "“languages” — language codes"
+
+msgctxt "core"
+msgid "«detect» — files, anyFiles, excludeFiles (до 16 шаблонів) і min"
+msgstr "“detect” — files, anyFiles, excludeFiles (up to 16 patterns) and min"
+
+msgctxt "core"
+msgid "«requires.transly» — діапазон версій"
+msgstr "“requires.transly” — a range of versions"
+
+msgctxt "core"
+msgid "Каталог завеликий"
+msgstr "The catalog is too big"
+
+msgctxt "core"
+msgid "Каталог — не JSON: {why}"
+msgstr "The catalog is not JSON: {why}"
+
+msgctxt "core"
+msgid "Каталог має бути об’єктом"
+msgstr "A catalog must be an object"
+
+msgctxt "core"
+msgid "Цей каталог має формат {v}, а застосунок знає лише {known}"
+msgstr "This catalog has format {v}, and the application knows only {known}"
+
+msgctxt "core"
+msgid "«plugins» має бути списком"
+msgstr "“plugins” must be a list"
+
+msgctxt "core"
+msgid "У каталозі більше {n} розширень: решту пропущено"
+msgstr "The catalog has more than {n} extensions: the rest is skipped"
+
+msgctxt "core"
+msgid "«{id}» уже є вище"
+msgstr "“{id}” is already above"
+
+msgctxt "core"
+msgid "Не вдалося розпізнати адресу каталогу"
+msgstr "Could not make sense of the catalog address"
+
+msgctxt "core"
+msgid "Потрібен Transly {range}"
+msgstr "Needs Transly {range}"
+
+msgctxt "core"
+msgid "У вибраному місці немає файлів, які застосунок уміє перекладати"
+msgstr "There are no files in the chosen place that the application can translate"
+
+msgctxt "core"
+msgid "У цих файлах немає тексту для перекладу"
+msgstr "There is no text to translate in these files"
+
+msgctxt "core"
+msgid "Розширення «{name}» увімкнено, але файлів із текстом у цьому місці не знайдено. Перевірте, чи обрано папку самої гри (не батьківську, не вкладену)."
+msgstr "The extension “{name}” is on, but no files with text were found here. Check that you chose the game’s own folder (not a parent or a nested one)."
+
+msgctxt "core"
+msgid "Це схоже на гру на «{engine}». Розширення «{name}» вимкнено: увімкніть його."
+msgstr "This looks like a game on “{engine}”. The extension “{name}” is off: switch it on."
+
+msgctxt "core"
+msgid "Розширення «{name}» не працює"
+msgstr "The extension “{name}” does not work"
+
+msgctxt "core"
+msgid "Увімкнути розширення"
+msgstr "Switch the extension on"
+
+msgctxt "core"
+msgid "Застосунок не впізнав цю гру. Можливо, для її рушія потрібне окреме розширення."
+msgstr "The application did not recognise this game. Its engine may need a separate extension."
+
+msgctxt "core"
+msgid "Знайти розширення…"
+msgstr "Find an extension…"
+
+msgctxt "core"
+msgid "Що застосунок уміє читати зараз"
+msgstr "What the application can read now"
+
+msgctxt "core"
+msgid "Що знайдено в обраному місці ({n})"
+msgstr "What was found in the chosen place ({n})"
+
+msgctxt "core"
+msgid "Можливо, підійде з каталогу"
+msgstr "May fit, from the catalog"
+
+msgctxt "core"
+msgid "Показати в каталозі"
+msgstr "Show in the catalog"
+
+msgctxt "core"
+msgid "Є оновлення {v}"
+msgstr "Update {v} available"
+
+msgctxt "core"
+msgid "Зберігається в проєкті й однаково діє на всіх пристроях."
+msgstr "Kept in the project and the same on all devices."
+
+msgctxt "core"
+msgid "не встановлено"
+msgstr "not installed"
+
+msgctxt "core"
+msgid "Сервери"
+msgstr "Servers"
+
+msgctxt "core"
+msgid "описано даними"
+msgstr "described as data"
+
+msgctxt "core"
+msgid "Мови інтерфейсу"
+msgstr "Interface languages"
+
+msgctxt "core"
+msgid "Використовувати"
+msgstr "Use"
+
+msgctxt "core"
+msgid "Збої"
+msgstr "Failures"
+
+msgctxt "core"
+msgid "Перевірити оновлення"
+msgstr "Check for updates"
+
+msgctxt "core"
+msgid "Оновити до {v}"
+msgstr "Update to {v}"
+
+msgctxt "core"
+msgid "Так, видалити"
+msgstr "Yes, remove"
+
+msgctxt "core"
+msgid "Видалити…"
+msgstr "Remove…"
+
+msgctxt "core"
+msgid "Оновлення до {v}"
+msgstr "Update to {v}"
+
+msgctxt "core"
+msgid "Повернення до старішої версії {v}"
+msgstr "Going back to the older version {v}"
+
+msgctxt "core"
+msgid "Перевстановлення {v}"
+msgstr "Reinstalling {v}"
+
+msgctxt "core"
+msgid "Встановлення"
+msgstr "Installation"
+
+msgctxt "core"
+msgid "Назад"
+msgstr "Back"
+
+msgctxt "core"
+msgid "Не підходить до цієї версії"
+msgstr "Does not fit this version"
+
+msgctxt "core"
+msgid "Інше джерело"
+msgstr "Another source"
+
+msgctxt "core"
+msgid "Це розширення вже встановлено з іншого місця ({old}). Переконайтеся, що воно від того самого автора."
+msgstr "This extension is already installed from another place ({old}). Make sure it is from the same author."
+
+msgctxt "core"
+msgid "Розширення містить код"
+msgstr "The extension contains code"
+
+msgctxt "core"
+msgid "Його код виконуватиметься у вашому застосунку. Встановлюйте лише від авторів, яким довіряєте."
+msgstr "Its code would run in your application. Install only from authors you trust."
+
+msgctxt "core"
+msgid "Розширення без коду: воно лише описує формати, мови або довідку, а читає й пише файли сам застосунок."
+msgstr "An extension without code: it only describes formats, languages or help, and the application itself reads and writes the files."
+
+msgctxt "core"
+msgid "Потрібні інші розширення"
+msgstr "Other extensions are needed"
+
+msgctxt "core"
+msgid "Не встановлено: {list}. Без них це розширення не працюватиме."
+msgstr "Not installed: {list}. Without them this extension will not work."
+
+msgctxt "core"
+msgid "Увага"
+msgstr "Attention"
+
+msgctxt "core"
+msgid "Додає"
+msgstr "Adds"
+
+msgctxt "core"
+msgid "рушії: {n}"
+msgstr "engines: {n}"
+
+msgctxt "core"
+msgid "формати: {n}"
+msgstr "formats: {n}"
+
+msgctxt "core"
+msgid "мови: {n}"
+msgstr "languages: {n}"
+
+msgctxt "core"
+msgid "довідка: {n}"
+msgstr "help: {n}"
+
+msgctxt "core"
+msgid "параметри: {n}"
+msgstr "parameters: {n}"
+
+msgctxt "core"
+msgid "Я довіряю автору й розумію, що код розширення виконуватиметься"
+msgstr "I trust the author and understand that the extension’s code would run"
+
+msgctxt "core"
+msgid "Оновити"
+msgstr "Update"
+
+msgctxt "core"
+msgid "Встановити"
+msgstr "Install"
+
+msgctxt "core"
+msgid "Каталог порожній"
+msgstr "The catalog is empty"
+
+msgctxt "core"
+msgid "Не підходить"
+msgstr "Does not fit"
+
+msgctxt "core"
+msgid "Сайт"
+msgstr "Site"
+
+msgctxt "core"
+msgid "Каталог — це список розширень, які хтось радить. Він лише описує їх і каже, де вони лежать: перед встановленням ви побачите, що розширення додає й чого просить, і нічого не запишеться без вашої згоди."
+msgstr "A catalog is a list of extensions somebody recommends. It only describes them and says where they are: before installing you will see what an extension adds and asks for, and nothing is written without your consent."
+
+msgctxt "core"
+msgid "назва, мова, рушій…"
+msgstr "name, language, engine…"
+
+msgctxt "core"
+msgid "Що додає"
+msgstr "What it adds"
+
+msgctxt "core"
+msgid "Каталоги"
+msgstr "Catalogs"
+
+msgctxt "core"
+msgid "Каталог — це файл transly-catalog.json у репозиторії GitHub або за адресою https. Мережа потрібна лише для оновлення списку."
+msgstr "A catalog is a transly-catalog.json file in a GitHub repository or at an https address. The network is needed only to refresh the list."
+
+msgctxt "core"
+msgid "вбудований"
+msgstr "built in"
+
+msgctxt "core"
+msgid "Встановлюються без мережі."
+msgstr "Installed without a network."
+
+msgctxt "core"
+msgid "Розширень: {n}"
+msgstr "Extensions: {n}"
+
+msgctxt "core"
+msgid "Ще не завантажено"
+msgstr "Not loaded yet"
+
+msgctxt "core"
+msgid "пропущено записів: {n}"
+msgstr "entries skipped: {n}"
+
+msgctxt "core"
+msgid "Прибрати"
+msgstr "Remove"
+
+msgctxt "core"
+msgid "Додати каталог"
+msgstr "Add a catalog"
+
+msgctxt "core"
+msgid "Оновити списки"
+msgstr "Refresh the lists"
+
+msgctxt "core"
+msgid "Встановлюю"
+msgstr "Installing"
+
+msgctxt "core"
+msgid "Підтвердьте, що довіряєте автору"
+msgstr "Confirm that you trust the author"
+
+msgctxt "core"
+msgid "«{name}» встановлено"
+msgstr "“{name}” is installed"
+
+msgctxt "core"
+msgid "Розширення «{name}» встановлено"
+msgstr "The extension “{name}” is installed"
+
+msgctxt "core"
+msgid "Напишіть автор/репозиторій"
+msgstr "Write author/repository"
+
+msgctxt "core"
+msgid "Перевіряю репозиторій"
+msgstr "Checking the repository"
+
+msgctxt "core"
+msgid "Вставте адресу"
+msgstr "Paste an address"
+
+msgctxt "core"
+msgid "Завантажую"
+msgstr "Downloading"
+
+msgctxt "core"
+msgid "Шукаю"
+msgstr "Searching"
+
+msgctxt "core"
+msgid "GitHub відповів {n}: спробуйте за хвилину"
+msgstr "GitHub answered {n}: try again in a minute"
+
+msgctxt "core"
+msgid "Перевіряю оновлення"
+msgstr "Checking for updates"
+
+msgctxt "core"
+msgid "Є нова версія {v}"
+msgstr "A new version {v} is available"
+
+msgctxt "core"
+msgid "Це остання версія"
+msgstr "This is the latest version"
+
+msgctxt "core"
+msgid "Завантажую оновлення"
+msgstr "Downloading the update"
+
+msgctxt "core"
+msgid "Видаляю"
+msgstr "Removing"
+
+msgctxt "core"
+msgid "Видалено. Від нього залежали: {list}"
+msgstr "Removed. These depended on it: {list}"
+
+msgctxt "core"
+msgid "Видалено"
+msgstr "Removed"
+
+msgctxt "core"
+msgid "Завантажую каталог"
+msgstr "Downloading the catalog"
+
+msgctxt "core"
+msgid "Каталог додано"
+msgstr "The catalog is added"
+
+msgctxt "core"
+msgid "Оновлюю списки"
+msgstr "Refreshing the lists"
+
+msgctxt "core"
+msgid "Списки оновлено"
+msgstr "The lists are refreshed"
+
+msgctxt "core"
+msgid "Розширення з кодом вмикається лише через встановлення: так ви бачите, чого воно просить"
+msgstr "An extension with code is switched on only through installation: that is how you see what it asks for"
+
+msgctxt "core"
+msgid "Зберігаю"
+msgstr "Saving"
+
+msgctxt "core"
+msgid "Читаю файли"
+msgstr "Reading files"
+
+msgctxt "core"
+msgid "Вимкнено"
+msgstr "Off"
+
+msgctxt "core"
+msgid "Власне сховище"
+msgstr "Own storage"
+
+msgctxt "core"
+msgid "Встановлено"
+msgstr "Installed"
+
+msgctxt "core"
+msgid "Залежності"
+msgstr "Dependencies"
+
+msgctxt "core"
+msgid "Каталог"
+msgstr "Catalog"
+
+msgctxt "core"
+msgid "Код"
+msgstr "Code"
+
+msgctxt "core"
+msgid "Мережа"
+msgstr "Network"
+
+msgctxt "core"
+msgid "Може зберігати невеликі власні дані на цьому пристрої."
+msgstr "May keep small data of its own on this device."
+
+msgctxt "core"
+msgid "Може показувати вам повідомлення в застосунку."
+msgstr "May show you notices in the application."
+
+msgctxt "core"
+msgid "Повідомлення"
+msgstr "Notices"
+
+msgctxt "core"
+msgid "Помилка"
+msgstr "Error"
+
+msgctxt "core"
+msgid "Потрібен Transly"
+msgstr "Needs Transly"
+
+msgctxt "core"
+msgid "Потрібне інше розширення"
+msgstr "Another extension is needed"
+
+msgctxt "core"
+msgid "Розширення може просити застосунок завантажити дані з указаних серверів (сам воно мережі не бачить)."
+msgstr "The extension may ask the application to download data from the listed servers (it does not see the network itself)."
+
+msgctxt "core"
+msgid "Рушії"
+msgstr "Engines"
+
+msgctxt "core"
+msgid "текстовий файл"
+msgstr "text file"

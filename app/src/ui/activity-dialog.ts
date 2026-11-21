@@ -111,7 +111,7 @@ export function openActivity(ctx: Ctx): void {
     let last = '';
     $('#ac-list', dlg).innerHTML = evs.map((e, i) => {
       const head = dayKey(e.at) !== last ? `<h3>${dayName(e.at)}</h3>` : ''; last = dayKey(e.at);
-      return `${head}<div class="sp-row ac-ev"><div class="sp-b"><b>${esc(e.text)}</b><span class="hint">${new Date(e.at).toLocaleTimeString(uiLocale(), { hour: '2-digit', minute: '2-digit' })}${e.sub ? ' · ' + esc(e.sub) : ''}</span>
+      return `${head}<div class="sp-row ac-ev"><div class="sp-b"><b>${esc(e.text)}</b><span class="hint">${new Date(e.at).toLocaleTimeString(uiLocale(), { hour: '2-digit', minute: '2-digit', hour12: false })}${e.sub ? ' · ' + esc(e.sub) : ''}</span>
         ${e.undo ? `<div class="cs-v"><button class="btn" type="button" data-undo="${i}">${esc(e.undoLabel ?? 'Скасувати')}</button>${e.rows ? `<button class="btn" type="button" data-open="${i}">${open.has(e.id) ? 'Сховати рядки' : 'Показати рядки'}</button>` : ''}</div>` : ''}
         ${open.has(e.id) && e.rows ? e.rows.map(r => `<div class="fr-b">${esc(r.source.replace(/\s+/g, ' ').slice(0, 90))}</div><div class="fr-a">${esc(r.target.replace(/\s+/g, ' ').slice(0, 110))}</div>`).join('') : ''}</div></div>`;
     }).join('') || '<p class="hint">Активності ще немає</p>';

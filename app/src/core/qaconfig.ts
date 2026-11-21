@@ -1,4 +1,4 @@
-import { QA_RULES } from './qarules';
+import { QA_RULES, qaRulesRevision } from './qarules';
 import type { QaRules, RuleSeverity } from './qarules';
 
 /**
@@ -18,8 +18,10 @@ export interface QaSettings {
 export const APOSTROPHES = ['any', '’', 'ʼ', "'"] as const;
 const LEVELS: readonly RuleSeverity[] = ['off', 'warn', 'bad'];
 
-const cache = new WeakMap<object, QaRules>();
-const DEFAULTS: QaRules = build(undefined);
+/** What is worked out from a project's settings is good for one set of rules: when a plugin brings or takes away a rule, it is worked out again. */
+const cache = new WeakMap<object, { rev: number; rules: QaRules }>();
+let defaults: { rev: number; rules: QaRules } | null = null;
+const DEFAULTS = (): QaRules => { const rev = qaRulesRevision(); if (!defaults || defaults.rev !== rev) defaults = { rev, rules: build(undefined) }; return defaults.rules; };
 
 function build(q: QaSettings | undefined): QaRules {
   const sev: Record<string, RuleSeverity> = {};
@@ -33,17 +35,18 @@ function build(q: QaSettings | undefined): QaRules {
     if (t && t.length <= 40) keep.add(t);
   }
   const apostrophe = APOSTROPHES.includes(q?.apostrophe as (typeof APOSTROPHES)[number]) ? (q!.apostrophe as QaRules['apostrophe']) : 'any';
-  const sig = `${QA_RULES.map(r => `${r.id}=${sev[r.id]}`).join(',')}|${[...keep].sort().join(',')}|${apostrophe}`;
+  const sig = `${QA_RULES.map(r => `${r.id}=${sev[r.id]}`).join(',')}|${[...keep].sort().join(',')}|${apostrophe}|r${qaRulesRevision()}`;
   return { sev, keep, apostrophe, sig };
 }
 
 /** The QA rules of a project with every field checked and filled in; the answer is remembered per `settings.qa` object. */
 export function qaOf(settings: { qa?: QaSettings | undefined } | undefined): QaRules {
   const q = settings?.qa;
-  if (!q || typeof q !== 'object') return DEFAULTS;
+  if (!q || typeof q !== 'object') return DEFAULTS();
+  const rev = qaRulesRevision();
   let hit = cache.get(q);
-  if (!hit) cache.set(q, hit = build(q));
-  return hit;
+  if (!hit || hit.rev !== rev) cache.set(q, hit = { rev, rules: build(q) });
+  return hit.rules;
 }
 
 /** A copy of the settings with one rule set to a level (the default level is stored as «not mentioned»). */

@@ -2,14 +2,14 @@ import { t } from './i18n';
 import { satisfies, validRange } from './semver';
 import { parseVersion } from './semver';
 import { PERMISSIONS } from './types';
-import type { Contributions, EngineContribution, FormatContribution, FormatSpec, HelpContribution, LanguageContribution, PluginManifest, PluginPermission, SettingsContribution } from './types';
+import type { CommandContribution, Contributions, EngineContribution, FormatContribution, FormatSpec, GlossaryContribution, HelpContribution, LanguageContribution, PluginManifest, PluginPermission, QaRuleContribution, SettingsContribution } from './types';
 import { API_VERSION, APP_VERSION, MANIFEST_VERSION } from './version';
 
 /** The file that names a plugin. */
 export const MANIFEST_FILE = 'transly-plugin.json';
 
 /** Limits that keep a manifest (and what it makes the application keep) small. */
-export const LIMITS = { files: 200, fileBytes: 2_000_000, totalBytes: 8_000_000, manifestBytes: 200_000, formats: 32, engines: 16, languages: 16, help: 64, settings: 16, fields: 64, name: 80, text: 600, id: 64 } as const;
+export const LIMITS = { files: 200, fileBytes: 2_000_000, totalBytes: 8_000_000, manifestBytes: 200_000, formats: 32, engines: 16, languages: 16, help: 64, settings: 16, fields: 64, commands: 32, qaRules: 32, glossaries: 16, steps: 50, patterns: 50, terms: 5000, pattern: 120, name: 80, text: 600, id: 64 } as const;
 
 export type Checked = { ok: true; manifest: PluginManifest; warnings: string[] } | { ok: false; errors: string[] };
 
@@ -180,6 +180,83 @@ function settings(r: Report, a: unknown): SettingsContribution[] {
   });
 }
 
+const matchOk = (r: Report, w: string, m: unknown, extra: string[] = []): m is Record<string, unknown> => {
+  if (!isObj(m)) { r.bad(w, t('має бути об’єктом')); return false; }
+  if (!isStr(m.find, LIMITS.pattern)) { r.bad(w, t('«find» — текст від 1 до {n} знаків (не регулярний вираз)', { n: LIMITS.pattern })); return false; }
+  for (const k of ['wholeWord', 'caseSensitive']) if (m[k] !== undefined && typeof m[k] !== 'boolean') r.bad(w, t('«{k}» — true або false', { k }));
+  for (const k of extra) if (m[k] !== undefined && typeof m[k] !== 'string') r.bad(w, t('«{k}» — текст', { k }));
+  return true;
+};
+
+function commands(r: Report, a: unknown, helpIds: Set<string>): CommandContribution[] {
+  if (a === undefined) return [];
+  if (!Array.isArray(a) || a.length > LIMITS.commands) { r.bad('contributes.commands', t('має бути списком (до {n})', { n: LIMITS.commands })); return []; }
+  const seen = new Set<string>();
+  return a.flatMap((c, i) => {
+    const w = `contributes.commands[${i}]`;
+    if (!isObj(c)) { r.bad(w, t('має бути об’єктом')); return []; }
+    if (typeof c.id !== 'string' || !LOCAL_ID.test(c.id)) r.bad(w, t('«id» — латиниця, цифри, «-» і «_»')); else if (seen.has(c.id)) r.bad(w, t('«id» «{id}» повторюється', { id: c.id })); else seen.add(c.id);
+    if (!isStr(c.title, LIMITS.name)) r.bad(w, t('«title» — непорожній рядок'));
+    if (c.description !== undefined && !isStr(c.description)) r.bad(w, t('«description» — текст'));
+    if (c.action === 'replace') {
+      if (!Array.isArray(c.steps) || !c.steps.length || c.steps.length > LIMITS.steps) r.bad(w, t('«steps» — від 1 до {n} кроків', { n: LIMITS.steps }));
+      else for (const [j, st] of c.steps.entries()) { if (matchOk(r, `${w}.steps[${j}]`, st) && (typeof (st as Record<string, unknown>).replace !== 'string' || ((st as Record<string, unknown>).replace as string).length > LIMITS.pattern)) r.bad(`${w}.steps[${j}]`, t('«replace» — текст до {n} знаків', { n: LIMITS.pattern })); }
+    } else if (c.action === 'help') {
+      if (typeof c.help !== 'string' || !helpIds.has(c.help)) r.bad(w, t('«help» — id однієї з довідок цього розширення'));
+    } else if (c.action === 'link') {
+      if (!isHttps(c.url)) r.bad(w, t('«url» — адреса https'));
+    } else r.bad(w, t('«action» — replace, help або link'));
+    return [c as unknown as CommandContribution];
+  });
+}
+
+function qaRules(r: Report, a: unknown): QaRuleContribution[] {
+  if (a === undefined) return [];
+  if (!Array.isArray(a) || a.length > LIMITS.qaRules) { r.bad('contributes.qaRules', t('має бути списком (до {n})', { n: LIMITS.qaRules })); return []; }
+  const seen = new Set<string>();
+  return a.flatMap((q, i) => {
+    const w = `contributes.qaRules[${i}]`;
+    if (!isObj(q)) { r.bad(w, t('має бути об’єктом')); return []; }
+    if (typeof q.id !== 'string' || !LOCAL_ID.test(q.id)) r.bad(w, t('«id» — латиниця, цифри, «-» і «_»')); else if (seen.has(q.id)) r.bad(w, t('«id» «{id}» повторюється', { id: q.id })); else seen.add(q.id);
+    if (!isStr(q.title, LIMITS.name)) r.bad(w, t('«title» — непорожній рядок'));
+    if (q.description !== undefined && !isStr(q.description)) r.bad(w, t('«description» — текст'));
+    if (q.severity !== undefined && q.severity !== 'warn' && q.severity !== 'bad') r.bad(w, t('«severity» — warn або bad'));
+    if (q.kinds !== undefined && (!Array.isArray(q.kinds) || q.kinds.length > 16 || !q.kinds.every(k => typeof k === 'string' && KINDS.includes(k)))) r.bad(w, t('«kinds» — види рядків: {list}', { list: KINDS.join(', ') }));
+    const ch = q.check, x = `${w}.check`;
+    if (!isObj(ch)) r.bad(x, t('має бути об’єктом'));
+    else {
+      if (ch.message !== undefined && !isStr(ch.message, 200)) r.bad(x, t('«message» — текст до 200 знаків'));
+      if (ch.type === 'forbid') {
+        if (!Array.isArray(ch.items) || !ch.items.length || ch.items.length > LIMITS.patterns) r.bad(x, t('«items» — від 1 до {n} шаблонів', { n: LIMITS.patterns }));
+        else for (const [j, it] of ch.items.entries()) { if (matchOk(r, `${x}.items[${j}]`, it, ['replace']) && typeof (it as Record<string, unknown>).replace === 'string' && ((it as Record<string, unknown>).replace as string).length > LIMITS.pattern) r.bad(`${x}.items[${j}]`, t('«replace» — текст до {n} знаків', { n: LIMITS.pattern })); }
+      } else if (ch.type === 'require') { matchOk(r, `${x}.when`, ch.when); matchOk(r, `${x}.then`, ch.then); }
+      else if (ch.type === 'maxLength') { if (typeof ch.max !== 'number' || !Number.isInteger(ch.max) || ch.max < 1 || ch.max > 10_000) r.bad(x, t('«max» — ціле число від 1 до 10000')); }
+      else if (ch.type !== 'sameAsSource') r.bad(x, t('«type» — forbid, require, maxLength або sameAsSource'));
+    }
+    return [q as unknown as QaRuleContribution];
+  });
+}
+
+function glossaries(r: Report, a: unknown): GlossaryContribution[] {
+  if (a === undefined) return [];
+  if (!Array.isArray(a) || a.length > LIMITS.glossaries) { r.bad('contributes.glossaries', t('має бути списком (до {n})', { n: LIMITS.glossaries })); return []; }
+  const seen = new Set<string>();
+  return a.flatMap((g, i) => {
+    const w = `contributes.glossaries[${i}]`;
+    if (!isObj(g)) { r.bad(w, t('має бути об’єктом')); return []; }
+    if (typeof g.id !== 'string' || !LOCAL_ID.test(g.id)) r.bad(w, t('«id» — латиниця, цифри, «-» і «_»')); else if (seen.has(g.id)) r.bad(w, t('«id» «{id}» повторюється', { id: g.id })); else seen.add(g.id);
+    if (!isStr(g.title, LIMITS.name)) r.bad(w, t('«title» — непорожній рядок'));
+    if (g.description !== undefined && !isStr(g.description)) r.bad(w, t('«description» — текст'));
+    if (g.terms === undefined && g.file === undefined) r.bad(w, t('потрібні «terms» або «file»'));
+    if (g.file !== undefined && (!safePath(g.file) || !/\.(json|tsv)$/i.test(String(g.file)))) r.bad(w, t('«file» — .json або .tsv усередині пакета'));
+    if (g.terms !== undefined) {
+      if (!Array.isArray(g.terms) || g.terms.length > LIMITS.terms) r.bad(w, t('«terms» — список до {n} термінів', { n: LIMITS.terms }));
+      else for (const [j, tm] of g.terms.entries()) if (!isObj(tm) || !isStr(tm.en, 200) || !isStr(tm.uk, 200) || (tm.alt !== undefined && (!Array.isArray(tm.alt) || tm.alt.length > 16 || !tm.alt.every(x => isStr(x, 200)))) || (tm.note !== undefined && !isStr(tm.note, 300))) { r.bad(`${w}.terms[${j}]`, t('потрібні «en» і «uk» (текст), «alt» — список, «note» — текст')); break; }
+    }
+    return [g as unknown as GlossaryContribution];
+  });
+}
+
 /**
  * Read and check a manifest. A manifest is untrusted text: it is parsed here, every field is checked for its type, length and form, and what is not
  * known is left out (a warning, not an error, so a plugin written for a newer version of the format still loads with what this version understands).
@@ -231,9 +308,9 @@ export function checkManifest(input: string | unknown, opts: { builtin?: boolean
     if (!isObj(m.contributes)) r.bad('contributes', t('має бути об’єктом'));
     else {
       const c = m.contributes;
-      for (const k of Object.keys(c)) if (!['formats', 'engines', 'languages', 'help', 'settings'].includes(k)) r.warn('contributes', t('«{k}» цій версії застосунку невідоме й буде пропущене', { k }));
-      const f = formats(r, c.formats, hasCode, !!opts.builtin);
-      contributes = { formats: f, engines: engines(r, c.engines, new Set(f.map(x => x.id))), languages: languages(r, c.languages), help: help(r, c.help), settings: settings(r, c.settings) };
+      for (const k of Object.keys(c)) if (!['formats', 'engines', 'languages', 'help', 'settings', 'commands', 'qaRules', 'glossaries'].includes(k)) r.warn('contributes', t('«{k}» цій версії застосунку невідоме й буде пропущене', { k }));
+      const f = formats(r, c.formats, hasCode, !!opts.builtin), helps = help(r, c.help);
+      contributes = { formats: f, engines: engines(r, c.engines, new Set(f.map(x => x.id))), languages: languages(r, c.languages), help: helps, settings: settings(r, c.settings), commands: commands(r, c.commands, new Set(helps.map(x => x.id))), qaRules: qaRules(r, c.qaRules), glossaries: glossaries(r, c.glossaries) };
     }
   }
   if (m.files !== undefined) {
@@ -246,6 +323,7 @@ export function checkManifest(input: string | unknown, opts: { builtin?: boolean
     const files = (m.files ?? {}) as Record<string, string>;
     // a built-in plugin's files are inside the application, so there is nothing to check them against
     if (!opts.builtin) for (const c of contributes.languages ?? []) for (const cat of c.catalogs) if (!(cat.file in files)) r.bad('files', t('файл «{p}» не має контрольної суми', { p: cat.file }));
+    for (const g of contributes.glossaries ?? []) if (g.file && !(g.file in files)) r.bad('files', t('файл «{p}» не має контрольної суми', { p: g.file }));
     for (const h of contributes.help ?? []) if (h.file && !(h.file in files)) r.bad('files', t('файл «{p}» не має контрольної суми', { p: h.file }));
   }
   if (r.errors.length) return { ok: false, errors: r.errors };

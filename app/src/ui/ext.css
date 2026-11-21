@@ -23,3 +23,6 @@
 .ex-md a,.ex-meta a{color:var(--accent-hi,var(--accent))}
 .exd details{margin:4px 0}.exd summary{cursor:pointer}
 .exd .achk{display:flex;gap:8px;align-items:flex-start;margin:6px 0}
+
+/* the catalog page: filter chips above the list */
+.exd .ex-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }

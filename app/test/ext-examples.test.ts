@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { API_VERSION, APP_VERSION, ExtHost, I18n, MemoryPluginStore, PluginRegistry, apply, extract, registerBuiltins } from '../src/core';
+import { API_VERSION, APP_VERSION, ExtHost, check, declarativeRules, glossaryTerms, pluginCommands, qaOf, setPluginQaRules, I18n, MemoryPluginStore, PluginRegistry, apply, extract, registerBuiltins } from '../src/core';
 import type { Translations } from '../src/core';
 import { plugins } from '../src/core';
 import schema from '../docs/plugins/plugin.schema.json';
@@ -17,7 +17,7 @@ function filesOf(dir: string): { name: string; data: Uint8Array }[] {
 const host = () => { const reg = new PluginRegistry(new I18n(), APP_VERSION, API_VERSION); registerBuiltins(reg); const h = new ExtHost(reg, new MemoryPluginStore()); h.setStorage(null); return { reg, h }; };
 
 describe('the example plugins', () => {
-  it('exist', () => { expect(names.sort()).toEqual(['json-dialogs', 'lang-english', 'lang-files']); });
+  it('exist', () => { expect(names.sort()).toEqual(['json-dialogs', 'lang-english', 'lang-files', 'style-pack']); });
   for (const name of names) {
     it(`${name}: installs (so its checksums are up to date) and is enabled`, async () => {
       const { h, reg } = host();
@@ -69,5 +69,25 @@ describe('the example plugins', () => {
     expect(i.t('Файл')).toBe('File');
     expect(i.t('Рядків без перекладу: {n}', { n: 3 })).toBe('Strings without a translation: 3');
     expect(i.t('Lang file (.lang)', undefined, 'plugin:example.lang-files')).toBe('Файл .lang');
+  });
+  it('style-pack brings rules of QA, commands and glossaries that work', async () => {
+    const { h, reg } = host();
+    const rec = await h.install(await h.plan({ kind: 'files', files: filesOf(join(ROOT, 'style-pack')) }));
+    try {
+      setPluginQaRules(declarativeRules(reg.list()));
+      const run = (source: string, target: string, kind?: 'name') => check({ source, ...(kind ? { kind } : {}) }, target, { tolerancePct: 100, terms: [], rules: qaOf(undefined) }).filter(i => i.key.startsWith('example.style-pack:'));
+      expect(run('Cool!', 'Це круто!').map(i => i.key)).toEqual(['example.style-pack:no-slang']);
+      expect(run('Yes, Sir.', 'Так.').map(i => i.key)).toEqual(['example.style-pack:address-sir']);
+      expect(run('Yes, Sir.', 'Так, пане.')).toEqual([]);
+      const long = run('Sword', 'Дуже довга назва предмета для вузької колонки', 'name');
+      expect(long.map(i => [i.key, i.severity])).toEqual([['example.style-pack:short-names', 'bad']]);
+      expect(run('Hello there', 'Hello there').map(i => i.key)).toEqual(['example.style-pack:not-translated']);
+      const cmds = pluginCommands(reg.list());
+      expect(cmds.map(c => [c.title, c.action])).toEqual([['Tidy punctuation', 'replace'], ['House style guide', 'help'], ['Ukrainian orthography (pravopys.net)', 'link']]);
+      expect(reg.helpById(cmds[1]!.help!)?.title).toBe('About this style');
+      const [inline, file] = rec.manifest.contributes!.glossaries!;
+      expect(glossaryTerms(rec, inline!).terms.map(t => t.en)).toEqual(['Sir', 'Madam']);
+      expect(glossaryTerms(rec, file!).terms.map(t => [t.en, t.uk, t.alt ?? []])).toEqual([['sword', 'меч', ['клинок']], ['shield', 'щит', ['буклер', 'тарч']], ['elf', 'ельф', []], ['dwarf', 'гном', []]]);
+    } finally { setPluginQaRules([]); }
   });
 });

@@ -1,4 +1,4 @@
-declare module '*.po?raw' {
+declare module '*?raw' {
   const text: string;
   export default text;
 }

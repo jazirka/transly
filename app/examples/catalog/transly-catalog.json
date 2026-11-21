@@ -1,0 +1,26 @@
+{
+  "catalogVersion": 1,
+  "name": "Example catalog",
+  "plugins": [
+    {
+      "id": "acme.wolf",
+      "name": "Wolf RPG Editor",
+      "description": "Reads and writes the games of Wolf RPG Editor.",
+      "version": "1.2.0",
+      "author": "Acme",
+      "tags": ["engine", "format"],
+      "repo": "acme/transly-wolf@v1.2.0",
+      "detect": { "anyFiles": ["**/*.wolf", "**/data/basicdata/*.dat"], "min": 1 },
+      "requires": { "transly": ">=0.1.0" }
+    },
+    {
+      "id": "pl.interface",
+      "name": "Polski",
+      "description": "The interface in Polish.",
+      "version": "0.3.0",
+      "tags": ["language"],
+      "languages": ["pl"],
+      "url": "https://example.com/transly/pl/transly-plugin.json"
+    }
+  ]
+}

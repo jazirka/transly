@@ -75,8 +75,10 @@ const put = ({ text, snapshot }) => new Promise((res, rej) => { const o = indexe
   check('the rail of the right panel has three tabs: the activity, the related things and the discussion (no «Рядок»)', rail.join() === 'act,rel,cm', rail.join());
   check('the related things stand in the right panel, not under the field', (await page.locator('#f-threads').count()) === 0 && (await page.locator('#f-var .thc2, #f-var .thb').count()) === 0 && (await page.locator('.pn-sec[data-sec="th"]').count()) === 1);
   check('the discussion is the second tab of the right panel (not under the field)', (await page.locator('#f-var #cm-in').count()) === 0 && (await page.locator('.fs #cm-in').count()) === 1);
-  await page.locator('#stabs [data-p="act"]').click(); await sleep(300);
-  check('the activity of the row (the earlier translations with what was added and deleted) is in the panel too, grouped by the day, each record with its icon and its time', (await page.locator('.pn-sec[data-sec="ac"]').isVisible()) && (await page.locator('#rp-title').innerText()).toLowerCase() === 'активність' && (await page.locator('#hist-list .ac-d').count()) >= 1 && (await page.locator('#hist-list .ac-i .ac-ic svg').count()) >= 3 && (await page.locator('#hist-list .ac-i time').count()) >= 3);
+  // the tabs are independent toggles: the activity is open from the start, a click would close it
+  if (!(await page.locator('#stabs [data-p="act"]').evaluate(e => e.classList.contains('on')))) await page.locator('#stabs [data-p="act"]').click();
+  await sleep(300);
+  check('the activity of the row (the earlier translations with what was added and deleted) is in the panel too, grouped by the day, each record with its icon and its time', (await page.locator('.pn-sec[data-sec="ac"]').isVisible()) && (await page.locator('#rp-title').innerText()).toLowerCase().startsWith('активність') && (await page.locator('#hist-list .ac-d').count()) >= 1 && (await page.locator('#hist-list .ac-i .ac-ic svg').count()) >= 3 && (await page.locator('#hist-list .ac-i time').count()) >= 3);
   check('the right panel has no card or line of the state of the row («Стан і дії») in any view: the field and the contributions are the translation', (await page.locator('.pn-sec[data-sec="tr"], .pn-ver').count()) === 0 && !/Стан і дії/.test(await page.locator('.fs').innerText()));
 
   // a row that was not sent has no card

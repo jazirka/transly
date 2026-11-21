@@ -74,7 +74,7 @@ async function addTerm(page, en, uk, alt = '') {
   check('the tip of a construction says what it is and where it is used across the game', /конструкція/.test(cards[0].tip) && /2 рядки/.test(cards[0].tip), cards[0] && cards[0].tip);
   check('an entry rendered by its alternative is a plain chip, too', /pick … up/.test(cards[2].text) && !/[✔▲]/.test(cards[2].text), cards[2] && cards[2].text);
   // pointing at a chip draws its thread (and only that one)
-  await page.locator('#pn-th .thc2[data-ck="take … off"] .thc2-b').hover(); await sleep(300);
+  await page.locator('#pn-th .thc2[data-ck="take … off"] .thc2-b').hover(); await sleep(1200);
   const hot = await page.evaluate(() => [...document.querySelectorAll('#te-links path')].map(p => ({ link: p.dataset.link, op: Number(getComputedStyle(p).opacity) })));
   check('the chip draws its own thread: the arrows and the arc of «take … off»', hot.filter(h => h.op > 0.9).length === 3 && hot.filter(h => h.op > 0.9).every(h => h.link === 'termtake … off'), JSON.stringify(hot));
   check('the other threads stay hidden', hot.filter(h => h.link !== 'termtake … off').every(h => h.op === 0), JSON.stringify(hot));

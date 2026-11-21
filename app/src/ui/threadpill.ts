@@ -47,7 +47,8 @@ const srcWord = (en: string): HTMLElement | null => [...document.querySelectorAl
 export function hideThreadPill(): void {
   window.clearTimeout(showTimer); window.clearTimeout(hideTimer);
   if (pill) pill.hidden = true;
-  holdThread(null);
+  // only a thread this pill held is let go: another one may be lit by a chip that is pointed at
+  if (st) holdThread(null);
   st = null;
 }
 

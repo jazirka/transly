@@ -19,8 +19,10 @@ const project = () => ({ version: 1, name: 'P', sourceLang: 'en', targetLang: 'u
   await page.locator('[data-m="edit"]').click(); await sleep(500);
   await page.locator('#lp-rows .si').nth(1).click(); await sleep(500); // a row with no history, no comments, nothing related
   const where = async () => page.evaluate(() => { const m = [...document.querySelectorAll('#s-pn .pn-mid')].find(e => e.getBoundingClientRect().width > 0); if (!m) return null; const pane = document.querySelector('#s-pn').getBoundingClientRect(), r = m.getBoundingClientRect(); return { txt: m.textContent, cx: (r.left + r.right) / 2 - (pane.left + pane.right) / 2, cy: ((r.top + r.bottom) / 2 - pane.top) / pane.height, align: getComputedStyle(m).textAlign }; });
+  // the tabs are independent toggles: to look at one, it is opened first and the others are closed
+  const only = async tab => { const on = t => page.locator(`#stabs [data-p="${t}"]`).evaluate(e => e.classList.contains('on')); if (!(await on(tab))) await page.locator(`#stabs [data-p="${tab}"]`).click(); for (const t of ['act', 'rel', 'cm']) if (t !== tab && (await on(t))) await page.locator(`#stabs [data-p="${t}"]`).click(); await sleep(250); };
   for (const [tab, txt, lo, hi] of [['act', 'Брак активності', .3, .7], ['rel', 'Брак пов’язаного', .3, .7], ['cm', 'Брак коментарів', .2, .8]]) {
-    await page.locator(`#stabs [data-p="${tab}"]`).click(); await sleep(400);
+    await only(tab); await sleep(200);
     const w = await where();
     check(`${tab}: says «${txt}»`, !!w && w.txt === txt, JSON.stringify(w));
     check(`${tab}: the message stands in the middle of the panel (across and down)`, !!w && Math.abs(w.cx) <= 10 && w.cy > lo && w.cy < hi && w.align === 'center', JSON.stringify(w));

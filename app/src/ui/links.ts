@@ -29,6 +29,10 @@ export function togglePin(ctx: Ctx, en: string): boolean {
   pinned.add(en);
   return true;
 }
+/** Keeps the thread of `en` lit while its pill is open (the pointer has left the word for the pill); `null` lets every thread go. */
+export function holdThread(en: string | null): void {
+  document.querySelectorAll<SVGPathElement>('#te-links path').forEach(x => x.classList.toggle('hot', en !== null && x.dataset.link === `term${en}`));
+}
 /** Lines of the kept threads stay lit; the chips say so. */
 export function showPinned(): void {
   rowIs(rowNow);
@@ -148,52 +152,15 @@ export function wireLinks(ctx: Ctx): void {
 }
 
 /**
- * While a card is open its words are joined to it: an arrow from the word in the original and one from the word in the
- * translation (when the translation has it) end at the card's edge, and both words are ringed. Words the card covers
- * get no arrow (the card is right under the word it was opened from).
+ * While a card is open its words are ringed (the word in the original and the word in the translation that belong to
+ * the same term or code): there is no line to the card, the card stands under the word it was opened from.
  */
-const cardLinks = (): SVGSVGElement => {
-  let svg = document.getElementById('card-links') as SVGSVGElement | null;
-  if (!svg) {
-    svg = document.createElementNS(NS, 'svg') as SVGSVGElement;
-    svg.id = 'card-links';
-    svg.setAttribute('aria-hidden', 'true');
-    svg.innerHTML = '<defs><marker id="cl-h" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" class="cl-t"/></marker></defs><g id="card-links-g"></g>';
-    document.body.appendChild(svg);
-  }
-  return svg;
-};
-
 export function clearCardLinks(): void {
-  document.getElementById('card-links-g')?.replaceChildren();
   document.querySelectorAll('.pin').forEach(e => e.classList.remove('pin'));
 }
 
-/** `words` are the elements to join to `card`; `edge` says on which side of the column the card stands ('r', 'l' or null when it stands under the word). */
-export function drawCardLinks(card: HTMLElement, words: HTMLElement[], edge: 'r' | 'l' | null, colEdge: number): void {
+/** Ring the words of the open card. */
+export function pinWords(words: HTMLElement[]): void {
   clearCardLinks();
-  const g = cardLinks().querySelector('#card-links-g')!;
-  const c = card.getBoundingClientRect();
-  for (const w of words) {
-    w.classList.add('pin');
-    const r = first(w);
-    const covered = r.right > c.left - 2 && r.left < c.right + 2 && r.bottom > c.top - 2 && r.top < c.bottom + 2;
-    if (covered) continue;
-    const sx = r.left + r.width / 2, sy = r.bottom + 2;
-    let d: string;
-    if (edge) {
-      const ex = edge === 'r' ? colEdge - 6 : colEdge + 6;
-      const tx = edge === 'r' ? c.left : c.right, ty = Math.min(Math.max(sy, c.top + 16), c.bottom - 16);
-      const dir = edge === 'r' ? 1 : -1;
-      d = `M${sx} ${sy} H${ex} C${ex + 10 * dir} ${sy}, ${tx - 10 * dir} ${ty}, ${tx} ${ty}`;
-    } else {
-      const tx = Math.min(Math.max(sx, c.left + 16), c.right - 16), ty = r.top > c.bottom ? c.bottom + 1 : c.top - 1;
-      d = `M${sx} ${r.top > c.bottom ? r.top - 2 : sy} C${sx} ${(sy + ty) / 2}, ${tx} ${(sy + ty) / 2}, ${tx} ${ty}`;
-    }
-    const path = document.createElementNS(NS, 'path');
-    path.setAttribute('d', d);
-    path.setAttribute('class', 'cl-p');
-    path.setAttribute('marker-end', 'url(#cl-h)');
-    g.appendChild(path);
-  }
+  for (const w of words) w.classList.add('pin');
 }

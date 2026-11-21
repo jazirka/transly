@@ -11,6 +11,7 @@ import { CODE_RE, markupTerms, termMarksOf } from './markup';
 import { autoSize, drawMarks, insertAtCursor } from './text-editor';
 import type { Mark } from './text-editor';
 import { hideTermCard } from './termcard';
+import { hideThreadPill } from './threadpill';
 import { drawLinks } from './links';
 import { renderRowsChip } from './links-panel';
 import { renderStrands, strandsClick } from './strands-panel';
@@ -145,7 +146,7 @@ export function renderFocus(ctx: Ctx, desktop: boolean): void {
   $('#f-refbox').hidden = !refs.length;
   $('#f-refbox').innerHTML = refs.map(r => `<div class="lbl">Довідка · ${esc(r.lang.toUpperCase())}</div><div class="srcbox ref" lang="${esc(r.lang)}">${esc(r.text!)}</div>`).join('');
   const ta = $('#i-tr') as HTMLTextAreaElement;
-  if (document.activeElement !== ta || ta.dataset.key !== u.key) { if (ta.dataset.key !== u.key) hideTermCard(); ta.value = e?.target ?? ''; ta.dataset.key = u.key; }
+  if (document.activeElement !== ta || ta.dataset.key !== u.key) { if (ta.dataset.key !== u.key) { hideTermCard(); hideThreadPill(); } ta.value = e?.target ?? ''; ta.dataset.key = u.key; }
   refreshTerms(ctx, u);
   renderStrands(ctx, u, ta.value);
   renderVariants(ctx, u.key);

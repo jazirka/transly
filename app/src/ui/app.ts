@@ -16,6 +16,7 @@ import { wireDiscuss } from './discuss';
 import { realOf } from './hintcards';
 import { approveOpenRow } from './rowpanel';
 import { wireTermCard } from './termcard';
+import { wireThreadPill } from './threadpill';
 import { wireLinks } from './links';
 import { wireRowsChip } from './links-panel';
 import { SCENE_HTML, bringCardIntoView, focusCard, hasScenes, renderSceneView, sceneClick, sceneFocus, sceneIdOf, sceneInput } from './scene-view';
@@ -2389,6 +2390,7 @@ export async function start(root: HTMLElement): Promise<void> {
     remark: (button, key) => { s.cur = key; qaClick(ctx, button); },
     edit: en => { s.leftOpen = true; s.leftBoth = false; s.leftTab[s.mode] = 'glossary'; renderAll(); editTerm(ctx, en); },
   });
+  wireThreadPill(ctx);
   wireGlossary(ctx);
   // a proposal of a new construction opens the form of «Пов’язане» with the pattern filled in. Once the proposals (or the index of the words) are found, only what shows them is drawn again.
   const redrawThreads = (): void => {

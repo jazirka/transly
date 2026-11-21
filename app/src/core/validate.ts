@@ -119,7 +119,7 @@ export function repairProject(o: Record<string, unknown>): string[] {
       const all = o.terms as unknown[];
       const ok = all.filter((t): t is Record<string, unknown> => isObj(t) && typeof t.en === 'string' && typeof t.uk === 'string');
       if (ok.length !== all.length) { o.terms = ok; n.dropped += all.length - ok.length; }
-      for (const t of ok) { if (!num(t.mt)) t.mt = 0; if ('alt' in t && !strs(t.alt)) delete t.alt; if ('qa' in t && typeof t.qa !== 'boolean') delete t.qa; }
+      for (const t of ok) { if (!num(t.mt)) t.mt = 0; if ('alt' in t && !strs(t.alt)) delete t.alt; if ('qa' in t && typeof t.qa !== 'boolean') delete t.qa; if ('gender' in t && !['m', 'f', 'n', 'p'].includes(t.gender as string)) delete t.gender; }
     }
   }
   const record = (k: string, ok: (v: Record<string, unknown>) => boolean, fixItem?: (v: Record<string, unknown>, id: string) => void): void => {

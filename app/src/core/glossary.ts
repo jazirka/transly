@@ -2,11 +2,16 @@ import type { Term } from './qa';
 import { ukNorm, ukWordForms } from './ukmorph';
 
 /** A glossary entry. Imported dictionaries set `qa: false`: they help the translator but never raise QA warnings. */
+/** The grammatical gender of the translation: masculine, feminine, neuter, or plural-only. It helps the declension of the term (and the words that agree with it). */
+export type TermGender = 'm' | 'f' | 'n' | 'p';
+export const TERM_GENDERS: TermGender[] = ['m', 'f', 'n', 'p'];
+
 export interface GlossaryTerm extends Term {
   mt: number;
   /** Other acceptable translations. */
   alt?: string[];
   note?: string;
+  gender?: TermGender;
   kind?: string;
   /** false = hint only, no QA check. Missing means true. */
   qa?: boolean;

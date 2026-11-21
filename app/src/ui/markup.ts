@@ -60,7 +60,7 @@ export const CODE_RE = CODE;
 export function markupTerms(text: string, hits: TermMark[]): string {
   const marks: { start: number; end: number; cls: string; attrs: string }[] = hits.map(h => h.kind === 'name'
     ? { start: h.start, end: h.end, cls: 'name-hit nh', attrs: ` data-hc="name" data-hk="${esc(h.key ?? '')}" tabindex="0" role="button" title="Назва, яку визначає сама гра"` }
-    : { start: h.start, end: h.end, cls: `term-hit th${h.missing ? ' miss' : ''}`, attrs: ` data-term="${esc(h.en)}" data-hc="term" data-hk="${esc(h.en)}"${h.ci === undefined ? '' : ` data-ci="${h.ci}"`}${h.parts && h.parts > 1 ? ` data-part="${h.part ?? 0}" data-parts="${h.parts}"` : ''} tabindex="0" role="button" title="${h.missing ? 'Термін глосарію: у перекладі його немає' : 'Термін глосарію'}"` });
+    : { start: h.start, end: h.end, cls: `term-hit th${h.missing ? ' miss' : ''}`, attrs: ` data-term="${esc(h.en)}" data-hc="term" data-hk="${esc(h.en)}"${h.ci === undefined ? '' : ` data-ci="${h.ci}"`}${h.parts && h.parts > 1 ? ` data-part="${h.part ?? 0}" data-parts="${h.parts}"` : ''} tabindex="0" role="button" aria-label="${h.missing ? 'Термін глосарію, у перекладі його немає' : 'Термін глосарію'}: ${esc(text.slice(h.start, h.end))}"` });
   for (const m of text.matchAll(CODE)) if (!marks.some(x => m.index! < x.end && m.index! + m[0].length > x.start)) marks.push({ start: m.index!, end: m.index! + m[0].length, cls: 'code', attrs: ` data-hc="code" data-hk="${esc(m[0])}" tabindex="0" role="button" title="Керівний код: що він означає"` });
   marks.sort((a, b) => a.start - b.start);
   let out = '', at = 0;

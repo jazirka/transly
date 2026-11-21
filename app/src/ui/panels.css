@@ -838,3 +838,25 @@ button.chip .caret{margin-left:5px;vertical-align:middle;position:relative;top:-
 /* the line: dashed, with a dot at both ends, only while one of the pair is pointed at */
 #te-links path.lk-p{stroke-dasharray:2 4;stroke-width:1.8;stroke-linecap:round}
 #te-links path.lk-p.hot,#te-links path.lk-p.kept{stroke-width:1.8}
+
+/* ---------- the pill on the thread (threadpill.ts): the renderings of a term, its gender and a comment ---------- */
+.tpill2{position:fixed;z-index:98;max-width:min(560px,94vw);background:var(--panel-2);border:1px solid var(--accent-ring);border-radius:16px;padding:5px 10px;box-shadow:0 0 0 3px var(--bg),0 10px 28px rgba(0,0,0,.5);color:var(--text);font-size:13px}
+.tpill2[hidden]{display:none}
+.tp-row{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;white-space:nowrap}
+.tp-n{flex:none;display:inline-grid;place-items:center;min-width:15px;height:15px;padding:0 2px;box-sizing:border-box;border-radius:8px;background:var(--tc,var(--accent));color:#1b1325;font:700 10px/1 var(--mono)}
+.tp-gap{flex:1;min-width:6px}
+.tp-c,.tp-m,.tp-a{border:1px solid var(--line);background:none;color:var(--text);border-radius:7px;padding:2px 9px;font:inherit;font-size:12.5px;cursor:pointer}
+.tp-c i{font-style:normal;opacity:.65;font-size:11px}
+.tp-c:hover,.tp-m:hover,.tp-a:hover{background:var(--hv)}
+.tp-c.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+.tp-m,.tp-a{border-color:transparent;color:var(--mute);font-size:12px;padding:2px 6px}
+.tp-m.set{color:var(--accent-text)}
+.tp-m[aria-expanded=true]{background:var(--accent-soft);color:var(--text)}
+.tp-ex{margin-top:8px;padding-top:8px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px;min-width:320px}
+.tp-g{display:flex;align-items:center;gap:8px;color:var(--mute);font-size:12px}
+.tp-seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;padding:1px;gap:1px}
+.tp-seg button{border:0;background:none;color:var(--text);border-radius:6px;padding:1px 9px;font:inherit;font-size:12px;cursor:pointer}
+.tp-seg button.on{background:var(--accent);color:var(--on-accent);font-weight:600}
+.tp-note{resize:vertical;min-height:44px;background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--text);font:inherit;font-size:12.5px;padding:6px 8px}
+.tp-note:focus{outline:2px solid var(--accent);outline-offset:0}
+.tp-acts{display:flex;gap:8px;justify-content:flex-end}

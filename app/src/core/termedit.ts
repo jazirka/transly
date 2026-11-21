@@ -1,9 +1,10 @@
 import { normalizeGap, patternParts, touchTerms } from './glossary';
-import type { GlossaryTerm } from './glossary';
+import type { GlossaryTerm, TermGender } from './glossary';
+import { TERM_GENDERS } from './glossary';
 import type { SavedProject } from './project';
 
 /** What the term form holds: the alternatives as one text, separated by `;` or `,`. A category or note left out (undefined) keeps what the term has; an empty one clears it. */
-export interface TermForm { en: string; uk: string; alt?: string; kind?: string; note?: string; qa?: boolean }
+export interface TermForm { en: string; uk: string; alt?: string; kind?: string; note?: string; qa?: boolean; gender?: TermGender | '' }
 
 const keyOf = (en: string): string => en.trim().toLowerCase();
 
@@ -29,15 +30,18 @@ export function saveTerm(saved: SavedProject, form: TermForm, now: number, was?:
   if (at >= 0 && oldKey !== newKey && saved.terms.some(t => keyOf(t.en) === newKey)) return 'exists';
   const alts = splitAlts(form.alt).map(normalizeGap);
   const prev = at >= 0 ? saved.terms[at] : undefined;
-  const { alt: _a, kind: _k, note: _n, qa: _q, ...kept } = prev ?? ({} as GlossaryTerm);
+  const { alt: _a, kind: _k, note: _n, qa: _q, gender: _g, ...kept } = prev ?? ({} as GlossaryTerm);
   // A field the form does not have (undefined) keeps what the term already holds; an empty one clears it.
   const kind = form.kind === undefined ? prev?.kind : form.kind.trim() || undefined;
   const note = form.note === undefined ? prev?.note : form.note.trim() || undefined;
+  // the gender: undefined keeps what the term has, an empty one clears it
+  const gender = form.gender === undefined ? prev?.gender : TERM_GENDERS.find(g => g === form.gender);
   const term: GlossaryTerm = {
     ...kept, en, uk, mt: now,
     ...(alts.length ? { alt: alts } : {}),
     ...(kind ? { kind } : {}),
     ...(note ? { note } : {}),
+    ...(gender ? { gender } : {}),
     ...(form.qa === false ? { qa: false } : {}),
   };
   if (at >= 0) {

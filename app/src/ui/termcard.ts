@@ -1,6 +1,6 @@
 import { $ } from './dom';
 import { cardHtml, termView } from './hintcards';
-import { clearCardLinks, drawCardLinks } from './links';
+import { clearCardLinks, pinWords } from './links';
 import type { Ctx } from './state';
 
 /**
@@ -57,21 +57,9 @@ export function showCard(ctx: Ctx, anchor: HTMLElement, kind: string, key: strin
   el.hidden = false;
   shown = { kind, key, anchor };
   const r = anchor.getBoundingClientRect(), c = el.getBoundingClientRect();
-  // A word of the open row has its twin on the other side (the term in the original and in the translation): the card
-  // then stands beside the column and an arrow runs to it from each of the two.
+  // A word of the open row has its twin on the other side (the term in the original and in the translation): both are ringed.
   const pair = anchor.closest('.fc-in') ? pairOf(kind, key) : null;
-  const col = document.querySelector('.fc-in')?.getBoundingClientRect();
-  const edge: 'r' | 'l' | null = pair && col && col.right + 14 + c.width <= window.innerWidth - 8 ? 'r' : pair && col && col.left - 14 - c.width >= 8 ? 'l' : null;
-  el.classList.toggle('side', !!edge);
-  if (edge && col && pair) {
-    const ys = [pair.src, pair.tr].filter((x): x is HTMLElement => !!x).map(x => { const b = x.getBoundingClientRect(); return b.top + b.height / 2; });
-    const mid = ys.reduce((a, b) => a + b, 0) / ys.length;
-    el.style.left = `${edge === 'r' ? col.right + 14 : col.left - 14 - c.width}px`;
-    el.style.top = `${Math.max(8, Math.min(window.innerHeight - c.height - 8, mid - c.height / 2))}px`;
-    el.classList.remove('above');
-    drawCardLinks(el, [pair.src, pair.tr].filter((x): x is HTMLElement => !!x), edge, edge === 'r' ? col.right : col.left);
-    return;
-  }
+  el.classList.remove('side');
   const below = r.bottom + 6 + c.height <= window.innerHeight - 8;
   const left = Math.max(8, Math.min(r.left, window.innerWidth - c.width - 8));
   el.style.left = `${left}px`;
@@ -79,8 +67,7 @@ export function showCard(ctx: Ctx, anchor: HTMLElement, kind: string, key: strin
   // The little arrow of the card points at the word (or the mark) it belongs to.
   el.classList.toggle('above', !below);
   el.style.setProperty('--ax', `${Math.max(14, Math.min(c.width - 24, r.left + r.width / 2 - left - 5))}px`);
-  // The twin of the word, if it is not under the card, gets an arrow too.
-  if (pair) drawCardLinks(el, [pair.src, pair.tr].filter((x): x is HTMLElement => !!x && x !== anchor), null, 0);
+  if (pair) pinWords([pair.src, pair.tr].filter((x): x is HTMLElement => !!x));
 }
 
 /** The word of the original and the word of the translation that belong to the same term or code. */
@@ -107,8 +94,10 @@ export function wireTermCard(ctx: Ctx, act: CardActions): void {
   const leave = (): void => { window.clearTimeout(showTimer); window.clearTimeout(hideTimer); hideTimer = window.setTimeout(hideTermCard, 220); };
   // Chips open on a click (they are buttons); words open when the pointer rests on them.
   const hoverable = (el: HTMLElement): boolean => !el.classList.contains('cc');
+  // a term of the open row has the pill on its thread (threadpill.ts); this card is for codes, names and what is outside the editor
+  const inPill = (w: { el: HTMLElement; kind: string }): boolean => w.kind === 'term' && !!w.el.closest('.fc-in');
 
-  document.addEventListener('mouseover', e => { const w = wordOf(e.target as Element); if (w && hoverable(w.el) && !w.el.closest('.te-layer')) plan(w.el, w.kind, w.key, 260); });
+  document.addEventListener('mouseover', e => { const w = wordOf(e.target as Element); if (w && hoverable(w.el) && !w.el.closest('.te-layer') && !inPill(w)) plan(w.el, w.kind, w.key, 260); });
   document.addEventListener('mouseout', e => { const w = wordOf(e.target as Element); if (w && hoverable(w.el) && !w.el.closest('.te-layer') && !(e.relatedTarget as Element | null)?.closest('#termcard')) leave(); });
   document.addEventListener('click', e => {
     const target = e.target as Element;
@@ -138,7 +127,7 @@ export function wireTermCard(ctx: Ctx, act: CardActions): void {
   });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && card && !card.hidden) { hideTermCard(); e.stopPropagation(); }
-    else if ((e.key === 'Enter' || e.key === ' ') && (e.target as Element).hasAttribute?.('data-hc') && (e.target as HTMLElement).tagName !== 'BUTTON') { e.preventDefault(); const w = wordOf(e.target as Element); if (w) showCard(ctx, w.el, w.kind, w.key); }
+    else if ((e.key === 'Enter' || e.key === ' ') && (e.target as Element).hasAttribute?.('data-hc') && (e.target as HTMLElement).tagName !== 'BUTTON') { const w = wordOf(e.target as Element); if (w && !inPill(w)) { e.preventDefault(); showCard(ctx, w.el, w.kind, w.key); } }
   }, true);
   cardEl().addEventListener('mouseenter', () => window.clearTimeout(hideTimer));
   cardEl().addEventListener('mouseleave', leave);
@@ -151,7 +140,8 @@ export function wireTermCard(ctx: Ctx, act: CardActions): void {
     let hit: HTMLElement | null = null;
     for (const el of document.elementsFromPoint(e.clientX, e.clientY)) if (el.tagName === 'MARK' && layer.contains(el)) { hit = el as HTMLElement; break; }
     const w = wordOf(hit);
-    if (w) { last = w.el; ta.style.cursor = 'help'; plan(w.el, w.kind, w.key, 320); }
+    if (w && inPill(w)) { /* the pill's */ }
+    else if (w) { last = w.el; ta.style.cursor = 'help'; plan(w.el, w.kind, w.key, 320); }
     else if (last) { last = null; ta.style.cursor = ''; leave(); }
   });
   ta.addEventListener('mouseleave', () => { last = null; ta.style.cursor = ''; leave(); });

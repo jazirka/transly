@@ -167,6 +167,11 @@ export function focusCard(key: string): void {
   bringIntoView(ta?.closest<HTMLElement>('.sv-card'));
 }
 
+/** Show a card without moving the focus into it (a click on a row or a scene only chooses it; typing starts when the user clicks the field). */
+export function bringCardIntoView(key: string): void {
+  bringIntoView(document.querySelector<HTMLElement>(`.sv-in[data-key="${CSS.escape(key)}"]`)?.closest<HTMLElement>('.sv-card'));
+}
+
 /**
  * Bring a card into view with some of the scene around it. The scroller is the whole view (`#v-scene`), and its top
  * is covered by the sticky header, so the visible part starts below it. A card that is above that part or low in it

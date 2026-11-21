@@ -124,7 +124,7 @@ export interface Ctx {
   /** The line of bulk actions of this session that Ctrl+Z walks back along. */
   history: UndoStack;
   render(): void;
-  select(key: string, mode?: Mode): void;
+  select(key: string, mode?: Mode, opts?: { focus?: boolean }): void;
   /** Show some rows of the game in one table (a group of the translator's when `gid` is given: the table then follows it when rows are moved). */
   openRows(title: string, rows: RowRef[], gid?: string): void;
   /** Open a tool of the menu from a place that is not the menu (a remark leads to the tool that deals with it). */

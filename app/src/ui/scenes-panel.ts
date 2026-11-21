@@ -70,6 +70,6 @@ export function scenesClick(ctx: Ctx, t: HTMLElement): boolean {
   if (!v || !sc) return true;
   const ents = ctx.entries(v.name);
   const target = sc.units.find(u => !ents[u.key]?.target) ?? sc.units[0];
-  if (target) ctx.select(target.key);
+  if (target) ctx.select(target.key, undefined, { focus: false });
   return true;
 }

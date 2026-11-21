@@ -80,11 +80,11 @@ async function addTerm(page, en, uk, alt = '') {
   check('the other threads stay hidden', hot.filter(h => h.link !== 'termtake … off').every(h => h.op === 0), JSON.stringify(hot));
   await page.mouse.move(700, 8); await sleep(300);
   check('it goes when the pointer leaves', (await op('#te-links path')).every(o => o === 0));
-  // a click keeps a thread drawn
+  // a click on the chip puts the translation of the word into the row, after the last character (the thread itself is the hover)
+  const before = await page.locator('#i-tr').inputValue().catch(() => '');
   await page.locator('#pn-th .thc2[data-ck="hat"] .thc2-b').click(); await page.mouse.move(700, 8); await sleep(300);
-  check('a click on the chip keeps its thread drawn', (await page.locator('#pn-th .thc2[data-ck="hat"] .thc2-b').getAttribute('aria-pressed')) === 'true' && (await page.evaluate(() => [...document.querySelectorAll('#te-links path')].filter(p => Number(getComputedStyle(p).opacity) > 0.9).map(p => p.dataset.link).join())) === 'termhat');
-  await page.locator('#pn-th .thc2[data-ck="hat"] .thc2-b').click(); await page.mouse.move(700, 8); await sleep(300);
-  check('and a second click lets it go', (await op('#te-links path')).every(o => o === 0) && (await page.locator('#pn-th .thc2.on').count()) === 0);
+  const after = await page.locator('#i-tr').inputValue().catch(() => '');
+  check('a click on the chip puts the word\'s translation at the end of the row', after.length > before.length && after.startsWith(before) && /капелюх/i.test(after.slice(before.length)), JSON.stringify({ before, after }));
   // the card of an entry opens from its small button, not from the chip
   await page.locator('#pn-th .thc2[data-ck="hat"] .thc2-m').click(); await sleep(300);
   check('the small button of a chip opens the card of the entry', await page.locator('#termcard').isVisible() && /капелюх/.test(await page.locator('#termcard').innerText()));
@@ -96,18 +96,21 @@ async function addTerm(page, en, uk, alt = '') {
   // the right panel: its three tabs (activity, related, discussion) are on the rail beside it
   const rail = await page.locator('#stabs [data-p]').evaluateAll(els => els.map(e => ({ p: e.dataset.p, text: e.textContent.trim(), on: e.classList.contains('on') })));
   check('the rail beside the right panel has three tabs: «Активність», «Пов’язане» and «Обговорення» (no «Рядок»)', rail.length === 3 && rail.map(r => r.p).join() === 'act,rel,cm' && /Активність/.test(rail[0].text) && /Пов’язане/.test(rail[1].text) && /Обговорення/.test(rail[2].text), JSON.stringify(rail));
-  check('exactly one is lit: the open one (the related things are the default)', rail.filter(r => r.on).length === 1 && rail[1].on, JSON.stringify(rail));
+  check('the open one is lit: the related things are the default', rail.filter(r => r.on).length === 1 && rail[1].on, JSON.stringify(rail));
   check('the panel has no tabs of its own in its header', (await page.locator('#rp-tabs, .fs .ph .rtab').count()) === 0);
   check('the old sections «Терміни й назви з гри» and «Зв’язані рядки» are gone from it', (await page.locator('#pn-tm, #pn-lk').count()) === 0);
   check('the discussion is on its own tab: hidden while the related things are open', !(await page.locator('#cm-in').isVisible()) && (await page.locator('.pn-sec[data-sec="th"]').isVisible()) && !(await page.locator('.pn-sec[data-sec="ac"]').isVisible()));
+  // the rail's buttons are switches: the tabs open together, each one on its own, and the last one switched off folds the panel
   await page.locator('#stabs [data-p="cm"]').click(); await sleep(250);
-  check('the discussion tab shows the discussion and hides the translation, and the title says so', (await page.locator('#cm-in').isVisible()) && !(await page.locator('.pn-sec[data-sec="ac"]').isVisible()) && (await page.locator('#rp-title').innerText()).toLowerCase() === 'обговорення');
-  await page.locator('#stabs [data-p="cm"]').click(); await sleep(250);
-  check('a second tap on the open tab folds the panel to the rail', !(await page.locator('#cm-in').isVisible()) && (await page.locator('#stabs [data-p].on').count()) === 0);
+  check('the discussion opens beside the related things, and the title names both', (await page.locator('#cm-in').isVisible()) && (await page.locator('.pn-sec[data-sec="th"]').isVisible()) && !(await page.locator('.pn-sec[data-sec="ac"]').isVisible()) && (await page.locator('#stabs [data-p].on').count()) === 2 && /пов’язане.*обговорення|обговорення.*пов’язане/i.test(await page.locator('#rp-title').innerText()));
   await page.locator('#stabs [data-p="act"]').click(); await sleep(250);
-  check('a tap on the other tab opens the panel on it: the activity, with the title of the panel saying so', (await page.locator('.pn-sec[data-sec="ac"]').isVisible()) && !(await page.locator('.pn-sec[data-sec="th"]').isVisible()) && (await page.locator('#stabs [data-p="act"].on').count()) === 1 && (await page.locator('#rp-title').innerText()).toLowerCase() === 'активність');
+  check('all three can be open together', (await page.locator('.pn-sec:not([hidden])').count()) === 3 && (await page.locator('#stabs [data-p].on').count()) === 3);
+  await page.locator('#stabs [data-p="act"]').click(); await page.locator('#stabs [data-p="rel"]').click(); await sleep(250);
+  check('a tap on a lit tab switches only that one off', (await page.locator('.pn-sec[data-sec="cm"]').isVisible()) && !(await page.locator('.pn-sec[data-sec="th"]').isVisible()) && !(await page.locator('.pn-sec[data-sec="ac"]').isVisible()));
+  await page.locator('#stabs [data-p="cm"]').click(); await sleep(250);
+  check('the last one switched off folds the panel to the rail', !(await page.locator('#cm-in').isVisible()) && (await page.locator('#stabs [data-p].on').count()) === 0);
   await page.locator('#stabs [data-p="rel"]').click(); await sleep(250);
-  check('and the related things are on their own tab', (await page.locator('.pn-sec[data-sec="th"]').isVisible()) && !(await page.locator('.pn-sec[data-sec="ac"]').isVisible()) && (await page.locator('#rp-title').innerText()).toLowerCase() === 'пов’язане');
+  check('a tap on a tab of the folded panel opens it on that tab', (await page.locator('.pn-sec[data-sec="th"]').isVisible()) && (await page.locator('#stabs [data-p="rel"].on').count()) === 1 && (await page.locator('#rp-title').innerText()).toLowerCase() === 'пов’язане');
   // the table has no editor: the cards are on the tab of the related things
   await page.locator('[data-m="table"]').click(); await sleep(500);
   await page.locator('.gr', { hasText: 'Take your hat off' }).first().click(); await sleep(500);

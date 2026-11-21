@@ -49,11 +49,8 @@ const check = (name, ok, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ') 
   check('the quick search shows the part of the line that matches, marked', /nobody saw/i.test(hit.text) && /nobody saw/i.test(hit.mark), JSON.stringify(hit).slice(0, 200));
   await page.keyboard.press('Escape'); await sleep(200);
 
-  // ---- the QA counter keeps its button look with errors (ux-a-11)
-  await page.locator('[data-m="table"]').click(); await sleep(400);
-  await page.locator('.gr .tr').nth(8).click(); await page.keyboard.type('Без коду'); await page.keyboard.press('Control+Enter'); await sleep(900);
-  const cls = await page.locator('#sb-qa').getAttribute('class');
-  check('the QA counter keeps the button class', /sbtn/.test(cls ?? ''), cls ?? '');
+  // ---- the status bar no longer carries the QA and advice counters (they are in the QA rules and the filters)
+  check('the status bar has no QA or advice counters', (await page.locator('#sb-qa, #sb-adv').count()) === 0);
 
   // ---- the settings tabs do not change the height of the dialog (ux-a-13)
   await page.locator('#hamb').click(); await sleep(300); await page.locator('#menubar [data-mg="Файл"]').click(); await sleep(200); await page.locator('#mdd').getByText('Налаштування…').first().click(); await sleep(500);
@@ -63,6 +60,7 @@ const check = (name, ok, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ') 
   await page.keyboard.press('Escape'); await sleep(300);
 
   // ---- a repeated line does not fill the panel with twins (ux-a-09)
+  await page.locator('[data-m="table"]').click(); await sleep(400);
   await page.locator('.gr').nth(1).click(); await sleep(500);
   check('the rows with the same original are one chip «≡ N» first, and no card stands open', (await page.locator('#pn-th .eqchip').count()) === 1 && (await page.locator('.rows-pop').count()) === 0);
   await page.locator('#pn-th .eqchip').click(); await sleep(300);

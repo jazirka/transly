@@ -3,7 +3,7 @@ import type { BatchKind, Entry, Unit } from '../core';
 import { $, buzz, esc, plural, toast } from './dom';
 import { discussClick, renderDiscuss } from './discuss';
 import { chipsHtml, qaRows, namesOfRow, nameMarks, realOf, tmMatch } from './hintcards';
-import { ROW_PANEL_HTML, ROW_TAB_TITLE, approveOpenRow, getRowTab, sendBackOpenRow, renderRowPanel, rowPanelClick, setRowTab } from './rowpanel';
+import { ROW_PANEL_HTML, ROW_TAB_TITLE, approveOpenRow, getRowTabs, sendBackOpenRow, renderRowPanel, rowPanelClick, setRowTab, toggleRowTab } from './rowpanel';
 import type { RowTab } from './rowpanel';
 import { focusCard, sceneBlocked } from './scene-view';
 import { historyClick } from './history-panel';
@@ -249,9 +249,9 @@ function renderSide(ctx: Ctx, u: Unit | undefined, e: Entry | undefined): void {
   const { s } = ctx;
   const open = s.phone || s.sideOn.length > 0;
   // The rail has the three tabs of the panel (activity, related, discussion): the one that is open is lit (none while the panel is folded).
-  const tab = getRowTab();
-  document.querySelectorAll<HTMLElement>('#stabs [data-p]').forEach(b => { const on = open && b.dataset.p === tab; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
-  $('#rp-title').textContent = ROW_TAB_TITLE[tab];
+  const tabs = getRowTabs();
+  document.querySelectorAll<HTMLElement>('#stabs [data-p]').forEach(b => { const on = open && tabs.includes((b.dataset.p ?? 'rel') as RowTab); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+  $('#rp-title').textContent = tabs.map(t => ROW_TAB_TITLE[t]).join(' · ');
   document.getElementById('v-focus')?.classList.toggle('side-collapsed', !open);
   // In the table there is no editor to carry the remarks of the row: they stand at the top of this zone.
   const q = u && s.mode === 'table' ? qaRows(ctx, u, e) : { html: '', count: 0 };
@@ -342,13 +342,13 @@ function setText(ctx: Ctx, u: Unit, text: string, what: string, kind?: BatchKind
   return batch;
 }
 
-/** Put a text into the translation: at the caret in the editor, at the end of the translation in the table. */
+/** Put a text into the translation: always after the last character of what is written, whether in the table, the editor or a card of a scene. */
 export function insertText(ctx: Ctx, text: string): void {
   const u = ctx.s.cur ? ctx.unit(ctx.s.cur) : undefined;
   if (!u || !ctx.s.current) { toast('Спершу виберіть рядок'); return; }
   if (ctx.s.mode === 'table') { const have = entryOf(ctx, u)?.target ?? ''; setText(ctx, u, have ? `${have} ${text}` : text, 'вставлено з картки'); }
-  else if (ctx.s.mode === 'scene') { const ta = document.querySelector<HTMLTextAreaElement>(`.sv-in[data-key="${CSS.escape(u.key)}"]`); if (ta) insertAtCursor(ta, text); }
-  else insertAtCursor($('#i-tr') as HTMLTextAreaElement, text);
+  else if (ctx.s.mode === 'scene') { const ta = document.querySelector<HTMLTextAreaElement>(`.sv-in[data-key="${CSS.escape(u.key)}"]`); if (ta) { ta.focus({ preventScroll: true }); ta.setSelectionRange(ta.value.length, ta.value.length); insertAtCursor(ta, text); } }
+  else { const ta = $('#i-tr') as HTMLTextAreaElement; ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); insertAtCursor(ta, text); }
 }
 
 export function step(ctx: Ctx, dir: 1 | -1): void {
@@ -485,9 +485,10 @@ export function sideClick(ctx: Ctx, t: HTMLElement): boolean {
   const tab = t.closest<HTMLElement>('#stabs [data-p]');
   if (tab) {
     // As on the left rail: a tab that is not open opens the panel on it; the open one folds the panel to the rail (the phone keeps its row of tabs open).
-    const want: RowTab = tab.dataset.p === 'cm' ? 'cm' : tab.dataset.p === 'act' ? 'act' : 'rel', same = getRowTab() === want;
-    setRowTab(want);
-    if (s.phone) { s.sideOn = ['panel']; } else { s.sideOn = same && s.sideOn.length ? [] : ['panel']; s.sideTouched = true; }
+    // The rail's buttons are switches: any of the three may be open together. The last one switched off folds the panel to the rail.
+    const want: RowTab = tab.dataset.p === 'cm' ? 'cm' : tab.dataset.p === 'act' ? 'act' : 'rel', lit = s.sideOn.length > 0 && getRowTabs().includes(want);
+    const any = s.phone ? (setRowTab(want), true) : toggleRowTab(want, !lit);
+    if (s.phone) { s.sideOn = ['panel']; } else { s.sideOn = any ? ['panel'] : []; s.sideTouched = true; }
     ctx.render(); return true;
   }
   if (t.closest('#rp-close')) { s.sideOn = []; s.sideTouched = true; ctx.render(); return true; }

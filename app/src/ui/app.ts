@@ -18,7 +18,7 @@ import { approveOpenRow } from './rowpanel';
 import { wireTermCard } from './termcard';
 import { wireLinks } from './links';
 import { wireRowsChip } from './links-panel';
-import { SCENE_HTML, focusCard, hasScenes, renderSceneView, sceneClick, sceneFocus, sceneIdOf, sceneInput } from './scene-view';
+import { SCENE_HTML, bringCardIntoView, focusCard, hasScenes, renderSceneView, sceneClick, sceneFocus, sceneIdOf, sceneInput } from './scene-view';
 import { SCENES_HTML, renderScenesPanel, sceneQuery, scenesClick, setSceneQuery, wireScenes } from './scenes-panel';
 import { undoByKey, undoToast } from './undo-toast';
 import { FILES_DRAG, GROUPS_HTML, dragFiles, groupsClick, placeMenuHtml, renderGroupsBlock, startNewGroup, wireGroups } from './groups-panel';
@@ -170,7 +170,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
   </div>
   <nav class="bnav" id="bnav" aria-label="Розділи"><button data-bn="files" aria-label="Файли"><svg viewBox="0 0 16 16"><path d="M2.5 4.5v8h11v-6.5h-6l-1.5-1.5z"/></svg><span>Файли</span></button><button data-bn="rows" aria-label="Рядки"><svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h10"/></svg><span>Рядки</span></button><button data-bn="edit" aria-label="Редактор"><svg viewBox="0 0 16 16"><path d="M3 13l.7-3L11 2.7a1.4 1.4 0 0 1 2 2L5.7 12z"/></svg><span>Редактор</span></button><button data-bn="help" aria-label="Вказівки"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M6.3 6.3a1.8 1.8 0 1 1 2.6 1.6c-.6.3-.9.7-.9 1.4M8 11.6v.1"/></svg><span>Вказівки</span></button><button data-bn="more" aria-label="Ще"><svg viewBox="0 0 16 16"><circle cx="3.5" cy="8" r="1" fill="currentColor"/><circle cx="8" cy="8" r="1" fill="currentColor"/><circle cx="12.5" cy="8" r="1" fill="currentColor"/></svg><span>Ще</span></button></nav>
   <footer class="status">
-    <span class="ok" id="sb-save"></span><span id="sb-load" class="busy" role="status" hidden></span><span id="sb-fmt"></span><span id="sb-qa" class="sbtn" role="button" tabindex="0" title="Перейти до наступної помилки QA у проєкті (F8)"></span><span id="sb-adv" class="sbtn" role="button" tabindex="0" title="Показати рядки з порадами" hidden></span><span id="st-sel"></span>
+    <span class="ok" id="sb-save"></span><span id="sb-load" class="busy" role="status" hidden></span><span id="sb-fmt"></span><span id="st-sel"></span>
     <span id="sb-upd" class="sbtn" role="button" tabindex="0" hidden title="Нову версію завантажено й перевірено. Натисніть, щоб оновитися зараз: застосунок закриється, оновиться без вікон і сам запуститься знову">↻ Оновлення готове</span><span id="sb-sync" class="sbtn" role="button" tabindex="0" title="Налаштування синхронізації"></span><span id="sb-build" class="sbtn" role="button" tabindex="0" title="Зібрати (F5)"></span>
     <div class="r"><span id="sb-file"></span><span id="sb-sess"></span></div>
   </footer>
@@ -342,7 +342,7 @@ export async function start(root: HTMLElement): Promise<void> {
     openFile: file => { openFile(file); renderAll(); },
     groupsChanged: () => groupsChanged(),
     groupOf: (file, key) => { const g = groupIndex(); const id = g.idx.groupOf(file, key); return id ? g.byId.get(id) ?? null : null; },
-    select: (key, mode) => {
+    select: (key, mode, opts) => {
       s.cur = key;
       if (mode) setMode(mode, false);
       // In the scene mode a row of another scene brings that scene in.
@@ -350,8 +350,8 @@ export async function start(root: HTMLElement): Promise<void> {
       if (s.phone) { s.leftOpen = false; s.rightOpen = false; }
       renderAll();
       if (s.mode === 'table') { reveal('grid', key); document.querySelector<HTMLElement>(`.gr[data-key="${CSS.escape(key)}"]`)?.scrollIntoView({ block: 'nearest' }); }
-      else if (s.mode === 'scene') focusCard(key);
-      else { reveal('slist', key); document.querySelector<HTMLElement>(`.si[data-key="${CSS.escape(key)}"]`)?.scrollIntoView({ block: 'nearest' }); $('#i-tr').focus(); }
+      else if (s.mode === 'scene') { if (opts?.focus === false) bringCardIntoView(key); else focusCard(key); }
+      else { reveal('slist', key); document.querySelector<HTMLElement>(`.si[data-key="${CSS.escape(key)}"]`)?.scrollIntoView({ block: 'nearest' }); if (opts?.focus !== false) $('#i-tr').focus(); }
     },
   };
 
@@ -921,18 +921,10 @@ export async function start(root: HTMLElement): Promise<void> {
     noteRow();
     const v = ctx.view();
     const ents = v ? ctx.entries(v.name) : {};
-    let qa = 0, adv = 0;
-    const opts = qaOpts();
-    if (v) for (const u of v.units) { const e = ents[u.key]; if (e && e.target) { if (activeIssues(u, e, opts).some(i => i.severity === 'bad')) qa++; if (hasAdvice(u, e, opts)) adv++; } }
     const sv = $('#sb-save');
     sv.textContent = !s.saveOk ? '○ Не збережено: повторю спробу' : s.savedAt ? '● Збережено о ' + new Date(s.savedAt).toLocaleTimeString(uiLocale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '● Зміни зберігаються автоматично';
     sv.className = s.saveOk ? 'ok' : 'bad';
     $('#sb-fmt').textContent = s.current && s.current !== GROUP ? FORMAT_LABEL[s.current.split('.').pop() ?? ''] ?? '' : '';
-    $('#sb-qa').textContent = qa ? plural(qa, ['помилка QA', 'помилки QA', 'помилок QA']) : 'Помилок QA немає';
-    $('#sb-qa').className = qa ? 'sbtn bad' : 'sbtn ok';
-    const ab = $('#sb-adv');
-    ab.hidden = !adv;
-    ab.textContent = adv ? `Поради: ${adv}` : '';
     const u = s.cur ? ctx.unit(s.cur) : undefined;
     $('#st-sel').textContent = u && v ? `${s.current === GROUP ? 'Група' : 'Файл'}: ${shortLabel()} › рядок ${v.units.indexOf(u) + 1} з ${v.units.length} · ${STATUS_LABEL[shownStatus(ctx, u, entryOf(u))]}` : '';
     if (v) {
@@ -1963,8 +1955,6 @@ export async function start(root: HTMLElement): Promise<void> {
     const cfgItem = t.closest<HTMLElement>('#cfgpop [data-cfg]');
     if (cfgItem) { runCfg = cfgItem.dataset.cfg as RunCfg; try { localStorage.setItem('transly.runcfg', runCfg); } catch { /* private mode */ } closeCfgMenu(); renderRunCfg(); return; }
     if (t.closest('#run-btn')) { runSelected(); return; }
-    if (t.closest('#sb-adv')) { s.filters = ['adv']; renderAll(); return; }
-    if (t.closest('#sb-qa')) { jump('error', 1); return; }
     if (t.closest('#sb-build')) { doBuild(); return; }
     if (t.closest('#sb-upd')) { updateNow(); return; }
     if (t.closest('#sb-sync')) { openSettingsDlg('file'); return; }
@@ -2108,7 +2098,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (sd) { sdGo(Number(sd.dataset.sd)); return; }
     if (t.id === 'sd') { closeSearch(); return; }
     const si = t.closest<HTMLElement>('.si[data-key]');
-    if (si) { if (s.phone) { s.leftOpen = false; } ctx.select(si.dataset.key!, s.mode === 'table' ? 'edit' : undefined); return; }
+    if (si) { if (s.phone) { s.leftOpen = false; } ctx.select(si.dataset.key!, s.mode === 'table' ? 'edit' : undefined, { focus: false }); return; }
     if (groupsClick(ctx, t, groupsApi) || glossaryClick(ctx, t) || scenesClick(ctx, t)) return;
     if (sideClick(ctx, t)) return;
     if (s.mode === 'scene' && sceneClick(ctx, t, key => { s.cur = key; send(ctx); })) return;
@@ -2165,7 +2155,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const cell = t.closest<HTMLElement>('.gr .tr');
     const row = t.closest<HTMLElement>('.gr');
     if (cell && row && s.mode === 'table') startInline(row.dataset.key!);
-    else if (row && s.mode === 'table' && !t.closest('textarea')) ctx.select(row.dataset.key!, 'edit');
+    else if (row && s.mode === 'table' && !t.closest('textarea')) ctx.select(row.dataset.key!, 'edit', { focus: false });
   });
 
   let scenePanelTimer = 0;

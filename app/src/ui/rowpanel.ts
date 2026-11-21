@@ -30,19 +30,29 @@ export const ROW_PANEL_HTML = ['<div class="pn-empty-all hint">Оберіть р
 /** The three tabs of the panel, on the rail beside it: the activity of the row, what is related to it, and its discussion. */
 export type RowTab = 'act' | 'rel' | 'cm';
 export const ROW_TAB_TITLE: Record<RowTab, string> = { act: 'Активність', rel: 'Пов’язане', cm: 'Обговорення' };
-let rtab: RowTab = (() => { try { const v = localStorage.getItem('transly.rtab'); return v === 'act' || v === 'cm' ? v : 'rel'; } catch { return 'rel'; } })();
-export const getRowTab = (): RowTab => rtab;
-export const setRowTab = (t: RowTab): void => { rtab = t; try { localStorage.setItem('transly.rtab', t); } catch { /* private mode */ } };
-
+/** The tabs that are open: any of them together (the rail's buttons are switches, as on the left). */
+const ALL_TABS: readonly RowTab[] = ['act', 'rel', 'cm'];
+let open: RowTab[] = (() => { try { const v = (localStorage.getItem('transly.rtab') ?? 'rel').split(',').filter((x): x is RowTab => (ALL_TABS as readonly string[]).includes(x)); return v.length ? v : ['rel']; } catch { return ['rel']; } })();
+const save = (): void => { try { localStorage.setItem('transly.rtab', open.join(',')); } catch { /* private mode */ } };
+export const getRowTabs = (): readonly RowTab[] => ALL_TABS.filter(t => open.includes(t));
+/** Switch a tab on or off. Returns whether any tab is open afterwards (none: the panel folds to the rail). */
+export function toggleRowTab(t: RowTab, on?: boolean): boolean {
+  const want = on ?? !open.includes(t);
+  open = want ? [...open.filter(x => x !== t), t] : open.filter(x => x !== t);
+  save();
+  return open.length > 0;
+}
+/** Keep one tab (a flow that has to show a particular one, e.g. the discussion after a comment). */
+export const setRowTab = (t: RowTab): void => { if (!open.includes(t)) { open = [...open, t]; save(); } };
 
 /** Fill the panel for the open row. */
 export function renderRowPanel(ctx: Ctx, u: Unit | undefined, e: Entry | undefined): void {
   const pane = $('#s-pn');
   pane.classList.toggle('no-row', !u);
   // One section for each tab of the rail.
-  document.querySelector<HTMLElement>('.pn-sec[data-sec="ac"]')!.hidden = rtab !== 'act';
-  document.querySelector<HTMLElement>('.pn-sec[data-sec="th"]')!.hidden = rtab !== 'rel';
-  document.querySelector<HTMLElement>('.pn-sec[data-sec="cm"]')!.hidden = rtab !== 'cm';
+  document.querySelector<HTMLElement>('.pn-sec[data-sec="ac"]')!.hidden = !open.includes('act');
+  document.querySelector<HTMLElement>('.pn-sec[data-sec="th"]')!.hidden = !open.includes('rel');
+  document.querySelector<HTMLElement>('.pn-sec[data-sec="cm"]')!.hidden = !open.includes('cm');
   if (!u) { clearStrands(); return; }
   const target = e?.target ?? '';
   // The related things (the words and constructions, the names, the memory, the rows with the same original) stand here, in the editing view too: they follow the text of the field there.

@@ -8,6 +8,7 @@ import { invalidateMined, mineClick, suggestionsForRow } from './mine-panel';
 import { cardOpenOver, hideTermCard, showCard } from './termcard';
 import { realOf } from './hintcards';
 import type { Ctx } from './state';
+import { insertText } from './focus';
 
 /**
  * «Пов’язане з рядком» (the cards under the field): a card for every glossary entry the original contains (a word, a phrase, a construction with a
@@ -170,7 +171,12 @@ export function strandsClick(ctx: Ctx, t: HTMLElement): boolean {
     return true;
   }
   const pin = t.closest<HTMLElement>('[data-thp]');
-  if (pin) { togglePin(ctx, pin.dataset.thp ?? ''); showPinned(); return true; }
+  if (pin) {
+    // a click on the word of a thread puts its translation into the row at once (after the last character); what the pin did is on the hover
+    const uk = ctx.s.saved.terms.find(x => x.en.trim().toLowerCase() === (pin.dataset.thp ?? '').trim().toLowerCase())?.uk;
+    if (uk && ctx.s.cur) { hideTermCard(); insertText(ctx, uk); return true; }
+    togglePin(ctx, pin.dataset.thp ?? ''); showPinned(); return true;
+  }
   const card = t.closest<HTMLElement>('[data-th="card"], [data-th="name"]');
   if (!card) return false;
   const en = card.dataset.hk ?? '';

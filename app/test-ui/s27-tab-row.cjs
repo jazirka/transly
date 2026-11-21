@@ -44,6 +44,7 @@ const selKey = page => page.evaluate(() => document.querySelector('#grid .gr.sel
   const kB = await selKey(page);
   await page.locator('[data-tab*="Map001"]').first().click(); await sleep(500);
   check('the tab of the first file comes back on the row it was left on', (await selKey(page)) === kA, `${kA} -> ${await selKey(page)}`);
+  await page.mouse.move(700, 8); await sleep(200);
   const title = await page.locator('[data-tab*="Map001"]').first().getAttribute('title');
   check('and its title says where the translator stopped', /на рядку 7/.test(title), title);
   await page.locator('[data-tab*="Map002"]').first().click(); await sleep(500);

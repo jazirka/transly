@@ -807,8 +807,10 @@ span.thc2-b{cursor:default}
 
 /* the open tab of the right panel takes the whole height, so a message that says «Брак …» can stand in the middle of it; the field for a new comment stays at the foot */
 #s-pn{flex:1}
-#s-pn .pn-sec:not([hidden]){flex:1;display:flex;flex-direction:column;border-bottom:0}
-#s-pn .pn-sec:not([hidden]) .pn-b{flex:1}
+#s-pn .pn-sec:not([hidden]){flex:1 1 0;min-height:0;display:flex;flex-direction:column;border-bottom:0}
+#s-pn .pn-sec:not([hidden]) .pn-b{flex:1;min-height:0;overflow:auto}
+/* several tabs together share the height, with a hairline between them */
+#s-pn .pn-sec:not([hidden]) ~ .pn-sec:not([hidden]){border-top:1px solid var(--line)}
 #s-pn .act,#s-pn #cm-list{flex:1;display:flex;flex-direction:column}
 #s-pn .cm-new{margin-top:auto}
 .pn-mid{margin:auto;padding:18px;text-align:center;color:var(--mute);font-size:14px;line-height:1.4}

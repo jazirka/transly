@@ -1117,7 +1117,7 @@ html.ovsb ::-webkit-scrollbar{display:none}
 /* the groups have no title of their own: compact rows, no divider between them and the tree */
 /* the tree: the same inset on both sides, a rounded highlight inside it, a child under the icon of its parent */
 #tree-list{padding:4px 6px}
-.node{padding:0 8px 0 calc(6px + var(--d,0) * 20px);border-radius:8px}
+.node{padding:0 8px 0 calc(6px + var(--d,0) * 12px);border-radius:8px}
 .node .chev{width:14px;font-size:11px}
 .node[data-file] .chev{display:none}
 /* picked files share one outline: no lines between them, rounded corners only at the ends of the run */

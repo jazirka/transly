@@ -1,66 +1,9 @@
-import { touchTerms, almost, autoBatches, reviewClusters, autoUndone, batchTitle, batchUndoLabel, edit, journalBatches, learnWords, proposals, sendBatches, undoAuto, undoBatch, undoJournal, undoReport, undoneBatches, uiLocale } from '../core';
+import { autoBatches, autoUndone, batchTitle, batchUndoLabel, journalBatches, sendBatches, undoAuto, undoBatch, undoJournal, undoReport, undoneBatches, uiLocale } from '../core';
 import type { JournalBatch, JournalItem, RowChange } from '../core';
 import { dialog } from './settings';
 import { undoBatch as undoViaStack } from './undo-toast';
 import { $, esc, plural, toast } from './dom';
 import type { Ctx } from './state';
-
-/** Short untranslated lines in which every word is already known: the translation is put together word by word. */
-export function openAutofill(ctx: Ctx, openTwins?: () => void): void {
-  const { s } = ctx;
-  const twins = reviewClusters(s.saved, ctx.links(), 1).total;
-  const dlg = dialog(`<form method="dialog"><h2 id="af-t">Автозаповнення</h2>
-    <p class="hint">Застосунок заповнює порожні рядки сам, але завжди чернетками з позначкою «авто»: їх варто переглянути, а в «Активності» можна скасувати. Джерела: однакові оригінали (вони заповнюються й після «Надіслати») і слова з уже перекладених рядків.</p>
-    ${openTwins ? `<div class="sp-row cs-row"><div class="sp-b"><b>Однакові оригінали</b><span class="hint">${twins ? `Груп, де є порожні або різні переклади: ${twins}` : 'Усе узгоджено'}</span></div><div class="cs-v"><button class="btn" type="button" id="af-twins">Переглянути…</button></div></div>` : ''}
-    <h3>За словами</h3><p class="hint">Короткі рядки без перекладу, у яких усі слова вже зустрічалися в перекладених рядках, збираються по словах.</p>
-    <p class="sum" id="af-sum" role="status"></p><div class="sp-list" id="af-list"></div><div id="af-almost"></div>
-    <div class="acts"><button class="btn" value="cancel">Закрити</button><button class="btn" type="button" id="af-all">Зняти всі</button><button class="btn p" type="button" id="af-go">Вписати вибрані</button></div></form>`, 'af-t');
-  $('#af-twins', dlg)?.addEventListener('click', () => { dlg.close(); openTwins?.(); });
-  const off = new Set<string>();
-  const draw = (): void => {
-    const list = proposals(s.views, s.saved);
-    const on = list.filter(p => !off.has(p.file + '\u0001' + p.key));
-    $('#af-sum', dlg).textContent = list.length ? `Знаю слів: ${learnWords(s.views, s.saved).size} · рядків для автозаповнення: ${list.length}` : 'Поки нічого не вдається скласти: перекладіть більше рядків або додайте терміни';
-    $('#af-list', dlg).innerHTML = list.slice(0, 120).map(p => `<label class="sp-row fr-row"><input type="checkbox" data-k="${esc(p.file + '\u0001' + p.key)}" ${off.has(p.file + '\u0001' + p.key) ? '' : 'checked'}><div class="sp-b"><span class="hint">${esc(s.views.find(v => v.name === p.file)?.label ?? p.file)}</span><div class="fr-b">${esc(p.source)}</div><div class="fr-a">${esc(p.target)}</div></div></label>`).join('');
-    ($('#af-go', dlg) as HTMLButtonElement).disabled = !on.length;
-    $('#af-all', dlg).textContent = on.length === list.length ? 'Зняти всі' : 'Вибрати всі';
-    const near = almost(s.views, s.saved).slice(0, 20);
-    $('#af-almost', dlg).innerHTML = near.length ? `<h3>Майже готові: не вистачає слів</h3><p class="hint">Слово неоднозначне, коли в перекладених рядках воно перекладене по-різному: оберіть варіант, і він стане терміном.</p>${near.map(a => `<div class="sp-row cs-row"><div class="sp-b"><b>${esc(a.source)}</b>${a.blockers.map(b => b.reason === 'ambiguous' ? `<div class="cs-v"><span class="hint">«${esc(b.word)}» неоднозначне:</span>${b.variants.map(v => `<button class="btn" type="button" data-w="${esc(b.word)}" data-v="${esc(v)}">${esc(v)}</button>`).join('')}</div>` : `<div class="cs-v"><span class="hint">«${esc(b.word)}» ще не зустрічалось у перекладах: додайте його в глосарій</span></div>`).join('')}</div></div>`).join('')}` : '';
-  };
-  dlg.addEventListener('change', e => {
-    const t = e.target as HTMLInputElement;
-    if (t.dataset.k) { t.checked ? off.delete(t.dataset.k) : off.add(t.dataset.k); draw(); }
-  });
-  dlg.addEventListener('click', e => {
-    const b = (e.target as HTMLElement).closest<HTMLElement>('[data-w]');
-    if (!b) return;
-    const en = b.dataset.w!, uk = b.dataset.v!;
-    if (!s.saved.terms.some(t => t.en.toLowerCase() === en.toLowerCase())) { s.saved.terms.push({ en, uk, mt: Date.now() }); touchTerms(s.saved.terms); }
-    ctx.invalidateTm(); ctx.persist(); draw();
-    toast(`Термін додано: ${en} → ${uk}`);
-  });
-  $('#af-all', dlg).addEventListener('click', () => {
-    const list = proposals(s.views, s.saved), allOn = list.every(p => !off.has(p.file + '\u0001' + p.key));
-    for (const p of list) allOn ? off.add(p.file + '\u0001' + p.key) : off.delete(p.file + '\u0001' + p.key);
-    draw();
-  });
-  $('#af-go', dlg).addEventListener('click', () => {
-    const now = Date.now();
-    const changes: RowChange[] = [];
-    for (const p of proposals(s.views, s.saved)) {
-      if (off.has(p.file + '\u0001' + p.key)) continue;
-      const u = s.views.find(v => v.name === p.file)?.units.find(x => x.key === p.key);
-      const ents = ctx.entries(p.file);
-      if (!u || ents[p.key]?.target?.trim()) continue;
-      changes.push({ file: p.file, key: p.key, next: edit(ents[p.key], u, p.target, ctx.stage(), now), text: p.target });
-    }
-    const n = changes.length;
-    if (n) ctx.commit(changes, 'words');
-    ctx.invalidateTm(); ctx.persist(); ctx.render(); dlg.close();
-    toast(`Вписано чернеток: ${n}. Скасувати можна в «Активності»`);
-  });
-  draw();
-}
 
 type Ev = { id: string; at: number; text: string; sub?: string; rows?: { source: string; target: string }[]; undo?: () => { done: number; skipped: number; report?: string }; undoLabel?: string };
 

@@ -1,4 +1,6 @@
-import type { FileView, SavedProject } from './project';
+import { isAutoFilled } from './autolog';
+import { knownStatus } from './model';
+import type { Entry, FileView, SavedProject } from './project';
 
 /** A piece of a line: a word, or anything else (punctuation, digits, a game control code) that stays as it is. */
 export interface Tok { text: string; word: boolean; index: number }
@@ -16,6 +18,24 @@ export function tokenize(text: string): Tok[] {
 
 const MAX_WORDS = 8;
 const lower = (s: string): string => s.toLowerCase();
+
+/**
+ * What the app may learn from: a row that was sent or proofread and is not itself an automatic fill. A draft is a translation
+ * in progress (half a sentence, a placeholder, a try), and a line the app filled in must not teach the next fill: both gave
+ * proposals like «The body of the bobby was still pulsating…» → «Тіло».
+ */
+export const trusted = (e: Entry | undefined, drafts = false): e is Entry => !!e?.target?.trim() && (drafts || knownStatus(e.status) === 'done' || knownStatus(e.status) === 'appr') && !isAutoFilled(e);
+
+/** What the fills learn from. The translator chooses: sent and proofread rows only (the default), or the drafts too. */
+export interface FillOpts { drafts?: boolean }
+
+/** Whether a translation can be of the line it is copied to: a long line is not answered by a word (or the other way round). */
+export function plausible(source: string, target: string): boolean {
+  const s = source.replace(/\\[A-Za-z]+(?:\[[^\]]*\])?/g, '').trim(), t = target.replace(/\\[A-Za-z]+(?:\[[^\]]*\])?/g, '').trim();
+  if (s.length < 16) return true;
+  const ratio = t.length / s.length, sw = s.split(/\s+/).length, tw = t.split(/\s+/).length;
+  return ratio >= 0.4 && ratio <= 3 && (sw < 4 || (tw >= sw * 0.4 && tw <= sw * 3));
+}
 const isCap = (s: string): boolean => { const c = [...s][0] ?? ''; return c !== c.toLowerCase(); };
 const capitalise = (s: string): string => { const [c = '', ...rest] = [...s]; return c.toUpperCase() + rest.join(''); };
 
@@ -30,14 +50,15 @@ export type WordDict = Map<string, string>;
  */
 export interface Learned { dict: WordDict; /** Words whose translations conflict: the variants with their votes. */ ambiguous: Map<string, [string, number][]> }
 
-export function learnWords(views: FileView[], saved: SavedProject): WordDict { return learnDetailed(views, saved).dict; }
+export function learnWords(views: FileView[], saved: SavedProject, opts: FillOpts = {}): WordDict { return learnDetailed(views, saved, opts).dict; }
 
-export function learnDetailed(views: FileView[], saved: SavedProject): Learned {
+export function learnDetailed(views: FileView[], saved: SavedProject, opts: FillOpts = {}): Learned {
   const votes = new Map<string, Map<string, number>>();
   for (const v of views) {
     const ents = saved.files[v.name]; if (!ents) continue;
     for (const u of v.units) {
-      const target = ents[u.key]?.target?.trim(); if (!target) continue;
+      const e = ents[u.key]; if (!trusted(e, opts.drafts)) continue;
+      const target = e.target.trim();
       const a = tokenize(u.source), b = tokenize(target);
       if (a.length !== b.length || a.filter(t => t.word).length > MAX_WORDS) continue;
       if (!a.every((t, i) => t.word === b[i]!.word && (t.word || t.text === b[i]!.text))) continue;
@@ -53,7 +74,8 @@ export function learnDetailed(views: FileView[], saved: SavedProject): Learned {
     const ranked = [...m].sort((x, y) => y[1] - x[1]);
     // a word that got two different translations is dropped even when one of them is commoner: the second is usually the same word in
     // another case («game» → «гра» and «гру»), and putting the commoner one into a new line gives a wrong form («Нова гру»)
-    if (ranked.length === 1) dict.set(w, ranked[0]![0]);
+    // a word seen in one line only is a guess: it needs a second line that agrees
+    if (ranked.length === 1) { if (ranked[0]![1] >= 2) dict.set(w, ranked[0]![0]); }
     else ambiguous.set(w, ranked);
   }
   for (const t of saved.terms) {
@@ -63,16 +85,17 @@ export function learnDetailed(views: FileView[], saved: SavedProject): Learned {
   return { dict, ambiguous };
 }
 
-export interface Proposal { file: string; key: string; source: string; target: string }
+/** Where a proposal comes from: a line with the same original that was translated, or the words of translated lines. */
+export interface Proposal { file: string; key: string; source: string; target: string; from: 'same' | 'words' }
 
 /** Untranslated short lines in which every word is known: the translation is put together word by word. */
-export function proposals(views: FileView[], saved: SavedProject, dict: WordDict = learnWords(views, saved), limit = 500): Proposal[] {
+export function proposals(views: FileView[], saved: SavedProject, dict: WordDict = learnWords(views, saved), limit = 500, opts: FillOpts = {}): Proposal[] {
   const out: Proposal[] = [];
   // a whole line that was translated already (the same words in another case of the letters) is put in as it was translated
   const whole = new Map<string, string>();
   for (const v of views) {
     const ents = saved.files[v.name] ?? {};
-    for (const u of v.units) { const t = ents[u.key]?.target?.trim(); if (t && !whole.has(lower(u.source.trim()))) whole.set(lower(u.source.trim()), t); }
+    for (const u of v.units) { const e = ents[u.key]; if (trusted(e, opts.drafts) && plausible(u.source, e.target) && !whole.has(lower(u.source.trim()))) whole.set(lower(u.source.trim()), e.target.trim()); }
   }
   for (const v of views) {
     const ents = saved.files[v.name] ?? {};
@@ -82,7 +105,7 @@ export function proposals(views: FileView[], saved: SavedProject, dict: WordDict
       if (same !== undefined && same !== u.source) {
         const letters = [...u.source].filter(c => c.toLowerCase() !== c.toUpperCase());
         const loud = letters.length > 1 && letters.every(c => c === c.toUpperCase());
-        out.push({ file: v.name, key: u.key, source: u.source, target: loud ? same.toUpperCase() : same });
+        out.push({ file: v.name, key: u.key, source: u.source, target: loud ? same.toUpperCase() : same, from: 'same' });
         if (out.length >= limit) return out;
         continue;
       }
@@ -98,7 +121,8 @@ export function proposals(views: FileView[], saved: SavedProject, dict: WordDict
         target += letters.length > 1 && letters.every(c => c === c.toUpperCase()) ? uk.toUpperCase() : isCap(t.text) ? capitalise(uk) : uk;
       }
       if (target === u.source) continue;
-      out.push({ file: v.name, key: u.key, source: u.source, target });
+      if (!plausible(u.source, target)) continue;
+      out.push({ file: v.name, key: u.key, source: u.source, target, from: 'words' });
       if (out.length >= limit) return out;
     }
   }

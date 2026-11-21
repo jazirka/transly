@@ -2,6 +2,7 @@ import { applyPlan, branchOf, defaultDecision, diffBranches, diffWords, planMerg
 import type { Decision, DiffKind, DiffRow, Unit } from '../core';
 import { $, esc, plural, toast } from './dom';
 import { oneLine } from './hintcards';
+import { screenTreeHtml } from './tree-nodes';
 import { undoToast } from './undo-toast';
 import type { Ctx } from './state';
 
@@ -58,7 +59,7 @@ export function openMergeScreen(ctx: Ctx, source: string, onClose: () => void): 
   root.setAttribute('role', 'region');
   root.setAttribute('aria-label', `Злиття гілки «${source}» у «${cur}»`);
   root.innerHTML = `<div class="mg-shell"><div class="mg-row">
-      <div class="mg-files"><div class="mg-fh">ЗМІНЕНІ ФАЙЛИ</div><div class="mg-tree" id="mg-tree" role="tree" aria-label="Змінені файли"></div><div class="mg-sum" id="mg-sum" aria-live="polite"></div></div>
+      <div class="mg-files"><div class="mg-card"><div class="mg-ph"><span class="ttl">Змінені файли</span></div><div class="mg-tree" id="mg-tree" role="tree" aria-label="Змінені файли"></div></div><div class="mg-sum" id="mg-sum" aria-live="polite"></div></div>
       <div class="mg-work"><div class="mg-tb" id="mg-tb"></div>
         <div class="grid mg-grid" role="grid" aria-label="Рядки, які відрізняються">
           <div class="gh" role="row"><div></div><div></div><div class="s">Файл · рядок</div><div>Оригінал · EN</div><div>${esc(cur)}</div><div>${esc(source)}</div><div>Результат · у ${esc(cur)}</div><div style="justify-content:flex-end;border-right:0">Рішення</div></div>
@@ -163,13 +164,11 @@ export function openMergeScreen(ctx: Ctx, source: string, onClose: () => void): 
   };
   let editStart = '';
 
+  const collapsed = new Set<string>();
   const renderTree = (): void => {
-    const byFile = new Map<string, { n: number; red: number }>();
-    for (const r of rows) { const e = byFile.get(r.file) ?? { n: 0, red: 0 }; e.n++; if (!r.locked && r.kind === 'conflict' && !decisionOf(r)) e.red++; byFile.set(r.file, e); }
-    const ic = (n: string): [string, string] => (/^Map\d+\.json$/.test(n) ? ['map', 'MAP'] : n.endsWith('.json') ? ['json', '{}'] : ['gl', 'Aa']);
-    const total = rows.length, red = [...byFile.values()].reduce((a, v) => a + v.red, 0);
-    $('#mg-tree', root).innerHTML = `<div class="node ${file === null ? 'cur' : ''}" style="--d:0" role="treeitem" tabindex="0" data-f="" aria-selected="${file === null}"><span class="chev"></span><span class="ic dir">▤</span><span class="nm">Усі файли</span>${red ? '<i class="rd"></i>' : ''}<span class="pc">${total.toLocaleString(uiLocale())}</span></div>`
-      + [...byFile].sort((x, y) => (ctx.fileTitle(x[0]) < ctx.fileTitle(y[0]) ? -1 : 1)).map(([f, v]) => { const [k, t] = ic(f); return `<div class="node ${file === f ? 'cur' : ''}" style="--d:1" role="treeitem" tabindex="-1" data-f="${esc(f)}" aria-selected="${file === f}"><span class="chev"></span><span class="ic ${k}">${t}</span><span class="nm">${esc(ctx.fileTitle(f))}</span>${v.red ? '<i class="rd"></i>' : ''}<span class="pc">${v.n.toLocaleString(uiLocale())}</span></div>`; }).join('');
+    const counts = new Map<string, number>(), flags = new Set<string>();
+    for (const r of rows) { counts.set(r.file, (counts.get(r.file) ?? 0) + 1); if (!r.locked && r.kind === 'conflict' && !decisionOf(r)) flags.add(r.file); }
+    $('#mg-tree', root).innerHTML = screenTreeHtml(ctx, counts, { file, collapsed, flags });
   };
 
   const renderSum = (): void => {
@@ -288,6 +287,8 @@ export function openMergeScreen(ctx: Ctx, source: string, onClose: () => void): 
     if (d && !d.disabled) { decideRows(targets(d.closest<HTMLElement>('.gr')!.dataset.id!), d.dataset.d as 'mine' | 'theirs'); return; }
     const sel = t.closest<HTMLElement>('[data-sel]');
     if (sel) { decideRows([...selected], sel.dataset.sel as 'mine' | 'theirs'); return; }
+    const dir = t.closest<HTMLElement>('[data-dir]');
+    if (dir) { const k = dir.dataset.dir!; if (collapsed.has(k)) collapsed.delete(k); else collapsed.add(k); renderTree(); return; }
     const f = t.closest<HTMLElement>('[data-f]');
     if (f) { file = f.dataset.f || null; selected.clear(); anchor = -1; scroll.scrollTop = 0; renderAll(); return; }
     const chip = t.closest<HTMLElement>('[data-chip]');

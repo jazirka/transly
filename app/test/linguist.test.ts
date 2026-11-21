@@ -163,7 +163,7 @@ describe('ling-29 autofill substitutes a learned inflected form word by word', (
   const run = (target: string): string | undefined => {
     const pairs: [string, string][] = [['New game', 'Нова гра'], ['Save game', 'Зберегти гру'], ['Load game', 'Завантажити гру'], [target, '']];
     const units: any = pairs.map((p, i) => ({ key: 'k' + i, source: p[0], speaker: '', kind: 'name', context: '' }));
-    const files: any = { 'f.json': Object.fromEntries(pairs.slice(0, 3).map((p, i) => ['k' + i, { target: p[1], status: 'draft', mt: 0 }])) };
+    const files: any = { 'f.json': Object.fromEntries(pairs.slice(0, 3).map((p, i) => ['k' + i, { target: p[1], status: 'done', mt: 0 }])) };
     const views: any = [{ name: 'f.json', units }], saved: any = { files, terms: [], settings: {} };
     return proposals(views, saved, learnWords(views, saved)).find(p => p.source === target)?.target;
   };

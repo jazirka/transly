@@ -11,7 +11,7 @@ import { HISTORY_LIMIT } from './workflow';
 export type Prev = NonNullable<HistoryItem['prev']>;
 
 /** What a bulk action is. The kind is the part of the batch id before the colon. */
-export type BatchKind = 'edit' | 'send' | 'approve' | 'scene' | 'words' | 'twin' | 'replace' | 'unify' | 'memory' | 'wrap' | 'clear' | 'copy' | 'back' | 'link' | 'term' | 'fix' | 'reconcile' | 'rekey' | 'merge' | 'undo' | 'redo';
+export type BatchKind = 'edit' | 'send' | 'approve' | 'scene' | 'words' | 'twin' | 'replace' | 'unify' | 'memory' | 'wrap' | 'clear' | 'copy' | 'back' | 'link' | 'autofill' | 'term' | 'fix' | 'reconcile' | 'rekey' | 'merge' | 'undo' | 'redo';
 
 /** The history text and the feed title of each kind of action. */
 export const BATCH_INFO: Record<BatchKind, { what: string; title: (n: string) => string }> = {
@@ -28,6 +28,7 @@ export const BATCH_INFO: Record<BatchKind, { what: string; title: (n: string) =>
   clear: { what: 'очищено переклад', title: n => `Очищено переклади: ${n}` },
   copy: { what: 'вставлено оригінал', title: n => `Вставлено оригінал: ${n}` },
   back: { what: 'повернуто на доопрацювання', title: n => `Повернуто на доопрацювання: ${n}` },
+  autofill: { what: 'автозаповнено', title: n => `Автозаповнення: ${n}` },
   link: { what: 'автозаповнено з однакового рядка', title: n => `Автозаповнення з однакових рядків: ${n}` },
   term: { what: 'змінено термін', title: n => `Змінено переклад терміна: ${n}` },
   fix: { what: 'виправлено за правилом', title: n => `Виправлено за правилом: ${n}` },

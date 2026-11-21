@@ -37,7 +37,10 @@ import { openFindReplace } from './tools-dialogs';
 import { openLinkTool } from './links-dialog';
 import { openTermSyncTool } from './termsync-dialog';
 import { openPluginTexts } from './plugins-dialog';
-import { openActivity, openAutofill } from './activity-dialog';
+import { openActivity } from './activity-dialog';
+import { openAutofillScreen } from './autofill-screen';
+import { baseName, fileIcon, treeNodes as treeNodesOf } from './tree-nodes';
+import type { TreeNode } from './tree-nodes';
 import { askAnotherGame, openIngestReport } from './ingest-dialog';
 import { markup } from './markup';
 import { trackActivePane } from './activepane';
@@ -359,7 +362,6 @@ export async function start(root: HTMLElement): Promise<void> {
   /* ---------- data helpers ---------- */
   const entryOf = (u: Unit): Entry | undefined => (s.current === GROUP ? groupEntries[u.key] : s.current ? s.saved.files[s.current]?.[u.key] : undefined);
   /** The name shown for what is open: a file, or the group. */
-  const baseName = (name: string): string => (name.split('/').pop() ?? name).replace(/\.json$/i, '');
   const fileTitle = (name: string): string => { const label = s.views.find(v => v.name === name)?.label; return label ? `${label} · ${baseName(name)}` : baseName(name); };
   const currentLabel = (): string => (s.current === GROUP ? groupTitle() : s.current ? fileTitle(s.current) : '');
   /** The short name of the open file (`Town`, not `Town · Map001`), for the chip of the windows below the files and for the status bar. */
@@ -530,34 +532,7 @@ export async function start(root: HTMLElement): Promise<void> {
     }
   }
 
-  function treeNodes(): { t: 'd' | 'f'; d: number; name: string; label: string }[] {
-    const out: { t: 'd' | 'f'; d: number; name: string; label: string }[] = [];
-    const rpg = s.views.filter(v => !v.name.includes('/'));
-    const others = s.views.filter(v => v.name.includes('/'));
-    if (rpg.length) {
-      out.push({ t: 'd', d: 0, name: 'data', label: 'data' });
-      for (const v of rpg.filter(x => !/^Map\d+\.json$/.test(x.name))) out.push({ t: 'f', d: 1, name: v.name, label: baseName(v.name) });
-      const maps = rpg.filter(x => /^Map\d+\.json$/.test(x.name));
-      if (maps.length) { out.push({ t: 'd', d: 1, name: 'data/maps', label: 'maps' }); for (const v of maps) out.push({ t: 'f', d: 2, name: v.name, label: baseName(v.name) }); }
-    }
-    let prev: string[] = [];
-    for (const v of others) {
-      const parts = v.name.split('/');
-      const dirs = parts.slice(0, -1);
-      let i = 0;
-      while (i < dirs.length && prev[i] === dirs[i]) i++;
-      for (let k = i; k < dirs.length; k++) out.push({ t: 'd', d: k, name: dirs.slice(0, k + 1).join('/'), label: dirs[k]! });
-      out.push({ t: 'f', d: dirs.length, name: v.name, label: baseName(v.name) });
-      prev = dirs;
-    }
-    return out;
-  }
-
-  function fileIcon(name: string): [string, string] {
-    if (/^Map\d+\.json$/.test(name)) return ['map', 'MAP'];
-    if (name.endsWith('.json')) return ['json', '{}'];
-    return ['gl', 'Aa'];
-  }
+  const treeNodes = (): TreeNode[] => treeNodesOf(s.views);
 
   let fileQ = '';
   /** The coloured dot of the group a file is in. */
@@ -1445,6 +1420,7 @@ export async function start(root: HTMLElement): Promise<void> {
     merge: source => { closeMerge = openMergeScreen(ctx, source, () => { closeMerge = null; adopt(); }); },
   };
   let closeMerge: (() => void) | null = null;
+  let closeFill: (() => void) | null = null;
   function openBranchMenu(): void {
     const pop = $('#brpop'), btn = $('#br-btn');
     if (!pop.hidden) { closeBranchMenu(); return; }
@@ -1689,7 +1665,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const MENUS: Record<string, MenuItem[]> = {
     'Файл': [{ t: 'Відкрити папку гри…', fn: () => void openFolder() }, { t: 'Відкрити файли або вставити JSON…', fn: openImportDlg }, '-', { t: 'Зібрати…', fn: doBuild }, { t: 'Запустити вибране', fn: runSelected, sc: 'F5' }, '-', { t: 'Розширення…', fn: () => openExt() }, { t: 'Налаштування…', fn: () => openSettingsDlg() }],
     'Перехід': [{ t: 'Наступний рядок без перекладу', fn: () => jump('untranslated', 1), sc: 'Alt+⇧+↓' }, { t: 'Наступна помилка QA', fn: () => jump('error', 1), sc: 'F8' }, { t: 'Наступна порада', fn: () => jump('advice', 1) }, { t: 'Наступний на вичитку', fn: () => jump('unreviewed', 1) }, { t: 'Наступний зі зміненим оригіналом', fn: () => jump('sourceChanged', 1) }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: 'Ctrl+K' }],
-    'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Оновити за глосарієм…', fn: () => openTermSyncTool(ctx) }, { t: 'Автозаповнення…', fn: () => openAutofill(ctx, () => openLinkTool(ctx)) }, { t: 'Злити гілку…', fn: () => chooseMerge(branchActions) }, { t: 'Активність…', fn: () => openActivity(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенесення рядків…', fn: () => openWrapTool(ctx, { wrapFile }) }, { t: 'Правила QA…', fn: () => openQaRules(ctx) }],
+    'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Оновити за глосарієм…', fn: () => openTermSyncTool(ctx) }, { t: 'Автозаповнення…', fn: () => { closeFill?.(); closeFill = openAutofillScreen(ctx, () => { closeFill = null; renderAll(); }); } }, { t: 'Злити гілку…', fn: () => chooseMerge(branchActions) }, { t: 'Активність…', fn: () => openActivity(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенесення рядків…', fn: () => openWrapTool(ctx, { wrapFile }) }, { t: 'Правила QA…', fn: () => openQaRules(ctx) }],
   };
   /** The menu of a group: the fixed items, and under «Інструменти» the commands of the plugins that work (the name of the plugin is where a shortcut would be). */
   const menuOf = (g: string): MenuItem[] => {

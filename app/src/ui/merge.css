@@ -87,3 +87,28 @@
 #brpop .cfg-t svg{fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px;margin-right:8px;color:var(--mute);width:16px;height:16px}
 .mg-grid .gr{content-visibility:visible;contain:none}
 .mg-grid .gr .tr.edc{align-self:stretch}
+
+/* ===== the autofill screen (the same table as the merge screen, with its own columns) ===== */
+.mgx.af .mg-grid{--cols:34px 22px 112px minmax(120px,1fr) minmax(150px,1fr) minmax(180px,1.3fr) 70px}
+.mgx.af .mg-tb{display:flex;flex-direction:column;gap:6px}
+.mg-tb .af-opts{padding-top:0}
+.af-sl{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--mute);white-space:nowrap}
+.af-sl input[type=range]{width:120px;accent-color:var(--accent)}
+.af-sl b{color:var(--text);font-weight:600;min-width:34px}
+.af-sep{flex:1}
+.af-lb{font-size:12.5px;color:var(--mute)}
+.af-sc{font:600 11.5px var(--mono);color:var(--info);margin-right:4px}
+.mg-grid .gr .tr.res.yes{box-shadow:inset 2px 0 0 var(--ok)}
+.chip .sd{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:0}
+.chip .sd.ok{background:var(--ok)}.chip .sd.info{background:var(--info)}.chip .sd.bad{background:var(--bad)}
+
+/* the list of files of these screens is a card, as the files of the project in the left panel */
+.mg-files{width:268px;padding:8px 0 0 8px;gap:8px;border-right:0}
+.mg-card{flex:1;min-height:0;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:var(--r3);background:rgba(36,38,41,.6);overflow:hidden}
+.mg-ph{flex:none;height:34px;display:flex;align-items:center;padding:0 12px;background:var(--panel);border-bottom:1px solid var(--line);color:#a9aeb6;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.mg-card .mg-tree{padding:4px 0}
+.mg-files .node .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mg-files .node .mem{font:12px var(--mono);color:var(--dim);margin-left:auto;padding-left:6px}
+.mg-files .node .mem+.pc{margin-left:6px}
+.mg-files .node .rd{display:inline-block;margin-left:6px;vertical-align:1px}
+.mg-sum{border-top:0;padding:4px 12px 10px}

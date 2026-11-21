@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EMPTY_GITHUB_STATE, emptyProject, githubSync, gitBlobSha } from '../src/core';
+import { EMPTY_GITHUB_STATE, emptyProject, githubSync, gitBlobSha, stamp } from '../src/core';
 import type { Entry, GithubSettings, GithubState, SavedProject, Unit } from '../src/core';
 import { MockGithub } from './mock-github';
 
@@ -20,6 +20,39 @@ class Device {
 }
 
 describe('github sync', () => {
+  it('when nothing changed, nothing is sent: the marks of a copy and of a build are not changes', async () => {
+    const gh = new MockGithub();
+    const a = new Device(pc(), gh);
+    await a.sync();
+    expect(gh.text('project.json')).not.toContain('stamps');
+    const before = gh.commitCount();
+    // what the application does after every sync, and after a build: a new time in the project
+    for (let i = 1; i <= 3; i++) {
+      stamp(a.project, 'copy', 'синхронізація', 1_000_000 + i);
+      stamp(a.project, 'build', 'збірка', 2_000_000 + i, 5);
+      const r = await a.sync();
+      expect(r.pushed).toBe(0);
+      expect(r.pulled).toBe(0);
+    }
+    expect(gh.commitCount()).toBe(before);
+    // a real edit is still sent, as one file
+    a.project = withFile(a.project, 'Map001.json', { a: entry('Вітаю', 50) });
+    expect((await a.sync()).pushed).toBe(1);
+    expect(gh.commitCount()).toBe(before + 1);
+  });
+
+  it('another device does not get the marks of this one, and keeps its own', async () => {
+    const gh = new MockGithub();
+    const a = new Device(pc(), gh);
+    stamp(a.project, 'copy', 'файл', 777);
+    await a.sync();
+    const b = new Device(emptyProject('Гра'), gh);
+    stamp(b.project, 'copy', 'синхронізація', 888);
+    await b.sync();
+    expect(b.project.stamps?.copy).toEqual({ mt: 888, how: 'синхронізація' });
+    expect(a.project.stamps?.copy).toEqual({ mt: 777, how: 'файл' });
+  });
+
   it('first push writes readable files and one commit; the originals go in gzipped', async () => {
     const gh = new MockGithub();
     const a = new Device(pc(), gh);

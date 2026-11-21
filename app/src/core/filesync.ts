@@ -7,7 +7,7 @@ import type { SavedProject } from './project';
  * Sync a project through any shared set of files (a GitHub repository, the artifact's own database…). The project
  * is stored as plain, diff-friendly files:
  *
- *   project.json                    glossary, memory, speakers, settings (everything but the per-file work)
+ *   project.json                    glossary, memory, speakers, settings (everything but the per-file work and this device's marks of copies and builds)
  *   translations/<file>.tr.json     one file per game file: unit key → translation, status, comments, history
  *   originals/snapshot.json.gz      the game's original strings (so a phone without the game can show them)
  *   originals/reference.json.gz     the reference-language texts
@@ -84,7 +84,9 @@ export const normDir = (d: string): string => { const t = d.trim().replace(/^\/+
 export async function projectFiles(p: SavedProject, dirIn: string, withAssets: boolean): Promise<Map<string, Uint8Array>> {
   const dir = normDir(dirIn);
   const out = new Map<string, Uint8Array>();
-  const { files, snapshot: _s, reference: _r, ...manifest } = p;
+  // `stamps` (when the last copy was made, when the last build was) are about this device's outside world, not about the translation: written after every
+  // sync, they would make the next sync see a change and push a commit that holds nothing but a new time, over and over.
+  const { files, snapshot: _s, reference: _r, stamps: _st, ...manifest } = p;
   out.set(`${dir}project.json`, enc.encode(pretty(manifest)));
   for (const [name, entries] of Object.entries(files)) {
     if (!Object.keys(entries).length) continue;
@@ -136,7 +138,7 @@ export async function syncFiles(remote: RemoteFiles, cfg: FilesOptions, state: F
       for (const path of toGet) if (path.startsWith(`${dir}translations/`)) files[path.slice(`${dir}translations/`.length, -'.tr.json'.length)] = JSON.parse(dec.decode(blobs.get(path)!)) as Translations;
       const manifestBytes = blobs.get(pj);
       // Without a changed project.json the remote has nothing new but per-file work: merge it onto our own manifest.
-      const manifest: Json = manifestBytes ? asObj(JSON.parse(dec.decode(manifestBytes))) : (() => { const { files: _f, snapshot: _s, reference: _r, ...m } = project; return m as Json; })();
+      const manifest: Json = manifestBytes ? asObj(JSON.parse(dec.decode(manifestBytes))) : (() => { const { files: _f, snapshot: _s, reference: _r, stamps: _st, ...m } = project; return m as Json; })();
       // A repository without the originals has rows without `src`: this device keeps the one it knows (the row is not "unchecked" for that).
       for (const [name, rows] of Object.entries(files)) for (const [k, e] of Object.entries(rows)) { const mine1 = project.files[name]?.[k]; if (e && !e.src && mine1?.src) e.src = mine1.src; }
       const theirs = deserialize(JSON.stringify({ ...manifest, files }), Date.now());

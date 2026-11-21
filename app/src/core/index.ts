@@ -9,6 +9,7 @@ export * from './qaconfig';
 export * from './qacodes';
 export * from './qaadvice';
 export * from './engine';
+export * from './ext';
 export { canonicalRpgMakerName, isRpgMakerFile, hasText } from './rpgmaker';
 export * from './merge';
 export * from './workflow';

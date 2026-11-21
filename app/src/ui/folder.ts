@@ -1,4 +1,4 @@
-import { READABLE_EXTENSIONS, formatOf, isRpgMakerFile, isTextFormat } from '../core';
+import { readableExtensions, formatOf, isRpgMakerFile, isTextFormat } from '../core';
 import type { GameFile } from '../core';
 import { isDesktop, pickGameDirDesktop } from './desktop';
 
@@ -51,7 +51,7 @@ async function walk(dir: DirHandle, prefix: string, out: PickedFile[], depth: nu
   }
 }
 
-const isReadable = (name: string): boolean => READABLE_EXTENSIONS.some(e => name.toLowerCase().endsWith(e));
+const isReadable = (name: string): boolean => readableExtensions().some(e => name.toLowerCase().endsWith(e));
 
 /**
  * Keep files the app can translate. For RPG Maker, prefer the game's data folder when a whole game was picked.

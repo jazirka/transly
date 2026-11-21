@@ -28,7 +28,8 @@
 .seg{padding:2px;border-radius:var(--b-r)}
 .seg button{height:var(--b-s);border-radius:calc(var(--b-r) - 2px)}
 .wc button{width:36px;height:var(--b-m);margin:0 1px;border-radius:var(--b-r);align-self:center}
-.wc{align-items:center;padding:0 6px 0 2px}
+.wc{align-items:center;padding:0 0 0 2px}
+.wc button:last-child{width:34px;margin-right:0}
 .wc button:last-child:hover{background:#c42b1c}
 
 /* the rail of the left panels */

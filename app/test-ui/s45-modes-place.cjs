@@ -43,12 +43,12 @@ const project = () => ({ version: 1, name: 'P', sourceLang: 'en', targetLang: 'u
   for (const w of widths) {
     const page = await open(w); const g = at[w] = await geo(page);
     check(`${w}: project → branch → mode, in this order and without overlap`, g.logo.r <= g.hamb.l && g.hamb.r <= g.proj.l && g.proj.r <= g.br.l && g.br.r <= g.seg.l, JSON.stringify([g.logo, g.hamb, g.proj, g.br, g.seg]));
-    check(`${w}: the logo is not squeezed and stands where it stood`, g.logo.w === 20 && g.logo.h === 20 && g.logo.l === 10, JSON.stringify(g.logo));
+    check(`${w}: the logo is not squeezed and stands where it stood`, g.logo.w === 20 && g.logo.h === 20 && g.logo.l === 7, JSON.stringify(g.logo));
     check(`${w}: the branch button keeps its size`, g.br.w === at[widths[0]].br.w, `${g.br.w} / ${at[widths[0]].br.w}`);
     check(`${w}: the modes are three icons without words, each with a name and a tip`, g.segText.every(t => t === '') && g.segNames.every(Boolean) && g.segSize.every(s => s === '28x28'), JSON.stringify([g.segText, g.segNames, g.segSize]));
     check(`${w}: the progress gives way to its neighbours and never overlaps them`, g.pg.w === 0 || (g.pg.l >= g.seg.r && g.pg.r <= g.cfg.l), JSON.stringify([g.pg, g.seg, g.cfg]));
     check(`${w}: the arrow of a menu button is small`, g.caret === '10x10', g.caret);
-    check(`${w}: the close button and the icons of the right rail are on one axis`, g.rail.length >= 3 && g.rail.every(x => x === g.close.cx), JSON.stringify([g.close.cx, g.rail]));
+    check(`${w}: the close button and the icons of the right rail are on one axis (17 px from the edge)`, g.rail.length >= 3 && g.rail.every(x => x === g.close.cx), JSON.stringify([g.close.cx, g.rail]));
     check(`${w}: the logo and the icons of the left rail are on one axis`, g.lrail.length >= 2 && g.lrail.every(b => b.cx === g.logo.cx), JSON.stringify([g.logo.cx, g.lrail]));
     if (w === 1400) {
       check('1400: the progress is cut, not hidden (the whole text is still there for a screen reader)', g.txt.startsWith('Перекладено') && g.txtVis > 20, `${g.txt} | ${g.txtVis}`);

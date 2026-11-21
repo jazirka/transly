@@ -1,11 +1,11 @@
 /* The top bar. Two clusters glued to the edges of the window: on the left the project, its branch and the mode (project → branch → mode), on the right
    the run button, the notifications and the window controls; the middle holds only the progress, which gives way first. The icon of the logo stands over the
-   left rail and the close button over the right one (the same axis, 20 px from the edge on the left and 25 px on the right). Nothing is placed by `order`
+   left rail and the close button over the right one (the same axis, 17 px from the edge on both sides: the rails are 34 px wide, their 28 px buttons stand in the middle, and the last icon of the right cluster and the close button stand on the same axis). Nothing is placed by `order`
    or by a percentage: a narrow window shortens the progress, then the name of the project, and never moves or squeezes the logo and the branch. */
-.topbar{display:flex;align-items:center;gap:0;height:var(--tb-h);padding:0 6px 0 0;position:relative}
+.topbar{display:flex;align-items:center;gap:0;height:var(--tb-h);padding:0 3px 0 0;position:relative}
 html.chrome-own .topbar{padding-right:var(--wctl-w)}
 .topbar .tb-l,.topbar .tb-r{display:flex;align-items:center;gap:4px;min-width:0}
-.topbar .tb-l{flex:0 1 auto;padding-left:10px}
+.topbar .tb-l{flex:0 1 auto;padding-left:7px}
 .topbar .tb-r{flex:none}
 .topbar .logo{flex:none;margin:0 6px 0 0}
 .topbar .tb-ic,.topbar .tpill,.topbar #seg{flex:none}
@@ -24,7 +24,8 @@ html.chrome-own .topbar{padding-right:var(--wctl-w)}
 .topbar #seg button+button::before{display:none}
 .topbar #seg svg{width:16px;height:16px}
 .topbar.menu-on #proj-btn,.topbar.menu-on #br-btn,.topbar.menu-on #seg{display:none}
-/* the right rail: the buttons of the left rail's size, on the axis of the close button */
-.ide:not(.sz-s) .fs .itabs{padding:8px 10px 6px 0}
+/* the right rail: the buttons of the left rail's size, in the middle of the 40 px rail (the same gap on both sides, as on the left), on the axis of the close button (W−20) */
+.ide:not(.sz-s) .fs .itabs{padding:8px 0 6px;width:34px;box-sizing:border-box}
+.ide:not(.sz-s) .strip{width:34px;box-sizing:border-box}
 .ide:not(.sz-s) .fs .itabs button{width:var(--b-m);height:var(--b-m)}
 .strip [hidden],#mtabs [hidden]{display:none!important}

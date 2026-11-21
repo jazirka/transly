@@ -243,8 +243,8 @@ td .term{color:#d9c3ee}
 @media (prefers-reduced-motion:no-preference){.gr,.chip,.tbtn,.node{transition:background .08s}}
 /* ===== v2: two modes (table | focus), bottom panel moved into focus sidebar, tags ===== */
 .ide{grid-template-rows:auto auto 1fr auto}
-.main{grid-template-columns:40px 250px minmax(0,1fr)}
-.ide.mode-focus .main{grid-template-columns:40px minmax(0,1fr)}
+.main{grid-template-columns:34px 250px minmax(0,1fr)}
+.ide.mode-focus .main{grid-template-columns:34px minmax(0,1fr)}
 .ide.mode-focus .tree{display:none}
 .seg{margin-left:auto;display:flex;align-self:center;margin-right:8px;border:1px solid var(--line);border-radius:var(--r2);overflow:hidden;background:var(--bg)}
 .seg button{height:24px;padding:0 12px;background:none;border:0;color:var(--mute);display:flex;align-items:center;gap:6px}
@@ -311,10 +311,10 @@ td .term{color:#d9c3ee}
 .tico.j{background:#3b3524;color:#e5c06a}.tico.g{background:#35294a;color:#b589d6}
 
 /* ===== v3: tool-window bar, stage switch, QA under the string ===== */
-.main{grid-template-columns:40px 250px minmax(0,1fr)}
-.ide.lp-closed .main,.ide.mode-focus.lp-closed .main{grid-template-columns:40px minmax(0,1fr)}
+.main{grid-template-columns:34px 250px minmax(0,1fr)}
+.ide.lp-closed .main,.ide.mode-focus.lp-closed .main{grid-template-columns:34px minmax(0,1fr)}
 .ide.lp-closed .tree{display:none}
-.ide.mode-focus .main{grid-template-columns:40px 250px minmax(0,1fr)}
+.ide.mode-focus .main{grid-template-columns:34px 250px minmax(0,1fr)}
 .ide.mode-focus .tree{display:flex}
 .strip{width:30px;padding:6px 0;gap:6px;align-items:stretch}
 .strip button{width:30px;height:auto;padding:12px 0;border-radius:0;writing-mode:vertical-rl;transform:rotate(180deg);font-size:12px;letter-spacing:.02em;color:var(--mute)}
@@ -855,10 +855,10 @@ body.resizing{user-select:none;cursor:col-resize}
 .ide:not(.sz-s) .fs .itabs .ssep{width:18px}
 .ide:not(.sz-s) .rz-r{position:absolute;top:0;bottom:6px;right:calc(52px + var(--rpw-eff));left:auto;width:8px}
 .ide:not(.sz-s).rp-collapsed .rz-r,.ide:not(.sz-s).rp-collapsed .fs .ibody{display:none}
-.ide:not(.sz-s).lp-open .main,.ide:not(.sz-s).lp-open.mode-table .main,.ide:not(.sz-s).lp-open.mode-focus .main{grid-template-columns:40px var(--lpw-eff) minmax(0,1fr) var(--rpw-eff) 40px}
-.ide:not(.sz-s).lp-open.rp-collapsed .main,.ide:not(.sz-s).lp-open.rp-collapsed.mode-table .main,.ide:not(.sz-s).lp-open.rp-collapsed.mode-focus .main{grid-template-columns:40px var(--lpw-eff) minmax(0,1fr) 40px}
-.ide:not(.sz-s).lp-closed .main,.ide:not(.sz-s).lp-closed.mode-table .main,.ide:not(.sz-s).lp-closed.mode-focus .main{grid-template-columns:40px minmax(0,1fr) var(--rpw-eff) 40px}
-.ide:not(.sz-s).lp-closed.rp-collapsed .main,.ide:not(.sz-s).lp-closed.rp-collapsed.mode-table .main,.ide:not(.sz-s).lp-closed.rp-collapsed.mode-focus .main{grid-template-columns:40px minmax(0,1fr) 40px}
+.ide:not(.sz-s).lp-open .main,.ide:not(.sz-s).lp-open.mode-table .main,.ide:not(.sz-s).lp-open.mode-focus .main{grid-template-columns:34px var(--lpw-eff) minmax(0,1fr) var(--rpw-eff) 34px}
+.ide:not(.sz-s).lp-open.rp-collapsed .main,.ide:not(.sz-s).lp-open.rp-collapsed.mode-table .main,.ide:not(.sz-s).lp-open.rp-collapsed.mode-focus .main{grid-template-columns:34px var(--lpw-eff) minmax(0,1fr) 34px}
+.ide:not(.sz-s).lp-closed .main,.ide:not(.sz-s).lp-closed.mode-table .main,.ide:not(.sz-s).lp-closed.mode-focus .main{grid-template-columns:34px minmax(0,1fr) var(--rpw-eff) 34px}
+.ide:not(.sz-s).lp-closed.rp-collapsed .main,.ide:not(.sz-s).lp-closed.rp-collapsed.mode-table .main,.ide:not(.sz-s).lp-closed.rp-collapsed.mode-focus .main{grid-template-columns:34px minmax(0,1fr) 34px}
 .ide:not(.sz-s) .main{padding-right:0}
 /* both zones share one header: title, and a hide control that shows on hover */
 .ibody .ph{height:34px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:2}
@@ -871,7 +871,7 @@ body.resizing{user-select:none;cursor:col-resize}
 .rz:focus-visible{outline:none;box-shadow:0 0 0 1px rgba(var(--accent-rgb),.6) inset}
 .ide:not(.sz-s) .rz-x{position:absolute;top:0;bottom:6px;left:calc(46px + var(--lpw-eff));right:auto;width:6px;cursor:col-resize}
 .ide:not(.sz-s).lp-closed .rz-x{display:none}
-.ide:not(.sz-s) .rz-r{right:calc(46px + var(--rpw-eff));width:6px}
+.ide:not(.sz-s) .rz-r{right:calc(40px + var(--rpw-eff));width:6px}
 .rz-y,.rz-p{height:7px;border:0;background:linear-gradient(var(--line),var(--line)) center/100% 1px no-repeat!important}
 .rz-y.drag,.rz-p.drag{background:rgba(var(--accent-rgb),.22)!important}
 /* rails sit on the window background, not as a separate strip */

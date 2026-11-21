@@ -435,7 +435,7 @@ input::placeholder,textarea::placeholder{color:#9a9ea6;opacity:1}
   .ide:not(.sz-s){--lpw-eff:min(var(--lpw,300px),240px);--rpw-eff:min(var(--rpw,350px),320px)}
 }
 /* the right panel opened in a narrow window lies over the centre (it has no column of its own; the rail keeps its column) */
-.ide:not(.sz-s).rp-collapsed.rp-over .fs .ibody{display:flex;position:absolute;top:0;bottom:6px;right:46px;width:var(--rpw-eff);z-index:20;box-shadow:-14px 0 32px rgba(0,0,0,.5)}
+.ide:not(.sz-s).rp-collapsed.rp-over .fs .ibody{display:flex;position:absolute;top:0;bottom:6px;right:40px;width:var(--rpw-eff);z-index:20;box-shadow:-14px 0 32px rgba(0,0,0,.5)}
 /* the table keeps its translation column when the centre is narrow: the key goes under the original, the speaker and length columns step aside */
 .gridwrap{container-type:inline-size;container-name:grid}
 .gr .src .skey{display:none}

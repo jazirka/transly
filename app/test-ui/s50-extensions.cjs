@@ -88,7 +88,7 @@ const project = () => ({ version: 1, name: 'P', sourceLang: 'en', targetLang: 'u
   await page.locator('#hamb').click(); await sleep(250);
   await page.locator('#menubar button').filter({ hasText: /^File$/ }).first().click(); await sleep(250);
   await page.locator('#mdd').getByText('Extensions…', { exact: false }).first().click().catch(async () => { await page.locator('#mdd').getByText('Розширення…').first().click(); }); await sleep(500);
-  await dlg.locator('.st-ti').nth(2).click(); await sleep(250);
+  await dlg.locator('.st-ti').nth(3).click(); await sleep(250);
   await dlg.locator('input[name="ex-lang"][value="uk"]').check(); await sleep(500);
   check('back in Ukrainian the interface is Ukrainian again', /Розширення/.test(await dlg.locator('#st-t').innerText()) && /Готово/.test(await dlg.locator('#ex-done').innerText()));
   await dlg.locator('#ex-done').click(); await sleep(300);

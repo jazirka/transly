@@ -67,6 +67,19 @@ const stored = () => new Promise(r => { const o = indexedDB.open('transly', 3); 
   check('«Наступний файл» opens the next file that has a find', await page.evaluate(() => /Map002/.test(document.querySelector('.tabs .tab.on')?.innerText ?? '')) && (await cells()).some(x => x.src === 'Hello' && /ok/.test(x.dot)), await page.evaluate(() => document.querySelector('.tabs .tab.on')?.innerText));
   await page.locator('#fb-next').click(); await sleep(900);
 
+  // the keys on selected rows
+  const bb = await page.locator('#grid .gr .ln').nth(2).boundingBox(), bb2 = await page.locator('#grid .gr .ln').nth(5).boundingBox();
+  await page.mouse.move(bb.x + 6, bb.y + 8); await page.mouse.down(); await page.mouse.move(bb2.x + 6, bb2.y + 8, { steps: 5 }); await page.mouse.up(); await sleep(200);
+  const cnt = async () => Number((await page.locator('#fb-go').innerText()).match(/· (\d+)/)[1]);
+  const c0 = await cnt();
+  await page.keyboard.press('-'); await sleep(400);
+  const c1 = await cnt();
+  check('«−» on the selected rows settles their finds at once', c1 < c0, c0 + ' → ' + c1);
+  await page.keyboard.press('+'); await sleep(400);
+  check('«+» takes them all back', (await cnt()) > c1, String(await cnt()));
+  await page.locator('#bb-clear').click(); await sleep(200);
+  await page.keyboard.press('-'); await page.keyboard.press('-'); await sleep(100);
+
   // the slider
   await page.locator('#fb-min').click(); await sleep(200); await page.locator('#fb-range').fill('70'); await sleep(400);
   c = await cells();

@@ -888,3 +888,4 @@ button.chip .caret{margin-left:5px;vertical-align:middle;position:relative;top:-
 .fb2.m.on{color:var(--bad);border-color:var(--bad);background:rgba(247,84,100,.14)}
 .fb2.p.on{color:var(--ok);border-color:var(--ok);background:rgba(95,184,101,.14)}
 .tab .badge.fl{background:rgba(var(--accent-rgb),.25);color:var(--accent-text)}
+.fillbar .fb-k{color:var(--dim);font-size:12px}.fillbar kbd{font:11.5px var(--mono);border:1px solid #4a4d54;border-radius:4px;padding:0 5px;background:#26282b;color:var(--mute)}

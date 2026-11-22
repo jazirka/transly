@@ -851,7 +851,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const c = fillCounts(), here = s.current && s.current !== GROUP ? fill.rows.filter(r => r.file === s.current).length : 0, files = fillFiles();
     bar.innerHTML = `<span class="fb-t">Автозаповнення</span><span class="fb-n" aria-live="polite">${fill.building ? `Шукаю… знайдено ${fill.found.toLocaleString(uiLocale())}` : fill.found ? `Знайдено ${fill.found.toLocaleString(uiLocale())} · у цьому файлі ${here.toLocaleString(uiLocale())}${files.length > 1 ? ` · файлів ${files.length}` : ''}` : 'Нічого заповнити не вдається: перекладіть і надішліть більше рядків'}</span>
       <button class="chip" type="button" id="fb-min" aria-haspopup="true" title="Точність, від якої знайдене береться без питань">Від ${fill.threshold}%${SVG.caret}</button><button class="chip" type="button" id="fb-src" aria-haspopup="true" title="З чого вчиться автозаповнення">Вчитися з: ${fill.drafts ? 'надісланих і чернеток' : 'надісланих'}${SVG.caret}</button>
-      <button class="chip${fill.only ? ' on' : ''}" type="button" id="fb-only" aria-pressed="${fill.only}" title="Показати в таблиці лише рядки, для яких є що вписати">Лише з пропозиціями</button>${files.length > 1 || (fill.found && !here) ? '<button class="chip" type="button" id="fb-next" title="Відкрити наступний файл, де є що вписати">Наступний файл ›</button>' : ''}
+      <button class="chip${fill.only ? ' on' : ''}" type="button" id="fb-only" aria-pressed="${fill.only}" title="Показати в таблиці лише рядки, для яких є що вписати">Лише з пропозиціями</button><span class="fb-k" title="Клавіші на виділених рядках (виділяйте протягуванням по номерах) або на відкритому рядку"><kbd>+</kbd> вписати <kbd>−</kbd> пропустити</span>${files.length > 1 || (fill.found && !here) ? '<button class="chip" type="button" id="fb-next" title="Відкрити наступний файл, де є що вписати">Наступний файл ›</button>' : ''}
       <span class="fb-sp"></span><button class="btn p" type="button" id="fb-go"${c.goes ? '' : ' disabled'}>Вписати як чернетки · ${c.goes.toLocaleString(uiLocale())}</button><button class="ghost" type="button" id="fb-x" aria-label="Закрити автозаповнення" title="Закрити (Esc)">✕</button>`;
   }
   async function startFill(): Promise<void> {
@@ -913,6 +913,18 @@ export async function start(root: HTMLElement): Promise<void> {
     if (own && (own.take === 'no') === (want === 'no')) fill.choice.delete(id); else fill.choice.set(id, { take: want });
     renderFillBar();
     if (fill.only) renderAll(); else rowChanged(key!);
+  }, true);
+  // «+» and «−» on the keyboard settle the finds of the selected rows (or of the open row when none is selected)
+  document.addEventListener('keydown', e => {
+    if (!fill.on || e.ctrlKey || e.metaKey || e.altKey || (e.target as HTMLElement).matches('input, textarea, select') || document.querySelector('dialog[open]')) return;
+    const want = e.key === '+' || e.key === '=' ? 'yes' : e.key === '-' || e.key === '_' ? 'no' : null;
+    if (!want || !s.current || s.current === GROUP) return;
+    const keys = s.checked.size ? [...s.checked] : s.cur ? [s.cur] : [];
+    let n = 0;
+    for (const k of keys) { const r = fillOf(s.current, k); if (r) { fill.choice.set(idOf(r), { take: want }); n++; } }
+    if (!n) return;
+    e.preventDefault(); e.stopPropagation();
+    renderFillBar(); renderAll();
   }, true);
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && fill.on && !document.querySelector('dialog[open]') && !(e.target as HTMLElement).matches('input, textarea')) { e.preventDefault(); e.stopPropagation(); endFill(); } }, true);
 

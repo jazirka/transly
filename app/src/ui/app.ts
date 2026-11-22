@@ -39,6 +39,7 @@ import { openTermSyncTool } from './termsync-dialog';
 import { openPluginTexts } from './plugins-dialog';
 import { openActivity } from './activity-dialog';
 import { applyFill, buildFill, fill, fillCellHtml, fillChoice, fillCounts, fillFiles, fillLenHtml, fillOf, fillText, idOf, setDrafts, setThreshold, stopFill } from './fill-mode';
+import { wireDragSelect } from './dragselect';
 import { baseName, fileIcon, treeNodes as treeNodesOf } from './tree-nodes';
 import type { TreeNode } from './tree-nodes';
 import { askAnotherGame, openIngestReport } from './ingest-dialog';
@@ -2452,6 +2453,16 @@ export async function start(root: HTMLElement): Promise<void> {
     edit: en => { s.leftOpen = true; s.leftBoth = false; s.leftTab[s.mode] = 'glossary'; renderAll(); editTerm(ctx, en); },
   });
   wireThreadPill(ctx);
+  // the rows of the table are selected by holding the mouse on the number column and dragging (the table scrolls at its edge)
+  wireDragSelect({
+    scroller: () => document.querySelector<HTMLElement>('.gridwrap'),
+    handle: '#grid .gr .ln',
+    row: '#grid .gr',
+    keyOf: r => r.dataset.key,
+    order: () => visibleUnits(true).map(u => u.key),
+    get: () => s.checked,
+    set: keys => { s.checked.clear(); for (const k of keys) s.checked.add(k); renderSelection(); },
+  });
   wireGlossary(ctx);
   // a proposal of a new construction opens the form of «Пов’язане» with the pattern filled in. Once the proposals (or the index of the words) are found, only what shows them is drawn again.
   const redrawThreads = (): void => {

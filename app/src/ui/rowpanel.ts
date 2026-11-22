@@ -15,6 +15,8 @@ import type { Ctx } from './state';
  * the editor alike. There is no separate "review" mode: a translation is approved here.
  */
 
+const SEND = '<svg viewBox="0 0 16 16"><path d="M14 2L7 9M14 2l-4.5 12L7 9 2 6.5z"/></svg>';
+
 /** One section: a folding header and its body (the ids are written out so a test can find them). */
 const sec = (id: string, title: string, body: string, extra = ''): string => `<section class="pn-sec" data-sec="${id}"><button class="pn-h" type="button" data-pn="${id}" aria-expanded="true"><span class="pn-c" aria-hidden="true">▾</span><span>${title}</span>${extra}</button><button class="pn-x" type="button" data-pnx="${id}" aria-label="Сховати розділ «${title}»" title="Сховати розділ">—</button>${body}</section>`;
 
@@ -24,7 +26,7 @@ export const ROW_PANEL_HTML = ['<div class="pn-empty-all hint">Оберіть р
   sec('th', 'Пов’язане', '<div class="pn-b" id="pn-th"></div>'),
   sec('cm', 'Обговорення', `<div class="pn-b" id="pn-cm"><div id="cm-list" class="cm-list"></div>
     <div class="cm-new"><div class="cm-box"><textarea class="cmin" id="cm-in" rows="2" placeholder="Написати про цей рядок…" aria-label="Новий коментар"></textarea>
-    <div class="cm-bar"><span class="hint">Ctrl+Enter</span><button class="btn p" id="cm-add">Коментувати</button></div></div></div></div>`, '<span class="cnt" id="pn-cm-n" hidden>0</span>'),
+    <div class="cm-bar"><span class="hint">Ctrl+Enter</span><button class="saveb" id="cm-add" type="button" aria-label="Коментувати" title="Коментувати (Ctrl+Enter)">${SEND}</button></div></div></div></div>`, '<span class="cnt" id="pn-cm-n" hidden>0</span>'),
 ].join('');
 
 /** The three tabs of the panel, on the rail beside it: the activity of the row, what is related to it, and its discussion. */

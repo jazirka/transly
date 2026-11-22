@@ -13,7 +13,7 @@ let timer = 0;
 function box(): HTMLDivElement {
   if (tip) return tip;
   tip = document.createElement('div');
-  tip.className = 'tt'; tip.setAttribute('role', 'tooltip'); tip.hidden = true;
+  tip.className = 'tip'; tip.setAttribute('role', 'tooltip'); tip.hidden = true;
   document.body.appendChild(tip);
   return tip;
 }

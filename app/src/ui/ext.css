@@ -28,5 +28,5 @@
 .exd .ex-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
 
 /* own tooltips (ui/tooltip.ts): the darkest layer, like the popups */
-.tt { position: fixed; z-index: 100000; max-width: 280px; padding: 5px 9px; border-radius: 7px; background: #141517; color: var(--text); border: 1px solid var(--line); box-shadow: 0 6px 18px rgba(0,0,0,.45); font: 500 12px/1.35 var(--ui); pointer-events: none; white-space: normal; overflow-wrap: anywhere; }
-.tt[hidden] { display: none; }
+.tip { position: fixed; z-index: 100000; max-width: 280px; padding: 5px 9px; border-radius: 7px; background: #141517; color: var(--text); border: 1px solid var(--line); box-shadow: 0 6px 18px rgba(0,0,0,.45); font: 500 12px/1.35 var(--ui); pointer-events: none; white-space: normal; overflow-wrap: anywhere; }
+.tip[hidden] { display: none; }

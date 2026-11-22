@@ -15,9 +15,9 @@ const check = (name, ok, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ') 
   check('the button has a title to show', !!title, title);
   await el.hover(); await sleep(150);
   check('the system title is taken off while hovering (so the system draws nothing)', (await el.getAttribute('title')) === null);
-  check('the tip is not shown at once', await page.locator('.tt').isHidden().catch(() => true));
+  check('the tip is not shown at once', await page.locator('.tip').isHidden().catch(() => true));
   await sleep(600);
-  const tt = page.locator('.tt');
+  const tt = page.locator('.tip');
   check('after a short wait the own tip shows the title', (await tt.isVisible()) && (await tt.innerText()) === title, await tt.innerText().catch(() => ''));
   const b = await tt.boundingBox();
   check('and it stays inside the window', !!b && b.x >= 0 && b.y >= 0 && b.x + b.width <= 1400 && b.y + b.height <= 900, JSON.stringify(b));

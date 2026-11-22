@@ -137,3 +137,4 @@
 .mgx.af .mg-tb .filters .chipsHost{order:1}
 .mgx.af .mg-tb .filters .r{order:2;margin-left:auto}
 .mgx.af .mg-grid .gr .key{line-height:1.4}
+.tico.all,.node .ic.all{background:none;color:var(--mute);display:inline-grid;place-items:center}

@@ -53,7 +53,7 @@ export function screenTreeHtml(ctx: Ctx, counts: Map<string, number>, o: { file:
   const views = ctx.s.views.filter(v => counts.has(v.name));
   const nodes = treeNodes(views);
   const total = [...counts.values()].reduce((a, b) => a + b, 0);
-  const all = `<div class="node ${o.file === null ? 'cur' : ''}" style="--d:0" role="treeitem" tabindex="0" data-f="" aria-selected="${o.file === null}"><span class="ic dir">▤</span><span class="nm">Усі файли</span><span class="mem" title="Рядків: ${total}">${total.toLocaleString(uiLocale())}</span></div>`;
+  const all = `<div class="node ${o.file === null ? 'cur' : ''}" style="--d:0" role="treeitem" tabindex="0" data-f="" aria-selected="${o.file === null}"><span class="ic all"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M3 4.5h10M3 8h10M3 11.5h10"/></svg></span><span class="nm">Усі файли</span><span class="mem" title="Рядків: ${total}">${total.toLocaleString(uiLocale())}</span></div>`;
   let skip: number | null = null;
   const body = nodes.map(n => {
     if (skip !== null && n.d > skip) return '';

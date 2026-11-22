@@ -20,6 +20,7 @@ const sv = (p: string, s = 14): string => `<svg class="gi" viewBox="0 0 16 16" w
 const ICON = {
   plus: sv('M3 8h10M8 3v10'), minus: sv('M3 8h10'), x: sv('M4 4l8 8M12 4l-8 8', 12), up: sv('M8 13V3M4 7l4-4 4 4', 11), down: sv('M8 3v10M4 9l4 4 4-4', 11),
   search: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>',
+  all: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M3 4.5h10M3 8h10M3 11.5h10"/></svg>',
   wand: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 13L11 5M10 3.5l1.5 1.5M12.5 1.5v2M11.5 2.5h2M5 3v1.5M4.2 3.7h1.6"/></svg>',
 };
 
@@ -225,8 +226,8 @@ export function openAutofillScreen(ctx: Ctx, onClose: () => void): () => void {
   const renderTabs = (): void => {
     const counts = new Map<string, number>();
     for (const r of rows) counts.set(r.file, (counts.get(r.file) ?? 0) + 1);
-    const tab = (on: boolean, f: string, ico: string, label: string, n: number): string => `<div class="tab ${on ? 'on' : ''}" role="tab" aria-selected="${on}"><button class="tb" type="button" data-f="${esc(f)}" aria-current="${on}" title="${esc(label)}: ${n.toLocaleString(uiLocale())}"><span class="tico ${ico === 'MAP' ? '' : 'j'}">${ico}</span>${esc(label)}<span class="badge">${n.toLocaleString(uiLocale())}</span></button></div>`;
-    $('#af-tabs', root).innerHTML = tab(file === null, '', '▤', 'Усі файли', rows.length) + [...counts].map(([f, n]) => tab(file === f, f, fileIcon(f)[1], ctx.fileTitle(f), n)).join('');
+    const tab = (on: boolean, f: string, ico: string, label: string, n: number): string => `<div class="tab ${on ? 'on' : ''}" role="tab" aria-selected="${on}"><button class="tb" type="button" data-f="${esc(f)}" aria-current="${on}" title="${esc(label)}: ${n.toLocaleString(uiLocale())}"><span class="tico ${ico === 'MAP' ? '' : ico === 'ALL' ? 'all' : 'j'}">${ico === 'ALL' ? ICON.all : ico}</span>${esc(label)}<span class="badge">${n.toLocaleString(uiLocale())}</span></button></div>`;
+    $('#af-tabs', root).innerHTML = tab(file === null, '', 'ALL', 'Усі файли', rows.length) + [...counts].map(([f, n]) => tab(file === f, f, fileIcon(f)[1], ctx.fileTitle(f), n)).join('');
   };
 
   const renderToolbar = (): void => {

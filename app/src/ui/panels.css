@@ -862,7 +862,8 @@ button.chip .caret{margin-left:5px;vertical-align:middle;position:relative;top:-
 .tp-acts{display:flex;gap:8px;justify-content:flex-end}
 
 /* ---------- the autofill, a mode of the table: the bar over the table and the finds in the cells ---------- */
-.fillbar{flex:none;display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--line);background:var(--accent-soft);font-size:13px;min-width:0;white-space:nowrap}
+.fillbar{flex:none;display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;padding:6px 12px;border-bottom:1px solid var(--line);background:var(--accent-soft);font-size:13px;min-width:0}
+.fillbar>*{white-space:nowrap}
 .fillbar[hidden]{display:none}
 .fillbar .fb-t{font-weight:600;color:var(--accent-text)}
 .fillbar .fb-n{color:var(--mute);overflow:hidden;text-overflow:ellipsis;min-width:0}

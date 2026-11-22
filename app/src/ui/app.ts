@@ -840,7 +840,7 @@ export async function start(root: HTMLElement): Promise<void> {
   }
 
   /* ---------- the autofill: a mode of this table ---------- */
-  const fillN = (file: string): number => fill.rows.reduce((a, r) => a + (r.file === file ? 1 : 0), 0);
+  const fillN = (file: string): number => fill.perFile.get(file) ?? 0;
   let fillPop: HTMLElement | null = null;
   const closeFillPop = (): void => { fillPop?.remove(); fillPop = null; };
   function renderFillBar(): void {
@@ -848,7 +848,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!bar) return;
     bar.hidden = !fill.on;
     if (!fill.on) { bar.innerHTML = ''; return; }
-    const c = fillCounts(), here = s.current && s.current !== GROUP ? fill.rows.filter(r => r.file === s.current).length : 0, files = fillFiles();
+    const c = fillCounts(), here = s.current && s.current !== GROUP ? fillN(s.current) : 0, files = fillFiles();
     bar.innerHTML = `<span class="fb-t">Автозаповнення</span><span class="fb-n" aria-live="polite">${fill.building ? `Шукаю… знайдено ${fill.found.toLocaleString(uiLocale())}` : fill.found ? `Знайдено ${fill.found.toLocaleString(uiLocale())} · у цьому файлі ${here.toLocaleString(uiLocale())}${files.length > 1 ? ` · файлів ${files.length}` : ''}` : 'Нічого заповнити не вдається: перекладіть і надішліть більше рядків'}</span>
       <button class="chip" type="button" id="fb-min" aria-haspopup="true" title="Точність, від якої знайдене береться без питань">Від ${fill.threshold}%${SVG.caret}</button><button class="chip" type="button" id="fb-src" aria-haspopup="true" title="З чого вчиться автозаповнення">Вчитися з: ${fill.drafts ? 'надісланих і чернеток' : 'надісланих'}${SVG.caret}</button>
       <button class="chip${fill.only ? ' on' : ''}" type="button" id="fb-only" aria-pressed="${fill.only}" title="Показати в таблиці лише рядки, для яких є що вписати">Лише з пропозиціями</button><span class="fb-k" title="Клавіші на виділених рядках (виділяйте протягуванням по номерах) або на відкритому рядку"><kbd>+</kbd> вписати <kbd>−</kbd> пропустити</span>${files.length > 1 || (fill.found && !here) ? '<button class="chip" type="button" id="fb-next" title="Відкрити наступний файл, де є що вписати">Наступний файл ›</button>' : ''}
@@ -862,7 +862,8 @@ export async function start(root: HTMLElement): Promise<void> {
     let moved = false;
     await buildFill(ctx, () => {
       // the first file that has a find is opened, when the open one has none
-      if (!moved && fill.rows.length && !fill.rows.some(r => r.file === s.current)) { moved = true; openFile(fill.rows[0]!.file); renderAll(); } else renderAll();
+      // while it is looking only the bar is redrawn (the whole table every few moments made the page lag); the first file that has a find is opened, when the open one has none
+      if (!moved && fill.rows.length && !fillN(s.current ?? '')) { moved = true; openFile(fill.rows[0]!.file); renderAll(); } else renderFillBar();
     });
     renderAll();
   }
@@ -895,12 +896,14 @@ export async function start(root: HTMLElement): Promise<void> {
     const pick = t.closest<HTMLElement>('[data-fsrc]');
     if (pick) { closeFillPop(); const d = pick.dataset.fsrc === 'drafts'; if (d !== fill.drafts) { setDrafts(d); void startFill(); } }
   });
+  let sliderFrame = 0;
   document.addEventListener('input', e => {
     const t = e.target as HTMLInputElement;
     if (t.id !== 'fb-range') return;
     setThreshold(Number(t.value));
     const b = document.getElementById('fb-rv'); if (b) b.textContent = `${fill.threshold}%`;
-    renderAll();
+    // one redraw per frame, however many input events the slider sends
+    if (!sliderFrame) sliderFrame = requestAnimationFrame(() => { sliderFrame = 0; renderAll(); });
   });
   // «−» and «+» in the cell of a find settle that row; pressing the one that is on lets it go (the slider decides again)
   document.addEventListener('click', e => {

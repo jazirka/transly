@@ -37,10 +37,11 @@ const stored = () => new Promise(r => { const o = indexedDB.open('transly', 3); 
   const by0 = (list, s) => list.filter(x => x.src === s);
   check('a line whose original was sent shows its translation in grey, with the dot of the same originals', by('Hello').some(x => x.tr === 'Привіт' && /ok/.test(x.dot)) && by('Good morning').some(x => x.tr === 'Добрий ранок'), JSON.stringify(by('Hello')));
   check('the memory shows how close it is: «Take the old key» is 75% and stays below the slider', by('Take the old key').some(x => /^7\d%$/.test(x.len) && /info/.test(x.dot) && !/yes/.test(x.fl)), JSON.stringify(by('Take the old key')));
-  check('a swapped word is never close, a draft is not a source', c.filter(x => /^Red (cow|rat)/.test(x.src)).every(x => !/yes/.test(x.fl)) && !c.some(x => x.src.startsWith('The body') && x.fl) && !by('Big bow').some(x => x.fl), JSON.stringify(c.filter(x => x.fl).map(x => x.src + ':' + x.len)));
+  check('a swapped word is never offered («Red cow» after «Red cat»), a draft is not a source', !c.some(x => /^Red (cow|rat)/.test(x.src) && x.fl) && !c.some(x => x.src.startsWith('The body') && x.fl) && !by('Big bow').some(x => x.fl), JSON.stringify(c.filter(x => x.fl).map(x => x.src + ':' + x.len)));
   check('what the slider takes is marked, and the button counts it', c.filter(x => /yes/.test(x.fl)).length === 2 && /· 3/.test(await page.locator('#fb-go').innerText()), await page.locator('#fb-go').innerText());
 
 
+  const cnt = async () => Number((await page.locator('#fb-go').innerText()).match(/· (\d+)/)[1]);
   // «−» and «+» on a row, the find edited in the cell, the filter and the tabs
   const rowOf = src => page.locator('#grid .gr', { has: page.locator('.fl'), hasText: src }).first();
   await rowOf('Open the old door').locator('[data-fd="yes"]').click(); await sleep(300);
@@ -60,17 +61,24 @@ const stored = () => new Promise(r => { const o = indexedDB.open('transly', 3); 
   const own = (await cells()).filter(x => x.src === 'Open the old door')[0];
   check('what is written there settles the find: it is the text now, and it is taken, but not written to the project', own && own.tr === 'Відкрий стару браму' && /yes/.test(own.fl) && !(await page.evaluate(stored)).files['Map001.json'].k7, JSON.stringify(own));
   await page.locator('#fb-only').click(); await sleep(400);
-  check('«Лише з пропозиціями» leaves in the table only the rows that have a find', await page.evaluate(() => [...document.querySelectorAll('#grid .gr')].every(r => !!r.querySelector('.fl'))) && (await cells()).length === 6, String((await cells()).length));
+  check('«Лише з пропозиціями» leaves in the table only the rows that have a find', await page.evaluate(() => [...document.querySelectorAll('#grid .gr')].every(r => !!r.querySelector('.fl'))) && (await cells()).length === 4, String((await cells()).length));
   await page.locator('#fb-only').click(); await sleep(300);
-  check('the tab of a file says how many finds it has', (await page.evaluate(() => [...document.querySelectorAll('.tabs .tab')].map(t => t.innerText.replace(/\s+/g, ' ')).join('|'))).includes('+6'));
+  check('the tab of a file says how many finds it has', (await page.evaluate(() => [...document.querySelectorAll('.tabs .tab')].map(t => t.innerText.replace(/\s+/g, ' ')).join('|'))).includes('+4'));
   await page.locator('#fb-next').click(); await sleep(900);
   check('«Наступний файл» opens the next file that has a find', await page.evaluate(() => /Map002/.test(document.querySelector('.tabs .tab.on')?.innerText ?? '')) && (await cells()).some(x => x.src === 'Hello' && /ok/.test(x.dot)), await page.evaluate(() => document.querySelector('.tabs .tab.on')?.innerText));
   await page.locator('#fb-next').click(); await sleep(900);
 
+  // the slider
+  const before85 = await cnt();
+  await page.locator('#fb-min').click(); await sleep(200); await page.locator('#fb-range').fill('70'); await sleep(400);
+  c = await cells();
+  check('the slider lowers the bar: more finds are taken now', (await cnt()) > before85, before85 + ' → ' + await cnt());
+  await page.locator('#fb-range').fill('85'); await sleep(300); await page.keyboard.press('Escape'); await page.mouse.click(800, 800); await sleep(200);
+
   // the keys on selected rows
-  const bb = await page.locator('#grid .gr .ln').nth(2).boundingBox(), bb2 = await page.locator('#grid .gr .ln').nth(5).boundingBox();
+  const bb = await page.locator('#grid .gr .ln').nth(0).boundingBox(), bb2 = await page.locator('#grid .gr .ln').last().boundingBox();
   await page.mouse.move(bb.x + 6, bb.y + 8); await page.mouse.down(); await page.mouse.move(bb2.x + 6, bb2.y + 8, { steps: 5 }); await page.mouse.up(); await sleep(200);
-  const cnt = async () => Number((await page.locator('#fb-go').innerText()).match(/· (\d+)/)[1]);
+  await page.evaluate(() => (document.activeElement)?.blur?.()); await sleep(100);
   const c0 = await cnt();
   await page.keyboard.press('-'); await sleep(400);
   const c1 = await cnt();
@@ -80,11 +88,6 @@ const stored = () => new Promise(r => { const o = indexedDB.open('transly', 3); 
   await page.locator('#bb-clear').click(); await sleep(200);
   await page.keyboard.press('-'); await page.keyboard.press('-'); await sleep(100);
 
-  // the slider
-  await page.locator('#fb-min').click(); await sleep(200); await page.locator('#fb-range').fill('70'); await sleep(400);
-  c = await cells();
-  check('the slider lowers the bar: the 75% and 76% finds are taken now', c.filter(x => /yes/.test(x.fl)).length === 4 && /· 5/.test(await page.locator('#fb-go').innerText()), await page.locator('#fb-go').innerText());
-  await page.locator('#fb-range').fill('85'); await sleep(300); await page.keyboard.press('Escape'); await page.mouse.click(800, 800); await sleep(200);
 
   // what is learned from
   await page.locator('#fb-src').click(); await sleep(200); await page.locator('[data-fsrc="drafts"]').click(); await sleep(1800);

@@ -38,7 +38,7 @@ import { openLinkTool } from './links-dialog';
 import { openTermSyncTool } from './termsync-dialog';
 import { openPluginTexts } from './plugins-dialog';
 import { openActivity } from './activity-dialog';
-import { applyFill, buildFill, fill, fillCellHtml, fillCounts, fillFiles, fillLenHtml, fillOf, setDrafts, setThreshold, stopFill } from './fill-mode';
+import { applyFill, buildFill, fill, fillCellHtml, fillChoice, fillCounts, fillFiles, fillLenHtml, fillOf, fillText, idOf, setDrafts, setThreshold, stopFill } from './fill-mode';
 import { baseName, fileIcon, treeNodes as treeNodesOf } from './tree-nodes';
 import type { TreeNode } from './tree-nodes';
 import { askAnotherGame, openIngestReport } from './ingest-dialog';
@@ -426,7 +426,7 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!v) return [];
     const ents = ctx.entries(v.name);
     const opts = withStatus && s.filters.includes('adv') ? qaOpts() : undefined;
-    const list = v.units.filter(u => inContext(u, ents[u.key]) && (!withStatus || passesStatus(u, ents[u.key], opts)));
+    const list = v.units.filter(u => inContext(u, ents[u.key]) && (!withStatus || passesStatus(u, ents[u.key], opts)) && !(fill.on && fill.only && !fillOf(v.name, u.key)));
     if (s.sort === 'order' || !sorted) return list;
     // Array.sort is stable: rows with the same rank keep the order of the file.
     const rank = (u: Unit): number => {
@@ -780,7 +780,7 @@ export async function start(root: HTMLElement): Promise<void> {
       const on = n === s.current;
       // A tab is short: the game's label (or the file's name); when two open tabs would read the same, the full name.
       const short = v.label || baseName(n), twin = s.open.some(o => o !== n && (s.views.find(x => x.name === o)?.label || baseName(o)) === short);
-      return `<div class="tab ${on ? 'on' : ''}"><button class="tb" data-tab="${esc(n)}" aria-current="${on}" title="${esc(fileTitle(n) + (n.includes('/') ? ' · ' + n : '') + (leftAt(n, v.units) ? ` · ви зупинилися на рядку ${leftAt(n, v.units)}` : ''))}"><span class="tico ${ic === 'map' ? '' : 'j'}">${lab}</span>${esc(twin ? fileTitle(n) : short)}${qa ? `<span class="badge" title="Проблеми QA у файлі">${qa}</span>` : ''}</button><button class="x" data-closetab="${esc(n)}" aria-label="Закрити вкладку ${esc(n)}">✕</button></div>`;
+      return `<div class="tab ${on ? 'on' : ''}"><button class="tb" data-tab="${esc(n)}" aria-current="${on}" title="${esc(fileTitle(n) + (n.includes('/') ? ' · ' + n : '') + (leftAt(n, v.units) ? ` · ви зупинилися на рядку ${leftAt(n, v.units)}` : ''))}"><span class="tico ${ic === 'map' ? '' : 'j'}">${lab}</span>${esc(twin ? fileTitle(n) : short)}${qa ? `<span class="badge" title="Проблеми QA у файлі">${qa}</span>` : ''}${fill.on && fillN(n) ? `<span class="badge fl" title="Автозаповнення знайшло, що вписати">+${fillN(n)}</span>` : ''}</button><button class="x" data-closetab="${esc(n)}" aria-label="Закрити вкладку ${esc(n)}">✕</button></div>`;
     }).join('') + (s.group ? `<div class="tab ${s.current === GROUP ? 'on' : ''}"><button class="tb" data-tab="${GROUP}" aria-current="${s.current === GROUP}" title="${esc(s.group.join(', '))}"><span class="tico j">▦</span>${esc(groupTitle())}</button><button class="x" data-closetab="${GROUP}" aria-label="Закрити групу">✕</button></div>` : '');
     document.querySelector<HTMLElement>('#tabs-host .tab.on')?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
   }
@@ -839,6 +839,7 @@ export async function start(root: HTMLElement): Promise<void> {
   }
 
   /* ---------- the autofill: a mode of this table ---------- */
+  const fillN = (file: string): number => fill.rows.reduce((a, r) => a + (r.file === file ? 1 : 0), 0);
   let fillPop: HTMLElement | null = null;
   const closeFillPop = (): void => { fillPop?.remove(); fillPop = null; };
   function renderFillBar(): void {
@@ -849,6 +850,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const c = fillCounts(), here = s.current && s.current !== GROUP ? fill.rows.filter(r => r.file === s.current).length : 0, files = fillFiles();
     bar.innerHTML = `<span class="fb-t">Автозаповнення</span><span class="fb-n" aria-live="polite">${fill.building ? `Шукаю… знайдено ${fill.found.toLocaleString(uiLocale())}` : fill.found ? `Знайдено ${fill.found.toLocaleString(uiLocale())} · у цьому файлі ${here.toLocaleString(uiLocale())}${files.length > 1 ? ` · файлів ${files.length}` : ''}` : 'Нічого заповнити не вдається: перекладіть і надішліть більше рядків'}</span>
       <button class="chip" type="button" id="fb-min" aria-haspopup="true" title="Точність, від якої знайдене береться без питань">Від ${fill.threshold}%${SVG.caret}</button><button class="chip" type="button" id="fb-src" aria-haspopup="true" title="З чого вчиться автозаповнення">Вчитися з: ${fill.drafts ? 'надісланих і чернеток' : 'надісланих'}${SVG.caret}</button>
+      <button class="chip${fill.only ? ' on' : ''}" type="button" id="fb-only" aria-pressed="${fill.only}" title="Показати в таблиці лише рядки, для яких є що вписати">Лише з пропозиціями</button>${files.length > 1 || (fill.found && !here) ? '<button class="chip" type="button" id="fb-next" title="Відкрити наступний файл, де є що вписати">Наступний файл ›</button>' : ''}
       <span class="fb-sp"></span><button class="btn p" type="button" id="fb-go"${c.goes ? '' : ' disabled'}>Вписати як чернетки · ${c.goes.toLocaleString(uiLocale())}</button><button class="ghost" type="button" id="fb-x" aria-label="Закрити автозаповнення" title="Закрити (Esc)">✕</button>`;
   }
   async function startFill(): Promise<void> {
@@ -859,7 +861,7 @@ export async function start(root: HTMLElement): Promise<void> {
     let moved = false;
     await buildFill(ctx, () => {
       // the first file that has a find is opened, when the open one has none
-      if (!moved && fill.rows.length && !fill.rows.some(r => r.file === s.current)) { moved = true; openFile(fill.rows[0]!.file); } else renderAll();
+      if (!moved && fill.rows.length && !fill.rows.some(r => r.file === s.current)) { moved = true; openFile(fill.rows[0]!.file); renderAll(); } else renderAll();
     });
     renderAll();
   }
@@ -869,6 +871,12 @@ export async function start(root: HTMLElement): Promise<void> {
     if (!fill.on) return;
     if (fillPop && !t.closest('.fb-pop, #fb-min, #fb-src')) closeFillPop();
     if (t.closest('#fb-x')) { endFill(); return; }
+    if (t.closest('#fb-only')) { fill.only = !fill.only; renderAll(); return; }
+    if (t.closest('#fb-next')) {
+      const fs = fillFiles(), at = fs.indexOf(s.current ?? ''), nx = fs[(at + 1) % fs.length];
+      if (nx) { openFile(nx); renderAll(); }
+      return;
+    }
     if (t.closest('#fb-go')) { closeFillPop(); applyFill(ctx); return; }
     const pop = (btn: HTMLElement, html: string): void => {
       const again = fillPop?.dataset.for === btn.id;
@@ -893,6 +901,18 @@ export async function start(root: HTMLElement): Promise<void> {
     const b = document.getElementById('fb-rv'); if (b) b.textContent = `${fill.threshold}%`;
     renderAll();
   });
+  // «−» and «+» in the cell of a find settle that row; pressing the one that is on lets it go (the slider decides again)
+  document.addEventListener('click', e => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>('[data-fd]');
+    if (!b || !fill.on) return;
+    e.stopPropagation(); e.preventDefault();
+    const key = b.closest<HTMLElement>('.gr')?.dataset.key, r = key && s.current && s.current !== GROUP ? fillOf(s.current, key) : undefined;
+    if (!r) return;
+    const id = idOf(r), want = b.dataset.fd === 'no' ? 'no' : 'yes', own = fill.choice.get(id);
+    if (own && (own.take === 'no') === (want === 'no')) fill.choice.delete(id); else fill.choice.set(id, { take: want });
+    renderFillBar();
+    if (fill.only) renderAll(); else rowChanged(key!);
+  }, true);
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && fill.on && !document.querySelector('dialog[open]') && !(e.target as HTMLElement).matches('input, textarea')) { e.preventDefault(); e.stopPropagation(); endFill(); } }, true);
 
   function renderTable(): void {
@@ -1898,7 +1918,9 @@ export async function start(root: HTMLElement): Promise<void> {
     const u = ctx.unit(key);
     if (!cell || !u || cell.querySelector('textarea')) return;
     const ta = el('textarea', 'cell-ed');
-    ta.rows = 2; ta.value = entryOf(u)?.target ?? ''; ta.setAttribute('aria-label', 'Переклад рядка');
+    // a row that has a find opens with the find in it: what is written here settles the find (it is not written to the project before «Вписати»)
+    const fp = fill.on && !entryOf(u)?.target && s.current && s.current !== GROUP ? fillOf(s.current, key) : undefined;
+    ta.rows = 2; ta.value = entryOf(u)?.target ?? (fp ? fillText(fp) : ''); ta.setAttribute('aria-label', 'Переклад рядка');
     // the editor is as tall as its text (up to half the window): the first line is not cut in half and a long text can be read
     const fit = (): void => { ta.style.height = 'auto'; ta.style.height = `${Math.min(ta.scrollHeight + 2, Math.round(window.innerHeight * 0.5))}px`; };
     ta.addEventListener('input', fit);
@@ -1906,6 +1928,10 @@ export async function start(root: HTMLElement): Promise<void> {
     cell.innerHTML = ''; cell.appendChild(ta); fit(); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
     let cancelled = false;
     const save = (): void => {
+      if (fp) {
+        if (!cancelled) { const v = ta.value; fill.choice.set(idOf(fp), !v.trim() ? { take: 'no' } : v === fp.target ? { take: 'yes' } : { take: 'custom', text: v }); renderFillBar(); }
+        return;
+      }
       if (!cancelled && ta.value !== (entryOf(u)?.target ?? '')) {
         // a change of the cell is an action of the journal: Ctrl+Z takes it back (an overwritten draft is not lost)
         const next = edit(entryOf(u), u, ta.value, ctx.stage(), Date.now());

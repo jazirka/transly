@@ -880,3 +880,11 @@ button.chip .caret{margin-left:5px;vertical-align:middle;position:relative;top:-
 .fl.no{text-decoration:line-through;opacity:.6}
 .gr .len .fs{font:12px var(--mono);color:var(--dim)}
 .gr .len .fs.tm{color:var(--info)}
+.gr .tr.fillc{position:relative;padding-right:64px}
+.fl-b{position:absolute;right:8px;top:50%;transform:translateY(-50%);display:flex;gap:4px;opacity:.7}
+.gr:hover .fl-b,.fl-b:focus-within{opacity:1}
+.fb2{width:22px;height:22px;display:grid;place-items:center;border:1px solid var(--b-line);border-radius:var(--b-r);background:none;color:var(--mute);padding:0;cursor:pointer;font:600 14px/1 var(--mono)}
+.fb2:hover{background:var(--hv);color:var(--text)}
+.fb2.m.on{color:var(--bad);border-color:var(--bad);background:rgba(247,84,100,.14)}
+.fb2.p.on{color:var(--ok);border-color:var(--ok);background:rgba(95,184,101,.14)}
+.tab .badge.fl{background:rgba(var(--accent-rgb),.25);color:var(--accent-text)}

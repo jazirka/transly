@@ -32,6 +32,7 @@ export const fill = {
   byId: new Map<string, FillRow>(),
   choice: new Map<string, Choice>(),
   drafts: store('transly.af.drafts') === '1',
+  only: false,
   threshold: Math.min(100, Math.max(50, Number(store('transly.af.min')) || 85)),
 };
 let buildId = 0;
@@ -91,7 +92,7 @@ export async function buildFill(ctx: Ctx, progress: () => void): Promise<void> {
   progress();
 }
 
-export function stopFill(): void { buildId++; fill.on = false; fill.building = false; fill.rows = []; fill.byId = new Map(); fill.choice.clear(); }
+export function stopFill(): void { buildId++; fill.on = false; fill.only = false; fill.building = false; fill.rows = []; fill.byId = new Map(); fill.choice.clear(); }
 
 const WHAT: Record<From, (r: FillRow) => string> = { same: () => 'підставлено з однакового рядка', words: () => 'автозаповнено за словами', tm: r => `підставлено з пам’яті (${r.score}%)` };
 
@@ -117,10 +118,11 @@ export function applyFill(ctx: Ctx): boolean {
   return true;
 }
 
-/** The cell «Переклад» of a row that has a find: the text in grey, with the dot of its source. */
+/** The cell «Переклад» of a row that has a find: the text in grey, with the dot of its source, and «−» / «+» to settle it. */
 export function fillCellHtml(r: FillRow): string {
-  const kind = FROMS.find(f => f.id === r.from)!, taken = fillWrites(r), c = fillChoice(r);
-  return `<span class="fl ${taken ? 'yes' : c?.take === 'no' ? 'no' : ''}" title="${esc(kind.tip)}${r.from === 'tm' ? `: ${r.score}%` : ''}"><i class="dot ${kind.dot}"></i>${esc(fillText(r))}</span>`;
+  const kind = FROMS.find(f => f.id === r.from)!, taken = fillWrites(r), c = fillChoice(r), own = fill.choice.get(idOf(r));
+  const btn = (d: 'no' | 'yes'): string => `<button type="button" class="fb2 ${d === 'no' ? 'm' : 'p'}${own && (d === 'no' ? own.take === 'no' : own.take !== 'no') ? ' on' : ''}" data-fd="${d}" aria-label="${d === 'no' ? 'Не заповнювати' : 'Вписати'}" title="${d === 'no' ? 'Не заповнювати (ще раз — повернути)' : 'Вписати (ще раз — повернути)'}">${d === 'no' ? '−' : '+'}</button>`;
+  return `<span class="fl ${taken ? 'yes' : c?.take === 'no' ? 'no' : ''}" title="${esc(kind.tip)}${r.from === 'tm' ? `: ${r.score}%` : ''}"><i class="dot ${kind.dot}"></i>${esc(fillText(r))}</span><span class="fl-b">${btn('no')}${btn('yes')}</span>`;
 }
 /** The cell «К-сть зн.» of such a row: how close the find is. */
 export const fillLenHtml = (r: FillRow): string => `<span class="fs ${r.from}">${r.from === 'tm' ? `${r.score}%` : r.from === 'same' ? '=' : 'слова'}</span>`;

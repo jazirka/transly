@@ -860,3 +860,23 @@ button.chip .caret{margin-left:5px;vertical-align:middle;position:relative;top:-
 .tp-note{resize:vertical;min-height:44px;background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--text);font:inherit;font-size:12.5px;padding:6px 8px}
 .tp-note:focus{outline:2px solid var(--accent);outline-offset:0}
 .tp-acts{display:flex;gap:8px;justify-content:flex-end}
+
+/* ---------- the autofill, a mode of the table: the bar over the table and the finds in the cells ---------- */
+.fillbar{flex:none;display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--line);background:var(--accent-soft);font-size:13px;min-width:0;white-space:nowrap}
+.fillbar[hidden]{display:none}
+.fillbar .fb-t{font-weight:600;color:var(--accent-text)}
+.fillbar .fb-n{color:var(--mute);overflow:hidden;text-overflow:ellipsis;min-width:0}
+.fillbar .fb-sp{flex:1}
+.fillbar .btn.p{height:var(--b-m)}
+.fb-pop{width:300px;padding:10px 12px}
+.fb-pop .fb-sl{display:flex;align-items:center;gap:8px;white-space:normal}
+.fb-pop .hint{display:block;margin-top:6px;font-size:12px;color:var(--mute);white-space:normal}
+.fb-pop button{display:block;width:100%;text-align:left}
+.gr .tr.fillc{color:var(--mute)}
+.fl{display:inline-flex;align-items:baseline;gap:7px;font-style:italic;color:var(--mute)}
+.fl .dot{width:7px;height:7px;border-radius:50%;flex:none;align-self:center;display:inline-block}
+.fl .dot.ok{background:var(--ok)}.fl .dot.info{background:var(--info)}.fl .dot.bad{background:var(--bad)}
+.fl.yes{color:var(--text);font-style:normal}
+.fl.no{text-decoration:line-through;opacity:.6}
+.gr .len .fs{font:12px var(--mono);color:var(--dim)}
+.gr .len .fs.tm{color:var(--info)}

@@ -38,7 +38,7 @@ import { openLinkTool } from './links-dialog';
 import { openTermSyncTool } from './termsync-dialog';
 import { openPluginTexts } from './plugins-dialog';
 import { openActivity } from './activity-dialog';
-import { openAutofillScreen } from './autofill-screen';
+import { applyFill, buildFill, fill, fillCellHtml, fillCounts, fillFiles, fillLenHtml, fillOf, setDrafts, setThreshold, stopFill } from './fill-mode';
 import { baseName, fileIcon, treeNodes as treeNodesOf } from './tree-nodes';
 import type { TreeNode } from './tree-nodes';
 import { askAnotherGame, openIngestReport } from './ingest-dialog';
@@ -165,6 +165,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
       <div class="view" id="v-table">
         <div class="filters"><div class="fin">${SVG.search}<input class="qin" id="q" placeholder="Фільтр у цьому файлі" aria-label="Фільтр"></div><span class="chipsHost" id="chips1"></span>
           <div class="r"><button class="chip" id="spkbtn">Мовець${SVG.caret}</button><button class="chip" id="lenbtn">Довжина${SVG.caret}</button></div></div>
+        <div class="fillbar" id="fillbar" hidden></div>
         <div class="gridwrap"><div class="bulk" id="bulk"><div class="bulk-in"><b id="bulkn">0</b><span id="bulkt"></span><button id="bb-ok" title="Надіслати вибрані переклади">Надіслати</button><button id="bb-appr" title="Вичитати вибрані переклади (рядки, що ще не надіслано, надсилаються й вичитуються разом)">Вичитати</button><button id="bb-tm" title="Підставити збіг із пам’яті перекладів (від 70%) у порожні вибрані рядки">З пам’яті</button><button id="bb-clear" class="ghost" title="Скасувати вибір" aria-label="Скасувати вибір">✕</button></div></div><div class="grid" id="grid" role="grid" aria-label="Рядки файлу"></div></div>
       </div>
       <div class="view" id="v-focus">${FOCUS_HTML}</div>
@@ -640,6 +641,7 @@ export async function start(root: HTMLElement): Promise<void> {
     const st = shownStatus(ctx, u, e);
     const adv = st !== 'qa' && hasAdvice(u, e, qaOpts());
     const hits = enforced();
+    const fp = fill.on && !e?.target && s.current && s.current !== GROUP ? fillOf(s.current, u.key) : undefined;
     const len = e?.target ? `${displayLength(e.target)}/${displayLength(u.source)}` : '—';
     return `<div class="gr ${sel ? 'sel' : ''} ${chk ? 'chk' : ''}" role="row" tabindex="${sel ? 0 : -1}" aria-selected="${sel}" data-key="${esc(u.key)}">
       <div class="ln" role="gridcell"><span class="num">${n}</span><input type="checkbox" class="rc" ${chk ? 'checked' : ''} aria-label="Вибрати рядок ${n}"></div>
@@ -647,8 +649,8 @@ export async function start(root: HTMLElement): Promise<void> {
       <div role="gridcell"><span class="key" title="${esc(u.key.split(SEP).join(' › '))}">${esc(shortKey(u.key))}</span>${cmIcon(e)}</div>
       <div class="who" role="gridcell">${esc(ctx.speaker(u))}</div>
       <div class="src" role="gridcell" lang="en">${markup(cellText(flow(u.source)), hits)}<span class="skey" aria-hidden="true">${esc(shortKey(u.key))}</span></div>
-      <div class="tr ${e?.target ? '' : 'empty'}" role="gridcell" title="Клікніть, щоб писати прямо тут">${e?.target ? markup(cellText(flow(e.target))) : '—'}</div>
-      <div class="len ${lenCls(u, e)}" role="gridcell" title="Символів у перекладі / в оригіналі">${len}</div></div>`;
+      <div class="tr ${e?.target ? '' : fp ? 'fillc' : 'empty'}" role="gridcell" title="Клікніть, щоб писати прямо тут">${e?.target ? markup(cellText(flow(e.target))) : fp ? fillCellHtml(fp) : '—'}</div>
+      <div class="len ${lenCls(u, e)}" role="gridcell" title="${fp && !e?.target ? 'Наскільки близька пропозиція автозаповнення' : 'Символів у перекладі / в оригіналі'}">${fp && !e?.target ? fillLenHtml(fp) : len}</div></div>`;
   }
   let enforcedCache: { stamp: string; en: string[] } | null = null;
   function enforced(): string[] {
@@ -836,7 +838,65 @@ export async function start(root: HTMLElement): Promise<void> {
     if (first) first.tabIndex = 0;
   }
 
+  /* ---------- the autofill: a mode of this table ---------- */
+  let fillPop: HTMLElement | null = null;
+  const closeFillPop = (): void => { fillPop?.remove(); fillPop = null; };
+  function renderFillBar(): void {
+    const bar = document.getElementById('fillbar');
+    if (!bar) return;
+    bar.hidden = !fill.on;
+    if (!fill.on) { bar.innerHTML = ''; return; }
+    const c = fillCounts(), here = s.current && s.current !== GROUP ? fill.rows.filter(r => r.file === s.current).length : 0, files = fillFiles();
+    bar.innerHTML = `<span class="fb-t">Автозаповнення</span><span class="fb-n" aria-live="polite">${fill.building ? `Шукаю… знайдено ${fill.found.toLocaleString(uiLocale())}` : fill.found ? `Знайдено ${fill.found.toLocaleString(uiLocale())} · у цьому файлі ${here.toLocaleString(uiLocale())}${files.length > 1 ? ` · файлів ${files.length}` : ''}` : 'Нічого заповнити не вдається: перекладіть і надішліть більше рядків'}</span>
+      <button class="chip" type="button" id="fb-min" aria-haspopup="true" title="Точність, від якої знайдене береться без питань">Від ${fill.threshold}%${SVG.caret}</button><button class="chip" type="button" id="fb-src" aria-haspopup="true" title="З чого вчиться автозаповнення">Вчитися з: ${fill.drafts ? 'надісланих і чернеток' : 'надісланих'}${SVG.caret}</button>
+      <span class="fb-sp"></span><button class="btn p" type="button" id="fb-go"${c.goes ? '' : ' disabled'}>Вписати як чернетки · ${c.goes.toLocaleString(uiLocale())}</button><button class="ghost" type="button" id="fb-x" aria-label="Закрити автозаповнення" title="Закрити (Esc)">✕</button>`;
+  }
+  async function startFill(): Promise<void> {
+    if (!s.views.length) { toast('Спершу відкрийте папку гри'); return; }
+    fill.on = true; fill.choice.clear();
+    if (s.mode !== 'table') setMode('table', false);
+    renderAll();
+    let moved = false;
+    await buildFill(ctx, () => {
+      // the first file that has a find is opened, when the open one has none
+      if (!moved && fill.rows.length && !fill.rows.some(r => r.file === s.current)) { moved = true; openFile(fill.rows[0]!.file); } else renderAll();
+    });
+    renderAll();
+  }
+  function endFill(): void { closeFillPop(); stopFill(); renderAll(); }
+  document.addEventListener('click', e => {
+    const t = e.target as HTMLElement;
+    if (!fill.on) return;
+    if (fillPop && !t.closest('.fb-pop, #fb-min, #fb-src')) closeFillPop();
+    if (t.closest('#fb-x')) { endFill(); return; }
+    if (t.closest('#fb-go')) { closeFillPop(); applyFill(ctx); return; }
+    const pop = (btn: HTMLElement, html: string): void => {
+      const again = fillPop?.dataset.for === btn.id;
+      closeFillPop();
+      if (again) return;
+      fillPop = document.createElement('div');
+      fillPop.className = 'pop fb-pop'; fillPop.dataset.for = btn.id; fillPop.innerHTML = html;
+      document.body.appendChild(fillPop);
+      const r = btn.getBoundingClientRect();
+      fillPop.style.left = `${Math.max(8, Math.min(innerWidth - fillPop.offsetWidth - 8, r.left))}px`; fillPop.style.top = `${r.bottom + 6}px`;
+    };
+    const min = t.closest<HTMLElement>('#fb-min'), src = t.closest<HTMLElement>('#fb-src');
+    if (min) { pop(min, `<div class="fb-sl">Вписувати без питань від <input type="range" id="fb-range" min="50" max="100" step="1" value="${fill.threshold}" aria-label="Точність, від якої знайдене береться без питань"><b id="fb-rv">${fill.threshold}%</b></div><p class="hint">Однакові оригінали мають 100%, збіги пам’яті — свою точність, слова — 60%. Що нижче, те лишається сірим, поки ви не вирішите.</p>`); return; }
+    if (src) { pop(src, `<div class="group">Вчитися з</div><button type="button" data-fsrc="sent" class="${fill.drafts ? '' : 'on'}">Надісланих і вичитаних<span class="hint">надійніше</span></button><button type="button" data-fsrc="drafts" class="${fill.drafts ? 'on' : ''}">Надісланих і чернеток<span class="hint">більше знайденого, але чернетка може бути недоробленою</span></button>`); return; }
+    const pick = t.closest<HTMLElement>('[data-fsrc]');
+    if (pick) { closeFillPop(); const d = pick.dataset.fsrc === 'drafts'; if (d !== fill.drafts) { setDrafts(d); void startFill(); } }
+  });
+  document.addEventListener('input', e => {
+    const t = e.target as HTMLInputElement;
+    if (t.id !== 'fb-range') return;
+    setThreshold(Number(t.value));
+    const b = document.getElementById('fb-rv'); if (b) b.textContent = `${fill.threshold}%`;
+    renderAll();
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && fill.on && !document.querySelector('dialog[open]') && !(e.target as HTMLElement).matches('input, textarea')) { e.preventDefault(); e.stopPropagation(); endFill(); } }, true);
+
   function renderTable(): void {
+    renderFillBar();
     const v = ctx.view();
     const grid = $('#grid');
     $('#chips1').innerHTML = chipsHtml('1');
@@ -1420,7 +1480,6 @@ export async function start(root: HTMLElement): Promise<void> {
     merge: source => { closeMerge = openMergeScreen(ctx, source, () => { closeMerge = null; adopt(); }); },
   };
   let closeMerge: (() => void) | null = null;
-  let closeFill: (() => void) | null = null;
   function openBranchMenu(): void {
     const pop = $('#brpop'), btn = $('#br-btn');
     if (!pop.hidden) { closeBranchMenu(); return; }
@@ -1665,7 +1724,7 @@ export async function start(root: HTMLElement): Promise<void> {
   const MENUS: Record<string, MenuItem[]> = {
     'Файл': [{ t: 'Відкрити папку гри…', fn: () => void openFolder() }, { t: 'Відкрити файли або вставити JSON…', fn: openImportDlg }, '-', { t: 'Зібрати…', fn: doBuild }, { t: 'Запустити вибране', fn: runSelected, sc: 'F5' }, '-', { t: 'Розширення…', fn: () => openExt() }, { t: 'Налаштування…', fn: () => openSettingsDlg() }],
     'Перехід': [{ t: 'Наступний рядок без перекладу', fn: () => jump('untranslated', 1), sc: 'Alt+⇧+↓' }, { t: 'Наступна помилка QA', fn: () => jump('error', 1), sc: 'F8' }, { t: 'Наступна порада', fn: () => jump('advice', 1) }, { t: 'Наступний на вичитку', fn: () => jump('unreviewed', 1) }, { t: 'Наступний зі зміненим оригіналом', fn: () => jump('sourceChanged', 1) }, '-', { t: 'Пошук скрізь…', fn: openSearch, sc: 'Ctrl+K' }],
-    'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Оновити за глосарієм…', fn: () => openTermSyncTool(ctx) }, { t: 'Автозаповнення…', fn: () => { closeFill?.(); closeFill = openAutofillScreen(ctx, () => { closeFill = null; renderAll(); }); } }, { t: 'Злити гілку…', fn: () => chooseMerge(branchActions) }, { t: 'Активність…', fn: () => openActivity(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенесення рядків…', fn: () => openWrapTool(ctx, { wrapFile }) }, { t: 'Правила QA…', fn: () => openQaRules(ctx) }],
+    'Інструменти': [{ t: 'Визначити мовців…', fn: () => openSpeakers(ctx) }, { t: 'Знайти й замінити…', fn: () => openFindReplace(ctx) }, { t: 'Оновити за глосарієм…', fn: () => openTermSyncTool(ctx) }, { t: 'Автозаповнення…', fn: () => startFill() }, { t: 'Злити гілку…', fn: () => chooseMerge(branchActions) }, { t: 'Активність…', fn: () => openActivity(ctx) }, { t: 'Тексти плагінів…', fn: () => openPluginTexts(ctx, setPluginCommands) }, { t: 'Перенесення рядків…', fn: () => openWrapTool(ctx, { wrapFile }) }, { t: 'Правила QA…', fn: () => openQaRules(ctx) }],
   };
   /** The menu of a group: the fixed items, and under «Інструменти» the commands of the plugins that work (the name of the plugin is where a shortcut would be). */
   const menuOf = (g: string): MenuItem[] => {

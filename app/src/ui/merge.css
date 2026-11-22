@@ -88,19 +88,7 @@
 .mg-grid .gr{content-visibility:visible;contain:none}
 .mg-grid .gr .tr.edc{align-self:stretch}
 
-/* ===== the autofill screen (the same table as the merge screen, with its own columns) ===== */
-.mgx.af .mg-grid{--cols:34px 22px 112px minmax(120px,1fr) minmax(150px,1fr) minmax(180px,1.3fr) 70px}
-.mgx.af .mg-tb{display:flex;flex-direction:column;gap:6px}
-.mg-tb .af-opts{padding-top:0}
-.af-sl{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--mute);white-space:nowrap}
-.af-sl input[type=range]{width:120px;accent-color:var(--accent)}
-.af-sl b{color:var(--text);font-weight:600;min-width:34px}
-.af-sep{flex:1}
-.af-lb{font-size:12.5px;color:var(--mute)}
-.af-sc{font:600 11.5px var(--mono);color:var(--info);margin-right:4px}
-.mg-grid .gr .tr.res.yes{box-shadow:inset 2px 0 0 var(--ok)}
-.chip .sd{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:0}
-.chip .sd.ok{background:var(--ok)}.chip .sd.info{background:var(--info)}.chip .sd.bad{background:var(--bad)}
+.tico.all,.node .ic.all{background:none;color:var(--mute);display:inline-grid;place-items:center}
 
 /* the list of files of these screens is a card, as the files of the project in the left panel */
 .mg-files{width:268px;padding:8px 0 0 8px;gap:8px;border-right:0}
@@ -113,28 +101,3 @@
 .mg-files .node .rd{display:inline-block;margin-left:6px;vertical-align:1px}
 .mg-sum{border-top:0;padding:4px 12px 10px}
 
-/* the autofill screen as the table of the project: an island with the tabs of the files, the filters and the table */
-.mgx.af .mg-work{margin:8px;border:1px solid var(--line);border-radius:var(--r3);background:rgba(36,38,41,.6);overflow:hidden}
-.mgx.af .mg-work .tabs{flex:none}
-.mgx.af .mg-tb{padding:8px 12px}
-.mgx.af .mg-tb .filters{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;min-width:0}
-.mgx.af .mg-tb .filters .r{margin-left:auto;display:flex;gap:8px}
-.mgx.af .mg-tb .chipsHost{display:flex;gap:8px;min-width:0}
-.mgx.af .mg-grid{--cols:34px 28px 110px minmax(180px,1fr) minmax(190px,1.1fr) minmax(160px,.8fr) 70px}
-.mgx.af .mg-grid .gr{height:52px;min-height:52px;border-bottom:1px solid #2a2c30}
-.mgx.af .mg-grid .gr>div{white-space:normal;line-height:1.4;display:flex;align-items:center;padding:4px 8px;overflow:hidden}
-.mgx.af .mg-grid .gr>.src,.mgx.af .mg-grid .gr>.tr{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;align-content:center}
-.mgx.af .mg-grid .gr>.st{justify-content:center}
-.mgx.af .mg-grid .gr .tr.empty{color:var(--dim)}
-.mgx.af .mg-grid .gr .tr.fnd{color:var(--mute)}
-.mgx.af .mg-grid .cell-ed{height:48px}
-.mgx.af .mg-grid .gh{height:26px}
-.af-pop{width:300px;padding:10px 12px}
-.af-pop .af-sl{display:flex;align-items:center;gap:8px;white-space:normal}
-.af-pop .hint{display:block;margin-top:6px;font-size:12px;color:var(--mute);white-space:normal}
-.af-pop button{display:block;width:100%;text-align:left}
-.mgx.af .mg-tb .filters .fin{order:0;min-width:240px;flex:0 1 280px}
-.mgx.af .mg-tb .filters .chipsHost{order:1}
-.mgx.af .mg-tb .filters .r{order:2;margin-left:auto}
-.mgx.af .mg-grid .gr .key{line-height:1.4}
-.tico.all,.node .ic.all{background:none;color:var(--mute);display:inline-grid;place-items:center}

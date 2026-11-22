@@ -1,4 +1,4 @@
-import { pct, sceneTitle, statsOf } from '../core';
+import { pct, sceneTitle, statsOf, uiLocale } from '../core';
 import type { SceneInfo } from '../core';
 import { $, CRUMB, esc, plural } from './dom';
 import { pagesPrefs } from './pages';
@@ -35,10 +35,12 @@ function item(ctx: Ctx, file: string, sc: SceneInfo, current: boolean): string {
   const st = statsOf(sc.units, ctx.entries(file));
   const pc = pct(st.translated, st.total);
   const state = st.approved === st.total ? 'appr' : st.translated === st.total ? 'done' : st.translated ? 'draft' : 'new';
-  return `<button class="sc-item ${current ? 'cur' : ''}" type="button" data-scene="${esc(sc.id)}" ${current ? 'aria-current="true"' : ''} title="${esc(sceneTitle(sc))}: перекладено ${st.translated} із ${st.total}, вичитано ${st.approved}">
-    <span class="sd ${state}" aria-hidden="true"></span>
-    <span class="sc-t">${esc(sceneTitle(sc))}</span>
-    <span class="sc-n">${st.translated}/${st.total}</span>
+  // the same row as a file of the tree: a mark, the name, the number of lines, the percent and the bar
+  return `<button class="node sc-item ${current ? 'cur' : ''}" type="button" data-scene="${esc(sc.id)}" ${current ? 'aria-current="true"' : ''} title="${esc(sceneTitle(sc))}: перекладено ${st.translated} із ${st.total}, вичитано ${st.approved}">
+    <span class="ic sc ${state}" aria-hidden="true"><svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M5 3.2v9.6L12.6 8z"/></svg></span>
+    <span class="nm sc-t">${esc(sceneTitle(sc))}</span>
+    <span class="mem" title="Рядків: ${st.total}">${st.total.toLocaleString(uiLocale())}</span>
+    <span class="pc ${pc === 100 ? 'full' : ''}">${pc}%</span>
     <span class="mini" aria-hidden="true"><i class="${st.approved === st.total ? 'f' : ''}" style="width:${pc}%"></i></span>
   </button>`;
 }

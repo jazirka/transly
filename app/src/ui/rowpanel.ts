@@ -16,15 +16,15 @@ import type { Ctx } from './state';
  */
 
 /** One section: a folding header and its body (the ids are written out so a test can find them). */
-const sec = (id: string, title: string, body: string, extra = ''): string => `<section class="pn-sec" data-sec="${id}"><button class="pn-h" type="button" data-pn="${id}" aria-expanded="true"><span class="pn-c" aria-hidden="true">▾</span><span>${title}</span>${extra}</button>${body}</section>`;
+const sec = (id: string, title: string, body: string, extra = ''): string => `<section class="pn-sec" data-sec="${id}"><button class="pn-h" type="button" data-pn="${id}" aria-expanded="true"><span class="pn-c" aria-hidden="true">▾</span><span>${title}</span>${extra}</button><button class="pn-x" type="button" data-pnx="${id}" aria-label="Сховати розділ «${title}»" title="Сховати розділ">—</button>${body}</section>`;
 
 /** Static markup of the panel (the discussion keeps its own field so what is typed in it survives redraws). */
 export const ROW_PANEL_HTML = ['<div class="pn-empty-all hint">Оберіть рядок</div>',
   sec('ac', 'Активність', '<div class="pn-b"><div class="act" id="hist-list"></div></div>'),
   sec('th', 'Пов’язане', '<div class="pn-b" id="pn-th"></div>'),
   sec('cm', 'Обговорення', `<div class="pn-b" id="pn-cm"><div id="cm-list" class="cm-list"></div>
-    <div class="cm-new"><textarea class="cmin" id="cm-in" placeholder="Нове обговорення цього рядка…" aria-label="Новий коментар"></textarea>
-    <div class="actions" style="margin-top:0"><button class="btn" id="cm-add">Коментувати</button><span class="hint">Ctrl+Enter</span></div></div></div>`, '<span class="cnt" id="pn-cm-n" hidden>0</span>'),
+    <div class="cm-new"><div class="cm-box"><textarea class="cmin" id="cm-in" rows="2" placeholder="Написати про цей рядок…" aria-label="Новий коментар"></textarea>
+    <div class="cm-bar"><span class="hint">Ctrl+Enter</span><button class="btn p" id="cm-add">Коментувати</button></div></div></div></div>`, '<span class="cnt" id="pn-cm-n" hidden>0</span>'),
 ].join('');
 
 /** The three tabs of the panel, on the rail beside it: the activity of the row, what is related to it, and its discussion. */

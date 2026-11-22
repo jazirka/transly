@@ -492,6 +492,12 @@ export function sideClick(ctx: Ctx, t: HTMLElement): boolean {
     if (s.phone) { s.sideOn = ['panel']; } else { s.sideOn = any ? ['panel'] : []; s.sideTouched = true; }
     ctx.render(); return true;
   }
+  const px = t.closest<HTMLElement>('[data-pnx]');
+  if (px) {
+    // the × of a card: switches off its tab, as the rail's button does; the last one folds the panel to the rail
+    const any = toggleRowTab(px.dataset.pnx === 'cm' ? 'cm' : px.dataset.pnx === 'ac' ? 'act' : 'rel', false);
+    s.sideOn = any ? ['panel'] : []; s.sideTouched = true; ctx.render(); return true;
+  }
   if (t.closest('#rp-close')) { s.sideOn = []; s.sideTouched = true; ctx.render(); return true; }
   if (qaClick(ctx, t)) return true;
   if (!t.closest('.fs')) return false;

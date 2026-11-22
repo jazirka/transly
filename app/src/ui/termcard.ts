@@ -1,4 +1,4 @@
-import { $ } from './dom';
+import { $, toast } from './dom';
 import { cardHtml, termView } from './hintcards';
 import { clearCardLinks, pinWords } from './links';
 import type { Ctx } from './state';
@@ -120,7 +120,17 @@ export function wireTermCard(ctx: Ctx, act: CardActions): void {
     // a click on a term or a code of the original puts it into the translation at once (after the last character); its card is the hover, not the click
     if (w && !w.el.closest('.te-layer') && (w.kind === 'code' || w.kind === 'term')) {
       const text = w.kind === 'code' ? w.key : ctx.s.saved.terms.find(t => t.en.trim().toLowerCase() === w.key.trim().toLowerCase())?.uk ?? '';
-      if (text && ctx.s.cur) { e.preventDefault(); hideTermCard(); act.insert(text); return; }
+      if (text && ctx.s.cur) {
+        e.preventDefault(); hideTermCard();
+        // a term that the translation has already is not written a second time (as many times as it stands in the original, no more)
+        if (w.kind === 'term') {
+          const key = CSS.escape(w.key);
+          const inSrc = [...document.querySelectorAll<HTMLElement>(`#f-src [data-hc="term"][data-hk="${key}"]`)].filter(x => (x.dataset.part ?? '0') === '0').length;
+          const inTr = [...document.querySelectorAll<HTMLElement>(`#te-layer mark[data-hc="term"][data-hk="${key}"]`)].filter(x => (x.dataset.part ?? '0') === '0').length;
+          if (inTr > 0 && inTr >= inSrc) { toast('Цей термін уже є в перекладі'); return; }
+        }
+        act.insert(text); return;
+      }
     }
     if (w && !w.el.closest('.te-layer')) { e.preventDefault(); if (shown?.anchor === w.el) hideTermCard(); else showCard(ctx, w.el, w.kind, w.key); return; }
     if (!target.closest('#termcard, [data-th="card"], [data-th="name"]')) hideTermCard();

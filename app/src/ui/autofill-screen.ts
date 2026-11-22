@@ -2,7 +2,7 @@ import { diffWords, edit, learnWords, plausible, proposals, uiLocale } from '../
 import type { RowChange, Unit } from '../core';
 import { $, esc, plural, toast } from './dom';
 import { oneLine } from './hintcards';
-import { screenTreeHtml } from './tree-nodes';
+import { fileIcon, screenTreeHtml } from './tree-nodes';
 import { undoToast } from './undo-toast';
 import type { Ctx } from './state';
 
@@ -31,7 +31,7 @@ const FROMS: { id: From; label: string; dot: string; tip: string }[] = [
   { id: 'tm', label: 'З пам’яті', dot: 'info', tip: 'збіг у пам’яті перекладів' },
   { id: 'words', label: 'За словами', dot: 'bad', tip: 'складено зі слів перекладених рядків' },
 ];
-const RH = 36;
+const RH = 52;
 const idOf = (r: { file: string; key: string }): string => `${r.file}\u0001${r.key}`;
 const store = (k: string, v?: string): string | null => { try { if (v !== undefined) localStorage.setItem(k, v); return localStorage.getItem(k); } catch { return null; } };
 
@@ -59,15 +59,30 @@ export function openAutofillScreen(ctx: Ctx, onClose: () => void): () => void {
   };
 
   // ---------- the pieces of the screen ----------
+  // a small popover under a button of the filters (closes on an outside click or Esc)
+  let pop: HTMLElement | null = null;
+  const closePop = (): void => { pop?.remove(); pop = null; };
+  const popOver = (btn: HTMLElement, html: string): void => {
+    const again = pop && pop.dataset.for === btn.id;
+    closePop();
+    if (again) return;
+    pop = document.createElement('div');
+    pop.className = 'pop af-pop'; pop.dataset.for = btn.id; pop.innerHTML = html;
+    root.appendChild(pop);
+    const r = btn.getBoundingClientRect();
+    pop.style.left = `${Math.max(8, Math.min(window.innerWidth - pop.offsetWidth - 8, r.right - pop.offsetWidth))}px`; pop.style.top = `${r.bottom + 6}px`;
+  };
+  const onDocClick = (e: MouseEvent): void => { if (pop && !(e.target as HTMLElement).closest('.af-pop, #af-bt-min, #af-bt-src')) closePop(); };
+  document.addEventListener('click', onDocClick);
   const root = document.createElement('div');
   root.className = 'mgx af';
   root.setAttribute('role', 'region');
   root.setAttribute('aria-label', 'Автозаповнення');
   root.innerHTML = `<div class="mg-shell"><div class="mg-row">
       <div class="mg-files"><div class="mg-card"><div class="mg-ph"><span class="ttl">Файли з пропозиціями</span></div><div class="mg-tree" id="mg-tree" role="tree" aria-label="Файли з пропозиціями"></div></div><div class="mg-sum" id="mg-sum" aria-live="polite"></div></div>
-      <div class="mg-work"><div class="mg-tb" id="mg-tb"></div>
+      <div class="mg-work"><div class="tabs"><span class="tabs-host" id="af-tabs" role="tablist" aria-label="Файли з пропозиціями"></span></div><div class="mg-tb" id="mg-tb"></div>
         <div class="grid mg-grid" role="grid" aria-label="Порожні рядки, які можна заповнити">
-          <div class="gh" role="row"><div></div><div></div><div class="s">Файл · рядок</div><div>Оригінал · EN</div><div>Знайдено</div><div>Результат · UK</div><div style="justify-content:flex-end;border-right:0">Рішення</div></div>
+          <div class="gh" role="row"><div role="columnheader"></div><div role="columnheader" class="s" title="Джерело пропозиції"><span class="vh">Джерело</span></div><div class="s" role="columnheader">Ключ</div><div role="columnheader">Оригінал · EN</div><div class="s" role="columnheader">Переклад · UK</div><div class="s" role="columnheader">Знайдено</div><div class="s" role="columnheader" style="justify-content:flex-end;border-right:0">Рішення</div></div>
           <div class="mg-scroll" id="mg-scroll"><div class="mg-rows" id="mg-rows"></div></div>
           <div class="mg-edge" id="mg-edge" hidden>↓ таблиця прокручується, поки мишу притиснуто до краю</div>
         </div><div class="mg-bub" id="mg-bub" hidden></div></div></div>
@@ -167,13 +182,13 @@ export function openAutofillScreen(ctx: Ctx, onClose: () => void): () => void {
       return `<button type="button" class="db ${take === 'no' ? 'm' : 'p'}${on ? ' on' : ''}" data-d="${take}" aria-pressed="${on}" aria-label="${take === 'no' ? 'Не заповнювати' : 'Вписати'}" title="${take === 'no' ? 'Не заповнювати' : 'Вписати'}">${take === 'no' ? ICON.minus : ICON.plus}</button>`;
     };
     return `<div class="gr${selected.has(id) ? ' sel' : ''}${active === id ? ' mg-act' : ''}${i % 2 ? ' z' : ''}${editing === id ? ' mg-ed' : ''}" role="row" data-id="${esc(id)}" data-i="${i}" style="top:${i * RH}px" aria-selected="${selected.has(id)}">
-      <div class="ln"><span>${i + 1}</span></div>
-      <div class="dot0"><i class="dot ${kind.dot}" title="${esc(kind.tip)}"></i></div>
-      <div class="key" title="${esc(r.key)}">${esc(ctx.fileTitle(r.file))} · ${u?.n ?? '…'}</div>
-      <div class="src" lang="en">${srcHtml(r)}</div>
-      <div class="tr">${marks(r)}</div>
-      <div class="tr res${editing === id ? ' edc' : ''}${d && d.take !== 'no' ? ' yes' : ''}" data-edit title="Клікніть, щоб писати прямо тут">${resCell}</div>
-      <div class="dec">${btn('no')}${btn('yes')}</div></div>`;
+      <div class="ln" role="gridcell"><span class="num">${i + 1}</span></div>
+      <div class="st" role="gridcell"><i class="dot ${kind.dot}" title="${esc(kind.tip)}"></i></div>
+      <div role="gridcell"><span class="key" title="${esc(r.key)}">${esc(ctx.fileTitle(r.file))} · ${u?.n ?? '…'}</span></div>
+      <div class="src" role="gridcell" lang="en">${srcHtml(r)}</div>
+      <div class="tr res${editing === id ? ' edc' : ''}${d && d.take !== 'no' ? ' yes' : ''}${!d || d.take === 'no' ? ' empty' : ''}" role="gridcell" data-edit title="Клікніть, щоб писати прямо тут">${resCell}</div>
+      <div class="tr fnd" role="gridcell">${marks(r)}</div>
+      <div class="dec" role="gridcell">${btn('no')}${btn('yes')}</div></div>`;
   };
 
   const paintSel = (): void => {
@@ -207,17 +222,20 @@ export function openAutofillScreen(ctx: Ctx, onClose: () => void): () => void {
     $('#mg-sum', root).innerHTML = `<div class="mg-fh" style="padding:0 0 4px">ПІДСУМОК</div><div class="sr"><span>Вписати</span><b>${c.goes.toLocaleString(uiLocale())}</b></div><div class="sr"><span>Пропустити</span><b>${c.no.toLocaleString(uiLocale())}</b></div><div class="sr"><span>Без рішення</span><b class="${c.pending ? 'bad' : ''}">${c.pending.toLocaleString(uiLocale())}</b></div>${building ? `<div class="sr"><span>Шукаю в пам’яті…</span><b>${found.toLocaleString(uiLocale())}</b></div>` : ''}`;
   };
 
+  const renderTabs = (): void => {
+    const counts = new Map<string, number>();
+    for (const r of rows) counts.set(r.file, (counts.get(r.file) ?? 0) + 1);
+    const tab = (on: boolean, f: string, ico: string, label: string, n: number): string => `<div class="tab ${on ? 'on' : ''}" role="tab" aria-selected="${on}"><button class="tb" type="button" data-f="${esc(f)}" aria-current="${on}" title="${esc(label)}: ${n.toLocaleString(uiLocale())}"><span class="tico ${ico === 'MAP' ? '' : 'j'}">${ico}</span>${esc(label)}<span class="badge">${n.toLocaleString(uiLocale())}</span></button></div>`;
+    $('#af-tabs', root).innerHTML = tab(file === null, '', '▤', 'Усі файли', rows.length) + [...counts].map(([f, n]) => tab(file === f, f, fileIcon(f)[1], ctx.fileTitle(f), n)).join('');
+  };
+
   const renderToolbar = (): void => {
     const n = (f: From): number => rows.filter(r => r.from === f).length;
     const chips = FROMS.filter(f => n(f.id)).map(f => `<button type="button" class="chip${filters.has(f.id) ? ' on' : ''}" data-chip="${f.id}" aria-pressed="${filters.has(f.id)}"><i class="sd ${f.dot}"></i>${esc(f.label)} · ${n(f.id).toLocaleString(uiLocale())}</button>`).join('');
     const tb = $('#mg-tb', root);
     const had = document.activeElement?.id === 'mg-q';
-    tb.innerHTML = `<div class="filters"><div class="fin">${ICON.search}<input class="qin" id="mg-q" placeholder="Фільтр у пропозиціях" aria-label="Фільтр у пропозиціях" value="${esc(query)}" autocomplete="off"></div>${chips}
-      <button type="button" class="chip${words ? ' on' : ''}" id="mg-words" aria-pressed="${words}">Слова${words ? ' ✓' : ''}</button></div>
-      <div class="filters af-opts"><label class="af-sl">Вписувати без питань від <input type="range" id="af-min" min="50" max="100" step="1" value="${threshold}" aria-label="Точність, від якої пропозиція береться без питань"><b id="af-minv">${threshold}%</b></label>
-      <span class="af-sep"></span><span class="af-lb">Вчитися з</span>
-      <button type="button" class="chip${drafts ? '' : ' on'}" data-src="sent" aria-pressed="${!drafts}" title="Лише надіслані й вичитані рядки: пропозиції надійніші">Надісланих</button>
-      <button type="button" class="chip${drafts ? ' on' : ''}" data-src="drafts" aria-pressed="${drafts}" title="І чернеток теж: пропозицій більше, але вони можуть бути недоробленими">Надісланих і чернеток</button></div>`;
+    tb.innerHTML = `<div class="filters"><div class="fin">${ICON.search}<input class="qin" id="mg-q" placeholder="Фільтр у пропозиціях" aria-label="Фільтр у пропозиціях" value="${esc(query)}" autocomplete="off"></div><span class="chipsHost">${chips}</span>
+      <div class="r"><button class="chip${threshold < 100 ? ' on' : ''}" type="button" id="af-bt-min" aria-haspopup="true" title="Точність, від якої пропозиція береться без питань">Від ${threshold}%<svg class="caret" viewBox="0 0 10 10"><path d="M2 3.6L5 6.6l3-3"/></svg></button><button class="chip${drafts ? ' on' : ''}" type="button" id="af-bt-src" aria-haspopup="true" title="З чого вчиться автозаповнення">Вчитися з: ${drafts ? 'надісланих і чернеток' : 'надісланих'}<svg class="caret" viewBox="0 0 10 10"><path d="M2 3.6L5 6.6l3-3"/></svg></button></div></div>`;
     if (had) { const q = $('#mg-q', tb) as HTMLInputElement; q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
   };
 
@@ -228,7 +246,7 @@ export function openAutofillScreen(ctx: Ctx, onClose: () => void): () => void {
       <button type="button" class="b p l" id="mg-go"${c.goes ? '' : ' disabled'}>Вписати як чернетки · ${c.goes.toLocaleString(uiLocale())}</button>`;
   };
 
-  const renderAll = (): void => { refilter(); renderToolbar(); renderTree(); renderSum(); renderRows(); renderBand(); };
+  const renderAll = (): void => { refilter(); renderTabs(); renderToolbar(); renderTree(); renderSum(); renderRows(); renderBand(); };
   const afterDecision = (): void => { renderTree(); renderSum(); renderRows(); renderBand(); };
 
   // ---------- deciding ----------
@@ -320,9 +338,10 @@ export function openAutofillScreen(ctx: Ctx, onClose: () => void): () => void {
     if (f) { file = f.dataset.f || null; selected.clear(); anchor = -1; scroll.scrollTop = 0; renderAll(); return; }
     const chip = t.closest<HTMLElement>('[data-chip]');
     if (chip) { const c = chip.dataset.chip as From; if (filters.has(c)) filters.delete(c); else filters.add(c); scroll.scrollTop = 0; renderAll(); return; }
+    if (t.closest('#af-bt-min')) { popOver(t.closest<HTMLElement>('#af-bt-min')!, `<div class="af-sl">Вписувати без питань від <input type="range" id="af-min" min="50" max="100" step="1" value="${threshold}" aria-label="Точність, від якої пропозиція береться без питань"><b id="af-minv">${threshold}%</b></div><p class="hint">Однакові оригінали мають 100%, збіги пам’яті — свою точність, слова — 60%. Що нижче — лишається сірим, поки ви не вирішите.</p>`); return; }
+    if (t.closest('#af-bt-src')) { popOver(t.closest<HTMLElement>('#af-bt-src')!, `<div class="group">Вчитися з</div><button type="button" data-src="sent" class="${drafts ? '' : 'on'}">Надісланих і вичитаних<span class="hint">надійніше</span></button><button type="button" data-src="drafts" class="${drafts ? 'on' : ''}">Надісланих і чернеток<span class="hint">більше пропозицій, але чернетка може бути недоробленою</span></button>`); return; }
     const src = t.closest<HTMLElement>('[data-src]');
-    if (src) { const d2 = src.dataset.src === 'drafts'; if (d2 !== drafts) { drafts = d2; store('transly.af.drafts', d2 ? '1' : '0'); choice.clear(); selected.clear(); void build(); } return; }
-    if (t.closest('#mg-words')) { words = !words; renderToolbar(); renderRows(); return; }
+    if (src) { closePop(); const d2 = src.dataset.src === 'drafts'; if (d2 !== drafts) { drafts = d2; store('transly.af.drafts', d2 ? '1' : '0'); choice.clear(); selected.clear(); void build(); } return; }
     if (t.closest('#mg-go')) { doFill(); return; }
     const res = t.closest<HTMLElement>('.res');
     if (res && !moved && !t.closest('textarea')) { const row = res.closest<HTMLElement>('.gr'); if (row) startEdit(row.dataset.id!); }
@@ -392,6 +411,8 @@ export function openAutofillScreen(ctx: Ctx, onClose: () => void): () => void {
     if (!root.isConnected) return;
     buildId++; stopAuto();
     document.removeEventListener('keydown', onKey, true);
+    document.removeEventListener('click', onDocClick);
+    closePop();
     document.removeEventListener('mousemove', onMove);
     document.removeEventListener('mouseup', onUp);
     window.removeEventListener('resize', onResize);

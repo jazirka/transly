@@ -27,12 +27,14 @@ const stored = () => new Promise(r => { const o = indexedDB.open('transly', 3); 
   await page.evaluate(put, { text: JSON.stringify(project), snapshot: { 'Map001.json': rows } }); await page.reload(); await sleep(1300);
   await page.locator('[data-m="edit"]').click(); await sleep(300);
   const open = async () => { await page.locator('#hamb').click(); await sleep(250); await page.getByText('Інструменти', { exact: true }).first().click().catch(() => {}); await sleep(250); await page.getByText('Автозаповнення…').first().click(); await sleep(1500); };
-  const list = () => page.evaluate(() => [...document.querySelectorAll('.mgx.af .gr')].map(r => ({ src: r.querySelector('.src').innerText, found: r.querySelector('.tr').innerText.replace(/\s+/g, ' '), res: r.querySelector('.res').innerText.replace(/\s+/g, ' '), dot: r.querySelector('.dot').className, yes: r.querySelector('.res').classList.contains('yes') })));
+  const list = () => page.evaluate(() => [...document.querySelectorAll('.mgx.af .gr')].map(r => ({ src: r.querySelector('.src').innerText, found: r.querySelector('.tr.fnd').innerText.replace(/\s+/g, ' '), res: r.querySelector('.res').innerText.replace(/\s+/g, ' '), dot: r.querySelector('.dot').className, yes: r.querySelector('.res').classList.contains('yes') })));
   await open();
 
   check('the screen takes the place of the work area; the top bar says «Автозаповнення» and has a way out', await page.evaluate(() => !!document.querySelector('.mgx.af') && /Автозаповнення/.test(document.getElementById('mcap').textContent) && !!document.getElementById('mg-close')));
   let l = await list();
   const by = s => l.filter(x => x.src.trim() === s);
+  check('the right side is the island of the table of the project: the tabs of the files, the filter, the table with Ключ, Оригінал and Переклад', await page.evaluate(() => document.querySelectorAll('.mgx.af .tabs .tab').length === 2 && !!document.querySelector('.mgx.af .filters .qin') && [...document.querySelectorAll('.mgx.af .gh > div')].map(x => x.textContent.trim()).join('|').includes('Ключ|Оригінал · EN|Переклад · UK')));
+  check('the left side is the tree of the files, as in the left panel: the card, the folders, the badge, the percent and its bar', await page.evaluate(() => !!document.querySelector('.mgx.af .mg-card .mg-ph') && !!document.querySelector('.mgx.af .node.dir[data-dir="data/maps"]') && !!document.querySelector('.mgx.af .node .ic.map') && !!document.querySelector('.mgx.af .node .pc') && !!document.querySelector('.mgx.af .node .mini')));
   check('rows with an original that was sent are filled whole, with the dot of the same originals', by('Hello').length === 1 && by('Hello')[0].res === 'Привіт' && /ok/.test(by('Hello')[0].dot) && by('Good morning')[0].res === 'Добрий ранок', JSON.stringify(l.slice(0, 3)));
   check('a swapped word is never close: «Red cow» after «Red cat» stays far below the slider, an added word («old») is close but under it', l.some(x => /^7\d%/.test(x.found) && /без рішення/.test(x.res) && /info/.test(x.dot)) && l.filter(x => /Red/.test(x.src)).every(x => /^(\d|[1-5]\d|6\d)%/.test(x.found) && !x.yes), JSON.stringify(l.filter(x => /info/.test(x.dot))));
   check('a draft is not a source: «Тіло» is not put on the long line, and no row is made of the draft «Великий меч»', !l.some(x => x.src.startsWith('The body')) && !l.some(x => /Big bow/.test(x.src)), JSON.stringify(l.map(x => x.src)));
@@ -40,18 +42,18 @@ const stored = () => new Promise(r => { const o = indexedDB.open('transly', 3); 
   check('the main button counts what is written', /Вписати як чернетки · 2/.test(await page.locator('#mg-go').innerText()), await page.locator('#mg-go').innerText());
 
   // the choice of what is learned from: the drafts too
-  await page.locator('[data-src="drafts"]').click(); await sleep(1500);
+  await page.locator('#af-bt-src').click(); await sleep(200); await page.locator('[data-src="drafts"]').click(); await sleep(1500);
   l = await list();
   check('with «Надісланих і чернеток» the draft is a source too: «Big bow» is composed (no: one word is a guess), the long line is still not filled with a word', !l.some(x => x.src.startsWith('The body')), JSON.stringify(l.map(x => x.src)));
   check('the choice stays for the next time', await page.evaluate(() => localStorage.getItem('transly.af.drafts') === '1'));
-  await page.locator('[data-src="sent"]').click(); await sleep(1500);
+  await page.locator('#af-bt-src').click(); await sleep(200); await page.locator('[data-src="sent"]').click(); await sleep(1500);
 
   // the slider
-  await page.locator('#af-min').fill('70'); await sleep(300);
+  await page.locator('#af-bt-min').click(); await sleep(200); await page.locator('#af-min').fill('70'); await sleep(300);
   check('the slider lowers the bar: the matches of the memory above it are taken now', (await list()).filter(x => x.yes).length === 4 && /· 4/.test(await page.locator('#mg-go').innerText()));
   await page.locator('#af-min').fill('100'); await sleep(300);
   check('and at 100% only whole equal originals are taken', (await list()).filter(x => x.yes).length === 2);
-  await page.locator('#af-min').fill('85'); await sleep(200);
+  await page.locator('#af-min').fill('85'); await sleep(200); await page.keyboard.press('Escape'); await page.mouse.click(700, 700); await sleep(200);
 
   // «−» and «+», and the text written in place
   const row = n => page.locator('.mgx.af .gr').nth(n);

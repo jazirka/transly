@@ -18,7 +18,7 @@ export interface FillRow { file: string; key: string; source: string; target: st
 export const FROMS: { id: From; label: string; dot: string; tip: string }[] = [
   { id: 'same', label: 'Однакові оригінали', dot: 'ok', tip: 'такий самий оригінал уже перекладено' },
   { id: 'tm', label: 'З пам’яті', dot: 'info', tip: 'збіг у пам’яті перекладів' },
-  { id: 'words', label: 'За словами', dot: 'bad', tip: 'складено зі слів перекладених рядків' },
+  { id: 'words', label: 'За словами', dot: 'bad', tip: 'складено з частин: терміни, слова й короткі рядки; рід і число прикметників узгоджено' },
 ];
 export const idOf = (r: { file: string; key: string }): string => `${r.file}\u0001${r.key}`;
 const store = (k: string, v?: string): string | null => { try { if (v !== undefined) localStorage.setItem(k, v); return localStorage.getItem(k); } catch { return null; } };

@@ -1,6 +1,7 @@
 import { isAutoFilled } from './autolog';
 import { knownStatus } from './model';
 import type { Entry, FileView, SavedProject } from './project';
+import { adjLemma, buildLexicon, composeLine } from './compose';
 
 /** A piece of a line: a word, or anything else (punctuation, digits, a game control code) that stays as it is. */
 export interface Tok { text: string; word: boolean; index: number }
@@ -76,7 +77,12 @@ export function learnDetailed(views: FileView[], saved: SavedProject, opts: Fill
     // another case («game» → «гра» and «гру»), and putting the commoner one into a new line gives a wrong form («Нова гру»)
     // a word seen in one line only is a guess: it needs a second line that agrees
     if (ranked.length === 1) { if (ranked[0]![1] >= 2) dict.set(w, ranked[0]![0]); }
-    else ambiguous.set(w, ranked);
+    else {
+      // «ліва», «ліве», «лівий»: the forms of one adjective are not a disagreement, the word is «лівий» and takes the gender of its noun
+      const lemmas = new Set(ranked.map(x => adjLemma(x[0])));
+      if (lemmas.size === 1 && !lemmas.has(null) && ranked.reduce((a, x) => a + x[1], 0) >= 2) dict.set(w, [...lemmas][0]!);
+      else ambiguous.set(w, ranked);
+    }
   }
   for (const t of saved.terms) {
     const en = tokenize(t.en.trim());
@@ -97,6 +103,7 @@ export function proposals(views: FileView[], saved: SavedProject, dict: WordDict
     const ents = saved.files[v.name] ?? {};
     for (const u of v.units) { const e = ents[u.key]; if (trusted(e, opts.drafts) && plausible(u.source, e.target) && !whole.has(lower(u.source.trim()))) whole.set(lower(u.source.trim()), e.target.trim()); }
   }
+  const lex = buildLexicon(whole, dict, saved);
   for (const v of views) {
     const ents = saved.files[v.name] ?? {};
     for (const u of v.units) {
@@ -109,18 +116,8 @@ export function proposals(views: FileView[], saved: SavedProject, dict: WordDict
         if (out.length >= limit) return out;
         continue;
       }
-      const toks = tokenize(u.source), words = toks.filter(t => t.word);
-      if (!words.length || words.length > MAX_WORDS || !words.every(t => dict.has(lower(t.text)))) continue;
-      let target = '', at = 0;
-      for (const t of toks) {
-        target += u.source.slice(at, t.index);
-        at = t.index + t.text.length;
-        if (!t.word) { target += t.text; continue; }
-        const uk = dict.get(lower(t.text))!;
-        const letters = [...t.text].filter(c => c.toLowerCase() !== c.toUpperCase());
-        target += letters.length > 1 && letters.every(c => c === c.toUpperCase()) ? uk.toUpperCase() : isCap(t.text) ? capitalise(uk) : uk;
-      }
-      if (target === u.source) continue;
+      const target = composeLine(u.source, lex, saved, MAX_WORDS + 2);
+      if (!target) continue;
       if (!plausible(u.source, target)) continue;
       out.push({ file: v.name, key: u.key, source: u.source, target, from: 'words' });
       if (out.length >= limit) return out;

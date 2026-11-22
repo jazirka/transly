@@ -49,7 +49,7 @@ const CHEV = '<span class="chev"><svg viewBox="0 0 8 8" aria-hidden="true"><path
  * The markup of the tree for a screen. `counts` is how many rows each file has to settle (files not in it are left out, and so are the
  * folders with none); `flags` are the files that need a look (a dot); `file` is the one the table is filtered to; `collapsed` the folders closed.
  */
-export function screenTreeHtml(ctx: Ctx, counts: Map<string, number>, o: { file: string | null; collapsed: Set<string>; flags?: Set<string> }): string {
+export function screenTreeHtml(ctx: Ctx, counts: Map<string, number>, o: { file: string | null; collapsed: Set<string>; flags?: Set<string>; all?: boolean }): string {
   const views = ctx.s.views.filter(v => counts.has(v.name));
   const nodes = treeNodes(views);
   const total = [...counts.values()].reduce((a, b) => a + b, 0);
@@ -68,5 +68,5 @@ export function screenTreeHtml(ctx: Ctx, counts: Map<string, number>, o: { file:
     const p = pct(st.translated, st.total), cur = n.name === o.file, [ic, lab] = fileIcon(n.name);
     return `<div class="node ${cur ? 'cur' : ''}" style="--d:${n.d}" data-f="${esc(n.name)}" role="treeitem" tabindex="-1" aria-level="${n.d + 1}" aria-selected="${cur}" title="Перекладено ${p}%"><span class="ic ${ic}">${lab}</span><span class="nm">${v.label ? `${esc(v.label)}<span class="lc">${esc(n.label)}</span>` : esc(n.label)}${o.flags?.has(n.name) ? '<i class="rd"></i>' : ''}</span><span class="mem" title="Рядків: ${counts.get(n.name)}">${counts.get(n.name)!.toLocaleString(uiLocale())}</span><span class="pc">${p}%</span><span class="mini"><i style="width:${p}%"></i></span></div>`;
   }).join('');
-  return all + body;
+  return (o.all === false ? '' : all) + body;
 }

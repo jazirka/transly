@@ -215,7 +215,7 @@ export function openAutofillScreen(ctx: Ctx, onClose: () => void): () => void {
   const renderTree = (): void => {
     const counts = new Map<string, number>();
     for (const r of rows) counts.set(r.file, (counts.get(r.file) ?? 0) + 1);
-    $('#mg-tree', root).innerHTML = screenTreeHtml(ctx, counts, { file, collapsed });
+    $('#mg-tree', root).innerHTML = screenTreeHtml(ctx, counts, { file, collapsed, all: false });
   };
 
   const renderSum = (): void => {
@@ -336,7 +336,7 @@ export function openAutofillScreen(ctx: Ctx, onClose: () => void): () => void {
     const dir = t.closest<HTMLElement>('[data-dir]');
     if (dir) { const k = dir.dataset.dir!; if (collapsed.has(k)) collapsed.delete(k); else collapsed.add(k); renderTree(); return; }
     const f = t.closest<HTMLElement>('[data-f]');
-    if (f) { file = f.dataset.f || null; selected.clear(); anchor = -1; scroll.scrollTop = 0; renderAll(); return; }
+    if (f) { file = f.dataset.f && f.dataset.f !== file ? f.dataset.f : null; selected.clear(); anchor = -1; scroll.scrollTop = 0; renderAll(); return; }
     const chip = t.closest<HTMLElement>('[data-chip]');
     if (chip) { const c = chip.dataset.chip as From; if (filters.has(c)) filters.delete(c); else filters.add(c); scroll.scrollTop = 0; renderAll(); return; }
     if (t.closest('#af-bt-min')) { popOver(t.closest<HTMLElement>('#af-bt-min')!, `<div class="af-sl">Вписувати без питань від <input type="range" id="af-min" min="50" max="100" step="1" value="${threshold}" aria-label="Точність, від якої пропозиція береться без питань"><b id="af-minv">${threshold}%</b></div><p class="hint">Однакові оригінали мають 100%, збіги пам’яті — свою точність, слова — 60%. Що нижче — лишається сірим, поки ви не вирішите.</p>`); return; }

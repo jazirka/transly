@@ -354,12 +354,45 @@ export async function start(root: HTMLElement): Promise<void> {
       // In the scene mode a row of another scene brings that scene in.
       if (s.mode === 'scene') s.scene = sceneIdOf(ctx, key);
       if (s.phone) { s.leftOpen = false; s.rightOpen = false; }
+      // A row of the list that is drawn is chosen without drawing the list again (its rows are only estimated until they are drawn, so a new drawing moved the list under the pointer):
+      // the mark moves, and the editor, the panel and the status are drawn
+      const drawn = !mode && !s.phone && s.mode === 'edit' ? document.querySelector<HTMLElement>(`#slist .si[data-key="${CSS.escape(key)}"]:not(.lazy)`) : null;
+      if (drawn) {
+        document.querySelector('#slist .si.sel')?.classList.remove('sel'); drawn.classList.add('sel');
+        saveUi(); renderTabs();
+        if (lp() === 'scenes' || s.leftBoth) renderScenesPanel(ctx);
+        renderFocus(ctx, isDesktop()); renderSidePanel(ctx); renderStatus(); showPendingRow();
+        if (opts?.focus !== false) $('#i-tr').focus();
+        return;
+      }
+      // the list of rows is drawn again, and its rows are only estimated until they are drawn: the row that stood at the top stays where it stood
+      const hold = holdListPlace('slist', '.si', key);
+      // a row that is in view already (the translator clicked it) is not scrolled to: the list stays as it is
+      const seen = (() => { const l = document.getElementById('slist'), r = l?.querySelector<HTMLElement>(`.si[data-key="${CSS.escape(key)}"]:not(.lazy)`); if (!l || !r) return false; const lb = l.getBoundingClientRect(), rb = r.getBoundingClientRect(); return rb.top >= lb.top && rb.bottom <= lb.bottom; })();
       renderAll();
+      hold();
       if (s.mode === 'table') { reveal('grid', key); document.querySelector<HTMLElement>(`.gr[data-key="${CSS.escape(key)}"]`)?.scrollIntoView({ block: 'nearest' }); }
       else if (s.mode === 'scene') { if (opts?.focus === false) bringCardIntoView(key); else focusCard(key); }
-      else { reveal('slist', key); document.querySelector<HTMLElement>(`.si[data-key="${CSS.escape(key)}"]`)?.scrollIntoView({ block: 'nearest' }); if (opts?.focus !== false) $('#i-tr').focus(); }
+      else { reveal('slist', key); if (!seen || s.mode !== 'edit') document.querySelector<HTMLElement>(`.si[data-key="${CSS.escape(key)}"]`)?.scrollIntoView({ block: 'nearest' }); if (opts?.focus !== false) $('#i-tr').focus(); }
     },
   };
+
+  /** Remember which row stands at the top of a list, and give a function that puts the list back so that the same row stands there again after a redraw. */
+  function holdListPlace(id: string, item: string, prefer?: string): () => void {
+    const list = document.getElementById(id);
+    if (!list || !list.scrollTop) return () => {};
+    const box = list.getBoundingClientRect();
+    const pick = prefer ? list.querySelector<HTMLElement>(`${item}[data-key="${CSS.escape(prefer)}"]:not(.lazy)`) : null;
+    const first = pick && pick.getBoundingClientRect().top >= box.top && pick.getBoundingClientRect().bottom <= box.bottom ? pick : [...list.querySelectorAll<HTMLElement>(`${item}[data-key]:not(.lazy)`)].find(e => e.getBoundingClientRect().bottom > box.top + 1);
+    if (!first?.dataset.key) return () => {};
+    const key = first.dataset.key, offset = first.getBoundingClientRect().top - box.top;
+    return () => {
+      const l = document.getElementById(id); if (!l) return;
+      reveal(id, key);
+      const now = l.querySelector<HTMLElement>(`${item}[data-key="${CSS.escape(key)}"]:not(.lazy)`);
+      if (now) l.scrollTop += now.getBoundingClientRect().top - l.getBoundingClientRect().top - offset;
+    };
+  }
 
   /* ---------- data helpers ---------- */
   const entryOf = (u: Unit): Entry | undefined => (s.current === GROUP ? groupEntries[u.key] : s.current ? s.saved.files[s.current]?.[u.key] : undefined);

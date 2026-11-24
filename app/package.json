@@ -9,6 +9,7 @@
     "test": "vitest run",
     "test:ui": "node scripts/test-ui.mjs",
     "typecheck": "tsc --noEmit",
+    "vectors": "vitest run --config scripts/vitest.vectors.config.ts",
     "tauri": "tauri",
     "build:mobile": "tsc --noEmit && vite build --mode mobile",
     "dev:mobile": "vite --mode mobile",

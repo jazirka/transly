@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["proto-egui", "proto-slint"]
+members = ["proto-egui", "proto-slint", "transly-core"]
 
 [profile.release]
 opt-level = 3

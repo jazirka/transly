@@ -17,6 +17,7 @@ pub mod ingest;
 pub mod journal;
 pub mod keys;
 pub mod links;
+pub mod manifest;
 pub mod js;
 pub mod merge;
 pub mod model;

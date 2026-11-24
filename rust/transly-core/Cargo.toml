@@ -11,3 +11,5 @@ indexmap = { version = "2", features = ["serde"] }
 regex = "1"
 fancy-regex = "0.14"
 unicode-normalization = "0.1"
+icu_collator = "2"
+icu_locale = "2"

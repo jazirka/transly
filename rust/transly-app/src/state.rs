@@ -26,7 +26,46 @@ pub struct Counts {
     pub approved: usize,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Filter {
+    All,
+    Untranslated,
+    Draft,
+    Sent,
+    Approved,
+}
+
+impl Filter {
+    pub const ALL: [Filter; 5] = [Filter::All, Filter::Untranslated, Filter::Draft, Filter::Sent, Filter::Approved];
+    pub fn label(self) -> &'static str {
+        match self {
+            Filter::All => "Усі",
+            Filter::Untranslated => "Без перекладу",
+            Filter::Draft => "Чернетки",
+            Filter::Sent => "Надіслано",
+            Filter::Approved => "Вичитано",
+        }
+    }
+    fn takes(self, s: RowStatus) -> bool {
+        matches!((self, s), (Filter::All, _) | (Filter::Untranslated, RowStatus::Untranslated) | (Filter::Draft, RowStatus::Draft) | (Filter::Sent, RowStatus::Sent) | (Filter::Approved, RowStatus::Approved))
+    }
+}
+
+/// Рядки поточного файлу після фільтра й пошуку (кеш: перераховується, лише коли щось змінилось).
+#[derive(Default)]
+struct Visible {
+    key: (usize, u8, String, u64),
+    rows: Vec<usize>,
+    counts: [usize; 5],
+}
+
 pub struct AppState {
+    pub filter: Filter,
+    pub search: String,
+    /// Збільшується при кожній правці: за ним скидаються кеші.
+    pub rev: u64,
+    vis: std::cell::RefCell<Visible>,
+    prog: std::cell::RefCell<(u64, Vec<(usize, usize)>)>,
     roots: Roots,
     picked: Picked,
     pub project: Option<SavedProject>,
@@ -39,7 +78,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None }
+        AppState { filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None }
     }
 }
 
@@ -72,6 +111,7 @@ impl AppState {
         self.dir = Some(dir.to_path_buf());
         self.file = if n > 0 { Some(0) } else { None };
         self.row = None;
+        self.rev += 1;
         Ok(n)
     }
 
@@ -115,6 +155,7 @@ impl AppState {
         if let Some(p) = self.project.as_mut() {
             p.files.entry(key_file).or_default().insert(key, e);
         }
+        self.rev += 1;
     }
 
     /// Правка перекладу рядка (чернетка).
@@ -138,6 +179,69 @@ impl AppState {
             }
             SubmitResult::Err(m) => Err(m),
         }
+    }
+
+    fn status_of(&self, f: usize, r: usize) -> RowStatus {
+        self.row_view(f, r).2
+    }
+
+    fn refresh_visible(&self, f: usize) {
+        let key = (f, Filter::ALL.iter().position(|x| *x == self.filter).unwrap_or(0) as u8, self.search.clone(), self.rev);
+        if self.vis.borrow().key == key {
+            return;
+        }
+        let q = self.search.to_lowercase();
+        let mut v = Visible { key, ..Default::default() };
+        for r in 0..self.row_count(f) {
+            let st = self.status_of(f, r);
+            if !q.is_empty() {
+                let (src, tgt, _) = self.row_view(f, r);
+                let k = self.unit(f, r).map_or("", |u| u.key.as_str());
+                if !(src.to_lowercase().contains(&q) || tgt.to_lowercase().contains(&q) || k.to_lowercase().contains(&q)) {
+                    continue;
+                }
+            }
+            v.counts[0] += 1;
+            v.counts[match st {
+                RowStatus::Untranslated => 1,
+                RowStatus::Draft => 2,
+                RowStatus::Sent => 3,
+                RowStatus::Approved => 4,
+            }] += 1;
+            if self.filter.takes(st) {
+                v.rows.push(r);
+            }
+        }
+        *self.vis.borrow_mut() = v;
+    }
+
+    pub fn visible_len(&self, f: usize) -> usize {
+        self.refresh_visible(f);
+        self.vis.borrow().rows.len()
+    }
+
+    pub fn visible_at(&self, f: usize, i: usize) -> Option<usize> {
+        self.refresh_visible(f);
+        self.vis.borrow().rows.get(i).copied()
+    }
+
+    /// Скільки рядків файлу в кожному фільтрі (за порядком `Filter::ALL`; пошук враховується).
+    pub fn filter_counts(&self, f: usize) -> [usize; 5] {
+        self.refresh_visible(f);
+        self.vis.borrow().counts
+    }
+
+    /// (усього, перекладено) для кожного файлу; кеш за `rev`.
+    pub fn file_progress(&self) -> Vec<(usize, usize)> {
+        if self.prog.borrow().0 != self.rev {
+            let v = (0..self.views.len()).map(|f| (self.row_count(f), (0..self.row_count(f)).filter(|r| self.status_of(f, *r) != RowStatus::Untranslated).count())).collect();
+            *self.prog.borrow_mut() = (self.rev, v);
+        }
+        self.prog.borrow().1.clone()
+    }
+
+    pub fn key_of(&self, f: usize, r: usize) -> String {
+        self.unit(f, r).map_or(String::new(), |u| u.key.clone())
     }
 
     pub fn progress(&self) -> Counts {
@@ -190,6 +294,16 @@ mod tests {
         assert_eq!(s.progress().draft, 1);
         s.submit(0, 0, "Герой").unwrap();
         assert_eq!(s.progress().sent, 1);
+        let c = s.filter_counts(0);
+        assert_eq!(c[0], s.row_count(0));
+        assert_eq!(c[3], 1, "один надісланий");
+        s.filter = Filter::Sent;
+        assert_eq!(s.visible_len(0), 1);
+        s.search = "нема-такого".into();
+        assert_eq!(s.visible_len(0), 0);
+        s.search.clear();
+        s.filter = Filter::All;
+        assert_eq!(s.file_progress()[0].1, 1);
         let saved = s.save_project().unwrap();
         assert!(std::fs::read_to_string(saved).unwrap().contains("Герой"));
         let _ = std::fs::remove_dir_all(&base);

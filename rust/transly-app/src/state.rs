@@ -68,7 +68,11 @@ struct Visible {
     counts: [usize; 5],
 }
 
+/// Кеш приміток QA файлу: (файл, rev) і примітки (рядок, текст, помилка?).
+type QaCache = ((usize, u64), Vec<(usize, String, bool)>);
+
 pub struct AppState {
+    qa_cache: std::cell::RefCell<QaCache>,
     pub game: Vec<GameFile>,
     pub dirty: bool,
     pub filter: Filter,
@@ -89,7 +93,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { game: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None }
+        AppState { qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None }
     }
 }
 
@@ -355,6 +359,40 @@ impl AppState {
         let name = self.views[f].name.clone();
         let next = add_comment(self.entry(f, r), "Ви", text, now_ms(), None);
         self.put(f, name, u.key, next);
+    }
+
+    /// Примітки QA по всіх перекладених рядках файлу: (рядок, текст, помилка?). Кеш за `rev`.
+    pub fn file_issues(&self, f: usize) -> Vec<(usize, String, bool)> {
+        let key = (f, self.rev);
+        if self.qa_cache.borrow().0 != key {
+            let mut out = Vec::new();
+            let mut qa = default_qa();
+            qa.terms = self.terms();
+            for r in 0..self.row_count(f) {
+                let Some(e) = self.entry(f, r).filter(|e| !e.target.is_empty()) else { continue };
+                let Some(u) = self.unit(f, r) else { continue };
+                for i in check(&UnitLike::from(u), &e.target, &qa) {
+                    out.push((r, i.message, i.severity == transly_core::qa::Severity::Bad));
+                }
+            }
+            *self.qa_cache.borrow_mut() = (key, out);
+        }
+        self.qa_cache.borrow().1.clone()
+    }
+
+    /// Скільки рядків файлу мають термін в оригіналі: для таблиці глосарія.
+    pub fn term_uses(&self, f: usize) -> Vec<usize> {
+        let terms = self.terms();
+        let mut n = vec![0usize; terms.len()];
+        for r in 0..self.row_count(f) {
+            let p = prepare_text(&self.source_of(f, r));
+            for (i, t) in terms.iter().enumerate() {
+                if !term_ranges_in(&p, &t.en).is_empty() {
+                    n[i] += 1;
+                }
+            }
+        }
+        n
     }
 
     pub fn key_of(&self, f: usize, r: usize) -> String {

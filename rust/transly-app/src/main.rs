@@ -26,6 +26,8 @@ struct App {
     term_en: String,
     term_uk: String,
     itab: usize,
+    btab: usize,
+    bottom_open: bool,
     focus: bool,
     comment: String,
 }
@@ -65,7 +67,7 @@ fn source_job(text: &str, marks: &[(usize, usize, usize)]) -> egui::text::Layout
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, focus: false, comment: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, btab: 0, bottom_open: true, focus: false, comment: String::new() }
     }
 }
 
@@ -129,6 +131,7 @@ impl eframe::App for App {
         self.menubar(ctx);
         self.toolbar(ctx);
         self.statusbar(ctx);
+        self.bottom(ctx);
         self.strip(ctx);
         if !self.focus {
             self.tree(ctx);
@@ -231,6 +234,85 @@ impl App {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.label(RichText::new(&self.message).size(11.5).color(MUTE));
                 });
+            });
+        });
+    }
+
+    fn bottom(&mut self, ctx: &egui::Context) {
+        let Some(f) = self.st.file else { return };
+        let h = if self.bottom_open { 210.0 } else { 30.0 };
+        egui::TopBottomPanel::bottom("bottom").exact_height(h).resizable(false).frame(egui::Frame::new().fill(PANEL).stroke(Stroke::new(1.0_f32, LINE))).show(ctx, |ui| {
+            let issues = self.st.file_issues(f);
+            let bad = issues.iter().filter(|i| i.2).count();
+            let terms = self.st.terms();
+            let (tabs, _) = ui.allocate_exact_size(vec2(ui.available_width(), 30.0), Sense::hover());
+            ui.painter().hline(tabs.x_range(), tabs.bottom(), Stroke::new(1.0_f32, LINE));
+            let mut x = tabs.left() + 4.0;
+            for (i, (t, n, is_bad)) in [("Глосарій", terms.len(), false), ("QA", issues.len(), bad > 0)].iter().enumerate() {
+                let label = format!("{t}  {n}");
+                let w = label.chars().count() as f32 * 7.2 + 24.0;
+                let r = Rect::from_min_size(pos2(x, tabs.top()), vec2(w, 30.0));
+                let resp = ui.interact(r, ui.id().with(("btab", i)), Sense::click());
+                let on = self.btab == i && self.bottom_open;
+                ui.painter().text(r.center(), Align2::CENTER_CENTER, label, FontId::proportional(12.5), if on || resp.hovered() { TEXT } else { MUTE });
+                if *is_bad {
+                    ui.painter().circle_filled(pos2(r.right() - 8.0, r.center().y - 5.0), 3.0, BAD);
+                }
+                if on {
+                    ui.painter().hline(r.x_range(), tabs.bottom() - 1.0, Stroke::new(2.0_f32, ACCENT));
+                }
+                if resp.clicked() {
+                    self.btab = i;
+                    self.bottom_open = true;
+                }
+                x += w;
+            }
+            let toggle = Rect::from_min_size(pos2(tabs.right() - 28.0, tabs.top()), vec2(24.0, 30.0));
+            let tr = ui.interact(toggle, ui.id().with("btoggle"), Sense::click());
+            ui.painter().text(toggle.center(), Align2::CENTER_CENTER, if self.bottom_open { "▾" } else { "▴" }, FontId::proportional(12.0), MUTE);
+            if tr.clicked() {
+                self.bottom_open = !self.bottom_open;
+            }
+            if !self.bottom_open {
+                return;
+            }
+            egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
+                ui.spacing_mut().item_spacing.y = 0.0;
+                if self.btab == 0 {
+                    let uses = self.st.term_uses(f);
+                    for (i, t) in terms.iter().enumerate() {
+                        let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::hover());
+                        if i % 2 == 1 {
+                            ui.painter().rect_filled(rect, CornerRadius::ZERO, ZEBRA);
+                        }
+                        ui.painter().circle_filled(pos2(rect.left() + 16.0, rect.center().y), 3.5, TERM_COLORS[i % TERM_COLORS.len()]);
+                        ui.painter().text(pos2(rect.left() + 30.0, rect.center().y), Align2::LEFT_CENTER, &t.en, FontId::proportional(12.5), TEXT);
+                        ui.painter().text(pos2(rect.left() + 260.0, rect.center().y), Align2::LEFT_CENTER, &t.uk, FontId::proportional(12.5), TEXT);
+                        ui.painter().text(pos2(rect.right() - 12.0, rect.center().y), Align2::RIGHT_CENTER, format!("у {} рядках", uses.get(i).copied().unwrap_or(0)), FontId::monospace(11.0), MUTE);
+                    }
+                    if terms.is_empty() {
+                        ui.add_space(10.0);
+                        ui.label(RichText::new("   Глосарій порожній: додайте термін у вкладці «Переклад»").color(MUTE));
+                    }
+                } else {
+                    for (row, msg, is_bad) in issues.iter().take(500) {
+                        let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
+                        if resp.hovered() {
+                            ui.painter().rect_filled(rect, CornerRadius::ZERO, Color32::from_rgb(0x30, 0x32, 0x3a));
+                        }
+                        ui.painter().circle_filled(pos2(rect.left() + 16.0, rect.center().y), 4.0, if *is_bad { BAD } else { WARN });
+                        ui.painter().text(pos2(rect.left() + 30.0, rect.center().y), Align2::LEFT_CENTER, format!("{}", row + 1), FontId::monospace(11.0), MUTE);
+                        ui.painter().text(pos2(rect.left() + 80.0, rect.center().y), Align2::LEFT_CENTER, msg, FontId::proportional(12.5), TEXT);
+                        if resp.clicked() {
+                            self.st.row = Some(*row);
+                            self.st.filter = Filter::All;
+                        }
+                    }
+                    if issues.is_empty() {
+                        ui.add_space(10.0);
+                        ui.label(RichText::new("   Приміток QA немає").color(OK));
+                    }
+                }
             });
         });
     }

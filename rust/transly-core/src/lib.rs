@@ -2,16 +2,20 @@
 //! еталон — «золоті вектори» (`tests/vectors/*.json`), які генерує `npm run vectors` у `app/`.
 
 pub mod controlcodes;
+pub mod engine;
+pub mod formats;
 pub mod glossary;
 pub mod groups;
 pub mod hyphen;
 pub mod autofill;
 pub mod autolog;
 pub mod branches;
+pub mod build;
 pub mod collate;
 pub mod compose;
 pub mod ingest;
 pub mod journal;
+pub mod keys;
 pub mod links;
 pub mod js;
 pub mod merge;
@@ -29,6 +33,7 @@ pub mod qacodes;
 pub mod qaconfig;
 pub mod qarules;
 pub mod plural;
+pub mod rpgmaker;
 pub mod scene;
 pub mod speakers;
 pub mod strands;

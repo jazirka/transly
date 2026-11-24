@@ -226,3 +226,145 @@ pub fn merge_branch_data(a: &SavedProject, b: &SavedProject, cur: &str, epoch: i
     }
     (if branches.is_empty() { None } else { Some(branches) }, if gone.is_empty() { None } else { Some(gone) })
 }
+
+// ---------- порівняння й злиття гілок ----------
+
+use crate::journal::RowChange;
+use crate::model::{next_mt, Entry, Status};
+use crate::plan::{plan_of, ChangePlan, Protect};
+use serde::Serialize;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DiffKind {
+    New,
+    Changed,
+    Conflict,
+}
+
+/// Один рядок, що відрізняється між поточною гілкою (`mine`) та іншою (`theirs`).
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct DiffRow {
+    pub file: String,
+    pub key: String,
+    pub kind: DiffKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mine: Option<Entry>,
+    pub theirs: Entry,
+    /// Рядок, яким обидві гілки починалися.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base: Option<Entry>,
+    /// Рядок вичитаний у поточній гілці: злиття його не чіпає.
+    pub locked: bool,
+}
+
+fn text_of(e: Option<&Entry>) -> &str {
+    e.map_or("", |e| e.target.as_str())
+}
+
+/// Рядки, де починалися дві гілки: де інша гілка зроблена з цієї (чи ця з неї), наскільки це залагодили злиття.
+fn base_for(p: &SavedProject, source: &str) -> Option<Files> {
+    let cur = branch_of(p);
+    let s = p.branches.as_ref().and_then(|b| b.get(source));
+    if let Some(s) = s.filter(|s| s.from.as_deref() == Some(cur.as_str())) {
+        if let Some(b) = &s.base {
+            return serde_json::from_value(b.clone()).ok();
+        }
+    }
+    let c = p.branches.as_ref().and_then(|b| b.get(&cur));
+    if let Some(c) = c.filter(|c| c.from.as_deref() == Some(source)) {
+        if let Some(b) = &c.base {
+            return serde_json::from_value(b.clone()).ok();
+        }
+    }
+    None
+}
+
+/// Що гілка `source` внесла б у поточну. Рядок у списку, лише коли в `source` він має переклад, якого тут нема: `new` (тут ще нічого),
+/// `changed` (змінила лише `source` відтоді, як гілки розійшлися) чи `conflict` (змінили обидві). Рядок, змінений лише в поточній, не в списку.
+pub fn diff_branches(p: &SavedProject, source: &str) -> Result<Vec<DiffRow>, String> {
+    let src = p.branches.as_ref().and_then(|b| b.get(source)).and_then(|b| b.files.as_ref()).ok_or_else(|| format!("Гілки «{source}» немає"))?;
+    let base = base_for(p, source);
+    let mut out = Vec::new();
+    let empty = Translations::new();
+    let mut names: Vec<&String> = Vec::new();
+    for f in p.files.keys().chain(src.keys()) {
+        if !names.contains(&f) {
+            names.push(f);
+        }
+    }
+    for file in names {
+        let mine = p.files.get(file).unwrap_or(&empty);
+        let theirs = src.get(file).unwrap_or(&empty);
+        let from = base.as_ref().and_then(|b| b.get(file)).unwrap_or(&empty);
+        for (key, t) in theirs {
+            let (m, b) = (mine.get(key), from.get(key));
+            if crate::js::trim(&t.target).is_empty() || t.target == text_of(m) {
+                continue;
+            }
+            let mine_empty = crate::js::trim(text_of(m)).is_empty();
+            let kind = if mine_empty {
+                DiffKind::New
+            } else if base.is_some() {
+                if text_of(m) == text_of(b) {
+                    DiffKind::Changed
+                } else if t.target == text_of(b) {
+                    continue;
+                } else {
+                    DiffKind::Conflict
+                }
+            } else {
+                DiffKind::Conflict
+            };
+            out.push(DiffRow { file: file.clone(), key: key.clone(), kind, mine: m.cloned(), theirs: t.clone(), base: b.cloned(), locked: kind != DiffKind::New && m.is_some_and(|m| m.status == Status::Appr) });
+        }
+    }
+    Ok(out)
+}
+
+/// Що перекладач вирішив для рядка: взяти їхній, лишити мій чи написати текст рядка вручну.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Decision {
+    Theirs,
+    Mine,
+    Custom(String),
+}
+
+pub fn row_id(file: &str, key: &str) -> String {
+    format!("{file}\u{1}{key}")
+}
+
+/// Рішення, з якого починається злиття: рядки, змінені лише ними, беруться, конфлікти чекають перекладача, вичитані лишаються.
+pub fn default_decision(r: &DiffRow) -> Option<Decision> {
+    if r.locked {
+        return Some(Decision::Mine);
+    }
+    if r.kind == DiffKind::Conflict { None } else { Some(Decision::Theirs) }
+}
+
+/// План злиття: рядки для запису однією дією журналу («merge»). Рядок без рішення лишається в поточній гілці; вичитаний ніколи не пишеться
+/// (план рахує його в `skipped`).
+pub fn plan_merge(p: &SavedProject, rows: &[DiffRow], decide: &dyn Fn(&DiffRow) -> Option<Decision>, now: i64) -> ChangePlan {
+    let mut changes: Vec<RowChange> = Vec::new();
+    for r in rows {
+        let Some(d) = decide(r) else { continue };
+        let prev = r.mine.as_ref();
+        let mt = next_mt(prev.map(|p| p.mt), now);
+        match d {
+            Decision::Mine => {}
+            Decision::Theirs => {
+                let mut next = Entry { target: r.theirs.target.clone(), status: r.theirs.status, mt, ..prev.cloned().unwrap_or_else(Entry::blank) };
+                if r.theirs.src.is_some() {
+                    next.src = r.theirs.src.clone();
+                }
+                changes.push(RowChange { file: r.file.clone(), key: r.key.clone(), text: r.theirs.target.clone(), next, what: None });
+            }
+            Decision::Custom(text) => {
+                let status = if crate::js::trim(&text).is_empty() { Status::New } else { Status::Draft };
+                let next = Entry { target: text.clone(), status, mt, ..prev.cloned().unwrap_or_else(Entry::blank) };
+                changes.push(RowChange { file: r.file.clone(), key: r.key.clone(), text, next, what: None });
+            }
+        }
+    }
+    plan_of(&p.files, &changes, "merge", Protect::Skip)
+}

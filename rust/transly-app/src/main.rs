@@ -25,6 +25,9 @@ struct App {
     message: String,
     term_en: String,
     term_uk: String,
+    itab: usize,
+    focus: bool,
+    comment: String,
 }
 
 const TERM_COLORS: [Color32; 4] = [VIOLET, INFO, OK, WARN];
@@ -62,7 +65,7 @@ fn source_job(text: &str, marks: &[(usize, usize, usize)]) -> egui::text::Layout
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, focus: false, comment: String::new() }
     }
 }
 
@@ -127,7 +130,9 @@ impl eframe::App for App {
         self.toolbar(ctx);
         self.statusbar(ctx);
         self.strip(ctx);
-        self.tree(ctx);
+        if !self.focus {
+            self.tree(ctx);
+        }
         self.inspector(ctx);
         self.editor(ctx);
     }
@@ -180,6 +185,9 @@ impl App {
                     }
                     if plain_button(ui, "Повернути оригінали").clicked() {
                         self.message = self.st.restore_originals().unwrap_or_else(|e| e);
+                    }
+                    if plain_button(ui, if self.focus { "Таблиця" } else { "Фокус" }).clicked() {
+                        self.focus = !self.focus;
                     }
                     if plain_button(ui, "Зберегти").clicked() {
                         self.message = match self.st.save_project() {
@@ -285,82 +293,176 @@ impl App {
     }
 
     fn inspector(&mut self, ctx: &egui::Context) {
-        egui::SidePanel::right("insp").exact_width(380.0).resizable(false).frame(egui::Frame::new().fill(PANEL).stroke(Stroke::new(1.0_f32, LINE))).show(ctx, |ui| {
+        let width = if self.focus { (ctx.screen_rect().width() - 40.0 - 330.0).max(380.0) } else { 380.0 };
+        egui::SidePanel::right("insp").exact_width(width).resizable(false).frame(egui::Frame::new().fill(PANEL).stroke(Stroke::new(1.0_f32, LINE))).show(ctx, |ui| {
             let (tabs, _) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::hover());
-            ui.painter().text(tabs.left_center() + vec2(15.0, 0.0), Align2::LEFT_CENTER, "Переклад", FontId::proportional(12.5), TEXT);
-            ui.painter().hline((tabs.left() + 4.0)..=(tabs.left() + 78.0), tabs.bottom() - 1.0, Stroke::new(2.0_f32, ACCENT));
             ui.painter().hline(tabs.x_range(), tabs.bottom(), Stroke::new(1.0_f32, LINE));
+            let mut x = tabs.left() + 4.0;
+            for (i, t) in ["Переклад", "Пам’ять", "Історія", "Коментарі"].iter().enumerate() {
+                let w = t.chars().count() as f32 * 7.2 + 22.0;
+                let r = Rect::from_min_size(pos2(x, tabs.top()), vec2(w, 34.0));
+                let resp = ui.interact(r, ui.id().with(("itab", i)), Sense::click());
+                let on = self.itab == i;
+                ui.painter().text(r.center(), Align2::CENTER_CENTER, t, FontId::proportional(12.5), if on || resp.hovered() { TEXT } else { MUTE });
+                if on {
+                    ui.painter().hline(r.x_range(), tabs.bottom() - 1.0, Stroke::new(2.0_f32, ACCENT));
+                }
+                if resp.clicked() {
+                    self.itab = i;
+                }
+                x += w;
+            }
             let Some((f, r)) = self.st.file.zip(self.st.row) else {
                 ui.add_space(16.0);
-                ui.vertical_centered(|ui| ui.label(RichText::new("Оберіть рядок у таблиці").color(MUTE)));
+                ui.vertical_centered(|ui| ui.label(RichText::new("Оберіть рядок").color(MUTE)));
                 return;
             };
             if self.draft_for != Some((f, r)) {
                 self.draft = self.st.target_of(f, r);
                 self.draft_for = Some((f, r));
             }
-            egui::Frame::new().inner_margin(egui::Margin::same(12)).show(ui, |ui| {
-                ui.spacing_mut().item_spacing.y = 5.0;
-                label_caps(ui, "Оригінал");
-                egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(CornerRadius::same(R2)).inner_margin(egui::Margin::symmetric(10, 9)).show(ui, |ui| {
-                    ui.set_width(ui.available_width());
-                    ui.label(source_job(&self.st.source_of(f, r), &self.st.source_marks(f, r)));
-                });
-                ui.horizontal(|ui| {
-                    let key = self.st.key_of(f, r);
-                    ui.label(RichText::new(key).monospace().size(10.5).color(MUTE));
-                });
-                ui.add_space(8.0);
-                label_caps(ui, "Переклад");
-                let resp = ui.add(egui::TextEdit::multiline(&mut self.draft).desired_rows(5).desired_width(f32::INFINITY).font(FontId::proportional(13.5)).margin(vec2(10.0, 9.0)).background_color(BG));
-                ui.painter().rect_stroke(resp.rect, CornerRadius::same(R2), Stroke::new(1.0_f32, ACCENT), StrokeKind::Outside);
-                let src_len = self.st.source_of(f, r).chars().count().max(1);
-                let ratio = (self.draft.chars().count() as f32 / src_len as f32).min(1.5);
-                let (m, _) = ui.allocate_exact_size(vec2(ui.available_width(), 3.0), Sense::hover());
-                ui.painter().rect_filled(m, CornerRadius::same(R1), Color32::from_rgb(0x3d, 0x40, 0x45));
-                ui.painter().rect_filled(Rect::from_min_size(m.min, vec2(m.width() * (ratio / 1.5), 3.0)), CornerRadius::same(R1), if ratio > 1.25 { BAD } else { OK });
-                ui.add_space(3.0);
-                ui.horizontal(|ui| {
-                    if primary_button(ui, "Надіслати").clicked() {
-                        self.message = match self.st.submit(f, r, &self.draft) {
-                            Ok(()) => "Надіслано".into(),
-                            Err(e) => e,
-                        };
-                    }
-                    if plain_button(ui, "Зберегти правку").clicked() {
-                        self.st.edit(f, r, &self.draft);
-                    }
-                });
-                ui.add_space(8.0);
-                for i in self.st.issues(f, r, &self.draft) {
-                    ui.horizontal(|ui| {
-                        let (d, _) = ui.allocate_exact_size(vec2(10.0, 14.0), Sense::hover());
-                        let col = if i.severity == transly_core::qa::Severity::Bad { BAD } else { WARN };
-                        ui.painter().circle_filled(d.center(), 4.0, col);
-                        ui.label(RichText::new(&i.message).color(TEXT));
-                    });
-                }
-                ui.add_space(10.0);
-                label_caps(ui, "Глосарій");
-                for (i, t) in self.st.terms().iter().enumerate() {
-                    ui.horizontal(|ui| {
-                        ui.colored_label(TERM_COLORS[i % TERM_COLORS.len()], "▪");
-                        ui.label(RichText::new(&t.en).color(TEXT));
-                        ui.label(RichText::new("→").color(DIM));
-                        ui.label(RichText::new(&t.uk).color(TEXT));
-                    });
-                }
-                ui.horizontal(|ui| {
-                    ui.add(egui::TextEdit::singleline(&mut self.term_en).hint_text("слово").desired_width(110.0));
-                    ui.add(egui::TextEdit::singleline(&mut self.term_uk).hint_text("переклад").desired_width(110.0));
-                    if plain_button(ui, "Додати термін").clicked() {
-                        self.message = self.st.add_term(&self.term_en, &self.term_uk);
-                        self.term_en.clear();
-                        self.term_uk.clear();
+            egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
+                egui::Frame::new().inner_margin(egui::Margin::same(12)).show(ui, |ui| {
+                    ui.spacing_mut().item_spacing.y = 5.0;
+                    match self.itab {
+                        0 => self.tab_translate(ui, f, r),
+                        1 => self.tab_memory(ui, f, r),
+                        2 => self.tab_history(ui, f, r),
+                        _ => self.tab_comments(ui, f, r),
                     }
                 });
             });
         });
+    }
+
+    fn tab_translate(&mut self, ui: &mut egui::Ui, f: usize, r: usize) {
+        label_caps(ui, "Оригінал");
+        egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(CornerRadius::same(R2)).inner_margin(egui::Margin::symmetric(10, 9)).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(source_job(&self.st.source_of(f, r), &self.st.source_marks(f, r)));
+        });
+        ui.label(RichText::new(self.st.key_of(f, r)).monospace().size(10.5).color(MUTE));
+        ui.add_space(8.0);
+        label_caps(ui, "Переклад");
+        let rows = if self.focus { 9 } else { 5 };
+        let resp = ui.add(egui::TextEdit::multiline(&mut self.draft).desired_rows(rows).desired_width(f32::INFINITY).font(FontId::proportional(13.5)).margin(vec2(10.0, 9.0)).background_color(BG));
+        ui.painter().rect_stroke(resp.rect, CornerRadius::same(R2), Stroke::new(1.0_f32, ACCENT), StrokeKind::Outside);
+        let src_len = self.st.source_of(f, r).chars().count().max(1);
+        let ratio = (self.draft.chars().count() as f32 / src_len as f32).min(1.5);
+        let (m, _) = ui.allocate_exact_size(vec2(ui.available_width(), 3.0), Sense::hover());
+        ui.painter().rect_filled(m, CornerRadius::same(R1), Color32::from_rgb(0x3d, 0x40, 0x45));
+        ui.painter().rect_filled(Rect::from_min_size(m.min, vec2(m.width() * (ratio / 1.5), 3.0)), CornerRadius::same(R1), if ratio > 1.25 { BAD } else { OK });
+        ui.add_space(3.0);
+        ui.horizontal(|ui| {
+            if primary_button(ui, "Надіслати").clicked() {
+                self.message = match self.st.submit(f, r, &self.draft) {
+                    Ok(()) => "Надіслано".into(),
+                    Err(e) => e,
+                };
+            }
+            if plain_button(ui, "Зберегти правку").clicked() {
+                self.st.edit(f, r, &self.draft);
+            }
+        });
+        ui.add_space(8.0);
+        for i in self.st.issues(f, r, &self.draft) {
+            ui.horizontal(|ui| {
+                let (d, _) = ui.allocate_exact_size(vec2(10.0, 14.0), Sense::hover());
+                let col = if i.severity == transly_core::qa::Severity::Bad { BAD } else { WARN };
+                ui.painter().circle_filled(d.center(), 4.0, col);
+                ui.label(RichText::new(&i.message).color(TEXT));
+            });
+        }
+        ui.add_space(10.0);
+        label_caps(ui, "Глосарій");
+        for (i, t) in self.st.terms().iter().enumerate() {
+            ui.horizontal(|ui| {
+                ui.colored_label(TERM_COLORS[i % TERM_COLORS.len()], "▪");
+                ui.label(RichText::new(&t.en).color(TEXT));
+                ui.label(RichText::new("→").color(DIM));
+                ui.label(RichText::new(&t.uk).color(TEXT));
+            });
+        }
+        ui.horizontal(|ui| {
+            ui.add(egui::TextEdit::singleline(&mut self.term_en).hint_text("слово").desired_width(110.0));
+            ui.add(egui::TextEdit::singleline(&mut self.term_uk).hint_text("переклад").desired_width(110.0));
+            if plain_button(ui, "Додати термін").clicked() {
+                self.message = self.st.add_term(&self.term_en, &self.term_uk);
+                self.term_en.clear();
+                self.term_uk.clear();
+            }
+        });
+    }
+
+    fn tab_memory(&mut self, ui: &mut egui::Ui, f: usize, r: usize) {
+        label_caps(ui, "Схожі переклади");
+        let ms = self.st.tm_matches(f, r);
+        if ms.is_empty() {
+            ui.label(RichText::new("Схожих рядків ще немає").color(MUTE));
+        }
+        for m in ms {
+            let resp = egui::Frame::new()
+                .fill(Color32::from_rgb(0x29, 0x2b, 0x2e))
+                .stroke(Stroke::new(1.0_f32, LINE))
+                .corner_radius(CornerRadius::same(R2))
+                .inner_margin(egui::Margin::symmetric(8, 7))
+                .show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(format!("{}%", m.score)).monospace().strong().color(if m.score >= 85 { OK } else { WARN }));
+                        ui.vertical(|ui| {
+                            ui.label(RichText::new(&m.t).color(TEXT));
+                            ui.label(RichText::new(&m.s).size(11.0).color(MUTE));
+                        });
+                    });
+                })
+                .response
+                .interact(Sense::click());
+            if resp.clicked() {
+                self.draft = m.t.clone();
+                self.itab = 0;
+            }
+        }
+    }
+
+    fn tab_history(&mut self, ui: &mut egui::Ui, f: usize, r: usize) {
+        label_caps(ui, "Історія рядка");
+        let rows = self.st.history(f, r);
+        if rows.is_empty() {
+            ui.label(RichText::new("Змін ще не було").color(MUTE));
+        }
+        for h in rows {
+            ui.label(RichText::new(&h.rec.what).size(11.0).color(MUTE));
+            egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(CornerRadius::same(R1)).inner_margin(egui::Margin::symmetric(8, 5)).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.label(RichText::new(&h.rec.text).color(TEXT));
+            });
+            if h.can_restore && ui.small_button("Повернути цю версію").clicked() {
+                self.draft = h.rec.text.clone();
+                self.itab = 0;
+            }
+            ui.add_space(6.0);
+        }
+    }
+
+    fn tab_comments(&mut self, ui: &mut egui::Ui, f: usize, r: usize) {
+        label_caps(ui, "Обговорення");
+        for t in self.st.threads(f, r) {
+            egui::Frame::new().fill(PANEL2).corner_radius(CornerRadius::same(R2)).inner_margin(egui::Margin::same(8)).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.label(RichText::new(&t.root.who).size(11.0).color(VIOLET));
+                ui.label(RichText::new(&t.root.text).color(TEXT));
+                for re in &t.replies {
+                    ui.label(RichText::new(format!("↳ {}: {}", re.who, re.text)).color(MUTE));
+                }
+            });
+        }
+        ui.add(egui::TextEdit::multiline(&mut self.comment).hint_text("Коментар…").desired_rows(3).desired_width(f32::INFINITY));
+        if plain_button(ui, "Додати коментар").clicked() && !self.comment.trim().is_empty() {
+            let text = self.comment.clone();
+            self.st.comment(f, r, &text);
+            self.comment.clear();
+        }
     }
 
     fn editor(&mut self, ctx: &egui::Context) {
@@ -402,8 +504,37 @@ impl App {
         });
     }
 
+    /// Вузький список (режим «фокус»): крапка стану, оригінал і переклад у два рядки.
+    fn compact_list(&mut self, ui: &mut egui::Ui, f: usize) {
+        let total = self.st.visible_len(f);
+        let row_h = 42.0;
+        egui::ScrollArea::vertical().auto_shrink([false; 2]).show_rows(ui, row_h, total, |ui, range| {
+            ui.spacing_mut().item_spacing.y = 0.0;
+            for i in range {
+                let Some(r) = self.st.visible_at(f, i) else { continue };
+                let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::click());
+                let sel = self.st.row == Some(r);
+                ui.painter().rect_filled(rect, CornerRadius::ZERO, if sel { SEL } else if resp.hovered() { TREE_HOVER } else { PANEL });
+                ui.painter().hline(rect.x_range(), rect.bottom(), Stroke::new(1.0_f32, LINE_SOFT));
+                let (src, tgt, st) = self.st.row_view(f, r);
+                paint_dot(ui, pos2(rect.left() + 14.0, rect.top() + 14.0), st);
+                let clip = Rect::from_min_max(pos2(rect.left() + 26.0, rect.top()), pos2(rect.right() - 8.0, rect.bottom()));
+                ui.painter().with_clip_rect(clip).text(pos2(clip.left(), rect.top() + 14.0), Align2::LEFT_CENTER, src.replace('\n', " ↵ "), FontId::proportional(12.5), SRC_TEXT);
+                let t = if tgt.is_empty() { "—".to_string() } else { tgt.replace('\n', " ↵ ") };
+                ui.painter().with_clip_rect(clip).text(pos2(clip.left(), rect.top() + 30.0), Align2::LEFT_CENTER, t, FontId::proportional(12.0), MUTE);
+                if resp.clicked() {
+                    self.st.row = Some(r);
+                }
+            }
+        });
+    }
+
     fn grid(&mut self, ui: &mut egui::Ui, f: usize) {
         let w = ui.available_width();
+        if w < 520.0 {
+            self.compact_list(ui, f);
+            return;
+        }
         // колонки: №, стан, ключ, оригінал, переклад
         let fixed = [34.0_f32, 22.0, 150.0];
         let flex = ((w - fixed.iter().sum::<f32>() - 12.0) / 2.0).max(120.0);

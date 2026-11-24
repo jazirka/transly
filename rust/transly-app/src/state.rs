@@ -6,6 +6,11 @@ use transly_core::progress::{row_state, RowState};
 use transly_core::build::{build, file_text, BuildOptions};
 use transly_core::projname::name_from_folder;
 use transly_core::project::{deserialize, empty_project, serialize, FileView, SavedProject};
+use transly_core::journal::record_change;
+use transly_core::historyview::{history_rows, HistoryRow};
+use transly_core::tm::{FindOpts, TmEntry, TmIndex, TmMatch};
+use transly_core::comments::{threads_of, Thread};
+use transly_core::workflow::add_comment;
 use transly_core::glossary::{prepare_text, term_ranges_in, Term};
 use transly_core::qa::{check, default_qa, Issue, UnitLike};
 use transly_core::termedit::{save_term, SaveResult, TermForm};
@@ -192,7 +197,12 @@ impl AppState {
     pub fn edit(&mut self, f: usize, r: usize, text: &str) {
         let Some(u) = self.unit(f, r).cloned() else { return };
         let name = self.views[f].name.clone();
-        let next = edit(self.entry(f, r), &u, text, Stage::Translate, now_ms());
+        if self.entry(f, r).map_or(text.is_empty(), |e| e.target == text) {
+            return;
+        }
+        let now = now_ms();
+        let next = edit(self.entry(f, r), &u, text, Stage::Translate, now);
+        let next = record_change(self.entry(f, r), &next, "правка", text, "Ви", now, None);
         self.put(f, name, u.key, next);
     }
 
@@ -204,6 +214,7 @@ impl AppState {
         let opts = SubmitOptions { qa: default_qa(), block_errors: true };
         match submit(self.entry(f, r), &u, Stage::Translate, now_ms(), &opts) {
             SubmitResult::Ok(e) => {
+                let e = record_change(self.entry(f, r), &e, "надіслано", &e.target.clone(), "Ви", now_ms(), None);
                 self.put(f, name, u.key, e);
                 Ok(())
             }
@@ -311,6 +322,41 @@ impl AppState {
         check(&UnitLike::from(u), text, &qa)
     }
 
+    /// Збіги з пам'яті перекладів для оригіналу рядка (пари береться з уже перекладених рядків проєкту).
+    pub fn tm_matches(&self, f: usize, r: usize) -> Vec<TmMatch> {
+        let mut idx = TmIndex::new(false);
+        let me = self.unit(f, r).map(|u| u.key.clone());
+        for (fi, v) in self.views.iter().enumerate() {
+            let Some(ents) = self.project.as_ref().and_then(|p| p.files.get(&v.name)) else { continue };
+            for u in &v.units {
+                if fi == f && Some(&u.key) == me.as_ref() {
+                    continue;
+                }
+                if let Some(e) = ents.get(&u.key).filter(|e| !e.target.is_empty()) {
+                    idx.add(TmEntry { s: u.source.clone(), t: e.target.clone(), src: v.name.clone() });
+                }
+            }
+        }
+        idx.find(&self.source_of(f, r), &FindOpts { min: Some(60.0), limit: Some(6), exclude: None })
+    }
+
+    /// Історія правок рядка, нові першими.
+    pub fn history(&self, f: usize, r: usize) -> Vec<HistoryRow> {
+        let e = self.entry(f, r);
+        history_rows(e.and_then(|e| e.history.as_deref()).unwrap_or(&[]), e.map_or("", |e| e.target.as_str()))
+    }
+
+    pub fn threads(&self, f: usize, r: usize) -> Vec<Thread> {
+        threads_of(self.entry(f, r).and_then(|e| e.comments.as_deref()))
+    }
+
+    pub fn comment(&mut self, f: usize, r: usize, text: &str) {
+        let Some(u) = self.unit(f, r).cloned() else { return };
+        let name = self.views[f].name.clone();
+        let next = add_comment(self.entry(f, r), "Ви", text, now_ms(), None);
+        self.put(f, name, u.key, next);
+    }
+
     pub fn key_of(&self, f: usize, r: usize) -> String {
         self.unit(f, r).map_or(String::new(), |u| u.key.clone())
     }
@@ -395,6 +441,26 @@ mod tests {
         assert_eq!(s2.target_of(0, 0), "Герой");
         s2.restore_originals().unwrap();
         assert_eq!(std::fs::read_to_string(data.join("Actors.json")).unwrap(), before);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn memory_history_and_comments_work() {
+        let base = std::env::temp_dir().join(format!("transly-app-tabs-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = base.join("MyGame").join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        std::fs::write(data.join("Actors.json"), r#"[null,{"id":1,"name":"Brave Hero","nickname":"","profile":"","note":""},{"id":2,"name":"Brave Hero","nickname":"","profile":"","note":""}]"#).unwrap();
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        assert!(s.row_count(0) >= 2);
+        s.submit(0, 0, "Хоробрий герой").unwrap();
+        let m = s.tm_matches(0, 1);
+        assert!(m.iter().any(|x| x.t == "Хоробрий герой" && x.score >= 90), "{m:?}");
+        s.edit(0, 0, "Хоробра героїня");
+        assert!(s.history(0, 0).len() >= 1);
+        s.comment(0, 0, "Перевірити рід");
+        assert_eq!(s.threads(0, 0).len(), 1);
         let _ = std::fs::remove_dir_all(&base);
     }
 

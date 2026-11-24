@@ -67,7 +67,7 @@ pub fn glossary_terms(g: &Value, file_text: &str) -> (Vec<BroughtTerm>, usize) {
                     m.insert("uk".into(), Value::from(uk));
                 }
                 if let Some(alt) = alt.filter(|a| !js::trim(a).is_empty()) {
-                    m.insert("alt".into(), alt.split(';').map(|x| js::trim(x)).filter(|x| !x.is_empty()).map(Value::from).collect());
+                    m.insert("alt".into(), alt.split(';').map(js::trim).filter(|x| !x.is_empty()).map(Value::from).collect());
                 }
                 if let Some(note) = note.filter(|n| !js::trim(n).is_empty()) {
                     m.insert("note".into(), Value::from(js::trim(note)));

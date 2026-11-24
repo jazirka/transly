@@ -18,6 +18,7 @@ use transly_core::termedit::{save_term, SaveResult, TermForm};
 use transly_core::readgame::read_game;
 use transly_core::rpgmaker::ExtractOptions;
 use transly_core::workflow::{edit, reconcile, submit, Stage, SubmitOptions, SubmitResult};
+use crate::plugins::PluginHost;
 use transly_core::filesync::{FilesReport, FilesState};
 use transly_platform::github::{github_sync, GithubSettings, HttpApi};
 use transly_platform::{apply_data, list_json, read_text, register_picked, restore_data, OutFile, Picked, Roots};
@@ -87,6 +88,7 @@ struct Visible {
 type QaCache = ((usize, u64), Vec<(usize, String, bool)>);
 
 pub struct AppState {
+    pub host: PluginHost,
     pub sync_state: FilesState,
     sync_rx: Option<std::sync::mpsc::Receiver<Result<FilesReport, String>>>,
     /// Підсумок перенесення перекладів після оновлення гри (порожній, коли гра не змінилась).
@@ -112,13 +114,22 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None }
+        AppState { host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None }
     }
 }
 
 /// Де лежить проєкт: поруч із текою гри (не всередині неї).
 fn project_path(dir: &Path, name: &str) -> PathBuf {
     dir.parent().unwrap_or(dir).join(format!("{name}.transly.json"))
+}
+
+/// Тека установлених плагінів у теці даних користувача.
+fn plugins_dir() -> Option<PathBuf> {
+    if cfg!(test) {
+        return None;
+    }
+    let base = std::env::var_os("LOCALAPPDATA").or_else(|| std::env::var_os("XDG_DATA_HOME")).map(PathBuf::from).or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local").join("share")))?;
+    Some(base.join("Transly").join("plugins"))
 }
 
 fn now_ms() -> i64 {
@@ -134,7 +145,7 @@ impl AppState {
     pub fn open_game(&mut self, dir: &Path) -> Result<usize, String> {
         register_picked(&self.roots, &self.picked, dir);
         let d = dir.to_string_lossy().to_string();
-        let exts: Vec<String> = [".po", ".pot", ".csv", ".tsv", ".rpy"].iter().map(|e| e.to_string()).collect();
+        let exts: Vec<String> = self.host.reg.extensions();
         let listed = list_json(&self.roots, &d, Some(exts))?;
         let mut files = Vec::new();
         for f in listed {
@@ -145,7 +156,17 @@ impl AppState {
                 files.push(GameFile { name: f.name, json: serde_json::Value::Null, text: Some(text) });
             }
         }
-        let views = read_game(&files, &ExtractOptions::default());
+        // вбудовані формати читає ядро; файли, які бере лише формат плагіна, — його обробник
+        let builtin: Vec<GameFile> = files.iter().filter(|f| transly_core::engine::format_of(&f.name).is_some()).cloned().collect();
+        let mut views = read_game(&builtin, &ExtractOptions::default());
+        for f in files.iter().filter(|f| transly_core::engine::format_of(&f.name).is_none()) {
+            if let Some(h) = self.host.reg.handler_of(&f.name) {
+                let units = h.extract(f, &ExtractOptions::default());
+                if !units.is_empty() {
+                    views.push(FileView { name: f.name.clone(), units, label: None });
+                }
+            }
+        }
         let name = name_from_folder(&d);
         let name = if name.is_empty() { "Новий проєкт".to_string() } else { name };
         // проєкт, збережений раніше, підхоплюється; рядки, чий оригінал змінився, повертаються в чернетки
@@ -558,6 +579,34 @@ impl AppState {
         msg
     }
 
+    /// Застосовує команду плагіна «замінити»: показує, скільки рядків зміниться, і записує однією дією журналу.
+    pub fn run_replace(&mut self, steps: &[transly_core::commands::ReplaceStep], apply: bool) -> Result<usize, String> {
+        let p = self.project.as_ref().ok_or("Проєкт не відкрито")?;
+        let found = transly_core::commands::plan_steps(&self.views, p, steps, 100_000);
+        if !apply || found.is_empty() {
+            return Ok(found.len());
+        }
+        let changes: Vec<transly_core::journal::RowChange> = found
+            .iter()
+            .filter_map(|m| {
+                let cur = p.files.get(&m.file)?.get(&m.key)?;
+                Some(transly_core::journal::RowChange { file: m.file.clone(), key: m.key.clone(), next: Entry { target: m.after.clone(), mt: now_ms(), ..cur.clone() }, text: m.after.clone(), what: None })
+            })
+            .collect();
+        let who = self.who();
+        let mut seed = 7u32;
+        let mut rand = move || {
+            seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+            seed >> 8
+        };
+        let n = changes.len();
+        let p = self.project.as_mut().ok_or("Проєкт не відкрито")?;
+        commit_rows(&mut p.files, &changes, "replace", &who, now_ms(), None, &mut rand);
+        self.rev += 1;
+        self.dirty = true;
+        Ok(n)
+    }
+
     pub fn key_of(&self, f: usize, r: usize) -> String {
         self.unit(f, r).map_or(String::new(), |u| u.key.clone())
     }
@@ -736,6 +785,33 @@ mod tests {
         let rn = (0..s2.row_count(0)).find(|r| s2.source_of(0, *r) == "Newcomer").unwrap();
         assert_eq!(s2.target_of(0, rn), "");
         assert!(!s2.last_note.is_empty());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_plugin_format_is_read_and_a_replace_command_runs() {
+        let base = std::env::temp_dir().join(format!("transly-app-plugfmt-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let plug = base.join("plug");
+        std::fs::create_dir_all(&plug).unwrap();
+        let manifest = r#"{"manifestVersion":1,"id":"acme.lang","name":"Lang","version":"1.0.0","contributes":{"formats":[{"id":"lang","label":"Lang","extensions":[".lang"],"text":true,"spec":{"type":"keyvalue"}}]}}"#;
+        std::fs::write(plug.join("transly-plugin.json"), manifest).unwrap();
+        let data = game(&base);
+        std::fs::write(data.join("ui.lang"), "menu.start=Start game
+menu.quit=Quit game
+").unwrap();
+        let mut s = AppState { host: PluginHost::open(Some(base.join("store"))), ..Default::default() };
+        s.host.install(&plug).unwrap();
+        s.open_game(&data).unwrap();
+        let fi = s.file_names().iter().position(|n| n == "ui.lang").expect("файл плагіна прочитано");
+        assert_eq!(s.row_count(fi), 2);
+        s.edit(fi, 0, "Почати гру");
+        s.edit(fi, 1, "Вийти з гри");
+        let step = transly_core::commands::ReplaceStep { find: "гру".into(), replace: "партію".into(), whole_word: false, case_sensitive: false };
+        assert_eq!(s.run_replace(std::slice::from_ref(&step), false).unwrap(), 1, "перегляд нічого не пише");
+        assert_eq!(s.target_of(fi, 0), "Почати гру");
+        assert_eq!(s.run_replace(&[step], true).unwrap(), 1);
+        assert_eq!(s.target_of(fi, 0), "Почати партію");
         let _ = std::fs::remove_dir_all(&base);
     }
 

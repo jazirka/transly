@@ -2,6 +2,7 @@
 //! рядок меню, панель інструментів, смуга інструментів, дерево файлів, сітка рядків із вкладкою, хлібними крихтами й фільтрами,
 //! інспектор рядка праворуч і рядок стану. Уся логіка — в `transly-core`, доступ до файлів — через `transly-platform`.
 
+mod plugins;
 mod state;
 mod theme;
 
@@ -26,6 +27,7 @@ struct App {
     term_en: String,
     term_uk: String,
     itab: usize,
+    plugins_win: bool,
     sync_win: Option<(transly_platform::github::GithubSettings, String)>,
     settings: Option<state::SettingsView>,
     btab: usize,
@@ -70,7 +72,7 @@ fn source_job(text: &str, marks: &[(usize, usize, usize)]) -> egui::text::Layout
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
     }
 }
 
@@ -137,6 +139,7 @@ impl eframe::App for App {
         self.bottom(ctx);
         self.settings_window(ctx);
         self.sync_window(ctx);
+        self.plugins_window(ctx);
         if let Some(msg) = self.st.finish_sync() {
             self.message = msg;
         }
@@ -204,6 +207,9 @@ impl App {
                     }
                     if plain_button(ui, if self.st.syncing() { "Синхронізація…" } else { "Синхронізувати" }).clicked() {
                         self.sync_win = Some((self.st.github_settings(), self.token.clone()));
+                    }
+                    if plain_button(ui, "Плагіни").clicked() {
+                        self.plugins_win = true;
                     }
                     if plain_button(ui, "Налаштування").clicked() {
                         self.settings = self.st.settings_view();
@@ -432,6 +438,102 @@ impl App {
             self.sync_win = None;
         } else {
             self.sync_win = Some((cfg, token));
+        }
+    }
+
+    fn plugins_window(&mut self, ctx: &egui::Context) {
+        if !self.plugins_win {
+            return;
+        }
+        let mut open = true;
+        let mut action: Option<(String, u8)> = None; // 0 вимкнути/увімкнути, 1 видалити
+        let mut run: Option<Vec<transly_core::commands::ReplaceStep>> = None;
+        egui::Window::new("Плагіни").open(&mut open).collapsible(false).default_width(560.0).show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                if primary_button(ui, "Встановити з теки…").clicked() {
+                    if let Some(p) = rfd::FileDialog::new().set_title("Тека плагіна (з transly-plugin.json)").pick_folder() {
+                        self.message = match self.st.host.install(&p) {
+                            Ok(id) => format!("Встановлено: {id}"),
+                            Err(e) => e,
+                        };
+                    }
+                }
+                if plain_button(ui, "Встановити з файлу…").clicked() {
+                    if let Some(p) = rfd::FileDialog::new().add_filter("Пакет плагіна", &["zip", "transly-plugin"]).pick_file() {
+                        self.message = match self.st.host.install(&p) {
+                            Ok(id) => format!("Встановлено: {id}"),
+                            Err(e) => e,
+                        };
+                    }
+                }
+            });
+            ui.add_space(8.0);
+            for r in self.st.host.rows() {
+                egui::Frame::new().fill(PANEL2).corner_radius(CornerRadius::same(R2)).inner_margin(egui::Margin::symmetric(10, 7)).show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.horizontal(|ui| {
+                        let mut on = r.enabled;
+                        if ui.checkbox(&mut on, "").changed() {
+                            action = Some((r.id.clone(), 0));
+                        }
+                        ui.vertical(|ui| {
+                            ui.label(RichText::new(format!("{}  {}", r.name, r.version)).color(TEXT));
+                            let (txt, col) = match r.state {
+                                "enabled" => ("працює", OK),
+                                "disabled" => ("вимкнено", MUTE),
+                                "incompatible" => ("несумісний", WARN),
+                                "missing-dependency" => ("бракує залежності", WARN),
+                                _ => ("помилка", BAD),
+                            };
+                            ui.label(RichText::new(format!("{}{}{}", r.id, if r.builtin { " · вбудований" } else { "" }, "")).size(11.0).color(MUTE));
+                            ui.label(RichText::new(match &r.reason { Some(w) => format!("{txt}: {w}"), None => txt.to_string() }).size(11.0).color(col));
+                        });
+                        if !r.builtin {
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                if plain_button(ui, "Видалити").clicked() {
+                                    action = Some((r.id.clone(), 1));
+                                }
+                            });
+                        }
+                    });
+                });
+                ui.add_space(4.0);
+            }
+            let cmds = self.st.host.commands();
+            if !cmds.is_empty() {
+                ui.add_space(6.0);
+                label_caps(ui, "Команди плагінів");
+                for c in cmds.iter().filter(|c| c.action == "replace") {
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(&c.title).color(TEXT));
+                        ui.label(RichText::new(&c.plugin_name).size(11.0).color(MUTE));
+                        if plain_button(ui, "Виконати").clicked() {
+                            run = c.steps.clone();
+                        }
+                    });
+                }
+            }
+        });
+        if let Some((id, kind)) = action {
+            if kind == 0 {
+                let on = !self.st.host.rows().iter().any(|r| r.id == id && r.enabled);
+                self.st.host.set_enabled(&id, on);
+            } else {
+                self.message = match self.st.host.remove(&id) {
+                    Ok(()) => "Плагін видалено".into(),
+                    Err(e) => e,
+                };
+            }
+        }
+        if let Some(steps) = run {
+            self.message = match self.st.run_replace(&steps, true) {
+                Ok(0) => "Команда нічого не змінила".into(),
+                Ok(n) => format!("Команда змінила рядків: {n}"),
+                Err(e) => e,
+            };
+        }
+        if !open {
+            self.plugins_win = false;
         }
     }
 

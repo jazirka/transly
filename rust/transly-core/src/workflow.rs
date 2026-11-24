@@ -123,3 +123,83 @@ pub fn reconcile(units: &[Unit], entries: &mut Translations, now: i64) -> Vec<St
     }
     changed
 }
+
+/// Результат відправлення: новий запис чи причина відмови.
+#[derive(Clone, Debug, PartialEq)]
+pub enum SubmitResult {
+    Ok(Entry),
+    Err(String),
+}
+
+#[derive(Clone)]
+pub struct SubmitOptions {
+    pub block_errors: bool,
+    pub qa: crate::qa::QaOptions,
+}
+impl Default for SubmitOptions {
+    fn default() -> Self {
+        SubmitOptions { block_errors: true, qa: crate::qa::default_qa() }
+    }
+}
+
+/// Надіслати на вичитку (прохід перекладу) або затвердити (прохід вичитки).
+pub fn submit(prev: Option<&Entry>, unit: &Unit, stage: Stage, now: i64, opts: &SubmitOptions) -> SubmitResult {
+    use crate::qa::{active_issues, Severity, UnitLike};
+    let Some(prev) = prev.filter(|p| !js::trim(&p.target).is_empty()) else { return SubmitResult::Err("Переклад порожній".into()) };
+    match stage {
+        Stage::Translate => {
+            if prev.status == Status::Done {
+                return SubmitResult::Err("Рядок уже надіслано".into());
+            }
+            if prev.status == Status::Appr {
+                return SubmitResult::Err("Рядок уже вичитано".into());
+            }
+        }
+        Stage::Review => {
+            if !matches!(prev.status, Status::Done | Status::Appr) {
+                return SubmitResult::Err("Рядок ще не надіслано".into());
+            }
+        }
+    }
+    let mut prev = prev.clone();
+    // режим перенесення «у тексті»: переноси ставляться при надсиланні, тож вичитується те, що покаже гра
+    let like = UnitLike::from(unit);
+    if let Some(plan) = &opts.qa.wrap {
+        let m = crate::wrap::MessageLike { kind: like.kind.clone(), key: like.key.clone(), face: like.face.clone() };
+        if stage == Stage::Translate && plan.settings.mode == crate::wrapconfig::WrapMode::Text && crate::wrap::is_message_unit(&m) {
+            let w = crate::wrap::wrap_message(plan, &m, &prev.target);
+            if w.changed {
+                prev.target = w.text;
+            }
+        }
+    }
+    if opts.block_errors {
+        let errors: Vec<String> = active_issues(&like, Some(&prev), &opts.qa).into_iter().filter(|i| i.severity == Severity::Bad).map(|i| i.message).collect();
+        if !errors.is_empty() {
+            return SubmitResult::Err(format!("Є помилка QA: {}", errors.join("; ")));
+        }
+    }
+    let mut e = Entry { mt: next_mt(Some(prev.mt), now), src: Some(unit.source.clone()), ..prev };
+    if stage == Stage::Translate {
+        e.status = Status::Done;
+        e.orig = Some(e.target.clone());
+        e.returned = Some(false);
+    } else {
+        e.status = Status::Appr;
+    }
+    SubmitResult::Ok(e)
+}
+
+/// Затвердити рядок одним кроком: чернетка спершу надсилається (щоб історія знала обидва), потім затверджується. Відмова з
+/// причиною, коли нема перекладу чи його надсилання блокує помилка QA. Уже затверджений лишається затвердженим.
+pub fn approve_entry(prev: Option<&Entry>, unit: &Unit, now: i64, opts: &SubmitOptions) -> SubmitResult {
+    let Some(p) = prev.filter(|p| !js::trim(&p.target).is_empty()) else { return SubmitResult::Err("Переклад порожній".into()) };
+    let mut next = p.clone();
+    if !matches!(next.status, Status::Done | Status::Appr) {
+        match submit(Some(&next), unit, Stage::Translate, now, opts) {
+            SubmitResult::Ok(e) => next = e,
+            err => return err,
+        }
+    }
+    submit(Some(&next), unit, Stage::Review, now, opts)
+}

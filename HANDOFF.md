@@ -40,4 +40,6 @@
 - Правила перенесення: рядки порівнювати через `js::cmp` (UTF-16), `JSON.stringify` → `js::stringify`, хеші — `js::hash_text`. Порядок полів структур = порядок, в якому TS будує об'єкти.
 - Також готово: `plural` (вибір форми й групування тисяч; підключення до i18n — з `ext/i18n`), `ukmorph` (повністю, словник `MorphDict` — трейт, у векторах не використовується). Вектори `ukmorph.json`: 1500 фраз, 4000 перенесень.
 - Також готово: `controlcodes`, `hyphen`, `wrapconfig` (разом із `gamewindow`), `wrap` (функція виміру в пікселях — `Option<Measure>`, її дає виклик; `js::is_space`/`js::trim` тепер як `s` у JS).
-- Далі за списком: `qa*` і правила (`qa`, `qarules`, `qacodes`, `qaconfig`, `qaadvice`), `project`, `autofill`, `compose`, `tm`, `ingest`, `branches`, формати файлів і збірка, `ext/*`.
+- Також готово: `qacodes`, `qarules` (8 власних правил; правила плагінів — з `ext/*`), `qaconfig`, `qa`, `qaadvice`, а також `submit`/`approve_entry` у `workflow`. Кеші по об’єкту рядка (`WeakMap`) не переносилися. Залежності: `fancy-regex`, `unicode-normalization`. Позиції в правилах — індекси символів, не UTF-16.
+- Відомо: 6 тестів `test/ext-examples.test.ts` падають на Windows через контрольні суми (CRLF) — не пов’язано з ядром.
+- Далі за списком: `project`, `autofill`, `compose`, `tm`, `ingest`, `branches`, формати файлів і збірка, `ext/*`.

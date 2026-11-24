@@ -33,3 +33,9 @@
 - Windows: потрібні Rust (`rustup`) і Build Tools для Visual Studio.
 - У `app/src/core` є тонкі місця, які тести фіксують: порядок злиття, `nextMt` (гібридний годинник), поділ слів `tokenize`, правила `ukmorph` (відмінювання). Не «покращуй» поведінку при перенесенні: спершу еквівалентність, потім зміни.
 - Не змінюй `desktop.yml` і `test.yml` без потреби.
+
+## Прогрес етапу 1 (оновлено)
+- Готово й запушено: `rust/transly-core` — модулі `model`, `variants`, `workflow` (без `submit`/`approveEntry`: потребують QA і `wrap`), `merge`. Вектори: `cd app && npm run vectors` → `rust/transly-core/tests/vectors/merge.json`; тести: `cd rust && cargo test -p transly-core`.
+- Нове вектори для модуля = новий файл `app/scripts/vectors/<модуль>.vec.ts` (допоміжне — `util.ts`: seeded rng, `text()` з символами для розбіжностей UTF-16/UTF-8) + `rust/transly-core/tests/<модуль>_vectors.rs` (допоміжне — `tests/common`).
+- Правила перенесення: рядки порівнювати через `js::cmp` (UTF-16), `JSON.stringify` → `js::stringify`, хеші — `js::hash_text`. Порядок полів структур = порядок, в якому TS будує об'єкти.
+- Далі за списком: `plural`, `glossary` (+ токенізація), `termmatch`, `strands`, `termusage`, `plan`/`journal`, `qa*`, `ukmorph`…

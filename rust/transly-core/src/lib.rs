@@ -2,6 +2,7 @@
 //! еталон — «золоті вектори» (`tests/vectors/*.json`), які генерує `npm run vectors` у `app/`.
 
 pub mod controlcodes;
+pub mod declarative;
 pub mod engine;
 pub mod formats;
 pub mod glossary;

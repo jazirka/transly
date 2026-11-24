@@ -5,6 +5,11 @@ use indexmap::IndexMap;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use transly_core::builtin::register_builtins;
+use transly_core::declqa::{declarative_rule, DeclRule};
+use transly_core::glossaries::{apply_glossary_import, glossary_terms, plan_glossary_import};
+use transly_core::project::SavedProject;
+use transly_core::qa::{Issue, IssueFix, Severity};
+use transly_core::qarules::{QaRules, RuleCtx};
 use transly_core::commands::{plugin_commands, PluginCommand};
 use transly_core::i18n::I18n;
 use transly_core::manifest::MANIFEST_FILE;
@@ -16,6 +21,9 @@ pub struct PluginHost {
     pub reg: PluginRegistry,
     pub i18n: I18n,
     dir: Option<PathBuf>,
+    /// Правила QA працюючих плагінів (перебудовуються, коли змінився набір плагінів).
+    rules: std::cell::RefCell<(u64, Vec<DeclRule>)>,
+    qa_i18n: std::cell::RefCell<I18n>,
 }
 
 /// Рядок списку для вікна менеджера.
@@ -38,7 +46,7 @@ fn record_of(pkg: &PluginPackage, enabled: bool, source: PluginSource) -> Plugin
 impl PluginHost {
     /// `dir` — тека установлених плагінів; None — лише вбудовані (тести).
     pub fn open(dir: Option<PathBuf>) -> PluginHost {
-        let mut host = PluginHost { reg: PluginRegistry::new(None, None), i18n: I18n::new(), dir };
+        let mut host = PluginHost { reg: PluginRegistry::new(None, None), i18n: I18n::new(), dir, rules: std::cell::RefCell::new((u64::MAX, vec![])), qa_i18n: std::cell::RefCell::new(I18n::new()) };
         register_builtins(&mut host.reg, &[], &mut host.i18n);
         host.load_installed();
         host
@@ -129,6 +137,63 @@ impl PluginHost {
         }
         self.write_state();
         Ok(())
+    }
+
+    fn refresh_rules(&self) {
+        if self.rules.borrow().0 == self.reg.revision {
+            return;
+        }
+        let mut i18n = self.qa_i18n.borrow_mut();
+        let mut rules = Vec::new();
+        for r in self.reg.list().filter(|r| r.state == transly_core::registry::PluginState::Enabled) {
+            for q in r.manifest["contributes"]["qaRules"].as_array().into_iter().flatten() {
+                rules.push(declarative_rule(r.id(), q, &mut i18n));
+            }
+        }
+        *self.rules.borrow_mut() = (self.reg.revision, rules);
+    }
+
+    /// Примітки правил плагінів до перекладу рядка (`kind` — вид рядка: dialogue, name…).
+    pub fn qa_issues(&self, kind: Option<&str>, source: &str, target: &str) -> Vec<Issue> {
+        self.refresh_rules();
+        let rules = self.rules.borrow();
+        if rules.1.is_empty() {
+            return vec![];
+        }
+        let qa = QaRules { sev: IndexMap::new(), keep: Default::default(), apostrophe: "any".into(), sig: String::new() };
+        let ctx = RuleCtx::new(kind, source, target, &qa);
+        let mut i18n = self.qa_i18n.borrow_mut();
+        let mut out = Vec::new();
+        for r in &rules.1 {
+            if r.kinds.as_ref().is_some_and(|k| !kind.is_some_and(|x| k.iter().any(|y| y == x))) {
+                continue;
+            }
+            if let Some(o) = r.run(&ctx, &mut i18n) {
+                let bad = r.def == transly_core::qarules::RuleSeverity::Bad;
+                out.push(Issue { key: r.id.clone(), severity: if bad { Severity::Bad } else { Severity::Warn }, cat: r.cat, message: o.message, detail: Some(r.explain.clone()), fix: o.fixed.filter(|f| f != target).map(|text| IssueFix { label: "Виправити".into(), text }), codes: None });
+            }
+        }
+        out
+    }
+
+    /// Глосарії працюючих плагінів: (id плагіна, id глосарія, назва).
+    pub fn glossaries(&self) -> Vec<(String, String, String)> {
+        self.reg
+            .list()
+            .filter(|r| r.state == transly_core::registry::PluginState::Enabled)
+            .flat_map(|r| r.manifest["contributes"]["glossaries"].as_array().into_iter().flatten().map(|g| (r.id().to_string(), g["id"].as_str().unwrap_or("").to_string(), g["title"].as_str().unwrap_or("").to_string())).collect::<Vec<_>>())
+            .collect()
+    }
+
+    /// Додає нові терміни глосарія плагіна до проєкту (власні терміни перекладача не замінюються). Повертає, скільки додано й скільки відрізняється.
+    pub fn import_glossary(&self, project: &mut SavedProject, plugin: &str, gid: &str, now: i64) -> Result<(usize, usize), String> {
+        let r = self.reg.get(plugin).ok_or("Плагін не знайдено")?;
+        let g = r.manifest["contributes"]["glossaries"].as_array().into_iter().flatten().find(|g| g["id"] == gid).ok_or("Глосарія не знайдено")?;
+        let file_text = g.get("file").and_then(Value::as_str).and_then(|f| r.files.get(f)).cloned().unwrap_or_default();
+        let (terms, _) = glossary_terms(g, &file_text);
+        let plan = plan_glossary_import(&project.terms, &terms);
+        let added = apply_glossary_import(project, &plan, now);
+        Ok((added, plan.differ.len()))
     }
 
     pub fn commands(&mut self) -> Vec<PluginCommand> {

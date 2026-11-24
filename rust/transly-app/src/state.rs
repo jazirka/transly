@@ -381,7 +381,11 @@ impl AppState {
     /// Примітки QA до тексту рядка за правилами ядра.
     pub fn issues(&self, f: usize, r: usize, text: &str) -> Vec<Issue> {
         let Some(u) = self.unit(f, r) else { return vec![] };
-        check(&UnitLike::from(u), text, &self.qa_options())
+        let mut v = check(&UnitLike::from(u), text, &self.qa_options());
+        if !text.is_empty() {
+            v.extend(self.host.qa_issues(UnitLike::from(u).kind.as_deref(), &u.source, text));
+        }
+        v
     }
 
     /// Збіги з пам'яті перекладів для оригіналу рядка (пари береться з уже перекладених рядків проєкту).
@@ -428,7 +432,9 @@ impl AppState {
             for r in 0..self.row_count(f) {
                 let Some(e) = self.entry(f, r).filter(|e| !e.target.is_empty()) else { continue };
                 let Some(u) = self.unit(f, r) else { continue };
-                for i in check(&UnitLike::from(u), &e.target, &qa) {
+                let mut all = check(&UnitLike::from(u), &e.target, &qa);
+                all.extend(self.host.qa_issues(UnitLike::from(u).kind.as_deref(), &u.source, &e.target));
+                for i in all {
                     out.push((r, i.message, i.severity == transly_core::qa::Severity::Bad));
                 }
             }
@@ -605,6 +611,19 @@ impl AppState {
         self.rev += 1;
         self.dirty = true;
         Ok(n)
+    }
+
+    /// Додає терміни глосарія плагіна до проєкту.
+    pub fn import_plugin_glossary(&mut self, plugin: &str, gid: &str) -> String {
+        let Some(p) = self.project.as_mut() else { return "Проєкт не відкрито".into() };
+        match self.host.import_glossary(p, plugin, gid, now_ms()) {
+            Ok((added, differ)) => {
+                self.rev += 1;
+                self.dirty = true;
+                format!("Додано термінів: {added}{}", if differ > 0 { format!(" (ще {differ} відрізняються від ваших і лишені як є)") } else { String::new() })
+            }
+            Err(e) => e,
+        }
     }
 
     pub fn key_of(&self, f: usize, r: usize) -> String {
@@ -812,6 +831,36 @@ menu.quit=Quit game
         assert_eq!(s.target_of(fi, 0), "Почати гру");
         assert_eq!(s.run_replace(&[step], true).unwrap(), 1);
         assert_eq!(s.target_of(fi, 0), "Почати партію");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn plugin_qa_rules_and_glossaries_work() {
+        let base = std::env::temp_dir().join(format!("transly-app-plugqa-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let plug = base.join("plug");
+        std::fs::create_dir_all(&plug).unwrap();
+        let terms = "Hero	Герой
+";
+        std::fs::write(plug.join("terms.tsv"), terms).unwrap();
+        let sum = format!("sha256-{}", transly_core::package::sha256_hex(terms.as_bytes()));
+        let manifest = format!(r#"{{"manifestVersion":1,"id":"acme.qa","name":"QA","version":"1.0.0","files":{{"terms.tsv":"{sum}"}},"contributes":{{"glossaries":[{{"id":"g","title":"Терміни","file":"terms.tsv"}}],"qaRules":[{{"id":"noword","title":"Без слова","severity":"bad","check":{{"type":"forbid","items":[{{"find":"заборонено"}}],"message":"Слово заборонене"}}}}]}}}}"#);
+        std::fs::write(plug.join("transly-plugin.json"), manifest).unwrap();
+        let data = game(&base);
+        let mut s = AppState { host: PluginHost::open(Some(base.join("store"))), ..Default::default() };
+        s.host.install(&plug).unwrap();
+        s.open_game(&data).unwrap();
+        let issues = s.issues(0, 0, "Це заборонено тут");
+        assert!(issues.iter().any(|i| i.key == "acme.qa:noword" && i.message.contains("заборонене")), "{issues:?}");
+        assert!(s.issues(0, 0, "Це добре").iter().all(|i| i.key != "acme.qa:noword"));
+        s.host.set_enabled("acme.qa", false);
+        assert!(s.issues(0, 0, "Це заборонено тут").iter().all(|i| i.key != "acme.qa:noword"), "вимкнений плагін не перевіряє");
+        s.host.set_enabled("acme.qa", true);
+        s.edit(0, 0, "Це заборонено тут");
+        assert!(s.file_issues(0).iter().any(|i| i.2), "помилка плагіна в списку файлу");
+        assert!(s.import_plugin_glossary("acme.qa", "g").contains("Додано термінів: 1"));
+        assert_eq!(s.terms().len(), 1);
+        assert!(s.import_plugin_glossary("acme.qa", "g").contains("Додано термінів: 0"), "вдруге нічого нового");
         let _ = std::fs::remove_dir_all(&base);
     }
 

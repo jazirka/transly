@@ -448,6 +448,7 @@ impl App {
         let mut open = true;
         let mut action: Option<(String, u8)> = None; // 0 вимкнути/увімкнути, 1 видалити
         let mut run: Option<Vec<transly_core::commands::ReplaceStep>> = None;
+        let mut gloss: Option<(String, String)> = None;
         egui::Window::new("Плагіни").open(&mut open).collapsible(false).default_width(560.0).show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if primary_button(ui, "Встановити з теки…").clicked() {
@@ -499,6 +500,20 @@ impl App {
                 });
                 ui.add_space(4.0);
             }
+            let gl = self.st.host.glossaries();
+            if !gl.is_empty() {
+                ui.add_space(6.0);
+                label_caps(ui, "Глосарії плагінів");
+                for (pid, gid, title) in &gl {
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(title).color(TEXT));
+                        ui.label(RichText::new(pid).size(11.0).color(MUTE));
+                        if plain_button(ui, "Додати терміни").clicked() {
+                            gloss = Some((pid.clone(), gid.clone()));
+                        }
+                    });
+                }
+            }
             let cmds = self.st.host.commands();
             if !cmds.is_empty() {
                 ui.add_space(6.0);
@@ -524,6 +539,9 @@ impl App {
                     Err(e) => e,
                 };
             }
+        }
+        if let Some((pid, gid)) = gloss {
+            self.message = self.st.import_plugin_glossary(&pid, &gid);
         }
         if let Some(steps) = run {
             self.message = match self.st.run_replace(&steps, true) {

@@ -128,6 +128,7 @@ const SHELL = `<div class="scroll-x"><div class="ide mode-table lp-open" id="ide
       <button class="tb-ic play" id="run-btn" title="Запустити (F5)" aria-label="Запустити">${SVG.play}</button>
       <div class="tsep"></div>
       <button class="tb-ic bellb" id="bell" title="Сповіщення: що потребує уваги й що змінили інші" aria-label="Сповіщення" aria-haspopup="menu" aria-expanded="false">${SVG.bell}<b id="bell-n" hidden>0</b></button>
+      <button class="tb-ic" id="hamb2" title="Головне меню (F10)" aria-label="Головне меню" aria-haspopup="menu" aria-expanded="false">${SVG.menu}</button>
       <button class="tb-ic" id="hk" title="Гарячі клавіші" aria-label="Гарячі клавіші">${SVG.keys}</button>
     </div>
   </header>
@@ -1882,7 +1883,7 @@ export async function start(root: HTMLElement): Promise<void> {
     else rememberOpener($('#hamb'));
     bar.hidden = !open;
     $('.topbar').classList.toggle('menu-on', open);
-    $('#hamb').setAttribute('aria-expanded', String(open));
+    $('#hamb').setAttribute('aria-expanded', String(open)); $('#hamb2').setAttribute('aria-expanded', String(open));
     // The keyboard goes straight into the bar; closing it gives the focus back to the button that opened it.
     if (open) focusFirst(bar, '[data-mg]'); else if (had) restoreOpener();
   }
@@ -2071,12 +2072,12 @@ export async function start(root: HTMLElement): Promise<void> {
     if (t.closest('#sb-sync')) { openSettingsDlg('file'); return; }
     if (t.closest('#lp-search,#mt-search')) { openSearch(); return; }
     if (t.closest('#hk')) { toggleKeys(); return; }
-    if (t.closest('#hamb')) { mbToggle(); return; }
+    if (t.closest('#hamb,#hamb2')) { mbToggle(); return; }
     const mg = t.closest<HTMLElement>('#menubar [data-mg]');
     if (mg) { if (mbOpen === mg.dataset.mg) mbClose(); else if (e.detail === 0) mbEnter(mg.dataset.mg!); else mbShow(mg.dataset.mg!); return; }
     const mi = t.closest<HTMLElement>('#mdd [data-mi]');
     if (mi) { const [g, i] = mi.dataset.mi!.split('|'); const it = menuOf(g!)[Number(i)]; mbToggle(false); if (it && it !== '-') setTimeout(() => it.fn(), 0); return; }
-    if (!t.closest('#menubar,#mdd,#hamb') && !$('#menubar').hidden) mbToggle(false);
+    if (!t.closest('#menubar,#mdd,#hamb,#hamb2') && !$('#menubar').hidden) mbToggle(false);
     if (t.closest('#scrim')) { s.leftOpen = false; s.rightOpen = false; renderAll(); return; }
     const bn = t.closest<HTMLElement>('#bnav [data-bn]');
     if (bn) { bottomNav(bn.dataset.bn!, bn); return; }
@@ -2398,6 +2399,7 @@ export async function start(root: HTMLElement): Promise<void> {
     }
     lastShift = 0;
     if (e.key === 'F5') { e.preventDefault(); runSelected(); return; }
+    if (e.key === 'F10' && !e.ctrlKey && !e.altKey && !e.shiftKey) { e.preventDefault(); mbToggle(); return; }
     // The next row that waits for you, in the whole project: an error (F8), a row without text (Alt+Shift+↓/↑), and «proofread and on» (Ctrl+Shift+Enter).
     if (e.key === 'F8') { e.preventDefault(); jump('error', e.shiftKey ? -1 : 1); return; }
     if (e.altKey && e.shiftKey && !e.ctrlKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); jump('untranslated', e.key === 'ArrowDown' ? 1 : -1); return; }

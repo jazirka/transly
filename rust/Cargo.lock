@@ -5445,9 +5445,12 @@ dependencies = [
 name = "transly-platform"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
+ "indexmap",
  "serde",
  "serde_json",
  "sha2",
+ "transly-core",
  "ureq",
 ]
 
@@ -5597,6 +5600,8 @@ dependencies = [
  "once_cell",
  "rustls",
  "rustls-pki-types",
+ "serde",
+ "serde_json",
  "url",
  "webpki-roots 0.26.11",
 ]

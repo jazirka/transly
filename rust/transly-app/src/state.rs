@@ -18,6 +18,8 @@ use transly_core::termedit::{save_term, SaveResult, TermForm};
 use transly_core::readgame::read_game;
 use transly_core::rpgmaker::ExtractOptions;
 use transly_core::workflow::{edit, reconcile, submit, Stage, SubmitOptions, SubmitResult};
+use transly_core::filesync::{FilesReport, FilesState};
+use transly_platform::github::{github_sync, GithubSettings, HttpApi};
 use transly_platform::{apply_data, list_json, read_text, register_picked, restore_data, OutFile, Picked, Roots};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -85,6 +87,8 @@ struct Visible {
 type QaCache = ((usize, u64), Vec<(usize, String, bool)>);
 
 pub struct AppState {
+    pub sync_state: FilesState,
+    sync_rx: Option<std::sync::mpsc::Receiver<Result<FilesReport, String>>>,
     /// Підсумок перенесення перекладів після оновлення гри (порожній, коли гра не змінилась).
     pub last_note: String,
     qa_cache: std::cell::RefCell<QaCache>,
@@ -108,7 +112,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None }
+        AppState { sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None }
     }
 }
 
@@ -487,6 +491,71 @@ impl AppState {
         self.rev += 1;
         self.dirty = true;
         Ok(msg)
+    }
+
+    /// Налаштування синхронізації з GitHub, збережені в проєкті (токен не зберігається ніде).
+    pub fn github_settings(&self) -> GithubSettings {
+        let get = |k: &str| self.project.as_ref().and_then(|p| p.settings.get(k)).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        GithubSettings { repo: get("githubRepo"), branch: get("githubBranch"), dir: get("githubDir"), originals: self.project.as_ref().and_then(|p| p.settings.get("githubOriginals")).and_then(|v| v.as_bool()).unwrap_or(false) }
+    }
+
+    pub fn set_github_settings(&mut self, g: &GithubSettings) {
+        if let Some(p) = self.project.as_mut() {
+            p.settings.insert("githubRepo".into(), serde_json::json!(g.repo));
+            p.settings.insert("githubBranch".into(), serde_json::json!(g.branch));
+            p.settings.insert("githubDir".into(), serde_json::json!(g.dir));
+            p.settings.insert("githubOriginals".into(), serde_json::json!(g.originals));
+            self.dirty = true;
+        }
+    }
+
+    /// Починає синхронізацію в окремому потоці (мережа не блокує вікно). Результат забирає `finish_sync`.
+    pub fn start_sync(&mut self, token: String) -> Result<(), String> {
+        if self.sync_rx.is_some() {
+            return Err("Синхронізація вже триває".into());
+        }
+        let project = self.project.clone().ok_or("Проєкт не відкрито")?;
+        let cfg = self.github_settings();
+        if cfg.repo.trim().is_empty() {
+            return Err("Вкажіть репозиторій у налаштуваннях синхронізації".into());
+        }
+        if token.trim().is_empty() {
+            return Err("Вкажіть токен GitHub".into());
+        }
+        let state = self.sync_state.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let mut api = HttpApi::new(token.trim());
+            let _ = tx.send(github_sync(&mut api, &cfg, &state, &project, 0, now_ms()));
+        });
+        self.sync_rx = Some(rx);
+        Ok(())
+    }
+
+    pub fn syncing(&self) -> bool {
+        self.sync_rx.is_some()
+    }
+
+    /// Забирає результат синхронізації, коли він готовий: зливає з проєктом, яким він став за час запиту.
+    pub fn finish_sync(&mut self) -> Option<String> {
+        let res = self.sync_rx.as_ref()?.try_recv().ok()?;
+        self.sync_rx = None;
+        Some(match res {
+            Err(e) => e,
+            Ok(rep) => self.adopt(rep),
+        })
+    }
+
+    fn adopt(&mut self, rep: FilesReport) -> String {
+        let msg = format!("Синхронізовано: отримано файлів {}, надіслано {}, конфліктів {}", rep.pulled, rep.pushed, rep.conflicts);
+        if let Some(live) = &self.project {
+            // за час запиту перекладач міг друкувати: результат зливається з поточним проєктом, а не замінює його
+            self.project = Some(transly_core::session::adopt_synced(live, &rep.project, false));
+        }
+        self.sync_state = rep.state;
+        self.rev += 1;
+        self.dirty = true;
+        msg
     }
 
     pub fn key_of(&self, f: usize, r: usize) -> String {

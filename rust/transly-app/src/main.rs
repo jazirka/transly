@@ -26,11 +26,13 @@ struct App {
     term_en: String,
     term_uk: String,
     itab: usize,
+    sync_win: Option<(transly_platform::github::GithubSettings, String)>,
     settings: Option<state::SettingsView>,
     btab: usize,
     bottom_open: bool,
     focus: bool,
     comment: String,
+    token: String,
 }
 
 const TERM_COLORS: [Color32; 4] = [VIOLET, INFO, OK, WARN];
@@ -68,7 +70,7 @@ fn source_job(text: &str, marks: &[(usize, usize, usize)]) -> egui::text::Layout
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
     }
 }
 
@@ -134,6 +136,10 @@ impl eframe::App for App {
         self.statusbar(ctx);
         self.bottom(ctx);
         self.settings_window(ctx);
+        self.sync_window(ctx);
+        if let Some(msg) = self.st.finish_sync() {
+            self.message = msg;
+        }
         self.strip(ctx);
         if !self.focus {
             self.tree(ctx);
@@ -195,6 +201,9 @@ impl App {
                         if let Some(p) = rfd::FileDialog::new().add_filter("Проєкт Transly", &["json"]).pick_file() {
                             self.message = self.st.merge_file(&p).unwrap_or_else(|e| e);
                         }
+                    }
+                    if plain_button(ui, if self.st.syncing() { "Синхронізація…" } else { "Синхронізувати" }).clicked() {
+                        self.sync_win = Some((self.st.github_settings(), self.token.clone()));
                     }
                     if plain_button(ui, "Налаштування").clicked() {
                         self.settings = self.st.settings_view();
@@ -375,6 +384,54 @@ impl App {
             self.settings = None;
         } else {
             self.settings = Some(v);
+        }
+    }
+
+    fn sync_window(&mut self, ctx: &egui::Context) {
+        let Some((mut cfg, mut token)) = self.sync_win.clone() else { return };
+        let mut open = true;
+        let (mut go, mut cancel) = (false, false);
+        egui::Window::new("Синхронізація через GitHub").open(&mut open).collapsible(false).resizable(false).default_width(440.0).show(ctx, |ui| {
+            egui::Grid::new("sync_grid").num_columns(2).spacing([14.0, 10.0]).show(ui, |ui| {
+                ui.label("Репозиторій (власник/назва)");
+                ui.text_edit_singleline(&mut cfg.repo);
+                ui.end_row();
+                ui.label("Гілка (порожньо — типова)");
+                ui.text_edit_singleline(&mut cfg.branch);
+                ui.end_row();
+                ui.label("Тека в репозиторії");
+                ui.text_edit_singleline(&mut cfg.dir);
+                ui.end_row();
+                ui.label("Токен GitHub");
+                ui.add(egui::TextEdit::singleline(&mut token).password(true));
+                ui.end_row();
+                ui.label("Зберігати оригінали (лише приватний)");
+                ui.checkbox(&mut cfg.originals, "");
+                ui.end_row();
+            });
+            ui.label(RichText::new("Токен не зберігається: його треба вводити в кожному сеансі.").size(11.0).color(MUTE));
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if primary_button(ui, "Синхронізувати").clicked() {
+                    go = true;
+                }
+                if plain_button(ui, "Закрити").clicked() {
+                    cancel = true;
+                }
+            });
+        });
+        if go {
+            self.st.set_github_settings(&cfg);
+            self.token = token.clone();
+            self.message = match self.st.start_sync(token) {
+                Ok(()) => "Синхронізація почалась…".into(),
+                Err(e) => e,
+            };
+            self.sync_win = None;
+        } else if cancel || !open {
+            self.sync_win = None;
+        } else {
+            self.sync_win = Some((cfg, token));
         }
     }
 

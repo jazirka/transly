@@ -3,6 +3,8 @@
 //! які користувач обрав у системному діалозі в цьому чи попередньому сеансі. Сам діалог показує інтерфейс (`rfd` чи подібне)
 //! і повідомляє результат через `Roots::allow` + `Picked::add`.
 
+pub mod github;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;

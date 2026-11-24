@@ -2,10 +2,13 @@
 name = "transly-platform"
 version = "0.1.0"
 edition = "2021"
-description = "Платформа Transly: безпечний доступ до файлів гри, збірка, запуск, оновлення (перенесено з app/src-tauri, без Tauri)"
+description = "Платформа Transly: безпечний доступ до файлів гри, збірка, запуск, оновлення, синхронізація через GitHub (перенесено з app/src-tauri і app/src/core/github.ts)"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
-ureq = { version = "2", default-features = false, features = ["tls"] }
+ureq = { version = "2", default-features = false, features = ["tls", "json"] }
+base64 = "0.22"
+indexmap = "2"
+transly-core = { path = "../transly-core" }

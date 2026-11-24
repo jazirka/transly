@@ -220,7 +220,7 @@ pub fn merge(a: &Translations, b: &Translations, since: i64) -> MergeResult {
         if ea.target != eb.target && ea.mt > since && eb.mt > since {
             conflicts.push(key.clone());
             let loser = if newer_of_is_b(&ea, eb) { &ea } else { eb };
-            if !loser.target.trim().is_empty() && loser.target != entry.target {
+            if !js::trim(&loser.target).is_empty() && loser.target != entry.target {
                 let kept = HistoryItem { at: 0, who: OTHER_DEVICE.into(), what: REPLACED_WHAT.into(), text: loser.target.clone(), batch: None, prev: None };
                 let ky = vec![kept.clone()];
                 let eh = |x: &HistoryItem, y: &HistoryItem| earlier(x, y);

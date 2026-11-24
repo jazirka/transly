@@ -38,4 +38,5 @@
 - Готово й запушено: `rust/transly-core` — модулі `model`, `variants`, `workflow` (без `submit`/`approveEntry`: потребують QA і `wrap`), `merge`. Вектори: `cd app && npm run vectors` → `rust/transly-core/tests/vectors/merge.json`; тести: `cd rust && cargo test -p transly-core`.
 - Нове вектори для модуля = новий файл `app/scripts/vectors/<модуль>.vec.ts` (допоміжне — `util.ts`: seeded rng, `text()` з символами для розбіжностей UTF-16/UTF-8) + `rust/transly-core/tests/<модуль>_vectors.rs` (допоміжне — `tests/common`).
 - Правила перенесення: рядки порівнювати через `js::cmp` (UTF-16), `JSON.stringify` → `js::stringify`, хеші — `js::hash_text`. Порядок полів структур = порядок, в якому TS будує об'єкти.
-- Далі за списком: `plural`, `glossary` (+ токенізація), `termmatch`, `strands`, `termusage`, `plan`/`journal`, `qa*`, `ukmorph`…
+- Також готово: `plural` (вибір форми й групування тисяч; підключення до i18n — з `ext/i18n`), `ukmorph` (повністю, словник `MorphDict` — трейт, у векторах не використовується). Вектори `ukmorph.json`: 1500 фраз, 4000 перенесень.
+- Далі за списком: `glossary` (+ токенізація), `termmatch`, `strands`, `termusage`, `plan`/`journal`, `qa*`, `ukmorph`…

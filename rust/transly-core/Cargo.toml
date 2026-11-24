@@ -8,3 +8,4 @@ description = "Ядро Transly: чиста логіка без інтерфей
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 indexmap = { version = "2", features = ["serde"] }
+regex = "1"

@@ -34,3 +34,13 @@ fn base36(mut n: u32) -> String {
     out.reverse();
     String::from_utf8(out).unwrap()
 }
+
+/// `String.prototype.trim`: пробіли Unicode плюс U+FEFF (Rust `trim` його не знає).
+pub fn trim(s: &str) -> &str {
+    s.trim_matches(|c: char| c.is_whitespace() || c == '\u{feff}')
+}
+
+/// Довжина в кодових одиницях UTF-16 (`String.length`).
+pub fn len16(s: &str) -> usize {
+    s.encode_utf16().count()
+}

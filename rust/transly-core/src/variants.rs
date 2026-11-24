@@ -36,7 +36,7 @@ pub fn sent_variants(e: Option<&Entry>) -> Vec<Variant> {
     let sent = matches!(e.status, Status::Done | Status::Appr);
     let mut out: Vec<Variant> = Vec::new();
     for h in e.history.as_deref().unwrap_or(&[]) {
-        if !is_send(&h.what) || h.text.trim().is_empty() {
+        if !is_send(&h.what) || js::trim(&h.text).is_empty() {
             continue;
         }
         if let Some(same) = out.iter_mut().find(|v| v.text == h.text) {
@@ -45,7 +45,7 @@ pub fn sent_variants(e: Option<&Entry>) -> Vec<Variant> {
         }
         out.push(Variant { id: variant_id(&h.text), who: h.who.clone(), at: h.at, sent_at: h.at, text: h.text.clone(), current: false, approved: false });
     }
-    if sent && !e.target.trim().is_empty() {
+    if sent && !js::trim(&e.target).is_empty() {
         if let Some(own) = out.iter_mut().find(|v| v.text == e.target) {
             own.current = true;
             own.approved = e.status == Status::Appr;

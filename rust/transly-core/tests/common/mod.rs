@@ -1,4 +1,5 @@
 //! Спільне для тестів на золотих векторах.
+#![allow(dead_code)]
 
 use serde::de::DeserializeOwned;
 use serde_json::Value;
@@ -29,5 +30,15 @@ pub fn to_value<T: serde::Serialize>(v: &T) -> Value {
 
 /// Точна рівність JSON (порядок ключів об'єкта не враховується, порядок елементів масиву — так).
 pub fn assert_same(what: &str, i: usize, input: &Value, got: &Value, want: &Value) {
-    assert!(got == want, "{what} #{i}\nвхід: {input}\nRust: {got}\nTS:   {want}");
+    assert!(norm(got) == norm(want), "{what} #{i}\nвхід: {input}\nRust: {got}\nTS:   {want}");
+}
+
+/// Усі числа до f64: у JS `1` і `1.0` — те саме число, а `serde_json::Value` їх розрізняє.
+fn norm(v: &Value) -> Value {
+    match v {
+        Value::Number(n) => serde_json::Number::from_f64(n.as_f64().unwrap()).map_or(Value::Null, Value::Number),
+        Value::Array(a) => Value::Array(a.iter().map(norm).collect()),
+        Value::Object(o) => Value::Object(o.iter().map(|(k, x)| (k.clone(), norm(x))).collect()),
+        other => other.clone(),
+    }
 }

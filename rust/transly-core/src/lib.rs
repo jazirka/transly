@@ -5,4 +5,6 @@ pub mod js;
 pub mod merge;
 pub mod model;
 pub mod variants;
+pub mod plural;
+pub mod ukmorph;
 pub mod workflow;

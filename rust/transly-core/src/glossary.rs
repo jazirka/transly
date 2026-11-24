@@ -324,7 +324,7 @@ fn has_break(s: &str) -> bool {
     s.contains(['.', '!', '?', ';', '\n'])
 }
 /// `/^[\s\-–—]+$/`
-fn is_sep(s: &str) -> bool {
+pub fn is_sep(s: &str) -> bool {
     !s.is_empty() && s.chars().all(|c| c.is_whitespace() || c == '\u{feff}' || matches!(c, '-' | '–' | '—'))
 }
 

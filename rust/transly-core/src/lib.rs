@@ -7,5 +7,7 @@ pub mod merge;
 pub mod model;
 pub mod variants;
 pub mod plural;
+pub mod strands;
+pub mod termmatch;
 pub mod ukmorph;
 pub mod workflow;

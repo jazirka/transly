@@ -191,6 +191,11 @@ impl App {
                     if plain_button(ui, "Повернути оригінали").clicked() {
                         self.message = self.st.restore_originals().unwrap_or_else(|e| e);
                     }
+                    if plain_button(ui, "Злити проєкт…").clicked() {
+                        if let Some(p) = rfd::FileDialog::new().add_filter("Проєкт Transly", &["json"]).pick_file() {
+                            self.message = self.st.merge_file(&p).unwrap_or_else(|e| e);
+                        }
+                    }
                     if plain_button(ui, "Налаштування").clicked() {
                         self.settings = self.st.settings_view();
                     }

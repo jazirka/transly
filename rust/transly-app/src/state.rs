@@ -454,6 +454,19 @@ impl AppState {
         self.dirty = true;
     }
 
+    /// Зливає проєкт із файлу в поточний (новіша правка кожного рядка виграє). Повертає підсумок.
+    pub fn merge_file(&mut self, path: &Path) -> Result<String, String> {
+        let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+        let other = deserialize(&text, Some(now_ms()))?;
+        let cur = self.project.as_ref().ok_or("Проєкт не відкрито")?;
+        let m = transly_core::project::merge_projects(cur, &other, 0);
+        let msg = format!("Злито: конфліктів {}{}", m.conflicts.len(), if m.dropped_by_reset > 0 { format!(", відкинуто скиданням {}", m.dropped_by_reset) } else { String::new() });
+        self.project = Some(m.project);
+        self.rev += 1;
+        self.dirty = true;
+        Ok(msg)
+    }
+
     pub fn key_of(&self, f: usize, r: usize) -> String {
         self.unit(f, r).map_or(String::new(), |u| u.key.clone())
     }
@@ -583,6 +596,30 @@ mod tests {
         let mut s2 = AppState::default();
         s2.open_game(&data).unwrap();
         assert_eq!(s2.settings_view().unwrap().who, "Анна");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn merging_another_project_keeps_the_newer_row() {
+        let base = std::env::temp_dir().join(format!("transly-app-merge-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = game(&base);
+        let mut a = AppState::default();
+        a.open_game(&data).unwrap();
+        a.edit(0, 0, "Старе");
+        let other_path = base.join("other.transly.json");
+        let mut b = AppState::default();
+        b.open_game(&data).unwrap();
+        b.edit(0, 0, "Нове");
+        std::fs::write(&other_path, serialize(b.project.as_ref().unwrap())).unwrap();
+        // у b правка пізніша: після злиття в a має лишитись «Нове»
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        b.edit(0, 0, "Найновіше");
+        std::fs::write(&other_path, serialize(b.project.as_ref().unwrap())).unwrap();
+        let msg = a.merge_file(&other_path).unwrap();
+        assert!(msg.starts_with("Злито"), "{msg}");
+        assert_eq!(a.target_of(0, 0), "Найновіше");
+        assert!(a.dirty);
         let _ = std::fs::remove_dir_all(&base);
     }
 

@@ -31,12 +31,13 @@ jobs:
           workspaces: rust
       - name: Build
         working-directory: rust
-        run: cargo build --release -p proto-egui
+        run: cargo build --release -p proto-egui -p proto-slint
       - name: Collect
         shell: bash
         run: |
           mkdir out
           cp rust/target/release/proto-egui.exe out/transly-proto-egui.exe
+          cp rust/target/release/proto-slint.exe out/transly-proto-slint.exe
           ls -la out
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -63,6 +64,6 @@ jobs:
           TMP="proto-build-$GITHUB_RUN_ID"
           gh release create "$TMP" out/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
             --title "Transly: Rust prototype (stage 0)" \
-            --notes "Native prototype on egui, commit $GITHUB_SHA. Not the app: a test of the table (100 000 rows), the translation field with marked terms and the right panel."
+            --notes "Native prototype on egui, commit $GITHUB_SHA. Not the app: two prototypes (egui and Slint) of the table (100 000 rows), the translation field with marked terms and the right panel."
           gh release delete proto-latest --yes --cleanup-tag --repo "$GITHUB_REPOSITORY" || true
           gh release edit "$TMP" --tag proto-latest --target "$GITHUB_SHA" --repo "$GITHUB_REPOSITORY"

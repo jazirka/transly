@@ -1,0 +1,70 @@
+import { ListView, TextEdit, ScrollView } from "std-widgets.slint";
+
+export struct Row { n: int, key: string, src: string, tgt: string }
+
+component Card inherits Rectangle {
+    in property <string> title;
+    background: #1b1c1f; border-color: #ffffff28; border-width: 1px; border-radius: 10px; clip: true;
+    VerticalLayout {
+        Rectangle { height: 34px; background: #26282c;
+            Text { x: 14px; text: root.title; color: #a0a0a0; font-size: 11px; font-weight: 700; vertical-alignment: center; } }
+        @children
+    }
+}
+
+export component App inherits Window {
+    title: "Transly · прототип Slint";
+    preferred-width: 1280px; preferred-height: 800px; background: #1f2023;
+    in property <[Row]> rows;
+    in property <styled-text> marked_src;
+    in-out property <string> target;
+    in-out property <int> selected: 0;
+    in property <string> comment_text: "Чи не краще «зняти шапку»?";
+    callback pick(int);
+    callback add_comment(string);
+
+    HorizontalLayout {
+        VerticalLayout {
+            horizontal-stretch: 1;
+            Rectangle { height: 26px; Text { x: 12px; text: "Прототип Slint · 100 000 рядків"; color: #c7cad1; } }
+            Rectangle { height: 26px; HorizontalLayout { spacing: 6px; padding-left: 8px;
+                Text { width: 60px; text: "№"; color: #888; } Text { width: 110px; text: "Ключ"; color: #888; }
+                Text { width: 320px; text: "Оригінал · EN"; color: #888; } Text { text: "Переклад · UK"; color: #888; } } }
+            ListView {
+                for r[i] in root.rows: Rectangle {
+                    height: 26px;
+                    background: root.selected == i ? #0b6e99 : transparent;
+                    TouchArea { clicked => { root.selected = i; root.pick(i); } }
+                    HorizontalLayout { spacing: 6px; padding-left: 8px;
+                        Text { width: 60px; text: r.n; color: #888; vertical-alignment: center; }
+                        Text { width: 110px; text: r.key; color: #888; font-family: "monospace"; vertical-alignment: center; }
+                        Text { width: 320px; text: r.src; color: #dfe1e5; vertical-alignment: center; overflow: elide; }
+                        Text { text: r.tgt == "" ? "—" : r.tgt; color: #dfe1e5; vertical-alignment: center; }
+                    }
+                }
+            }
+            Rectangle { height: 200px; background: #1f2023; border-color: #ffffff20; border-width: 1px;
+                VerticalLayout { padding: 10px; spacing: 4px;
+                    Text { text: "ОРИГІНАЛ · EN (стилізований текст: лише підкреслення й колір)"; color: #888; font-size: 11px; }
+                    StyledText { text: root.marked_src; }
+                    Text { text: "ПЕРЕКЛАД · UK (редагований TextEdit: позначок усередині немає)"; color: #888; font-size: 11px; }
+                    TextEdit { text <=> root.target; font-size: 15px; height: 80px; }
+                }
+            }
+        }
+        VerticalLayout { width: 320px; spacing: 6px; padding: 6px;
+            Card { title: "АКТИВНІСТЬ"; height: 110px; Text { text: "Брак активності"; color: #aaa; horizontal-alignment: center; vertical-alignment: center; } }
+            Card { title: "ОБГОВОРЕННЯ";
+                VerticalLayout {
+                    Text { text: root.comment_text; color: #dfe1e5; padding: 10px; wrap: word-wrap; }
+                    comment_in := TextEdit { height: 70px; placeholder-text: "Написати про цей рядок…"; }
+                    Rectangle { height: 36px; background: #26282c;
+                        HorizontalLayout { padding: 6px; Text { text: "Ctrl+Enter"; color: #888; vertical-alignment: center; }
+                            Rectangle { }
+                            Rectangle { width: 36px; background: #1f7a6a; border-radius: 8px; Text { text: "▶"; color: white; }
+                                TouchArea { clicked => { root.add_comment(comment_in.text); comment_in.text = ""; } } } } }
+                }
+            }
+        }
+    }
+}

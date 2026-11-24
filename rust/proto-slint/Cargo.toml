@@ -1,0 +1,10 @@
+[package]
+name = "proto-slint"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+slint = { version = "1", default-features = false, features = ["std", "backend-winit", "renderer-femtovg", "accessibility", "compat-1-2"] }
+
+[build-dependencies]
+slint-build = "1"

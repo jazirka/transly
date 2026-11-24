@@ -1,6 +1,6 @@
 mod common;
 
-use common::{assert_same, cases, to_value};
+use common::{assert_same, cases};
 use serde_json::{json, Value};
 use transly_core::glossaries::*;
 use transly_core::project::empty_project;

@@ -1,0 +1,68 @@
+name: Rust prototype
+
+# Stage 0 of the rewrite in Rust: builds the native prototype (rust/proto-egui) for Windows and, with "release", publishes the .exe as the
+# "proto-latest" release, so that the Ukrainian input, the screen reader and the speed can be tried on a real Windows.
+# Run it by hand from the Actions tab.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Publish the .exe as the "proto-latest" release'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: rust
+      - name: Build
+        working-directory: rust
+        run: cargo build --release -p proto-egui
+      - name: Collect
+        shell: bash
+        run: |
+          mkdir out
+          cp rust/target/release/proto-egui.exe out/transly-proto-egui.exe
+          ls -la out
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: transly-proto
+          path: out/*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: ${{ needs.build.result == 'success' && inputs.release }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: transly-proto
+          path: out
+      - name: Publish as a release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls out/*.exe >/dev/null 2>&1 || { echo "::error::No file to publish"; exit 1; }
+          TMP="proto-build-$GITHUB_RUN_ID"
+          gh release create "$TMP" out/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+            --title "Transly: Rust prototype (stage 0)" \
+            --notes "Native prototype on egui, commit $GITHUB_SHA. Not the app: a test of the table (100 000 rows), the translation field with marked terms and the right panel."
+          gh release delete proto-latest --yes --cleanup-tag --repo "$GITHUB_REPOSITORY" || true
+          gh release edit "$TMP" --tag proto-latest --target "$GITHUB_SHA" --repo "$GITHUB_REPOSITORY"

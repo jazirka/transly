@@ -1,0 +1,8 @@
+[package]
+name = "proto-egui"
+version = "0.0.1"
+edition = "2021"
+description = "Етап 0: прототип нативного інтерфейсу Transly на egui (таблиця на 100 тис. рядків, поле перекладу з позначками термінів, права панель)"
+
+[dependencies]
+eframe = { version = "0.31", default-features = false, features = ["default_fonts", "glow", "accesskit", "x11", "wayland"] }

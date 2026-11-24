@@ -458,7 +458,7 @@ mod tests {
         let m = s.tm_matches(0, 1);
         assert!(m.iter().any(|x| x.t == "Хоробрий герой" && x.score >= 90), "{m:?}");
         s.edit(0, 0, "Хоробра героїня");
-        assert!(s.history(0, 0).len() >= 1);
+        assert!(!s.history(0, 0).is_empty());
         s.comment(0, 0, "Перевірити рід");
         assert_eq!(s.threads(0, 0).len(), 1);
         let _ = std::fs::remove_dir_all(&base);

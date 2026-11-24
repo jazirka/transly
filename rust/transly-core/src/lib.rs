@@ -6,6 +6,7 @@ pub mod declarative;
 pub mod dictlinks;
 pub mod declqa;
 pub mod engine;
+pub mod filesync;
 pub mod findreplace;
 pub mod followups;
 pub mod formats;

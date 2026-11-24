@@ -71,6 +71,7 @@ pub mod textdiff;
 pub mod tm;
 pub mod termedit;
 pub mod termsync;
+pub mod termtable;
 pub mod termusage;
 pub mod theme;
 pub mod ukmorph;

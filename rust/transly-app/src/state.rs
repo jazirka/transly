@@ -4,7 +4,9 @@ use std::path::{Path, PathBuf};
 use transly_core::model::{Entry, GameFile, Unit};
 use transly_core::progress::{row_state, RowState};
 use transly_core::project::{empty_project, serialize, FileView, SavedProject};
-use transly_core::qa::default_qa;
+use transly_core::glossary::{prepare_text, term_ranges_in, Term};
+use transly_core::qa::{check, default_qa, Issue, UnitLike};
+use transly_core::termedit::{save_term, SaveResult, TermForm};
 use transly_core::readgame::read_game;
 use transly_core::rpgmaker::ExtractOptions;
 use transly_core::workflow::{edit, submit, Stage, SubmitOptions, SubmitResult};
@@ -240,6 +242,46 @@ impl AppState {
         self.prog.borrow().1.clone()
     }
 
+    /// Терміни глосарія проєкту.
+    pub fn terms(&self) -> Vec<Term> {
+        self.project.as_ref().map(|p| p.terms.iter().filter_map(|t| serde_json::from_value(t.clone()).ok()).collect()).unwrap_or_default()
+    }
+
+    /// Додає чи змінює термін. Повертає повідомлення для рядка стану.
+    pub fn add_term(&mut self, en: &str, uk: &str) -> String {
+        let Some(p) = self.project.as_mut() else { return "Проєкт не відкрито".into() };
+        let form = TermForm { en: en.into(), uk: uk.into(), ..Default::default() };
+        let res = save_term(p, &form, now_ms(), None);
+        self.rev += 1;
+        match res {
+            Some(SaveResult::Added) => "Термін додано".into(),
+            Some(SaveResult::Changed) => "Термін змінено".into(),
+            Some(SaveResult::Exists) => "Такий термін уже є".into(),
+            None => "Потрібні обидва слова".into(),
+        }
+    }
+
+    /// Терміни глосарія в оригіналі рядка: (початок, кінець у UTF-16, номер терміна).
+    pub fn source_marks(&self, f: usize, r: usize) -> Vec<(usize, usize, usize)> {
+        let p = prepare_text(&self.source_of(f, r));
+        let mut out = Vec::new();
+        for (i, t) in self.terms().iter().enumerate() {
+            for (a, b) in term_ranges_in(&p, &t.en) {
+                out.push((a, b, i));
+            }
+        }
+        out.sort();
+        out
+    }
+
+    /// Примітки QA до тексту рядка за правилами ядра.
+    pub fn issues(&self, f: usize, r: usize, text: &str) -> Vec<Issue> {
+        let Some(u) = self.unit(f, r) else { return vec![] };
+        let mut qa = default_qa();
+        qa.terms = self.terms();
+        check(&UnitLike::from(u), text, &qa)
+    }
+
     pub fn key_of(&self, f: usize, r: usize) -> String {
         self.unit(f, r).map_or(String::new(), |u| u.key.clone())
     }
@@ -278,6 +320,24 @@ mod tests {
         std::fs::create_dir_all(&data).unwrap();
         std::fs::write(data.join("Actors.json"), r#"[null,{"id":1,"name":"Hero","nickname":"","profile":"Brave","note":""}]"#).unwrap();
         data
+    }
+
+    #[test]
+    fn terms_are_marked_in_the_source_and_qa_reads_them() {
+        let base = std::env::temp_dir().join(format!("transly-app-terms-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = game(&base);
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        let src = s.source_of(0, 0);
+        assert!(s.source_marks(0, 0).is_empty());
+        assert_eq!(s.add_term(&src, "Герой"), "Термін додано");
+        assert_eq!(s.add_term(&src, "Інший"), "Такий термін уже є");
+        assert_eq!(s.terms().len(), 1);
+        assert!(!s.source_marks(0, 0).is_empty());
+        assert!(!s.issues(0, 0, "Зовсім інше слово").is_empty(), "переклад без терміна дає примітку");
+        assert!(s.issues(0, 0, "Герой").iter().all(|i| i.key != "term"));
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

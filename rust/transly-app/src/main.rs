@@ -23,6 +23,41 @@ struct App {
     draft: String,
     draft_for: Option<(usize, usize)>,
     message: String,
+    term_en: String,
+    term_uk: String,
+}
+
+const TERM_COLORS: [Color32; 4] = [VIOLET, INFO, OK, WARN];
+
+/// Оригінал із підкресленими термінами глосарія (колір за номером терміна).
+fn source_job(text: &str, marks: &[(usize, usize, usize)]) -> egui::text::LayoutJob {
+    use egui::text::{LayoutJob, TextFormat};
+    let base = TextFormat { font_id: FontId::proportional(13.5), color: TEXT, ..Default::default() };
+    let mut job = LayoutJob::default();
+    let (mut buf, mut cur_mark): (String, Option<usize>) = (String::new(), None);
+    let mut u16pos = 0;
+    let flush = |job: &mut LayoutJob, buf: &mut String, mark: Option<usize>| {
+        if buf.is_empty() {
+            return;
+        }
+        let mut f = base.clone();
+        if let Some(i) = mark {
+            f.underline = Stroke::new(1.5_f32, TERM_COLORS[i % TERM_COLORS.len()]);
+        }
+        job.append(buf, 0.0, f);
+        buf.clear();
+    };
+    for c in text.chars() {
+        let mark = marks.iter().find(|(a, b, _)| u16pos >= *a && u16pos < *b).map(|m| m.2);
+        if mark != cur_mark {
+            flush(&mut job, &mut buf, cur_mark);
+            cur_mark = mark;
+        }
+        buf.push(c);
+        u16pos += c.len_utf16();
+    }
+    flush(&mut job, &mut buf, cur_mark);
+    job
 }
 
 fn dot_color(s: RowStatus) -> Option<Color32> {
@@ -242,7 +277,7 @@ impl App {
                 label_caps(ui, "Оригінал");
                 egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(CornerRadius::same(R2)).inner_margin(egui::Margin::symmetric(10, 9)).show(ui, |ui| {
                     ui.set_width(ui.available_width());
-                    ui.label(RichText::new(self.st.source_of(f, r)).size(13.5).color(TEXT));
+                    ui.label(source_job(&self.st.source_of(f, r), &self.st.source_marks(f, r)));
                 });
                 ui.horizontal(|ui| {
                     let key = self.st.key_of(f, r);
@@ -267,6 +302,34 @@ impl App {
                     }
                     if plain_button(ui, "Зберегти правку").clicked() {
                         self.st.edit(f, r, &self.draft);
+                    }
+                });
+                ui.add_space(8.0);
+                for i in self.st.issues(f, r, &self.draft) {
+                    ui.horizontal(|ui| {
+                        let (d, _) = ui.allocate_exact_size(vec2(10.0, 14.0), Sense::hover());
+                        let col = if i.severity == transly_core::qa::Severity::Bad { BAD } else { WARN };
+                        ui.painter().circle_filled(d.center(), 4.0, col);
+                        ui.label(RichText::new(&i.message).color(TEXT));
+                    });
+                }
+                ui.add_space(10.0);
+                label_caps(ui, "Глосарій");
+                for (i, t) in self.st.terms().iter().enumerate() {
+                    ui.horizontal(|ui| {
+                        ui.colored_label(TERM_COLORS[i % TERM_COLORS.len()], "▪");
+                        ui.label(RichText::new(&t.en).color(TEXT));
+                        ui.label(RichText::new("→").color(DIM));
+                        ui.label(RichText::new(&t.uk).color(TEXT));
+                    });
+                }
+                ui.horizontal(|ui| {
+                    ui.add(egui::TextEdit::singleline(&mut self.term_en).hint_text("слово").desired_width(110.0));
+                    ui.add(egui::TextEdit::singleline(&mut self.term_uk).hint_text("переклад").desired_width(110.0));
+                    if plain_button(ui, "Додати термін").clicked() {
+                        self.message = self.st.add_term(&self.term_en, &self.term_uk);
+                        self.term_en.clear();
+                        self.term_uk.clear();
                     }
                 });
             });

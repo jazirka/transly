@@ -19,16 +19,16 @@ pub fn hash_text(t: &str) -> String {
         h ^= u as u32;
         h = h.wrapping_mul(0x01000193);
     }
-    base36(h)
+    base36(h as u64)
 }
 
-fn base36(mut n: u32) -> String {
+pub fn base36(mut n: u64) -> String {
     if n == 0 {
         return "0".into();
     }
     let mut out = Vec::new();
     while n > 0 {
-        out.push(std::char::from_digit(n % 36, 36).unwrap() as u8);
+        out.push(std::char::from_digit((n % 36) as u32, 36).unwrap() as u8);
         n /= 36;
     }
     out.reverse();

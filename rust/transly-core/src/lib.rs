@@ -15,6 +15,7 @@ pub mod autolog;
 pub mod branches;
 pub mod build;
 pub mod collate;
+pub mod commands;
 pub mod compose;
 pub mod ingest;
 pub mod journal;

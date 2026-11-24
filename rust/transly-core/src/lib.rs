@@ -47,6 +47,7 @@ pub mod scene;
 pub mod semver;
 pub mod speakers;
 pub mod strands;
+pub mod strings;
 pub mod termmatch;
 pub mod tm;
 pub mod termedit;

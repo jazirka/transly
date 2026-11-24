@@ -9,5 +9,6 @@ pub mod variants;
 pub mod plural;
 pub mod strands;
 pub mod termmatch;
+pub mod termusage;
 pub mod ukmorph;
 pub mod workflow;

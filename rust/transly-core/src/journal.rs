@@ -6,18 +6,13 @@
 //! `system_rand()` дає звичайне джерело.
 
 use crate::js;
-use crate::model::{Entry, HistoryItem, Prev, Status, Translations, Unit};
+use crate::model::{Entry, HistoryItem, Prev, Status, Translations};
 use crate::plural::rows;
 use crate::workflow::HISTORY_LIMIT;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
-/// Файл гри з його рядками (стислий `FileView`; повний з'явиться з модулем `project`).
-#[derive(Clone, Debug, Deserialize)]
-pub struct FileView {
-    pub name: String,
-    pub units: Vec<Unit>,
-}
+pub use crate::project::FileView;
 /// Переклади проєкту по файлах (`SavedProject.files`).
 pub type SavedFiles = IndexMap<String, Translations>;
 

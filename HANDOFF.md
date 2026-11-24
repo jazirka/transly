@@ -45,4 +45,5 @@
 - Також готово: `progress`, `validate` (ремонт і обмеження годинника), `project` (формат `project.json`, розбір із ремонтом, `merge_projects`), `branches` (без `diffBranches`/`planMerge`), частини `groups` і `links` (лише злиття).
   - Проєкт у Rust: типізовані `files` (рядки з `extra` для невідомих полів), решта — `serde_json::Value` з порядком ключів файлу; невідомі поля верхнього рівня — `extra`.
   - Відхилення від TS: дробові часові мітки (`mt`, `at`…) при читанні відкидають дробову частину (`js::lenient_i64`); `sourceLang`/`targetLang` не рядок → типові `en`/`uk`; порядок ключів у `base` гілок, створених у Rust, — порядок структур (лише для нічиїх при злитті двох різних `base`).
-- Далі за списком: решта `groups` (сцени), `links`, `branches` (порівняння), `scene`, `sceneindex`, `speakers`, `autofill`, `compose`, `tm`, `ingest`, формати файлів і збірка (`engine`, `rpgmaker`, `build`), `ext/*`.
+- Також готово: `autolog`, `autofill` (токенізація, навчання слів, пропозиції, «майже»), `compose` (складання рядка з частин). `FileView` тепер один — у `project`, `journal` його реекспортує.
+- Далі за списком: решта `groups` (сцени), `links`, `branches` (порівняння), `scene`, `sceneindex`, `speakers`, `tm`, `ingest`, формати файлів і збірка (`engine`, `rpgmaker`, `build`), `ext/*`.

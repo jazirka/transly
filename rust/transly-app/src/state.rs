@@ -3,14 +3,16 @@
 use std::path::{Path, PathBuf};
 use transly_core::model::{Entry, GameFile, Unit};
 use transly_core::progress::{row_state, RowState};
-use transly_core::project::{empty_project, serialize, FileView, SavedProject};
+use transly_core::build::{build, file_text, BuildOptions};
+use transly_core::projname::name_from_folder;
+use transly_core::project::{deserialize, empty_project, serialize, FileView, SavedProject};
 use transly_core::glossary::{prepare_text, term_ranges_in, Term};
 use transly_core::qa::{check, default_qa, Issue, UnitLike};
 use transly_core::termedit::{save_term, SaveResult, TermForm};
 use transly_core::readgame::read_game;
 use transly_core::rpgmaker::ExtractOptions;
-use transly_core::workflow::{edit, submit, Stage, SubmitOptions, SubmitResult};
-use transly_platform::{list_json, read_text, register_picked, Picked, Roots};
+use transly_core::workflow::{edit, reconcile, submit, Stage, SubmitOptions, SubmitResult};
+use transly_platform::{apply_data, list_json, read_text, register_picked, restore_data, OutFile, Picked, Roots};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RowStatus {
@@ -62,6 +64,8 @@ struct Visible {
 }
 
 pub struct AppState {
+    pub game: Vec<GameFile>,
+    pub dirty: bool,
     pub filter: Filter,
     pub search: String,
     /// Збільшується при кожній правці: за ним скидаються кеші.
@@ -80,8 +84,13 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None }
+        AppState { game: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None }
     }
+}
+
+/// Де лежить проєкт: поруч із текою гри (не всередині неї).
+fn project_path(dir: &Path, name: &str) -> PathBuf {
+    dir.parent().unwrap_or(dir).join(format!("{name}.transly.json"))
 }
 
 fn now_ms() -> i64 {
@@ -97,22 +106,39 @@ impl AppState {
     pub fn open_game(&mut self, dir: &Path) -> Result<usize, String> {
         register_picked(&self.roots, &self.picked, dir);
         let d = dir.to_string_lossy().to_string();
-        let listed = list_json(&self.roots, &d, None)?;
+        let exts: Vec<String> = [".po", ".pot", ".csv", ".tsv", ".rpy"].iter().map(|e| e.to_string()).collect();
+        let listed = list_json(&self.roots, &d, Some(exts))?;
         let mut files = Vec::new();
         for f in listed {
             let text = read_text(&self.roots, &f.path)?;
-            let json = serde_json::from_str(&text).unwrap_or(serde_json::Value::Null);
-            files.push(GameFile { name: f.name, json, text: None });
+            if f.name.to_lowercase().ends_with(".json") {
+                files.push(GameFile { name: f.name, json: serde_json::from_str(&text).unwrap_or(serde_json::Value::Null), text: None });
+            } else {
+                files.push(GameFile { name: f.name, json: serde_json::Value::Null, text: Some(text) });
+            }
         }
         let views = read_game(&files, &ExtractOptions::default());
-        let name = dir.file_name().map_or("Новий проєкт".to_string(), |n| n.to_string_lossy().to_string());
-        let project = empty_project(&name, "en", "uk");
+        let name = name_from_folder(&d);
+        let name = if name.is_empty() { "Новий проєкт".to_string() } else { name };
+        // проєкт, збережений раніше, підхоплюється; рядки, чий оригінал змінився, повертаються в чернетки
+        let path = project_path(dir, &name);
+        let mut project = match std::fs::read_to_string(&path) {
+            Ok(t) => deserialize(&t, Some(now_ms())).unwrap_or_else(|_| empty_project(&name, "en", "uk")),
+            Err(_) => empty_project(&name, "en", "uk"),
+        };
+        for v in &views {
+            if let Some(entries) = project.files.get_mut(&v.name) {
+                reconcile(&v.units, entries, now_ms());
+            }
+        }
         let n = views.len();
+        self.game = files;
         self.views = views;
         self.project = Some(project);
         self.dir = Some(dir.to_path_buf());
         self.file = if n > 0 { Some(0) } else { None };
         self.row = None;
+        self.dirty = false;
         self.rev += 1;
         Ok(n)
     }
@@ -158,6 +184,8 @@ impl AppState {
             p.files.entry(key_file).or_default().insert(key, e);
         }
         self.rev += 1;
+        self.dirty = true;
+        self.dirty = true;
     }
 
     /// Правка перекладу рядка (чернетка).
@@ -253,6 +281,7 @@ impl AppState {
         let form = TermForm { en: en.into(), uk: uk.into(), ..Default::default() };
         let res = save_term(p, &form, now_ms(), None);
         self.rev += 1;
+        self.dirty = true;
         match res {
             Some(SaveResult::Added) => "Термін додано".into(),
             Some(SaveResult::Changed) => "Термін змінено".into(),
@@ -303,11 +332,34 @@ impl AppState {
     }
 
     /// Записує `transly-project.json` поруч із текою гри (не всередині неї).
-    pub fn save_project(&self) -> Result<String, String> {
+    pub fn save_project(&mut self) -> Result<String, String> {
         let (Some(p), Some(dir)) = (&self.project, &self.dir) else { return Err("Проєкт не відкрито".into()) };
-        let path = dir.parent().unwrap_or(dir).join(format!("{}.transly.json", p.name));
-        std::fs::write(&path, serialize(p)).map_err(|e| e.to_string())?;
+        let path = project_path(dir, &p.name);
+        // спершу тимчасовий файл, потім заміна: збій посеред запису не псує проєкт
+        let tmp = path.with_extension("json.tmp");
+        std::fs::write(&tmp, serialize(p)).map_err(|e| e.to_string())?;
+        std::fs::rename(&tmp, &path).map_err(|e| e.to_string())?;
+        self.dirty = false;
         Ok(path.to_string_lossy().to_string())
+    }
+
+    /// Збирає переклад і кладе файли в теку гри (копії оригіналів лишаються поруч). Повертає підсумок.
+    pub fn build_into_game(&mut self, include_drafts: bool) -> Result<String, String> {
+        let (Some(p), Some(dir)) = (&self.project, &self.dir) else { return Err("Проєкт не відкрито".into()) };
+        let mut qa = default_qa();
+        qa.terms = self.terms();
+        let opts = BuildOptions { only_approved: false, include_drafts, block_errors: true, qa };
+        let res = build(&self.game, &self.views, p, &opts);
+        let out: Vec<OutFile> = res.files.iter().map(|f| OutFile { name: f.name.rsplit('/').next().unwrap_or(&f.name).to_string(), content: file_text(f) }).collect();
+        let n = apply_data(&self.roots, &dir.to_string_lossy(), &out)?;
+        Ok(format!("Збірка: записано {n} файлів, рядків у грі {}, поза збіркою {}", res.included, res.skipped))
+    }
+
+    /// Повертає оригінальні файли гри з резервної копії.
+    pub fn restore_originals(&mut self) -> Result<String, String> {
+        let dir = self.dir.as_ref().ok_or("Проєкт не відкрито")?;
+        let n = restore_data(&self.roots, &dir.to_string_lossy())?;
+        Ok(format!("Повернуто оригіналів: {n}"))
     }
 }
 
@@ -320,6 +372,30 @@ mod tests {
         std::fs::create_dir_all(&data).unwrap();
         std::fs::write(data.join("Actors.json"), r#"[null,{"id":1,"name":"Hero","nickname":"","profile":"Brave","note":""}]"#).unwrap();
         data
+    }
+
+    #[test]
+    fn build_writes_into_the_game_and_restore_brings_originals_back_and_project_reloads() {
+        let base = std::env::temp_dir().join(format!("transly-app-build-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = game(&base);
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        s.submit(0, 0, "Герой").unwrap();
+        let before = std::fs::read_to_string(data.join("Actors.json")).unwrap();
+        let msg = s.build_into_game(true).unwrap();
+        assert!(msg.contains("записано"), "{msg}");
+        let built = std::fs::read_to_string(data.join("Actors.json")).unwrap();
+        assert!(built.contains("Герой") && !before.contains("Герой"));
+        s.save_project().unwrap();
+        assert!(!s.dirty);
+        // новий сеанс підхоплює збережений проєкт
+        let mut s2 = AppState::default();
+        s2.open_game(&data).unwrap();
+        assert_eq!(s2.target_of(0, 0), "Герой");
+        s2.restore_originals().unwrap();
+        assert_eq!(std::fs::read_to_string(data.join("Actors.json")).unwrap(), before);
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

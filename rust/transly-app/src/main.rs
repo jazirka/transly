@@ -17,9 +17,9 @@ fn main() -> eframe::Result {
     }))
 }
 
-#[derive(Default)]
 struct App {
     st: AppState,
+    last_save: std::time::Instant,
     draft: String,
     draft_for: Option<(usize, usize)>,
     message: String,
@@ -58,6 +58,12 @@ fn source_job(text: &str, marks: &[(usize, usize, usize)]) -> egui::text::Layout
     }
     flush(&mut job, &mut buf, cur_mark);
     job
+}
+
+impl Default for App {
+    fn default() -> Self {
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new() }
+    }
 }
 
 fn dot_color(s: RowStatus) -> Option<Color32> {
@@ -101,7 +107,22 @@ fn chip(ui: &mut egui::Ui, text: &str, count: usize, on: bool) -> egui::Response
 }
 
 impl eframe::App for App {
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        if self.st.dirty {
+            let _ = self.st.save_project();
+        }
+    }
+
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // автозбереження: не рідше за раз на 20 с, коли є зміни
+        if self.st.dirty && self.last_save.elapsed().as_secs() >= 20 {
+            self.message = match self.st.save_project() {
+                Ok(_) => "Автозбережено".into(),
+                Err(e) => e,
+            };
+            self.last_save = std::time::Instant::now();
+        }
+        ctx.request_repaint_after(std::time::Duration::from_secs(5));
         self.menubar(ctx);
         self.toolbar(ctx);
         self.statusbar(ctx);
@@ -153,6 +174,12 @@ impl App {
                                 Err(e) => e,
                             };
                         }
+                    }
+                    if plain_button(ui, "Зібрати в гру").clicked() {
+                        self.message = self.st.build_into_game(true).unwrap_or_else(|e| e);
+                    }
+                    if plain_button(ui, "Повернути оригінали").clicked() {
+                        self.message = self.st.restore_originals().unwrap_or_else(|e| e);
                     }
                     if plain_button(ui, "Зберегти").clicked() {
                         self.message = match self.st.save_project() {

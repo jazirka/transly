@@ -37,7 +37,12 @@ pub fn base36(mut n: u64) -> String {
 
 /// `String.prototype.trim`: пробіли Unicode плюс U+FEFF (Rust `trim` його не знає).
 pub fn trim(s: &str) -> &str {
-    s.trim_matches(|c: char| c.is_whitespace() || c == '\u{feff}')
+    s.trim_matches(is_space)
+}
+
+/// Пробіл у сенсі JS (`\s`, `trim`): Unicode White_Space без U+0085, плюс U+FEFF.
+pub fn is_space(c: char) -> bool {
+    (c.is_whitespace() && c != '\u{85}') || c == '\u{feff}'
 }
 
 /// Довжина в кодових одиницях UTF-16 (`String.length`).

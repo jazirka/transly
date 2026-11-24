@@ -1,12 +1,16 @@
 //! Ядро Transly. Кожен модуль повторює відповідний файл `app/src/core/*.ts` з тією самою поведінкою;
 //! еталон — «золоті вектори» (`tests/vectors/*.json`), які генерує `npm run vectors` у `app/`.
 
+pub mod controlcodes;
 pub mod glossary;
+pub mod hyphen;
 pub mod journal;
 pub mod js;
 pub mod merge;
 pub mod model;
 pub mod variants;
+pub mod wrap;
+pub mod wrapconfig;
 pub mod plan;
 pub mod plural;
 pub mod strands;

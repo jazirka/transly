@@ -325,7 +325,7 @@ fn has_break(s: &str) -> bool {
 }
 /// `/^[\s\-–—]+$/`
 pub fn is_sep(s: &str) -> bool {
-    !s.is_empty() && s.chars().all(|c| c.is_whitespace() || c == '\u{feff}' || matches!(c, '-' | '–' | '—'))
+    !s.is_empty() && s.chars().all(|c| js::is_space(c) || matches!(c, '-' | '–' | '—'))
 }
 
 /// Місця, де стоять усі частини шаблону по черзі, з не більше `max_gap` слів між частинами й без кінця речення між ними.

@@ -65,6 +65,11 @@ pub struct RuleCtx<'a> {
     pub rules: &'a QaRules,
     src_words: OnceCell<HashSet<String>>,
 }
+impl<'a> RuleCtx<'a> {
+    pub fn new(kind: Option<&'a str>, source: &'a str, target: &'a str, rules: &'a QaRules) -> RuleCtx<'a> {
+        RuleCtx { kind, source, target, ms: mask_codes(source), mt: mask_codes(target), rules, src_words: OnceCell::new() }
+    }
+}
 impl RuleCtx<'_> {
     /// Слова оригіналу (замасковані) як множина: слово, що стоїть в оригіналі, — власне слово гри.
     fn src_words(&self) -> &HashSet<String> {
@@ -509,7 +514,7 @@ pub fn qa_rules_revision() -> u32 {
 
 /// Примітки ввімкнених правил для перекладу, по одній на правило.
 pub fn run_rules(source: &str, target: &str, rules: &QaRules, kind: Option<&str>) -> Vec<Issue> {
-    let ctx = RuleCtx { kind, source, target, ms: mask_codes(source), mt: mask_codes(target), rules, src_words: OnceCell::new() };
+    let ctx = RuleCtx::new(kind, source, target, rules);
     let mut out = Vec::new();
     for r in QA_RULES.iter() {
         let sev = rules.sev.get(r.id).copied().unwrap_or(r.def);

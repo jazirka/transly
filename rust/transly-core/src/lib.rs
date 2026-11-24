@@ -3,6 +3,7 @@
 
 pub mod controlcodes;
 pub mod declarative;
+pub mod declqa;
 pub mod engine;
 pub mod findreplace;
 pub mod formats;

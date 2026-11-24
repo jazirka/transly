@@ -541,3 +541,40 @@ fn apply_list(list: &mut Vec<Value>, base: &str, get: &dyn Fn(&str) -> Option<St
         }
     }
 }
+
+/// Кожен список команд файлу RPG Maker (події мап, спільні події, загони) для проходів, що потребують сирих команд.
+pub fn command_lists(file: &GameFile) -> Vec<Vec<Value>> {
+    let mut out = Vec::new();
+    let j = &file.json;
+    let lists_of = |v: &Value, out: &mut Vec<Vec<Value>>| {
+        if let Some(l) = v.get("list").and_then(Value::as_array) {
+            out.push(l.clone());
+        }
+    };
+    if is_map(&file.name) && j.is_object() && j.get("events").is_some_and(Value::is_array) {
+        for ev in j["events"].as_array().unwrap() {
+            if let Some(pages) = ev.get("pages").and_then(Value::as_array).filter(|_| ev.is_object()) {
+                for pg in pages.iter().filter(|p| p.is_object()) {
+                    lists_of(pg, &mut out);
+                }
+            }
+        }
+    } else if file.name == "CommonEvents.json" {
+        if let Value::Array(evs) = j {
+            for ev in evs.iter().filter(|e| e.is_object()) {
+                lists_of(ev, &mut out);
+            }
+        }
+    } else if file.name == "Troops.json" {
+        if let Value::Array(ts) = j {
+            for t in ts.iter().filter(|t| t.is_object()) {
+                if let Some(pages) = t.get("pages").and_then(Value::as_array) {
+                    for pg in pages.iter().filter(|p| p.is_object()) {
+                        lists_of(pg, &mut out);
+                    }
+                }
+            }
+        }
+    }
+    out
+}

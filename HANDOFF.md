@@ -39,4 +39,4 @@
 - Нове вектори для модуля = новий файл `app/scripts/vectors/<модуль>.vec.ts` (допоміжне — `util.ts`: seeded rng, `text()` з символами для розбіжностей UTF-16/UTF-8) + `rust/transly-core/tests/<модуль>_vectors.rs` (допоміжне — `tests/common`).
 - Правила перенесення: рядки порівнювати через `js::cmp` (UTF-16), `JSON.stringify` → `js::stringify`, хеші — `js::hash_text`. Порядок полів структур = порядок, в якому TS будує об'єкти.
 - Також готово: `plural` (вибір форми й групування тисяч; підключення до i18n — з `ext/i18n`), `ukmorph` (повністю, словник `MorphDict` — трейт, у векторах не використовується). Вектори `ukmorph.json`: 1500 фраз, 4000 перенесень.
-- Далі за списком: `glossary` (+ токенізація), `termmatch`, `strands`, `termusage`, `plan`/`journal`, `qa*`, `ukmorph`…
+- Далі за списком: `qa*` і правила (`qa`, `qarules`, `qaconfig`, `qaadvice`), `wrap`, `controlCodes`, `project`, `autofill`, `compose`, `tm`, `ingest`, `branches`, формати файлів і збірка, `ext/*`.

@@ -4,6 +4,7 @@
 pub mod controlcodes;
 pub mod declarative;
 pub mod engine;
+pub mod findreplace;
 pub mod formats;
 pub mod glossary;
 pub mod groups;
@@ -45,6 +46,7 @@ pub mod speakers;
 pub mod strands;
 pub mod termmatch;
 pub mod tm;
+pub mod termedit;
 pub mod termusage;
 pub mod ukmorph;
 pub mod workflow;

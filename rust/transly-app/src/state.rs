@@ -27,6 +27,18 @@ pub enum RowStatus {
     Approved,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct SettingsView {
+    pub name: String,
+    pub source_lang: String,
+    pub target_lang: String,
+    pub who: String,
+    pub tolerance_pct: f64,
+    pub block_errors: bool,
+    pub propagate: bool,
+    pub line_limit: f64,
+}
+
 #[derive(Default, Debug, PartialEq, Eq)]
 pub struct Counts {
     pub total: usize,
@@ -206,7 +218,7 @@ impl AppState {
         }
         let now = now_ms();
         let next = edit(self.entry(f, r), &u, text, Stage::Translate, now);
-        let next = record_change(self.entry(f, r), &next, "правка", text, "Ви", now, None);
+        let next = record_change(self.entry(f, r), &next, "правка", text, &self.who(), now, None);
         self.put(f, name, u.key, next);
     }
 
@@ -215,10 +227,11 @@ impl AppState {
         self.edit(f, r, text);
         let Some(u) = self.unit(f, r).cloned() else { return Err("Немає рядка".into()) };
         let name = self.views[f].name.clone();
-        let opts = SubmitOptions { qa: default_qa(), block_errors: true };
+        let block = self.settings_view().is_none_or(|v| v.block_errors);
+        let opts = SubmitOptions { qa: self.qa_options(), block_errors: block };
         match submit(self.entry(f, r), &u, Stage::Translate, now_ms(), &opts) {
             SubmitResult::Ok(e) => {
-                let e = record_change(self.entry(f, r), &e, "надіслано", &e.target.clone(), "Ви", now_ms(), None);
+                let e = record_change(self.entry(f, r), &e, "надіслано", &e.target.clone(), &self.who(), now_ms(), None);
                 self.put(f, name, u.key, e);
                 Ok(())
             }
@@ -321,9 +334,7 @@ impl AppState {
     /// Примітки QA до тексту рядка за правилами ядра.
     pub fn issues(&self, f: usize, r: usize, text: &str) -> Vec<Issue> {
         let Some(u) = self.unit(f, r) else { return vec![] };
-        let mut qa = default_qa();
-        qa.terms = self.terms();
-        check(&UnitLike::from(u), text, &qa)
+        check(&UnitLike::from(u), text, &self.qa_options())
     }
 
     /// Збіги з пам'яті перекладів для оригіналу рядка (пари береться з уже перекладених рядків проєкту).
@@ -357,7 +368,7 @@ impl AppState {
     pub fn comment(&mut self, f: usize, r: usize, text: &str) {
         let Some(u) = self.unit(f, r).cloned() else { return };
         let name = self.views[f].name.clone();
-        let next = add_comment(self.entry(f, r), "Ви", text, now_ms(), None);
+        let next = add_comment(self.entry(f, r), &self.who(), text, now_ms(), None);
         self.put(f, name, u.key, next);
     }
 
@@ -366,8 +377,7 @@ impl AppState {
         let key = (f, self.rev);
         if self.qa_cache.borrow().0 != key {
             let mut out = Vec::new();
-            let mut qa = default_qa();
-            qa.terms = self.terms();
+            let qa = self.qa_options();
             for r in 0..self.row_count(f) {
                 let Some(e) = self.entry(f, r).filter(|e| !e.target.is_empty()) else { continue };
                 let Some(u) = self.unit(f, r) else { continue };
@@ -393,6 +403,55 @@ impl AppState {
             }
         }
         n
+    }
+
+    /// Налаштування QA проєкту: допуск довжини й межа рядка.
+    pub fn qa_options(&self) -> transly_core::qa::QaOptions {
+        let mut qa = default_qa();
+        qa.terms = self.terms();
+        if let Some(p) = &self.project {
+            if let Some(t) = p.settings.get("tolerancePct").and_then(|v| v.as_f64()) {
+                qa.tolerance_pct = t;
+            }
+            qa.line_limit = p.settings.get("lineLimit").and_then(|v| v.as_f64()).filter(|l| *l > 0.0);
+        }
+        qa
+    }
+
+    /// Ім'я перекладача для записів історії.
+    pub fn who(&self) -> String {
+        self.project.as_ref().and_then(|p| p.settings.get("who")).and_then(|v| v.as_str()).filter(|w| !w.is_empty()).unwrap_or("Ви").to_string()
+    }
+
+    /// Налаштування, які показує вікно.
+    pub fn settings_view(&self) -> Option<SettingsView> {
+        let p = self.project.as_ref()?;
+        let get = |k: &str| p.settings.get(k);
+        Some(SettingsView {
+            name: p.name.clone(),
+            source_lang: p.source_lang.clone(),
+            target_lang: p.target_lang.clone(),
+            who: self.who(),
+            tolerance_pct: get("tolerancePct").and_then(|v| v.as_f64()).unwrap_or(25.0),
+            block_errors: get("blockErrors").and_then(|v| v.as_bool()).unwrap_or(true),
+            propagate: get("propagate").and_then(|v| v.as_bool()).unwrap_or(true),
+            line_limit: get("lineLimit").and_then(|v| v.as_f64()).unwrap_or(0.0),
+        })
+    }
+
+    pub fn apply_settings(&mut self, v: &SettingsView) {
+        let Some(p) = self.project.as_mut() else { return };
+        p.name = v.name.clone();
+        p.source_lang = v.source_lang.clone();
+        p.target_lang = v.target_lang.clone();
+        p.settings.insert("who".into(), serde_json::json!(v.who));
+        p.settings.insert("tolerancePct".into(), serde_json::json!(v.tolerance_pct));
+        p.settings.insert("blockErrors".into(), serde_json::json!(v.block_errors));
+        p.settings.insert("propagate".into(), serde_json::json!(v.propagate));
+        p.settings.insert("lineLimit".into(), serde_json::json!(v.line_limit));
+        p.settings_at = Some(now_ms());
+        self.rev += 1;
+        self.dirty = true;
     }
 
     pub fn key_of(&self, f: usize, r: usize) -> String {
@@ -430,8 +489,7 @@ impl AppState {
     /// Збирає переклад і кладе файли в теку гри (копії оригіналів лишаються поруч). Повертає підсумок.
     pub fn build_into_game(&mut self, include_drafts: bool) -> Result<String, String> {
         let (Some(p), Some(dir)) = (&self.project, &self.dir) else { return Err("Проєкт не відкрито".into()) };
-        let mut qa = default_qa();
-        qa.terms = self.terms();
+        let qa = self.qa_options();
         let opts = BuildOptions { only_approved: false, include_drafts, block_errors: true, qa };
         let res = build(&self.game, &self.views, p, &opts);
         let out: Vec<OutFile> = res.files.iter().map(|f| OutFile { name: f.name.rsplit('/').next().unwrap_or(&f.name).to_string(), content: file_text(f) }).collect();
@@ -499,6 +557,32 @@ mod tests {
         assert!(!s.history(0, 0).is_empty());
         s.comment(0, 0, "Перевірити рід");
         assert_eq!(s.threads(0, 0).len(), 1);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn settings_change_who_and_qa_and_survive_a_reload() {
+        let base = std::env::temp_dir().join(format!("transly-app-settings-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = game(&base);
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        let mut v = s.settings_view().unwrap();
+        assert_eq!(v.who, "Ви");
+        v.who = "Анна".into();
+        v.tolerance_pct = 10.0;
+        v.line_limit = 5.0;
+        s.apply_settings(&v);
+        assert!(s.dirty);
+        assert_eq!(s.who(), "Анна");
+        assert_eq!(s.qa_options().tolerance_pct, 10.0);
+        assert_eq!(s.qa_options().line_limit, Some(5.0));
+        s.edit(0, 0, "Герой");
+        assert_eq!(s.history(0, 0)[0].rec.who, "Анна");
+        s.save_project().unwrap();
+        let mut s2 = AppState::default();
+        s2.open_game(&data).unwrap();
+        assert_eq!(s2.settings_view().unwrap().who, "Анна");
         let _ = std::fs::remove_dir_all(&base);
     }
 

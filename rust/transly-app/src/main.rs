@@ -26,6 +26,7 @@ struct App {
     term_en: String,
     term_uk: String,
     itab: usize,
+    settings: Option<state::SettingsView>,
     btab: usize,
     bottom_open: bool,
     focus: bool,
@@ -67,7 +68,7 @@ fn source_job(text: &str, marks: &[(usize, usize, usize)]) -> egui::text::Layout
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, btab: 0, bottom_open: true, focus: false, comment: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new() }
     }
 }
 
@@ -132,6 +133,7 @@ impl eframe::App for App {
         self.toolbar(ctx);
         self.statusbar(ctx);
         self.bottom(ctx);
+        self.settings_window(ctx);
         self.strip(ctx);
         if !self.focus {
             self.tree(ctx);
@@ -188,6 +190,9 @@ impl App {
                     }
                     if plain_button(ui, "Повернути оригінали").clicked() {
                         self.message = self.st.restore_originals().unwrap_or_else(|e| e);
+                    }
+                    if plain_button(ui, "Налаштування").clicked() {
+                        self.settings = self.st.settings_view();
                     }
                     if plain_button(ui, if self.focus { "Таблиця" } else { "Фокус" }).clicked() {
                         self.focus = !self.focus;
@@ -315,6 +320,57 @@ impl App {
                 }
             });
         });
+    }
+
+    fn settings_window(&mut self, ctx: &egui::Context) {
+        let Some(mut v) = self.settings.clone() else { return };
+        let mut open = true;
+        let (mut save, mut cancel) = (false, false);
+        egui::Window::new("Налаштування проєкту").open(&mut open).collapsible(false).resizable(false).default_width(420.0).show(ctx, |ui| {
+            egui::Grid::new("settings_grid").num_columns(2).spacing([14.0, 10.0]).show(ui, |ui| {
+                ui.label("Назва проєкту");
+                ui.text_edit_singleline(&mut v.name);
+                ui.end_row();
+                ui.label("Мова оригіналу");
+                ui.add(egui::TextEdit::singleline(&mut v.source_lang).desired_width(80.0));
+                ui.end_row();
+                ui.label("Мова перекладу");
+                ui.add(egui::TextEdit::singleline(&mut v.target_lang).desired_width(80.0));
+                ui.end_row();
+                ui.label("Хто перекладає");
+                ui.text_edit_singleline(&mut v.who);
+                ui.end_row();
+                ui.label("Допуск довжини, %");
+                ui.add(egui::DragValue::new(&mut v.tolerance_pct).range(0.0..=300.0));
+                ui.end_row();
+                ui.label("Найдовший рядок (0 — без межі)");
+                ui.add(egui::DragValue::new(&mut v.line_limit).range(0.0..=500.0));
+                ui.end_row();
+                ui.label("Помилки QA блокують надсилання");
+                ui.checkbox(&mut v.block_errors, "");
+                ui.end_row();
+                ui.label("Однакові рядки перекладати разом");
+                ui.checkbox(&mut v.propagate, "");
+                ui.end_row();
+            });
+            ui.add_space(10.0);
+            ui.horizontal(|ui| {
+                if primary_button(ui, "Зберегти").clicked() {
+                    save = true;
+                }
+                if plain_button(ui, "Скасувати").clicked() {
+                    cancel = true;
+                }
+            });
+        });
+        if save {
+            self.st.apply_settings(&v);
+            self.settings = None;
+        } else if cancel || !open {
+            self.settings = None;
+        } else {
+            self.settings = Some(v);
+        }
     }
 
     fn strip(&mut self, ctx: &egui::Context) {

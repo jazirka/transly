@@ -66,3 +66,17 @@ pub fn lenient_opt_i64<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<
         Some(n) => Some(n.as_i64().or_else(|| n.as_f64().map(|f| f as i64)).ok_or_else(|| serde::de::Error::custom("не ціле число"))?),
     })
 }
+
+/// Перші `n` кодових одиниць UTF-16 (`s.slice(0, n)`); сурогатна пара, розрізана посередині, відкидається.
+pub fn slice16(s: &str, n: usize) -> String {
+    let mut used = 0;
+    let mut out = String::new();
+    for c in s.chars() {
+        used += c.len_utf16();
+        if used > n {
+            break;
+        }
+        out.push(c);
+    }
+    out
+}

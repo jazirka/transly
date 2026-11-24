@@ -53,4 +53,5 @@ pub mod tm;
 pub mod termedit;
 pub mod termusage;
 pub mod ukmorph;
+pub mod units;
 pub mod workflow;

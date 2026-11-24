@@ -25,20 +25,6 @@ fn is_json_file(name: &str) -> bool {
     name.len() >= 5 && name.is_char_boundary(name.len() - 5) && name[name.len() - 5..].eq_ignore_ascii_case(".json")
 }
 
-/// Перші `n` одиниць UTF-16 тексту (`slice(0, n)`).
-fn slice16(s: &str, n: usize) -> String {
-    let mut used = 0;
-    let mut out = String::new();
-    for c in s.chars() {
-        used += c.len_utf16();
-        if used > n {
-            break;
-        }
-        out.push(c);
-    }
-    out
-}
-
 /// Терміни одного глосарія плагіна: записані в маніфесті або з його файлу (`.json` — список, `.tsv` — оригінал, табуляція,
 /// переклад, табуляція, варіанти через `;`). `file_text` — вміст файлу `g.file` у пакеті (порожній, якщо файлу немає).
 pub fn glossary_terms(g: &Value, file_text: &str) -> (Vec<BroughtTerm>, usize) {
@@ -89,7 +75,7 @@ pub fn glossary_terms(g: &Value, file_text: &str) -> (Vec<BroughtTerm>, usize) {
         }
         seen.insert(en.to_lowercase());
         let alt: Vec<String> = r.get("alt").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).filter(|a| !js::trim(a).is_empty() && js::len16(a) <= 200).map(String::from).collect()).unwrap_or_default();
-        let note = r.get("note").and_then(Value::as_str).filter(|n| !js::trim(n).is_empty()).map(|n| slice16(js::trim(n), 300));
+        let note = r.get("note").and_then(Value::as_str).filter(|n| !js::trim(n).is_empty()).map(|n| js::slice16(js::trim(n), 300));
         terms.push(BroughtTerm { en, uk, alt: if alt.is_empty() { None } else { Some(alt) }, note });
         if terms.len() >= LIMIT {
             break;

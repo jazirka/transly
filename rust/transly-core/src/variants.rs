@@ -142,6 +142,7 @@ pub fn cast_vote(e: &Entry, id: &str, who: &str, v: i8, now: i64) -> Entry {
         on: id.to_string(),
         v: if cur.map(|c| c.v) == Some(v) { 0 } else { v },
         at: now.max(cur.map_or(0, |c| c.at) + 1),
+        extra: Default::default(),
     };
     let mut rest: Vec<Vote> = votes.iter().enumerate().filter(|(i, _)| Some(*i) != cur_idx).map(|(_, x)| x.clone()).collect();
     rest.push(next);
@@ -153,7 +154,7 @@ pub fn cast_vote(e: &Entry, id: &str, who: &str, v: i8, now: i64) -> Entry {
 pub fn set_dropped(e: &Entry, id: &str, who: &str, off: bool, now: i64) -> Entry {
     let drops = e.drops.clone().unwrap_or_default();
     let cur_idx = drops.iter().position(|d| d.on == id);
-    let next = Drop { who: who.to_string(), on: id.to_string(), at: now.max(cur_idx.map_or(0, |i| drops[i].at) + 1), off: if off { Some(true) } else { None } };
+    let next = Drop { who: who.to_string(), on: id.to_string(), at: now.max(cur_idx.map_or(0, |i| drops[i].at) + 1), off: if off { Some(true) } else { None }, extra: Default::default() };
     let mut rest: Vec<Drop> = drops.iter().enumerate().filter(|(i, _)| Some(*i) != cur_idx).map(|(_, x)| x.clone()).collect();
     rest.push(next);
     rest.sort_by(by_drop);

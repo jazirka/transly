@@ -49,3 +49,20 @@ pub fn is_space(c: char) -> bool {
 pub fn len16(s: &str) -> usize {
     s.encode_utf16().count()
 }
+
+/// Читання цілого з JSON, що терпить дробові числа (в JS усі числа — `f64`): дробова частина відкидається.
+/// Часові мітки в проєктах — цілі мілісекунди, але чужий чи пошкоджений файл не повинен відмовляти завантаженню.
+pub fn lenient_i64<'de, D: serde::Deserializer<'de>>(d: D) -> Result<i64, D::Error> {
+    use serde::Deserialize;
+    let n = serde_json::Number::deserialize(d)?;
+    n.as_i64().or_else(|| n.as_f64().map(|f| f as i64)).ok_or_else(|| serde::de::Error::custom("не ціле число"))
+}
+
+/// Те саме для необов'язкового поля.
+pub fn lenient_opt_i64<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<i64>, D::Error> {
+    use serde::Deserialize;
+    Ok(match Option::<serde_json::Number>::deserialize(d)? {
+        None => None,
+        Some(n) => Some(n.as_i64().or_else(|| n.as_f64().map(|f| f as i64)).ok_or_else(|| serde::de::Error::custom("не ціле число"))?),
+    })
+}

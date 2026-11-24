@@ -3,15 +3,21 @@
 
 pub mod controlcodes;
 pub mod glossary;
+pub mod groups;
 pub mod hyphen;
+pub mod branches;
 pub mod journal;
+pub mod links;
 pub mod js;
 pub mod merge;
 pub mod model;
+pub mod validate;
 pub mod variants;
 pub mod wrap;
 pub mod wrapconfig;
 pub mod plan;
+pub mod progress;
+pub mod project;
 pub mod qa;
 pub mod qaadvice;
 pub mod qacodes;

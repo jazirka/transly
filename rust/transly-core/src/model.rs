@@ -3,7 +3,7 @@
 
 use indexmap::IndexMap;
 use serde::{Deserialize, Deserializer, Serialize};
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 /// Стан рядка. Рухається лише вперед: new → draft → done → appr.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -113,6 +113,7 @@ pub struct Unit {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CommentRes {
     pub who: String,
+    #[serde(deserialize_with = "crate::js::lenient_i64")]
     pub at: i64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub open: Option<bool>,
@@ -121,6 +122,7 @@ pub struct CommentRes {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Comment {
     pub who: String,
+    #[serde(deserialize_with = "crate::js::lenient_i64")]
     pub at: i64,
     pub text: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -129,10 +131,13 @@ pub struct Comment {
     pub re: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub res: Option<CommentRes>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, deserialize_with = "crate::js::lenient_opt_i64", skip_serializing_if = "Option::is_none")]
     pub ed: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub del: Option<bool>,
+    /// Невідомі поля (від новішої версії): проходять без змін.
+    #[serde(flatten, default, skip_serializing_if = "Map::is_empty")]
+    pub extra: Map<String, Value>,
 }
 
 /// Голос за внесок рядка; `v` 0 — знятий голос (лишається слідом для злиття).
@@ -141,7 +146,11 @@ pub struct Vote {
     pub who: String,
     pub on: String,
     pub v: i8,
+    #[serde(deserialize_with = "crate::js::lenient_i64")]
     pub at: i64,
+    /// Невідомі поля (від новішої версії): проходять без змін.
+    #[serde(flatten, default, skip_serializing_if = "Map::is_empty")]
+    pub extra: Map<String, Value>,
 }
 
 /// Внесок, знятий з картки рядка (`off`: повернений).
@@ -149,9 +158,13 @@ pub struct Vote {
 pub struct Drop {
     pub who: String,
     pub on: String,
+    #[serde(deserialize_with = "crate::js::lenient_i64")]
     pub at: i64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub off: Option<bool>,
+    /// Невідомі поля (від новішої версії): проходять без змін.
+    #[serde(flatten, default, skip_serializing_if = "Map::is_empty")]
+    pub extra: Map<String, Value>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -164,6 +177,7 @@ pub struct Prev {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct HistoryItem {
+    #[serde(deserialize_with = "crate::js::lenient_i64")]
     pub at: i64,
     pub who: String,
     pub what: String,
@@ -172,6 +186,9 @@ pub struct HistoryItem {
     pub batch: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub prev: Option<Prev>,
+    /// Невідомі поля (від новішої версії): проходять без змін.
+    #[serde(flatten, default, skip_serializing_if = "Map::is_empty")]
+    pub extra: Map<String, Value>,
 }
 
 /// Збережений і зливаний стан одного рядка.
@@ -179,6 +196,7 @@ pub struct HistoryItem {
 pub struct Entry {
     pub target: String,
     pub status: Status,
+    #[serde(deserialize_with = "crate::js::lenient_i64")]
     pub mt: i64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub src: Option<String>,
@@ -188,7 +206,7 @@ pub struct Entry {
     pub returned: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ign: Option<Vec<String>>,
-    #[serde(default, rename = "ignAt", skip_serializing_if = "Option::is_none")]
+    #[serde(default, rename = "ignAt", deserialize_with = "crate::js::lenient_opt_i64", skip_serializing_if = "Option::is_none")]
     pub ign_at: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub comments: Option<Vec<Comment>>,
@@ -198,6 +216,9 @@ pub struct Entry {
     pub drops: Option<Vec<Drop>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub history: Option<Vec<HistoryItem>>,
+    /// Невідомі поля (від новішої версії): проходять без змін.
+    #[serde(flatten, default, skip_serializing_if = "Map::is_empty")]
+    pub extra: Map<String, Value>,
 }
 
 impl Entry {
@@ -216,6 +237,7 @@ impl Entry {
             votes: None,
             drops: None,
             history: None,
+            extra: Map::new(),
         }
     }
 }

@@ -42,4 +42,7 @@
 - Також готово: `controlcodes`, `hyphen`, `wrapconfig` (разом із `gamewindow`), `wrap` (функція виміру в пікселях — `Option<Measure>`, її дає виклик; `js::is_space`/`js::trim` тепер як `s` у JS).
 - Також готово: `qacodes`, `qarules` (8 власних правил; правила плагінів — з `ext/*`), `qaconfig`, `qa`, `qaadvice`, а також `submit`/`approve_entry` у `workflow`. Кеші по об’єкту рядка (`WeakMap`) не переносилися. Залежності: `fancy-regex`, `unicode-normalization`. Позиції в правилах — індекси символів, не UTF-16.
 - Відомо: 6 тестів `test/ext-examples.test.ts` падають на Windows через контрольні суми (CRLF) — не пов’язано з ядром.
-- Далі за списком: `project`, `autofill`, `compose`, `tm`, `ingest`, `branches`, формати файлів і збірка, `ext/*`.
+- Також готово: `progress`, `validate` (ремонт і обмеження годинника), `project` (формат `project.json`, розбір із ремонтом, `merge_projects`), `branches` (без `diffBranches`/`planMerge`), частини `groups` і `links` (лише злиття).
+  - Проєкт у Rust: типізовані `files` (рядки з `extra` для невідомих полів), решта — `serde_json::Value` з порядком ключів файлу; невідомі поля верхнього рівня — `extra`.
+  - Відхилення від TS: дробові часові мітки (`mt`, `at`…) при читанні відкидають дробову частину (`js::lenient_i64`); `sourceLang`/`targetLang` не рядок → типові `en`/`uk`; порядок ключів у `base` гілок, створених у Rust, — порядок структур (лише для нічиїх при злитті двох різних `base`).
+- Далі за списком: решта `groups` (сцени), `links`, `branches` (порівняння), `scene`, `sceneindex`, `speakers`, `autofill`, `compose`, `tm`, `ingest`, формати файлів і збірка (`engine`, `rpgmaker`, `build`), `ext/*`.

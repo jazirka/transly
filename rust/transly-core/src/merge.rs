@@ -221,7 +221,7 @@ pub fn merge(a: &Translations, b: &Translations, since: i64) -> MergeResult {
             conflicts.push(key.clone());
             let loser = if newer_of_is_b(&ea, eb) { &ea } else { eb };
             if !js::trim(&loser.target).is_empty() && loser.target != entry.target {
-                let kept = HistoryItem { at: 0, who: OTHER_DEVICE.into(), what: REPLACED_WHAT.into(), text: loser.target.clone(), batch: None, prev: None };
+                let kept = HistoryItem { at: 0, who: OTHER_DEVICE.into(), what: REPLACED_WHAT.into(), text: loser.target.clone(), batch: None, prev: None, extra: Default::default() };
                 let ky = vec![kept.clone()];
                 let eh = |x: &HistoryItem, y: &HistoryItem| earlier(x, y);
                 let (h, same) = union_by(entry.history.as_ref(), Some(&ky), same_history, Some(&eh));

@@ -22,7 +22,7 @@ fn keep_last<T>(v: &mut Vec<T>, n: usize) {
 /// Додає запис в історію (не змінюючи вхід), лишаючи найновіші `HISTORY_LIMIT`.
 pub fn note(e: &Entry, what: &str, text: &str, who: &str, now: i64) -> Entry {
     let mut history = e.history.clone().unwrap_or_default();
-    history.push(HistoryItem { at: now, who: who.into(), what: what.into(), text: text.into(), batch: None, prev: None });
+    history.push(HistoryItem { at: now, who: who.into(), what: what.into(), text: text.into(), batch: None, prev: None, extra: Default::default() });
     keep_last(&mut history, HISTORY_LIMIT);
     Entry { history: Some(history), ..e.clone() }
 }
@@ -47,6 +47,7 @@ pub fn add_comment(e: Option<&Entry>, who: &str, text: &str, now: i64, reply_to:
         res: None,
         ed: None,
         del: None,
+        extra: Default::default(),
     };
     let mut comments = base.comments.clone().unwrap_or_default();
     comments.push(c);
@@ -125,6 +126,7 @@ pub fn reconcile(units: &[Unit], entries: &mut Translations, now: i64) -> Vec<St
 }
 
 /// Результат відправлення: новий запис чи причина відмови.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum SubmitResult {
     Ok(Entry),

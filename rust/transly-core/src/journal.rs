@@ -97,7 +97,7 @@ pub fn record_change(before: Option<&Entry>, after: &Entry, what: &str, text: &s
         Some(b) if after.mt < b.mt => b.mt + 1,
         _ => after.mt,
     };
-    let rec = HistoryItem { at: now.max(mt), who: who.into(), what: what.into(), text: text.into(), batch: batch.map(String::from), prev: Some(prev_of(before)) };
+    let rec = HistoryItem { at: now.max(mt), who: who.into(), what: what.into(), text: text.into(), batch: batch.map(String::from), prev: Some(prev_of(before)), extra: Default::default() };
     let mut history: Vec<HistoryItem> = after.history.clone().or_else(|| before.and_then(|b| b.history.clone())).unwrap_or_default();
     history.push(rec);
     if history.len() > HISTORY_LIMIT {

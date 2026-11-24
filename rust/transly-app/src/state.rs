@@ -6,7 +6,8 @@ use transly_core::progress::{row_state, RowState};
 use transly_core::build::{build, file_text, BuildOptions};
 use transly_core::projname::name_from_folder;
 use transly_core::project::{deserialize, empty_project, serialize, FileView, SavedProject};
-use transly_core::journal::record_change;
+use transly_core::ingest::{ingest_note, ingest_quiet, plan_ingest};
+use transly_core::journal::{commit_rows, record_change};
 use transly_core::historyview::{history_rows, HistoryRow};
 use transly_core::tm::{FindOpts, TmEntry, TmIndex, TmMatch};
 use transly_core::comments::{threads_of, Thread};
@@ -84,6 +85,8 @@ struct Visible {
 type QaCache = ((usize, u64), Vec<(usize, String, bool)>);
 
 pub struct AppState {
+    /// Підсумок перенесення перекладів після оновлення гри (порожній, коли гра не змінилась).
+    pub last_note: String,
     qa_cache: std::cell::RefCell<QaCache>,
     pub game: Vec<GameFile>,
     pub dirty: bool,
@@ -105,7 +108,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None }
+        AppState { last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None }
     }
 }
 
@@ -152,6 +155,25 @@ impl AppState {
                 reconcile(&v.units, entries, now_ms());
             }
         }
+        // гра могла оновитися: переклади зіставляються з новими рядками за текстом оригіналу (ключі зсуваються)
+        self.last_note = String::new();
+        let old_snap: Option<indexmap::IndexMap<String, Vec<Unit>>> = project.snapshot.as_ref().and_then(|v| serde_json::from_value(v.clone()).ok());
+        if old_snap.is_some() {
+            let plan = plan_ingest(old_snap.as_ref(), &views, &project.files, now_ms());
+            if !plan.changes.is_empty() {
+                let mut seed = 1u32;
+                let mut rand = move || {
+                    seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+                    seed >> 8
+                };
+                commit_rows(&mut project.files, &plan.changes, "rekey", "Ви", now_ms(), None, &mut rand);
+            }
+            if !ingest_quiet(&plan.report) {
+                self.last_note = ingest_note(&plan.report);
+            }
+        }
+        let snap: indexmap::IndexMap<String, Vec<Unit>> = views.iter().map(|v| (v.name.clone(), v.units.clone())).collect();
+        project.snapshot = serde_json::to_value(&snap).ok();
         let n = views.len();
         self.game = files;
         self.views = views;
@@ -620,6 +642,31 @@ mod tests {
         assert!(msg.starts_with("Злито"), "{msg}");
         assert_eq!(a.target_of(0, 0), "Найновіше");
         assert!(a.dirty);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn an_updated_game_moves_translations_to_the_shifted_rows() {
+        let base = std::env::temp_dir().join(format!("transly-app-ingest-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = base.join("MyGame").join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        let actors = |names: &[&str]| format!("[null,{}]", names.iter().enumerate().map(|(i, n)| format!(r#"{{"id":{},"name":"{n}","nickname":"","profile":"","note":""}}"#, i + 1)).collect::<Vec<_>>().join(","));
+        std::fs::write(data.join("Actors.json"), actors(&["Alpha", "Beta"])).unwrap();
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        let ri = (0..s.row_count(0)).find(|r| s.source_of(0, *r) == "Beta").unwrap();
+        s.edit(0, ri, "Бета");
+        s.save_project().unwrap();
+        // нова версія гри: перед Beta вставлено нового героя, ключі зсунулись
+        std::fs::write(data.join("Actors.json"), actors(&["Alpha", "Newcomer", "Beta"])).unwrap();
+        let mut s2 = AppState::default();
+        s2.open_game(&data).unwrap();
+        let rj = (0..s2.row_count(0)).find(|r| s2.source_of(0, *r) == "Beta").unwrap();
+        assert_eq!(s2.target_of(0, rj), "Бета");
+        let rn = (0..s2.row_count(0)).find(|r| s2.source_of(0, *r) == "Newcomer").unwrap();
+        assert_eq!(s2.target_of(0, rn), "");
+        assert!(!s2.last_note.is_empty());
         let _ = std::fs::remove_dir_all(&base);
     }
 

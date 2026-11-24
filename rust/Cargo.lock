@@ -5415,6 +5415,7 @@ name = "transly-app"
 version = "0.0.1"
 dependencies = [
  "eframe",
+ "indexmap",
  "rfd",
  "serde_json",
  "transly-core",

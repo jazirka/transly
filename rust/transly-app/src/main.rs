@@ -168,7 +168,7 @@ impl App {
                 if plain_button(ui, "Відкрити гру…").clicked() {
                     if let Some(dir) = rfd::FileDialog::new().set_title("Оберіть папку гри (data)").pick_folder() {
                         self.message = match self.st.open_game(&dir) {
-                            Ok(n) => format!("Відкрито: {n} файлів із текстом"),
+                            Ok(n) => format!("Відкрито: {n} файлів із текстом{}", if self.st.last_note.is_empty() { String::new() } else { format!(". {}", self.st.last_note) }),
                             Err(e) => e,
                         };
                         self.draft_for = None;

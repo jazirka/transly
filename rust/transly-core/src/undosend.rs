@@ -81,7 +81,7 @@ pub fn send_batches(views: &[FileView], saved: &SavedProject, limit: usize) -> V
             found.push(Found { kind, item: item(e, last.at, false) });
         }
     }
-    found.sort_by(|a, b| b.item.at.cmp(&a.item.at));
+    found.sort_by_key(|f| std::cmp::Reverse(f.item.at));
     let mut out: Vec<SendBatch> = Vec::new();
     for f in found {
         let it = SentItem { guessed: false, ..f.item };
@@ -96,7 +96,7 @@ pub fn send_batches(views: &[FileView], saved: &SavedProject, limit: usize) -> V
         }
     }
     // Рядки, що чекають вичитки без запису про надсилання (надіслані старою версією чи історію втрачено): за часом зміни.
-    loose.sort_by(|a, b| b.item.at.cmp(&a.item.at));
+    loose.sort_by_key(|f| std::cmp::Reverse(f.item.at));
     let mut guessed: Vec<SendBatch> = Vec::new();
     for f in loose {
         let it = SentItem { guessed: true, ..f.item };
@@ -106,7 +106,7 @@ pub fn send_batches(views: &[FileView], saved: &SavedProject, limit: usize) -> V
         }
     }
     let mut all: Vec<SendBatch> = out.into_iter().chain(guessed).collect();
-    all.sort_by(|a, b| b.at.cmp(&a.at));
+    all.sort_by_key(|b| std::cmp::Reverse(b.at));
     all.truncate(limit);
     all
 }
@@ -154,7 +154,7 @@ pub fn undone_batches(views: &[FileView], saved: &SavedProject, limit: usize) ->
             }
         }
     }
-    found.sort_by(|a, b| b.1.cmp(&a.1));
+    found.sort_by_key(|f| std::cmp::Reverse(f.1));
     let mut out: Vec<UndoneBatch> = Vec::new();
     for (kind, at) in found {
         match out.last_mut() {

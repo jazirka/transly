@@ -7,6 +7,7 @@ pub mod declqa;
 pub mod engine;
 pub mod findreplace;
 pub mod formats;
+pub mod glossaries;
 pub mod glossary;
 pub mod groups;
 pub mod hyphen;

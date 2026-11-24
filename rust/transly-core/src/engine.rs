@@ -16,10 +16,10 @@ pub enum Applied {
     Text(String),
 }
 
-fn base(name: &str) -> &str {
+pub fn base(name: &str) -> &str {
     name.rsplit(['\\', '/']).next().unwrap_or(name)
 }
-fn ext(name: &str) -> String {
+pub fn ext(name: &str) -> String {
     match name.rfind(['.', '/', '\\']) {
         Some(i) if name[i..].starts_with('.') && i + 1 < name.len() => name[i..].to_lowercase(),
         _ => String::new(),

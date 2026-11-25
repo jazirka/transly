@@ -27,6 +27,7 @@ struct App {
     term_en: String,
     term_uk: String,
     itab: usize,
+    ref_win: Option<String>,
     spk_win: Option<Vec<(transly_core::speakers::SpeakerCandidate, String)>>,
     import_win: Option<(u8, String)>,
     build_win: Option<state::BuildChoice>,
@@ -77,7 +78,7 @@ fn source_job(text: &str, marks: &[(usize, usize, usize)]) -> egui::text::Layout
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
     }
 }
 
@@ -159,6 +160,7 @@ impl App {
         self.build_window(ctx);
         self.import_window(ctx);
         self.speakers_window(ctx);
+        self.reference_window(ctx);
         if let Some(msg) = self.st.finish_sync() {
             self.message = msg;
         }
@@ -227,6 +229,10 @@ impl App {
                     ui.separator();
                     if ui.add_enabled(self.st.is_open(), egui::Button::new("Імпорт пам’яті й глосарія…")).clicked() {
                         self.import_win = Some((0, String::new()));
+                        ui.close_menu();
+                    }
+                    if ui.add_enabled(self.st.is_open(), egui::Button::new("Додати довідкову мову…")).clicked() {
+                        self.ref_win = Some(String::new());
                         ui.close_menu();
                     }
                     if ui.add_enabled(self.st.is_open(), egui::Button::new("Налаштування проєкту…")).clicked() {
@@ -927,6 +933,38 @@ impl App {
         }
     }
 
+    fn reference_window(&mut self, ctx: &egui::Context) {
+        let Some(mut lang) = self.ref_win.take() else { return };
+        let mut open = true;
+        let (mut go, mut close) = (false, false);
+        egui::Window::new("Довідкова мова").open(&mut open).collapsible(false).resizable(false).default_width(440.0).show(ctx, |ui| {
+            ui.label(RichText::new("Оберіть папку тієї самої гри іншою мовою (наприклад, офіційна російська чи польська версія): її тексти з'являться в інспекторі як довідка.").size(11.5).color(MUTE));
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                ui.label("Код мови");
+                ui.add(egui::TextEdit::singleline(&mut lang).hint_text("ru").desired_width(80.0));
+            });
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                if ui.add_enabled(!lang.trim().is_empty(), egui::Button::new(RichText::new("Обрати папку…").color(Color32::WHITE)).fill(ACCENT).min_size(vec2(0.0, 26.0))).clicked() {
+                    go = true;
+                }
+                if plain_button(ui, "Закрити").clicked() {
+                    close = true;
+                }
+            });
+        });
+        if go {
+            if let Some(dir) = rfd::FileDialog::new().set_title("Папка гри іншою мовою (data)").pick_folder() {
+                self.message = self.st.import_reference(&dir, &lang).unwrap_or_else(|e| e);
+                close = true;
+            }
+        }
+        if !close && open {
+            self.ref_win = Some(lang);
+        }
+    }
+
     fn strip(&mut self, ctx: &egui::Context) {
         egui::SidePanel::left("strip").exact_width(40.0).resizable(false).frame(egui::Frame::new().fill(PANEL).stroke(Stroke::new(1.0_f32, LINE))).show(ctx, |ui| {
             ui.add_space(6.0);
@@ -1037,6 +1075,11 @@ impl App {
             ui.label(source_job(&self.st.source_of(f, r), &self.st.source_marks(f, r)));
         });
         ui.label(RichText::new(self.st.key_of(f, r)).monospace().size(10.5).color(MUTE));
+        for (lang, text) in self.st.references_of(f, r) {
+            ui.add_space(4.0);
+            label_caps(ui, &format!("Довідка · {lang}"));
+            ui.label(RichText::new(text).color(SRC_TEXT));
+        }
         ui.add_space(8.0);
         label_caps(ui, "Переклад");
         let rows = if self.focus { 9 } else { 5 };

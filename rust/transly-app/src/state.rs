@@ -171,7 +171,8 @@ impl AppState {
     }
 
     /// Відкриває папку гри: читає її файли й будує рядки. Повертає число файлів із текстом.
-    pub fn open_game(&mut self, dir: &Path) -> Result<usize, String> {
+    /// Читає теку гри: файли й рядки (вбудовані формати — ядро, решта — обробники плагінів).
+    fn load_dir(&self, dir: &Path) -> Result<(Vec<GameFile>, Vec<FileView>), String> {
         register_picked(&self.roots, &self.picked, dir);
         let d = dir.to_string_lossy().to_string();
         let exts: Vec<String> = self.host.reg.extensions();
@@ -196,6 +197,12 @@ impl AppState {
                 }
             }
         }
+        Ok((files, views))
+    }
+
+    pub fn open_game(&mut self, dir: &Path) -> Result<usize, String> {
+        let d = dir.to_string_lossy().to_string();
+        let (files, views) = self.load_dir(dir)?;
         let name = name_from_folder(&d);
         let name = if name.is_empty() { "Новий проєкт".to_string() } else { name };
         // проєкт, збережений раніше, підхоплюється; рядки, чий оригінал змінився, повертаються в чернетки
@@ -950,6 +957,41 @@ impl AppState {
         format!("Імен мовців змінено: {changed}")
     }
 
+    /// Додає довідкову мову: тека тієї самої гри іншою мовою; кожен рядок зіставляється з її рядком за ключем чи вирівнюванням.
+    pub fn import_reference(&mut self, dir: &Path, lang: &str) -> Result<String, String> {
+        let lang = transly_core::js::trim(lang).to_lowercase();
+        if lang.is_empty() {
+            return Err("Вкажіть код мови, наприклад ru або pl".into());
+        }
+        let (_, ref_views) = self.load_dir(dir)?;
+        let mut texts: indexmap::IndexMap<String, transly_core::reference::Reference> = indexmap::IndexMap::new();
+        let mut n = 0;
+        for v in &self.views {
+            let Some(rv) = ref_views.iter().find(|r| r.name == v.name) else { continue };
+            let r = transly_core::reference::align_reference(&v.units, &rv.units);
+            n += r.len();
+            texts.insert(v.name.clone(), r);
+        }
+        if n == 0 {
+            return Err("У цій теці не знайдено рядків, що відповідають вашій грі".into());
+        }
+        let p = self.project.as_mut().ok_or("Проєкт не відкрито")?;
+        let cur: Option<transly_core::reference::ReferenceBundle> = p.reference.as_ref().and_then(|v| serde_json::from_value(v.clone()).ok());
+        let bundle = transly_core::reference::with_reference(cur.as_ref(), transly_core::reference::ReferenceSet { lang: lang.clone(), texts });
+        p.reference = serde_json::to_value(&bundle).ok();
+        self.rev += 1;
+        self.dirty = true;
+        Ok(format!("Довідкова мова «{lang}»: зіставлено рядків {n}"))
+    }
+
+    /// Довідкові переклади рядка: (код мови, текст).
+    pub fn references_of(&self, f: usize, r: usize) -> Vec<(String, String)> {
+        let Some(v) = self.views.get(f) else { return vec![] };
+        let Some(u) = v.units.get(r) else { return vec![] };
+        let bundle: Option<transly_core::reference::ReferenceBundle> = self.project.as_ref().and_then(|p| p.reference.as_ref()).and_then(|x| serde_json::from_value(x.clone()).ok());
+        transly_core::reference::reference_sets(bundle.as_ref()).into_iter().filter_map(|set| set.texts.get(&v.name).and_then(|m| m.get(&u.key)).map(|t| (set.lang.clone(), t.clone()))).collect()
+    }
+
     pub fn key_of(&self, f: usize, r: usize) -> String {
         self.unit(f, r).map_or(String::new(), |u| u.key.clone())
     }
@@ -1422,6 +1464,28 @@ menu.quit=Quit game
         assert!(s.set_speakers(&[(key.clone(), "Анна".into())]).ends_with(": 0"), "без змін");
         s.set_speakers(&[(key.clone(), String::new())]);
         assert_eq!(s.speaker_of_row(f, one), "");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_reference_language_is_aligned_and_shown() {
+        let base = std::env::temp_dir().join(format!("transly-app-ref-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let en = game(&base);
+        let ru = base.join("Ru").join("data");
+        std::fs::create_dir_all(&ru).unwrap();
+        std::fs::write(ru.join("Actors.json"), r#"[null,{"id":1,"name":"Герой","nickname":"","profile":"Храбрый","note":""}]"#).unwrap();
+        let mut s = AppState::default();
+        s.open_game(&en).unwrap();
+        assert!(s.import_reference(&ru, "").is_err());
+        let msg = s.import_reference(&ru, "RU").unwrap();
+        assert!(msg.contains("«ru»"), "{msg}");
+        let hero = (0..s.row_count(0)).find(|r| s.source_of(0, *r) == "Hero").unwrap();
+        assert_eq!(s.references_of(0, hero), vec![("ru".to_string(), "Герой".to_string())]);
+        s.save_project().unwrap();
+        let mut s2 = AppState::default();
+        s2.open_game(&en).unwrap();
+        assert_eq!(s2.references_of(0, hero).len(), 1, "довідка переживає перезапуск");
         let _ = std::fs::remove_dir_all(&base);
     }
 

@@ -124,6 +124,7 @@ struct Visible {
 type QaCache = ((usize, u64), Vec<(usize, String, bool)>);
 
 pub struct AppState {
+    auto_limit: std::cell::RefCell<Option<usize>>,
     /// Показувати лише рядки цієї групи.
     pub group_filter: Option<String>,
     scene_cache: std::cell::RefCell<(usize, Option<transly_core::scene::SceneIndex>)>,
@@ -154,7 +155,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { group_filter: None, scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None }
+        AppState { auto_limit: std::cell::RefCell::new(None), group_filter: None, scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None }
     }
 }
 
@@ -230,6 +231,7 @@ impl AppState {
         // гра могла оновитися: переклади зіставляються з новими рядками за текстом оригіналу (ключі зсуваються)
         self.last_note = String::new();
         *self.scene_cache.borrow_mut() = (usize::MAX, None);
+        *self.auto_limit.borrow_mut() = None;
         let old_snap: Option<indexmap::IndexMap<String, Vec<Unit>>> = project.snapshot.as_ref().and_then(|v| serde_json::from_value(v.clone()).ok());
         if old_snap.is_some() {
             let plan = plan_ingest(old_snap.as_ref(), &views, &project.files, now_ms());
@@ -530,7 +532,17 @@ impl AppState {
             if let Some(t) = p.settings.get("tolerancePct").and_then(|v| v.as_f64()) {
                 qa.tolerance_pct = t;
             }
-            qa.line_limit = p.settings.get("lineLimit").and_then(|v| v.as_f64()).filter(|l| *l > 0.0);
+            let raw = p.settings.get("lineLimit").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let limit = if raw < 0.0 {
+                0.0
+            } else if raw > 0.0 {
+                raw
+            } else {
+                let mut c = self.auto_limit.borrow_mut();
+                *c.get_or_insert_with(|| transly_core::wrap::auto_line_limit(&self.views)) as f64
+            };
+            qa.line_limit = Some(limit).filter(|l| *l > 0.0);
+            qa.wrap = Some(transly_core::wrap::WrapPlan { settings: transly_core::wrapconfig::wrap_of(p.settings.get("wrap")), limit, disabled: raw < 0.0, measure: None });
             qa.rules = Some(transly_core::qaconfig::qa_of(p.settings.get("qa")));
         }
         qa
@@ -1249,6 +1261,29 @@ impl AppState {
         n
     }
 
+    /// Налаштування перенесення рядків проєкту.
+    pub fn wrap_settings(&self) -> transly_core::wrapconfig::WrapSettings {
+        transly_core::wrapconfig::wrap_of(self.project.as_ref().and_then(|p| p.settings.get("wrap")))
+    }
+
+    pub fn set_wrap_settings(&mut self, w: &transly_core::wrapconfig::WrapSettings) {
+        let Some(p) = self.project.as_mut() else { return };
+        p.settings.insert("wrap".into(), serde_json::to_value(w).unwrap_or_default());
+        p.settings_at = Some(now_ms());
+        self.rev += 1;
+        self.dirty = true;
+    }
+
+    /// Показує, що з текстом зробить перенос за поточними налаштуваннями (для прикладу в діалозі).
+    pub fn wrap_preview(&self, text: &str, face: bool) -> (String, usize) {
+        let opts = self.qa_options();
+        let Some(plan) = opts.wrap else { return (text.to_string(), 0) };
+        let m = transly_core::wrap::MessageLike { kind: Some("dialogue".into()), key: None, face: face.then(|| "Face".to_string()) };
+        let r = transly_core::wrap::wrap_message(&plan, &m, text);
+        let n = r.text.split('\n').count();
+        (r.text, n)
+    }
+
     pub fn key_of(&self, f: usize, r: usize) -> String {
         self.unit(f, r).map_or(String::new(), |u| u.key.clone())
     }
@@ -1839,6 +1874,23 @@ menu.quit=Quit game
         s.set_rule_level(&id, &def);
         assert_eq!(s.qa_rules_view(0)[0].3, def);
         assert_eq!(s.fix_qa_rule(&id), 0, "нічого виправляти");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn wrap_settings_roundtrip_and_preview() {
+        let base = std::env::temp_dir().join(format!("transly-app-wrap-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = game(&base);
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        let mut w = s.wrap_settings();
+        assert_eq!(w.mode, transly_core::wrapconfig::WrapMode::Build);
+        w.max_lines = 3;
+        s.set_wrap_settings(&w);
+        assert_eq!(s.wrap_settings().max_lines, 3);
+        let (t, n) = s.wrap_preview("слово слово слово слово слово слово слово слово слово слово слово слово слово слово слово", false);
+        assert!(n >= 2, "довгий текст переноситься: {t}");
         let _ = std::fs::remove_dir_all(&base);
     }
 

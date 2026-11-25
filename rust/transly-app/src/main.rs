@@ -27,6 +27,7 @@ struct App {
     term_en: String,
     term_uk: String,
     itab: usize,
+    wrap_win: Option<(transly_core::wrapconfig::WrapSettings, String, bool)>,
     qar_win: bool,
     br_win: Option<String>,
     groups_win: Option<String>,
@@ -81,7 +82,7 @@ fn source_job(text: &str, marks: &[(usize, usize, usize)]) -> egui::text::Layout
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, qar_win: false, br_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, wrap_win: None, qar_win: false, br_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
     }
 }
 
@@ -167,6 +168,7 @@ impl App {
         self.groups_window(ctx);
         self.branches_window(ctx);
         self.qarules_window(ctx);
+        self.wrap_window(ctx);
         if let Some(msg) = self.st.finish_sync() {
             self.message = msg;
         }
@@ -259,6 +261,10 @@ impl App {
                 ui.menu_button("Інструменти", |ui| {
                     if ui.add_enabled(self.st.is_open(), egui::Button::new(if self.st.syncing() { "Синхронізація триває…" } else { "Синхронізація через GitHub…" })).clicked() {
                         self.act_sync();
+                        ui.close_menu();
+                    }
+                    if ui.add_enabled(self.st.is_open(), egui::Button::new("Перенесення рядків…")).clicked() {
+                        self.wrap_win = Some((self.st.wrap_settings(), "Мандрівник дістався перекладацького містечка наприкінці осені, і там на нього чекав старий друг, якого він не бачив багато років.".into(), false));
                         ui.close_menu();
                     }
                     if ui.add_enabled(self.st.is_open(), egui::Button::new("Правила QA…")).clicked() {
@@ -1160,6 +1166,54 @@ impl App {
             self.message = format!("Виправлено рядків: {n}");
         }
         self.qar_win = open;
+    }
+
+    fn wrap_window(&mut self, ctx: &egui::Context) {
+        use transly_core::wrapconfig::{HyphenMode, WrapKeep, WrapMode};
+        let Some((mut w, mut sample, mut face)) = self.wrap_win.take() else { return };
+        let before = w.clone();
+        let mut open = true;
+        egui::Window::new("Перенесення рядків").open(&mut open).collapsible(false).default_width(560.0).show(ctx, |ui| {
+            ui.label(RichText::new("Вікно повідомлення в грі не переносить рядки саме. Тут обираєте, хто це робить і як. Довжина перекладу ніколи не обмежується, це лише рекомендації. Ширину задає «Налаштування проєкту → Довжина рядка».").size(11.5).color(MUTE));
+            ui.add_space(6.0);
+            label_caps(ui, "Коли переносити");
+            ui.radio_value(&mut w.mode, WrapMode::Build, "Під час збірки й запуску гри (рекомендовано)");
+            ui.radio_value(&mut w.mode, WrapMode::Text, "У тексті, коли надсилаю рядок");
+            ui.radio_value(&mut w.mode, WrapMode::Off, "Не переносити (лише попереджати)");
+            ui.add_space(6.0);
+            label_caps(ui, "Переніс слів");
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut w.hyphen, HyphenMode::Off, "не переносити слова");
+                ui.selectable_value(&mut w.hyphen, HyphenMode::Needed, "лише коли треба");
+                ui.selectable_value(&mut w.hyphen, HyphenMode::Fill, "коли краще заповнює");
+            });
+            ui.horizontal(|ui| {
+                ui.label("Літер до / після переносу");
+                ui.add(egui::DragValue::new(&mut w.min_left).range(1..=6));
+                ui.add(egui::DragValue::new(&mut w.min_right).range(1..=6));
+            });
+            ui.add_space(6.0);
+            label_caps(ui, "Розриви, які поставили ви");
+            ui.radio_value(&mut w.keep, WrapKeep::Long, "Зберігати, переносити лише задовгі (рекомендовано)");
+            ui.radio_value(&mut w.keep, WrapKeep::Reflow, "Збирати текст заново завжди");
+            ui.horizontal(|ui| {
+                ui.label("Попереджати, коли рядків більше, ніж (0 — вимкнено)");
+                ui.add(egui::DragValue::new(&mut w.max_lines).range(0..=12));
+            });
+            ui.add_space(6.0);
+            label_caps(ui, "Приклад");
+            ui.add(egui::TextEdit::multiline(&mut sample).desired_rows(3).desired_width(f32::INFINITY));
+            ui.checkbox(&mut face, "Поруч портрет персонажа");
+            let (shown, n) = self.st.wrap_preview(&sample, face);
+            ui.label(RichText::new(shown).monospace().color(TEXT));
+            ui.label(RichText::new(format!("Рядків: {n}")).size(11.0).color(MUTE));
+        });
+        if w != before {
+            self.st.set_wrap_settings(&w);
+        }
+        if open {
+            self.wrap_win = Some((w, sample, face));
+        }
     }
 
     fn strip(&mut self, ctx: &egui::Context) {

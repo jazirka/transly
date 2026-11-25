@@ -41,6 +41,7 @@ struct App {
     term_en: String,
     term_uk: String,
     itab: usize,
+    scene_mode: bool,
     keep_edit: Option<(String, String)>,
     activity_win: bool,
     tsync_win: Option<TermSyncWin>,
@@ -101,7 +102,7 @@ fn source_job(text: &str, marks: &[(usize, usize, usize)]) -> egui::text::Layout
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
     }
 }
 
@@ -267,6 +268,20 @@ impl App {
                         self.br_win = Some(String::new());
                     }
                 }
+                ui.add_space(6.0);
+                // режим: Таблиця (усі рядки), Редагування (один рядок на всю ширину), Сцена (репліки події поспіль)
+                ui.add_enabled_ui(can, |ui| {
+                    egui::Frame::new().fill(BTN).corner_radius(CornerRadius::same(R2)).inner_margin(egui::Margin::symmetric(2, 2)).show(ui, |ui| {
+                        ui.spacing_mut().item_spacing.x = 2.0;
+                        let modes = [("Таблиця", !self.focus && !self.scene_mode), ("Редагування", self.focus && !self.scene_mode), ("Сцена", self.scene_mode)];
+                        for (i, (label, on)) in modes.into_iter().enumerate() {
+                            if ui.selectable_label(on, label).on_hover_text(["Усі рядки файлу", "Один рядок на всю ширину", "Репліки події поспіль"][i]).clicked() {
+                                self.focus = i == 1;
+                                self.scene_mode = i == 2;
+                            }
+                        }
+                    });
+                });
                 ui.add_space(8.0);
                 if can {
                     let p = self.st.progress();
@@ -279,7 +294,12 @@ impl App {
                         ui.painter().rect_filled(Rect::from_min_size(pos2(x, r.top()), vec2(w, 6.0)), CornerRadius::ZERO, col);
                         x += w;
                     }
-                    ui.label(RichText::new(format!("{pct}% вичитано · {} з {}", p.draft + p.sent + p.approved, p.total)).size(12.0).color(MUTE));
+                    let text = format!("{pct}% вичитано · {} з {}", p.draft + p.sent + p.approved, p.total);
+                    if ctx.screen_rect().width() > 1560.0 {
+                        ui.label(RichText::new(text).size(12.0).color(MUTE));
+                    } else {
+                        ui.label(RichText::new(format!("{pct}%")).size(12.0).color(MUTE)).on_hover_text(text);
+                    }
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.add_enabled(can, egui::TextEdit::singleline(&mut self.st.search).hint_text("Пошук у рядках…").desired_width(220.0).margin(vec2(10.0, 4.0)));
@@ -297,9 +317,6 @@ impl App {
                         }
                         if plain_button(ui, "Зібрати в гру…").clicked() {
                             self.build_win = Some(self.st.build_defaults());
-                        }
-                        if plain_button(ui, if self.focus { "Таблиця" } else { "Фокус" }).clicked() {
-                            self.focus = !self.focus;
                         }
                         if plain_button(ui, "Зберегти").clicked() {
                             self.message = match self.st.save_project() {
@@ -1856,7 +1873,21 @@ impl App {
                     self.st.group_filter = None;
                 }
             }
-            self.grid(ui, f);
+            if self.scene_mode {
+                match self.st.row {
+                    Some(r) => {
+                        egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
+                            ui.add_space(8.0);
+                            egui::Frame::new().inner_margin(egui::Margin::symmetric(14, 0)).show(ui, |ui| self.tab_scene(ui, f, r));
+                        });
+                    }
+                    None => {
+                        ui.centered_and_justified(|ui| ui.label(RichText::new("Виберіть рядок: тут з'являться репліки його сцени").color(MUTE)));
+                    }
+                }
+            } else {
+                self.grid(ui, f);
+            }
         });
     }
 
@@ -2101,19 +2132,22 @@ mod ui_tests {
     }
 
     #[test]
-    fn the_focus_button_switches_the_layout_and_back() {
+    fn the_mode_switch_changes_the_layout_and_back() {
         let data = game("focus");
         let mut app = App::default();
         app.st.open_game(&data).unwrap();
         let mut h = harness(app);
         h.run();
         assert!(!h.state().focus);
-        h.get_by_label("Фокус").click();
+        h.get_by_label("Редагування").click();
         h.run();
         assert!(h.state().focus);
+        h.get_all_by_label("Сцена").next().unwrap().click();
+        h.run();
+        assert!(h.state().scene_mode && !h.state().focus);
         h.get_by_label("Таблиця").click();
         h.run();
-        assert!(!h.state().focus);
+        assert!(!h.state().focus && !h.state().scene_mode);
     }
 
     #[test]

@@ -136,6 +136,7 @@ struct Visible {
 type QaCache = ((usize, u64), Vec<(usize, String, bool)>);
 
 pub struct AppState {
+    tm_cache: std::cell::RefCell<Option<(u64, TmIndex)>>,
     /// Остання зміна перекладу терміна: за нею пропонуються заміни в рядках.
     pub last_term_change: Option<transly_core::termsync::TermChange>,
     auto_limit: std::cell::RefCell<Option<usize>>,
@@ -168,12 +169,15 @@ pub struct AppState {
     pub tabs: Vec<usize>,
     /// Коли проєкт востаннє збережено (мс від 1970).
     pub saved_ms: Option<i64>,
+    /// Коли проєкт востаннє збирали в гру і скільки рядків у збірці (з налаштувань проєкту).
+    pub session_start: i64,
+    pub session_edits: usize,
 }
 
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![], saved_ms: None }
+        AppState { tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![], saved_ms: None, session_start: now_ms(), session_edits: 0 }
     }
 }
 
@@ -325,6 +329,9 @@ impl AppState {
         self.dir = Some(dir.to_path_buf());
         self.file = if n > 0 { Some(0) } else { None };
         self.tabs = self.file.into_iter().collect();
+        self.session_start = now_ms();
+        self.session_edits = 0;
+        self.saved_ms = std::fs::metadata(&path).and_then(|m| m.modified()).ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as i64);
         self.row = None;
         self.dirty = false;
         self.rev += 1;
@@ -387,6 +394,7 @@ impl AppState {
         let next = edit(self.entry(f, r), &u, text, Stage::Translate, now);
         let next = record_change(self.entry(f, r), &next, "правка", text, &self.who(), now, None);
         self.put(f, name, u.key, next);
+        self.session_edits += 1;
     }
 
     /// Надсилає рядок на вичитку (з перевіркою QA за правилами ядра).
@@ -537,27 +545,37 @@ impl AppState {
         v
     }
 
-    /// Збіги з пам'яті перекладів для оригіналу рядка (пари береться з уже перекладених рядків проєкту).
+    /// Збіги з пам'яті перекладів для оригіналу рядка (пари — з перекладених рядків проєкту й імпортованої пам'яті). Індекс
+    /// будується раз на зміну даних, а не на кожен кадр.
     pub fn tm_matches(&self, f: usize, r: usize) -> Vec<TmMatch> {
-        let mut idx = TmIndex::new(false);
-        let me = self.unit(f, r).map(|u| u.key.clone());
-        for (fi, v) in self.views.iter().enumerate() {
-            let Some(ents) = self.project.as_ref().and_then(|p| p.files.get(&v.name)) else { continue };
-            for u in &v.units {
-                if fi == f && Some(&u.key) == me.as_ref() {
-                    continue;
-                }
-                if let Some(e) = ents.get(&u.key).filter(|e| !e.target.is_empty()) {
-                    idx.add(TmEntry { s: u.source.clone(), t: e.target.clone(), src: v.name.clone() });
+        if self.tm_cache.borrow().as_ref().is_none_or(|c| c.0 != self.rev) {
+            let mut idx = TmIndex::new(false);
+            for v in self.views.iter() {
+                let Some(ents) = self.project.as_ref().and_then(|p| p.files.get(&v.name)) else { continue };
+                for u in &v.units {
+                    if let Some(e) = ents.get(&u.key).filter(|e| !e.target.is_empty()) {
+                        idx.add(TmEntry { s: u.source.clone(), t: e.target.clone(), src: v.name.clone() });
+                    }
                 }
             }
-        }
-        for m in self.project.as_ref().map(|p| p.memory.as_slice()).unwrap_or_default() {
-            if let (Some(sv), Some(tv)) = (m.get("s").and_then(|v| v.as_str()), m.get("t").and_then(|v| v.as_str())) {
-                idx.add(TmEntry { s: sv.into(), t: tv.into(), src: "Імпорт".into() });
+            for m in self.project.as_ref().map(|p| p.memory.as_slice()).unwrap_or_default() {
+                if let (Some(sv), Some(tv)) = (m.get("s").and_then(|v| v.as_str()), m.get("t").and_then(|v| v.as_str())) {
+                    idx.add(TmEntry { s: sv.into(), t: tv.into(), src: "Імпорт".into() });
+                }
             }
+            *self.tm_cache.borrow_mut() = Some((self.rev, idx));
         }
-        idx.find(&self.source_of(f, r), &FindOpts { min: Some(60.0), limit: Some(6), exclude: None })
+        let own_s = self.source_of(f, r);
+        let own_t = self.target_of(f, r);
+        let cache = self.tm_cache.borrow();
+        let Some((_, idx)) = cache.as_ref() else { return vec![] };
+        let mut found = idx.find(&own_s, &FindOpts { min: Some(60.0), limit: Some(8), exclude: None });
+        // власний запис рядка не підказка самому собі
+        if let Some(at) = found.iter().position(|m| m.s == own_s && m.t == own_t) {
+            found.remove(at);
+        }
+        found.truncate(6);
+        found
     }
 
     /// Історія правок рядка, нові першими.
@@ -1591,6 +1609,24 @@ impl AppState {
         idx.scenes.iter().map(|sc| (transly_core::scene::scene_title(sc), sc.units.first().and_then(|u| pos.get(u.key.as_str()).copied()).unwrap_or(0), sc.units.len())).collect()
     }
 
+    /// Остання збірка в гру: (коли, скільки рядків).
+    pub fn last_build(&self) -> Option<(i64, usize)> {
+        let b = self.project.as_ref()?.settings.get("lastBuild")?;
+        Some((b.get("at")?.as_i64()?, b.get("rows")?.as_u64()? as usize))
+    }
+
+    /// Підпис формату файлу гри для рядка стану.
+    pub fn format_label(&self, f: usize) -> &'static str {
+        match self.views.get(f).and_then(|v| transly_core::engine::format_of(&v.name)) {
+            Some("rpgmaker") => "RPG Maker MV · UTF-8",
+            Some("gettext") => "gettext · UTF-8",
+            Some("csv") => "CSV · UTF-8",
+            Some("renpy") => "Ren’Py · UTF-8",
+            Some("locale-json") => "JSON · UTF-8",
+            _ => "UTF-8",
+        }
+    }
+
     pub fn key_of(&self, f: usize, r: usize) -> String {
         self.unit(f, r).map_or(String::new(), |u| u.key.clone())
     }
@@ -1652,6 +1688,10 @@ impl AppState {
         let out: Vec<OutFile> = res.files.iter().map(|f| OutFile { name: f.name.rsplit('/').next().unwrap_or(&f.name).to_string(), content: file_text(f) }).collect();
         let n = apply_data(&self.roots, &dir.to_string_lossy(), &out)?;
         let unsupported = if res.unsupported.is_empty() { String::new() } else { format!(", без запису (немає плагіна формату): {}", res.unsupported.len()) };
+        if let Some(p) = self.project.as_mut() {
+            p.settings.insert("lastBuild".into(), serde_json::json!({ "at": now_ms(), "rows": res.included }));
+            self.dirty = true;
+        }
         Ok(format!("Збірка: записано {n} файлів, рядків у грі {}, поза збіркою {}{unsupported}", res.included, res.skipped))
     }
 

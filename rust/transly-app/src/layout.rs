@@ -31,8 +31,8 @@ fn mini_icon(ui: &mut egui::Ui, center: egui::Pos2, name: &str, id: &str) -> egu
     resp
 }
 
-/// Заголовок картки (`.ph`): великі літери 12, праворуч ⋮ і «—».
-fn card_head(ui: &mut egui::Ui, title: &str, sub: Option<&str>, menu: bool) -> (egui::Response, egui::Response) {
+/// Заголовок картки (`.ph`): великі літери 12 і, за потреби, підпис (назва файлу). Кнопок у ньому немає: ⋮ і «—» зі знімка нічого не робили.
+fn card_head(ui: &mut egui::Ui, title: &str, sub: Option<&str>) {
     let (h, _) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::hover());
     ui.painter().rect_filled(h, card_top(), PANEL);
     ui.painter().hline(h.x_range(), h.bottom(), Stroke::new(1.0_f32, LINE));
@@ -42,9 +42,6 @@ fn card_head(ui: &mut egui::Ui, title: &str, sub: Option<&str>, menu: bool) -> (
     if let Some(s) = sub {
         ui.painter().text(pos2(h.left() + 10.0 + tw + 10.0, h.center().y), Align2::LEFT_CENTER, s, ip(12.0), TEXT);
     }
-    let dots = if menu { mini_icon(ui, pos2(h.right() - 42.0, h.center().y), "dots", "head-dots") } else { ui.interact(Rect::NOTHING, ui.id().with("nodots"), Sense::hover()) };
-    let minus = mini_icon(ui, pos2(h.right() - 17.0, h.center().y), "minus", "head-minus");
-    (dots, minus)
 }
 
 /// Ліва колонка 306 (картка 300 + проміжок 6): картку малюємо самі, бо рамка панелі egui додає до ширини поля й рамку й обрізає її праворуч.
@@ -107,7 +104,7 @@ impl App {
                 3 => ("Пов’язане", None),
                 _ => ("Файли гри", None),
             };
-            card_head(ui, title, sub, self.rail == 0);
+            card_head(ui, title, sub);
             if self.rail == 3 {
                 self.related_body(ui, true);
                 return;
@@ -700,20 +697,20 @@ impl App {
             let name = self.st.file.and_then(|f| self.st.file_names().get(f).cloned()).map(|n| n.trim_end_matches(".json").to_string()).unwrap_or_default();
             match self.rail {
                 2 => {
-                    card_head(ui, "Сцени", Some(&name), true);
+                    card_head(ui, "Сцени", Some(&name));
                 }
                 3 => {
-                    card_head(ui, "Пов’язане", None, false);
+                    card_head(ui, "Пов’язане", None);
                     self.related_body(ui, true);
                     return;
                 }
                 0 => {
-                    card_head(ui, "Файли гри", None, true);
+                    card_head(ui, "Файли гри", None);
                     self.tree_body(ui);
                     return;
                 }
                 _ => {
-                    card_head(ui, "Рядки", Some(&name), true);
+                    card_head(ui, "Рядки", Some(&name));
                 }
             }
             let Some(f) = self.st.file else { return };
@@ -922,8 +919,8 @@ impl App {
                     ui.painter().text(pos2(cx, bar.center().y + 8.0), Align2::CENTER_CENTER, o.to_string(), mp(12.0), MUTE);
                     let sr = Rect::from_center_size(pos2(bar.right() - 28.0, bar.center().y), vec2(36.0, 30.0));
                     let sresp = ui.interact(sr, ui.id().with("send"), Sense::click());
-                    ui.painter().rect_filled(sr, CornerRadius::same(8), if sresp.hovered() { TEXT } else { SRC_TEXT });
-                    icons::paint(ui, Rect::from_center_size(sr.center(), vec2(17.0, 17.0)), "send", BG);
+                    ui.painter().rect_filled(sr, CornerRadius::same(8), if sresp.hovered() { accent_hover() } else { accent_solid() });
+                    icons::paint(ui, Rect::from_center_size(sr.center(), vec2(17.0, 17.0)), "send", Color32::WHITE);
                     sresp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Надіслати"));
                     if sresp.on_hover_text("Надіслати на вичитку (Ctrl+Enter)").clicked() {
                         self.message = match self.st.submit(f, r, &self.draft) {

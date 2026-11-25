@@ -1,0 +1,2 @@
+# Контрольні суми файлів плагінів лічаться за байтами: на Windows (autocrlf) вони зламалися б від CRLF.
+app/examples/plugins/** text eol=lf

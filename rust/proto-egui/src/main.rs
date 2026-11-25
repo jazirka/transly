@@ -155,7 +155,7 @@ impl eframe::App for App {
         self.frame_ms = self.frame_ms * 0.9 + now.duration_since(self.last).as_secs_f32() * 1000.0 * 0.1;
         self.last = now;
         self.frames += 1;
-        if std::env::var("PROTO_LOG").is_ok() && self.frames % 30 == 0 { eprintln!("frame {} interval {:.1} ms · update() cpu {:.2} ms avg", self.frames, self.frame_ms, self.cpu_ms); }
+        if std::env::var("PROTO_LOG").is_ok() && self.frames.is_multiple_of(30) { eprintln!("frame {} interval {:.1} ms · update() cpu {:.2} ms avg", self.frames, self.frame_ms, self.cpu_ms); }
 
         egui::TopBottomPanel::top("top").show(ctx, |ui| {
             ui.horizontal(|ui| {

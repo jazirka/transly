@@ -11,3 +11,6 @@ transly-core = { path = "../transly-core" }
 transly-platform = { path = "../transly-platform" }
 serde_json = { version = "1", features = ["preserve_order"] }
 indexmap = { version = "2", features = ["serde"] }
+
+[dev-dependencies]
+egui_kittest = "0.31"

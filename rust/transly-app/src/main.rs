@@ -112,6 +112,7 @@ fn chip(ui: &mut egui::Ui, text: &str, count: usize, on: bool) -> egui::Response
     let galley = ui.painter().layout_no_wrap(label, FontId::proportional(12.0), if on { CHIP_ON_TEXT } else { MUTE });
     let size = vec2(galley.size().x + 18.0, 24.0);
     let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, format!("{text} {count}")));
     let (fill, line, col) = if on { (CHIP_ON, CHIP_ON_LINE, CHIP_ON_TEXT) } else if resp.hovered() { (PANEL, LINE, TEXT) } else { (Color32::TRANSPARENT, LINE, MUTE) };
     ui.painter().rect(rect, CornerRadius::same(R3), fill, Stroke::new(1.0_f32, line), StrokeKind::Inside);
     ui.painter().text(rect.left_center() + vec2(9.0, 0.0), Align2::LEFT_CENTER, format!("{text}  {count}"), FontId::proportional(12.0), col);
@@ -126,6 +127,13 @@ impl eframe::App for App {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.frame(ctx);
+    }
+}
+
+impl App {
+    /// Один кадр інтерфейсу (окремо від `eframe`, щоб його можна було ганяти в тестах).
+    fn frame(&mut self, ctx: &egui::Context) {
         // автозбереження: не рідше за раз на 20 с, коли є зміни
         if self.st.dirty && self.last_save.elapsed().as_secs() >= 20 {
             self.message = match self.st.save_project() {
@@ -154,9 +162,7 @@ impl eframe::App for App {
         self.inspector(ctx);
         self.editor(ctx);
     }
-}
 
-impl App {
     fn menubar(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::top("menubar").exact_height(30.0).frame(egui::Frame::new().fill(PANEL).inner_margin(egui::Margin::symmetric(10, 0)).stroke(Stroke::new(1.0_f32, LINE))).show(ctx, |ui| {
             ui.horizontal_centered(|ui| {
@@ -321,6 +327,7 @@ impl App {
                 let r = Rect::from_min_size(pos2(x, tabs.top()), vec2(w, 30.0));
                 let resp = ui.interact(r, ui.id().with(("btab", i)), Sense::click());
                 let on = self.btab == i && self.bottom_open;
+                resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, label.clone()));
                 ui.painter().text(r.center(), Align2::CENTER_CENTER, label, FontId::proportional(12.5), if on || resp.hovered() { TEXT } else { MUTE });
                 if *is_bad {
                     ui.painter().circle_filled(pos2(r.right() - 8.0, r.center().y - 5.0), 3.0, BAD);
@@ -726,6 +733,7 @@ impl App {
                 for (i, name) in names.iter().enumerate() {
                     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::click());
                     let cur = self.st.file == Some(i);
+                    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, cur, name.clone()));
                     if cur {
                         ui.painter().rect_filled(rect, CornerRadius::ZERO, SEL);
                     } else if resp.hovered() {
@@ -763,6 +771,7 @@ impl App {
                 let r = Rect::from_min_size(pos2(x, tabs.top()), vec2(w, 34.0));
                 let resp = ui.interact(r, ui.id().with(("itab", i)), Sense::click());
                 let on = self.itab == i;
+                resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, *t));
                 ui.painter().text(r.center(), Align2::CENTER_CENTER, t, FontId::proportional(12.5), if on || resp.hovered() { TEXT } else { MUTE });
                 if on {
                     ui.painter().hline(r.x_range(), tabs.bottom() - 1.0, Stroke::new(2.0_f32, ACCENT));
@@ -977,6 +986,7 @@ impl App {
                 ui.painter().rect_filled(rect, CornerRadius::ZERO, if sel { SEL } else if resp.hovered() { TREE_HOVER } else { PANEL });
                 ui.painter().hline(rect.x_range(), rect.bottom(), Stroke::new(1.0_f32, LINE_SOFT));
                 let (src, tgt, st) = self.st.row_view(f, r);
+                resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, sel, format!("{src} — {tgt}")));
                 paint_dot(ui, pos2(rect.left() + 14.0, rect.top() + 14.0), st);
                 let clip = Rect::from_min_max(pos2(rect.left() + 26.0, rect.top()), pos2(rect.right() - 8.0, rect.bottom()));
                 ui.painter().with_clip_rect(clip).text(pos2(clip.left(), rect.top() + 14.0), Align2::LEFT_CENTER, src.replace('\n', " ↵ "), FontId::proportional(12.5), SRC_TEXT);
@@ -1020,6 +1030,7 @@ impl App {
                 ui.painter().rect_filled(rect, CornerRadius::ZERO, bg);
                 ui.painter().hline(rect.x_range(), rect.bottom(), Stroke::new(1.0_f32, LINE_SOFT));
                 let (src, tgt, st) = self.st.row_view(f, r);
+                resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, sel, format!("{src} — {tgt}")));
                 let key = self.st.key_of(f, r);
                 let mut x = rect.left();
                 let cell = |x: f32, cw: f32| Rect::from_min_size(pos2(x, rect.top()), vec2(cw, row_h));
@@ -1045,5 +1056,104 @@ impl App {
                 }
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod ui_tests {
+    use super::*;
+    use egui_kittest::kittest::Queryable;
+    use egui_kittest::Harness;
+
+    fn game(tag: &str) -> std::path::PathBuf {
+        let base = std::env::temp_dir().join(format!("transly-ui-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = base.join("MyGame").join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        std::fs::write(data.join("Actors.json"), r#"[null,{"id":1,"name":"Hero","nickname":"","profile":"Brave","note":""},{"id":2,"name":"Mage","nickname":"","profile":"Wise","note":""}]"#).unwrap();
+        data
+    }
+
+    fn harness(app: App) -> Harness<'static, App> {
+        Harness::builder().with_size(egui::vec2(1360.0, 800.0)).build_state(|ctx, app: &mut App| {
+            theme::apply(ctx);
+            app.frame(ctx);
+        }, app)
+    }
+
+    #[test]
+    fn an_empty_window_asks_to_open_a_game() {
+        let mut h = harness(App::default());
+        h.run();
+        h.get_by_label_contains("Відкрийте папку гри");
+        h.get_by_label("Гру не відкрито");
+    }
+
+    #[test]
+    fn a_game_shows_files_rows_and_the_inspector_follows_the_selected_row() {
+        let data = game("rows");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        let mut h = harness(app);
+        h.run();
+        h.get_by_label("Actors.json");
+        h.get_by_label_contains("Hero");
+        // вибір рядка наповнює інспектор
+        h.state_mut().st.row = Some(0);
+        h.run();
+        h.get_by_label("ОРИГІНАЛ");
+        h.get_by_label("ПЕРЕКЛАД");
+        h.get_by_label("Пам’ять");
+        assert!(h.get_all_by_label("Надіслати").count() >= 2, "кнопка є на панелі й в інспекторі");
+    }
+
+    #[test]
+    fn the_focus_button_switches_the_layout_and_back() {
+        let data = game("focus");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        let mut h = harness(app);
+        h.run();
+        assert!(!h.state().focus);
+        h.get_by_label("Фокус").click();
+        h.run();
+        assert!(h.state().focus);
+        h.get_by_label("Таблиця").click();
+        h.run();
+        assert!(!h.state().focus);
+    }
+
+    #[test]
+    fn the_settings_window_opens_and_saves() {
+        let data = game("settings");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        let mut h = harness(app);
+        h.run();
+        h.get_by_label("Налаштування").click();
+        h.run();
+        h.get_by_label("Налаштування проєкту");
+        h.get_by_label("Хто перекладає");
+        h.get_by_label("Скасувати").click();
+        h.run();
+        assert!(h.query_by_label("Хто перекладає").is_none());
+    }
+
+    #[test]
+    fn typing_a_translation_and_sending_updates_progress() {
+        let data = game("send");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.st.row = Some(0);
+        let mut h = harness(app);
+        h.run();
+        h.state_mut().draft = "Герой".into();
+        h.state_mut().draft_for = Some((0, 0));
+        h.run();
+        // кнопка «Надіслати» є і в панелі інструментів, і в інспекторі
+        h.get_all_by_label("Надіслати").last().unwrap().click();
+        h.run();
+        assert_eq!(h.state().st.progress().sent, 1);
+        assert_eq!(h.state().message, "Надіслано");
     }
 }

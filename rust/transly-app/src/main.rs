@@ -452,6 +452,13 @@ impl App {
                 self.message = self.st.save_project().map(|p| format!("Збережено: {p}")).unwrap_or_else(|e| e);
                 ui.close_menu();
             }
+            if ui.add_enabled(self.st.is_open(), egui::Button::new("Відкрити проєкт із файлу…")).on_hover_text("Наприклад, файл, збережений зі старого застосунку: переклади й налаштування беруться з нього").clicked() {
+                if let Some(p) = rfd::FileDialog::new().add_filter("Проєкт Transly", &["json"]).pick_file() {
+                    self.message = self.st.open_project_file(&p).unwrap_or_else(|e| e);
+                    self.draft_for = None;
+                }
+                ui.close_menu();
+            }
             if ui.add_enabled(self.st.is_open(), egui::Button::new("Злити з іншим проєктом…")).clicked() {
                 self.act_merge();
                 ui.close_menu();

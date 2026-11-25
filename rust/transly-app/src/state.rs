@@ -697,6 +697,24 @@ impl AppState {
         self.dirty = true;
     }
 
+    /// Відкриває проєкт зі збереженого файлу (наприклад, із старого застосунку) для поточної гри: переклади, налаштування, тема й
+    /// решта беруться з файлу. Проєкт, що був поруч із грою, спершу копіюється в `*.before-open-<час>.json`.
+    pub fn open_project_file(&mut self, path: &Path) -> Result<String, String> {
+        let dir = self.dir.clone().ok_or("Спершу відкрийте гру")?;
+        let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+        let loaded = deserialize(&text, Some(now_ms()))?;
+        let name = name_from_folder(&dir.to_string_lossy());
+        let target = project_path(&dir, &if name.is_empty() { "Новий проєкт".to_string() } else { name });
+        if target.exists() {
+            let keep = target.with_extension(format!("before-open-{}.json", now_ms()));
+            std::fs::copy(&target, &keep).map_err(|e| format!("Не вдалося зберегти копію поточного проєкту: {e}"))?;
+        }
+        std::fs::write(&target, text).map_err(|e| e.to_string())?;
+        let rows: usize = loaded.files.values().map(|f| f.len()).sum();
+        self.open_game(&dir)?;
+        Ok(format!("Відкрито проєкт «{}»: збережених рядків {rows}", self.project.as_ref().map_or("", |p| p.name.as_str())))
+    }
+
     /// Зливає проєкт із файлу в поточний (новіша правка кожного рядка виграє). Повертає підсумок.
     pub fn merge_file(&mut self, path: &Path) -> Result<String, String> {
         let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
@@ -1745,7 +1763,7 @@ mod tests {
 
     #[test]
     fn memory_history_and_comments_work() {
-        let base = std::env::temp_dir().join(format!("transly-app-tabs-{}", std::process::id()));
+        let base = std::env::temp_dir().join(format!("transly-app-memhist-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&base);
         let data = base.join("MyGame").join("data");
         std::fs::create_dir_all(&data).unwrap();
@@ -2506,6 +2524,29 @@ menu.quit=Quit game
         assert_eq!(s.file_names(), vec!["Actors.json".to_string()], "data1 і резервна тека не рахуються окремо");
         let r = (0..s.row_count(0)).find(|r| s.source_of(0, *r) == "Hero");
         assert!(r.is_some(), "оригінал береться з резервної копії, а не з перекладеного файлу");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_saved_project_file_is_adopted_for_the_game() {
+        let base = std::env::temp_dir().join(format!("transly-app-adopt-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = game(&base);
+        let mut a = AppState::default();
+        a.open_game(&data).unwrap();
+        a.edit(0, 0, "Мій переклад");
+        a.project.as_mut().unwrap().settings.insert("hue".into(), serde_json::json!(48));
+        let saved = a.save_project().unwrap();
+        let copy = base.join("old-app.json");
+        std::fs::copy(&saved, &copy).unwrap();
+        std::fs::remove_file(&saved).unwrap();
+        let mut b = AppState::default();
+        b.open_game(&data).unwrap();
+        assert_eq!(b.target_of(0, 0), "", "новий проєкт порожній");
+        let msg = b.open_project_file(&copy).unwrap();
+        assert!(msg.contains("збережених рядків"), "{msg}");
+        assert_eq!(b.target_of(0, 0), "Мій переклад");
+        assert_eq!(b.project.as_ref().unwrap().settings.get("hue").and_then(|h| h.as_i64()), Some(48), "тема з файлу");
         let _ = std::fs::remove_dir_all(&base);
     }
 

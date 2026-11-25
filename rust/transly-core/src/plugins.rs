@@ -47,10 +47,33 @@ struct Acc {
     samples: IndexSet<String>,
 }
 
+/// Накопичувач команд плагінів: файли додаються по одному (для великої гри всі разом у пам'яті не потрібні).
+#[derive(Default)]
+pub struct PluginScan {
+    m: IndexMap<String, Acc>,
+}
+
+impl PluginScan {
+    pub fn add(&mut self, f: &GameFile) {
+        scan_file(&mut self.m, f);
+    }
+
+    pub fn finish(self) -> Vec<PluginCandidate> {
+        finish_candidates(self.m)
+    }
+}
+
 /// Команди плагінів (код 356), чиї аргументи містять текст.
 pub fn plugin_candidates(game: &[GameFile]) -> Vec<PluginCandidate> {
     let mut m: IndexMap<String, Acc> = IndexMap::new();
     for f in game {
+        scan_file(&mut m, f);
+    }
+    finish_candidates(m)
+}
+
+fn scan_file(m: &mut IndexMap<String, Acc>, f: &GameFile) {
+    {
         for list in command_lists(f) {
             for c in &list {
                 if c.get("code").and_then(Value::as_f64) != Some(356.0) {
@@ -75,6 +98,9 @@ pub fn plugin_candidates(game: &[GameFile]) -> Vec<PluginCandidate> {
             }
         }
     }
+}
+
+fn finish_candidates(m: IndexMap<String, Acc>) -> Vec<PluginCandidate> {
     let mut out: Vec<PluginCandidate> = m
         .into_iter()
         .filter(|(_, e)| e.with_text > 0)

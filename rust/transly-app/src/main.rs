@@ -2726,15 +2726,23 @@ mod ui_tests {
         let mut app = App::default();
         app.st.open_game(&data).unwrap();
         let rows = |a: &App| a.st.file_names().iter().position(|n| n == "Map001.json").map_or(0, |f| a.st.row_count(f));
-        let before = rows(&app);
+        // перше відкриття: схожі на текст команди беруться самі (як у старому застосунку), і про це сказано
+        let with = rows(&app);
+        assert!(app.st.last_note.contains("GabText"), "{}", app.st.last_note);
         let cands = app.st.plugin_candidates();
         assert!(cands.iter().any(|c| c.name == "GabText" && c.with_text == 4), "{:?}", cands.iter().map(|c| (&c.name, c.with_text)).collect::<Vec<_>>());
-        app.plug_win = Some(["GabText".to_string()].into_iter().collect());
+        // у вікні вибір можна зняти: тексти команди йдуть із таблиці
+        app.plug_win = Some(Default::default());
         let mut h = harness(app);
         h.run();
         h.get_by_label("Застосувати").click();
         h.run();
-        assert!(rows(h.state()) > before, "тексти команди з'явились у таблиці");
+        assert!(rows(h.state()) < with, "без команди її текстів у таблиці менше");
+        h.state_mut().plug_win = Some(["GabText".to_string()].into_iter().collect());
+        h.run();
+        h.get_by_label("Застосувати").click();
+        h.run();
+        assert_eq!(rows(h.state()), with);
         // після повторного відкриття вибір лишається (він у налаштуваннях проєкту)
         h.state_mut().st.save_project().unwrap();
         let after = rows(h.state());
@@ -2808,6 +2816,94 @@ mod ui_tests {
         assert_eq!(text, r"Увага! Гарольд, йди далі \V[3] \ ", "імена підставлено, коди часу прибрано, інші коди лишились");
         assert_eq!(job.sections[0].format.color, Color32::from_rgb(0xff, 0x78, 0x4c), r"\C[2] фарбує текст");
         assert_eq!(job.sections[1].format.color, TEXT, r"\C[0] повертає колір");
+    }
+
+    /// Перевірка на справжній грі (нічого не пише в теку гри й проєкт): `TRANSLY_GAME=<тека> cargo test -p transly-app --release real_game_deep -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn real_game_deep() {
+        use std::time::Instant;
+        let Some(dir) = std::env::var_os("TRANSLY_GAME").map(std::path::PathBuf::from) else { return };
+        let t0 = Instant::now();
+        let mut app = App::default();
+        app.st.open_game(&dir).unwrap();
+        let names = app.st.file_names();
+        let total: usize = (0..names.len()).map(|f| app.st.row_count(f)).sum();
+        println!("ВІДКРИТО: {} файлів, {total} рядків за {:.1} с", names.len(), t0.elapsed().as_secs_f32());
+        println!("  примітка відкриття: {:?}", app.st.last_note);
+        println!("  проєкт: терміни {}, прогрес {:?}", app.st.terms().len(), app.st.progress());
+        // найбільший файл і мапа
+        let big = (0..names.len()).max_by_key(|f| app.st.row_count(*f)).unwrap();
+        let map = (0..names.len()).filter(|f| names[*f].starts_with("Map")).max_by_key(|f| app.st.row_count(*f)).unwrap();
+        println!("  найбільший файл {} ({}), найбільша мапа {} ({})", names[big], app.st.row_count(big), names[map], app.st.row_count(map));
+        // вікно в усіх режимах
+        app.st.file = Some(map);
+        app.st.row = Some(0);
+        let mut h = harness(app);
+        let frame = |h: &mut Harness<'static, App>, label: &str| {
+            h.run();
+            let t = Instant::now();
+            for _ in 0..3 {
+                h.run();
+            }
+            println!("  кадр «{label}» (усталений, середній): {:.0} мс", t.elapsed().as_secs_f32() * 1000.0 / 3.0);
+        };
+        frame(&mut h, "таблиця");
+        h.state_mut().focus = true;
+        frame(&mut h, "редагування");
+        h.state_mut().focus = false;
+        h.state_mut().scene_mode = true;
+        frame(&mut h, "сцена");
+        h.state_mut().scene_mode = false;
+        let sc = h.state().st.scenes_list(map);
+        println!("  сцен у мапі: {}, перша: {:?}", sc.len(), sc.first());
+        // пошук, черги, QA
+        let t = Instant::now();
+        let hits = h.state().st.search_all("the", 8);
+        println!("  пошук «the»: {} збігів за {:.0} мс", hits.rows_total, t.elapsed().as_secs_f32() * 1000.0);
+        for kind in transly_core::queue::QueueKind::ALL {
+            let t = Instant::now();
+            let msg = h.state_mut().st.jump_queue(kind, true);
+            println!("  перехід «{}»: {msg} ({:.0} мс)", kind.label().1, t.elapsed().as_secs_f32() * 1000.0);
+        }
+        let t = Instant::now();
+        let issues = h.state().st.file_issues(big).len();
+        println!("  QA найбільшого файлу: {issues} приміток за {:.0} мс", t.elapsed().as_secs_f32() * 1000.0);
+        let t = Instant::now();
+        let mine = h.state().st.mine_suggestions();
+        println!("  конструкції: {} пропозицій за {:.1} с", mine.len(), t.elapsed().as_secs_f32());
+        let cands = h.state().st.plugin_candidates();
+        println!("  команд плагінів з текстом: {:?}", cands.iter().take(6).map(|c| (c.name.clone(), c.with_text, c.likely)).collect::<Vec<_>>());
+        // назви з гри й нитки на реальному рядку
+        let t = Instant::now();
+        let mut with_names = 0;
+        for r in 0..h.state().st.row_count(map).min(400) {
+            if !h.state().st.game_names_in(map, r).is_empty() {
+                with_names += 1;
+            }
+        }
+        println!("  назви з гри знайдено у {with_names} з 400 рядків мапи за {:.0} мс", t.elapsed().as_secs_f32() * 1000.0);
+        // картинки: герої й предмети
+        for f in ["Actors.json", "Items.json", "Enemies.json"] {
+            if let Some(fi) = h.state().st.file_names().iter().position(|n| n == f) {
+                let n = (0..h.state().st.row_count(fi)).filter(|r| !h.state().st.pics_of(fi, *r).is_empty()).count();
+                let with_file = (0..h.state().st.row_count(fi)).filter(|r| h.state().st.pics_of(fi, *r).iter().any(|p| match p {
+                    state::Pic::Icon { .. } => h.state().st.game_image("img/system/IconSet.png").is_some(),
+                    state::Pic::Face { name, .. } => h.state().st.game_image(&format!("img/faces/{name}.png")).is_some(),
+                    state::Pic::Enemy { name, .. } => h.state().st.game_image(&format!("img/enemies/{name}.png")).is_some() || h.state().st.game_image(&format!("img/sv_enemies/{name}.png")).is_some(),
+                    state::Pic::Picture { .. } => false,
+                })).count();
+                println!("  {f}: рядків із картинкою {n}, з них файл знайдено {with_file}");
+            }
+        }
+        // збірка в пам'яті (нічого не пишеться): скільки рядків піде в гру
+        let choice = state::BuildChoice { only_approved: false, include_drafts: true, block_errors: false };
+        match h.state().st.build_preview(&choice) {
+            Ok((a, b, c)) => println!("  збірка (перегляд): у грі {a}, поза збіркою {b}, {c}"),
+            Err(e) => println!("  збірка (перегляд): {e}"),
+        }
+        let rss = std::process::Command::new("powershell").args(["-NoProfile", "-Command", &format!("(Get-Process -Id {}).WorkingSet64", std::process::id())]).output().map(|o| String::from_utf8_lossy(&o.stdout).trim().parse::<f64>().unwrap_or(0.0) / 1048576.0).unwrap_or(0.0);
+        println!("  підсумок: {:.1} с, пам'ять {rss:.0} МБ", t0.elapsed().as_secs_f32());
     }
 
     #[test]

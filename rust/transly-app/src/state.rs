@@ -266,8 +266,35 @@ impl RelayCfg {
     }
 }
 
+/// Параметри витягання рядків за налаштуваннями проєкту. Коли про команди плагінів ще не питали, шукає команди, схожі на текст для гравця
+/// (файли розбираються по одному й лише ті, де є код 356): повертає й їхні назви.
+fn plugin_options(settings: &serde_json::Map<String, serde_json::Value>, raw: &[(String, String)]) -> (ExtractOptions, Option<Vec<String>>) {
+    let mut names: Vec<String> = settings.get("pluginCommands").and_then(|v| v.as_array()).map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default();
+    if settings.get("pluginsAsked").and_then(|v| v.as_bool()).unwrap_or(false) {
+        return (ExtractOptions { plugin_commands: names }, None);
+    }
+    let mut scan = transly_core::plugins::PluginScan::default();
+    for (n, t) in raw {
+        if !n.to_lowercase().ends_with(".json") || !t.contains("356") {
+            continue;
+        }
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(t) {
+            scan.add(&GameFile { name: n.clone(), json, text: None });
+        }
+    }
+    let likely: Vec<String> = scan.finish().into_iter().filter(|c| c.likely).map(|c| c.name).collect();
+    for n in &likely {
+        if !names.contains(n) {
+            names.push(n.clone());
+        }
+    }
+    (ExtractOptions { plugin_commands: names }, Some(likely))
+}
+
 /// Файли гри (назва, сирий текст) і рядки, зчитані з теки.
 type LoadedDir = (Vec<(String, String)>, Vec<FileView>);
+/// Вибір параметрів витягання рядків за прочитаним сирим текстом файлів гри.
+type PickOptions<'a> = &'a mut dyn FnMut(&[(String, String)]) -> ExtractOptions;
 
 pub fn now_ms() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64)
@@ -281,7 +308,7 @@ impl AppState {
     /// Відкриває папку гри: читає її файли й будує рядки. Повертає число файлів із текстом.
     /// Читає теку гри по одному файлу: у пам'яті лишаються лише рядки й сирий текст файлу (для збірки), а розібраний JSON
     /// (у кілька разів більший за текст) відкидається одразу. Вбудовані формати читає ядро, решта — обробники плагінів.
-    fn load_dir(&self, dir: &Path) -> Result<LoadedDir, String> {
+    fn load_dir(&self, dir: &Path, pick: PickOptions) -> Result<LoadedDir, String> {
         register_picked(&self.roots, &self.picked, dir);
         let d = dir.to_string_lossy().to_string();
         let exts: Vec<String> = self.host.reg.extensions();
@@ -319,7 +346,8 @@ impl AppState {
             // файл гри міг уже містити переклад (збірка пише в нього): оригінал береться з резервної копії поруч
             raw.push((name.clone(), read_text(&self.roots, orig.as_deref().unwrap_or(path))?));
         }
-        let views = self.build_views(&raw, &ExtractOptions::default());
+        let opts = pick(&raw);
+        let views = self.build_views(&raw, &opts);
         Ok((raw, views))
     }
 
@@ -400,7 +428,6 @@ impl AppState {
 
     pub fn open_game(&mut self, dir: &Path) -> Result<usize, String> {
         let d = dir.to_string_lossy().to_string();
-        let (files, views) = self.load_dir(dir)?;
         let name = name_from_folder(&d);
         let name = if name.is_empty() { "Новий проєкт".to_string() } else { name };
         // проєкт, збережений раніше, підхоплюється; рядки, чий оригінал змінився, повертаються в чернетки
@@ -421,22 +448,36 @@ impl AppState {
             },
             Err(_) => empty_project(&name, "en", "uk"),
         };
+        // команди плагінів із текстом: у проєкті вже обрані, а при першому відкритті (про них ще не питали) беруться схожі на текст для гравця,
+        // як у старому застосунку (без цього тексти GabText тощо не потрапили б у таблицю)
+        let mut auto: Option<Vec<String>> = None;
+        let settings = project.settings.clone();
+        let (files, views) = self.load_dir(dir, &mut |raw| {
+            let (opts, likely) = plugin_options(&settings, raw);
+            auto = likely;
+            opts
+        })?;
+        let mut auto_note = String::new();
+        if let Some(likely) = auto {
+            let mut chosen: Vec<String> = settings.get("pluginCommands").and_then(|v| v.as_array()).map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default();
+            for n in &likely {
+                if !chosen.contains(n) {
+                    chosen.push(n.clone());
+                }
+            }
+            project.settings.insert("pluginCommands".into(), serde_json::json!(chosen));
+            project.settings.insert("pluginsAsked".into(), serde_json::json!(true));
+            if !likely.is_empty() {
+                auto_note = format!("Додано тексти команд плагінів: {} (змінити: Інструменти → Тексти плагінів). ", likely.join(", "));
+            }
+        }
         for v in &views {
             if let Some(entries) = project.files.get_mut(&v.name) {
                 reconcile(&v.units, entries, now_ms());
             }
         }
-        // проєкт обрав команди плагінів із текстом: рядки читаються з ними (раніше їх не було)
-        let cmds: Vec<String> = project.settings.get("pluginCommands").and_then(|v| v.as_array()).map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default();
-        let mut views = views;
-        if !cmds.is_empty() {
-            views = self.build_views(&files, &ExtractOptions { plugin_commands: cmds });
-            for v in &views {
-                reconcile(&v.units, project.files.entry(v.name.clone()).or_default(), now_ms());
-            }
-        }
         // гра могла оновитися: переклади зіставляються з новими рядками за текстом оригіналу (ключі зсуваються)
-        self.last_note = unreadable;
+        self.last_note = format!("{auto_note}{unreadable}");
         *self.scene_cache.borrow_mut() = (usize::MAX, None);
         *self.names_cache.borrow_mut() = None;
         *self.auto_limit.borrow_mut() = None;
@@ -1330,14 +1371,29 @@ impl AppState {
         out
     }
 
-    /// Байти зображення з теки гри (`img/…`). Шукає в теці, яку відкрито, і в її батьківській (для MV файли лежать у `www`).
+    /// PNG із теки гри (`img/…`). Шукає в теці, яку відкрито, і в її батьківській (для MV файли лежать у `www`). Зашифровані картинки
+    /// RPG Maker (`.rpgmvp` MV, `.png_` MZ) розшифровуються без ключа: після 16 байтів заголовка перші 16 байтів PNG замінено, а вони в усіх PNG однакові.
     pub fn game_image(&self, rel: &str) -> Option<Vec<u8>> {
         let dir = self.dir.as_ref()?;
         let mut bases: Vec<PathBuf> = vec![dir.clone()];
         if let Some(p) = dir.parent() {
             bases.push(p.to_path_buf());
         }
-        bases.iter().find_map(|b| transly_platform::read_image(&self.roots, &b.to_string_lossy(), rel).ok())
+        let stem = rel.strip_suffix(".png").unwrap_or(rel);
+        for (ext, packed) in [(".png", false), (".rpgmvp", true), (".png_", true)] {
+            let r = format!("{stem}{ext}");
+            let Some(bytes) = bases.iter().find_map(|b| transly_platform::read_image(&self.roots, &b.to_string_lossy(), &r).ok()) else { continue };
+            if !packed {
+                return Some(bytes);
+            }
+            const PNG_HEAD: [u8; 16] = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52];
+            if bytes.len() > 32 {
+                let mut png = bytes[16..].to_vec();
+                png[..16].copy_from_slice(&PNG_HEAD);
+                return Some(png);
+            }
+        }
+        None
     }
 
     /// Нитки рядка: кожен запис глосарія, що є в оригіналі, і чи передає його переклад (власний відповідник, варіант, нічого, ще не перекладено).
@@ -1601,7 +1657,8 @@ impl AppState {
         if lang.is_empty() {
             return Err("Вкажіть код мови, наприклад ru або pl".into());
         }
-        let (_, ref_views) = self.load_dir(dir)?;
+        let opts = self.extract_options();
+        let (_, ref_views) = self.load_dir(dir, &mut |_| opts.clone())?;
         let mut texts: indexmap::IndexMap<String, transly_core::reference::Reference> = indexmap::IndexMap::new();
         let mut n = 0;
         for v in &self.views {

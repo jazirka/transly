@@ -1284,6 +1284,38 @@ impl AppState {
         (r.text, n)
     }
 
+    /// Що гілка `source` внесла б у поточну.
+    pub fn branch_diff(&self, source: &str) -> Result<Vec<transly_core::branches::DiffRow>, String> {
+        let p = self.project.as_ref().ok_or("Проєкт не відкрито")?;
+        transly_core::branches::diff_branches(p, source)
+    }
+
+    /// Злиття з вибором по рядках: `pick(id)` дає рішення (None — типове: нові й змінені беруться, конфлікти лишаються).
+    pub fn merge_branch_with(&mut self, source: &str, pick: &dyn Fn(&str) -> Option<transly_core::branches::Decision>) -> Result<String, String> {
+        use transly_core::branches::{default_decision, row_id};
+        let p = self.project.as_ref().ok_or("Проєкт не відкрито")?;
+        let rows = transly_core::branches::diff_branches(p, source)?;
+        let decide = |r: &transly_core::branches::DiffRow| pick(&row_id(&r.file, &r.key)).or_else(|| default_decision(r));
+        let plan = transly_core::branches::plan_merge(p, &rows, &decide, now_ms());
+        let n = plan.changes.len();
+        if n > 0 {
+            let who = self.who();
+            let mut rand = Self::seeded_rand();
+            let p = self.project.as_mut().ok_or("Проєкт не відкрито")?;
+            let id = commit_rows(&mut p.files, &plan.changes, &plan.kind, &who, now_ms(), None, &mut rand);
+            self.undo.record(&id);
+            self.rev += 1;
+            self.dirty = true;
+        }
+        Ok(format!("Злито рядків: {n}"))
+    }
+
+    pub fn rename_branch(&mut self, from: &str, to: &str) -> Result<(), String> {
+        let p = self.project.as_ref().ok_or("Проєкт не відкрито")?;
+        let r = transly_core::branches::rename_branch(p, from, to);
+        self.set_project_branch(r)
+    }
+
     pub fn key_of(&self, f: usize, r: usize) -> String {
         self.unit(f, r).map_or(String::new(), |u| u.key.clone())
     }
@@ -1821,6 +1853,8 @@ menu.quit=Quit game
         assert!(s.create_branch("варіант").is_err());
         s.switch_branch("main").unwrap();
         assert_eq!(s.target_of(0, 1), "");
+        s.rename_branch("варіант", "стиль").unwrap();
+        s.rename_branch("стиль", "варіант").unwrap();
         let msg = s.merge_branch("варіант").unwrap();
         assert!(msg.starts_with("Злито рядків: 1"), "{msg}");
         assert_eq!(s.target_of(0, 1), "Тільки тут");
@@ -1891,6 +1925,27 @@ menu.quit=Quit game
         assert_eq!(s.wrap_settings().max_lines, 3);
         let (t, n) = s.wrap_preview("слово слово слово слово слово слово слово слово слово слово слово слово слово слово слово", false);
         assert!(n >= 2, "довгий текст переноситься: {t}");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn branch_conflicts_follow_the_pick() {
+        let base = std::env::temp_dir().join(format!("transly-app-conflict-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = game(&base);
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        s.edit(0, 0, "Старий");
+        s.create_branch("b").unwrap();
+        s.edit(0, 0, "Їхній");
+        s.switch_branch("main").unwrap();
+        s.edit(0, 0, "Мій");
+        let rows = s.branch_diff("b").unwrap();
+        assert!(rows.iter().any(|r| r.kind == transly_core::branches::DiffKind::Conflict), "{rows:?}");
+        s.merge_branch_with("b", &|_| None).unwrap();
+        assert_eq!(s.target_of(0, 0), "Мій", "без вибору лишається мій");
+        s.merge_branch_with("b", &|_| Some(transly_core::branches::Decision::Theirs)).unwrap();
+        assert_eq!(s.target_of(0, 0), "Їхній");
         let _ = std::fs::remove_dir_all(&base);
     }
 

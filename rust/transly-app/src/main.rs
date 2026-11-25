@@ -30,6 +30,8 @@ struct App {
     wrap_win: Option<(transly_core::wrapconfig::WrapSettings, String, bool)>,
     qar_win: bool,
     br_win: Option<String>,
+    merge_win: Option<(String, Vec<transly_core::branches::DiffRow>, std::collections::HashMap<String, transly_core::branches::Decision>)>,
+    rename_win: Option<(String, String)>,
     groups_win: Option<String>,
     ref_win: Option<String>,
     spk_win: Option<Vec<(transly_core::speakers::SpeakerCandidate, String)>>,
@@ -82,7 +84,7 @@ fn source_job(text: &str, marks: &[(usize, usize, usize)]) -> egui::text::Layout
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, wrap_win: None, qar_win: false, br_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
     }
 }
 
@@ -168,6 +170,8 @@ impl App {
         self.groups_window(ctx);
         self.branches_window(ctx);
         self.qarules_window(ctx);
+        self.merge_window(ctx);
+        self.rename_window(ctx);
         self.wrap_window(ctx);
         if let Some(msg) = self.st.finish_sync() {
             self.message = msg;
@@ -1092,6 +1096,9 @@ impl App {
                             if ui.small_button("Злити сюди").clicked() {
                                 act = Some((n.clone(), 1));
                             }
+                            if ui.small_button("Назва").clicked() {
+                                act = Some((n.clone(), 3));
+                            }
                             if ui.small_button("Перемкнутись").clicked() {
                                 act = Some((n.clone(), 0));
                             }
@@ -1110,7 +1117,18 @@ impl App {
         if let Some((n, k)) = act {
             self.message = match k {
                 0 => self.st.switch_branch(&n).map(|_| format!("Гілка «{n}»")).unwrap_or_else(|e| e),
-                1 => self.st.merge_branch(&n).unwrap_or_else(|e| e),
+                1 => match self.st.branch_diff(&n) {
+                    Ok(rows) if rows.iter().any(|r| r.kind == transly_core::branches::DiffKind::Conflict && !r.locked) => {
+                        self.merge_win = Some((n.clone(), rows, Default::default()));
+                        String::new()
+                    }
+                    Ok(_) => self.st.merge_branch(&n).unwrap_or_else(|e| e),
+                    Err(e) => e,
+                },
+                3 => {
+                    self.rename_win = Some((n.clone(), n.clone()));
+                    String::new()
+                }
                 _ => self.st.delete_branch(&n).map(|_| format!("Гілку «{n}» видалено")).unwrap_or_else(|e| e),
             };
         }
@@ -1213,6 +1231,74 @@ impl App {
         }
         if open {
             self.wrap_win = Some((w, sample, face));
+        }
+    }
+
+    fn merge_window(&mut self, ctx: &egui::Context) {
+        use transly_core::branches::{row_id, Decision, DiffKind};
+        let Some((src, rows, mut dec)) = self.merge_win.take() else { return };
+        let mut open = true;
+        let (mut go, mut close) = (false, false);
+        egui::Window::new(format!("Злиття гілки «{src}»")).open(&mut open).collapsible(false).default_width(680.0).default_height(460.0).show(ctx, |ui| {
+            ui.label(RichText::new("Нові й змінені рядки беруться. У конфліктах змінили обидві гілки: оберіть, чий переклад лишити (без вибору лишається ваш).").size(11.5).color(MUTE));
+            egui::ScrollArea::vertical().max_height(340.0).show(ui, |ui| {
+                for r in rows.iter().filter(|r| r.kind == DiffKind::Conflict && !r.locked) {
+                    let id = row_id(&r.file, &r.key);
+                    let mine = r.mine.as_ref().map_or("", |e| e.target.as_str()).to_string();
+                    egui::Frame::new().fill(PANEL2).corner_radius(CornerRadius::same(R2)).inner_margin(egui::Margin::symmetric(10, 6)).show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        ui.label(RichText::new(format!("{} · {}", r.file, r.key)).monospace().size(10.5).color(MUTE));
+                        let cur = dec.get(&id).cloned();
+                        if ui.radio(matches!(cur, None | Some(Decision::Mine)), format!("Мій: {mine}")).clicked() {
+                            dec.insert(id.clone(), Decision::Mine);
+                        }
+                        if ui.radio(matches!(cur, Some(Decision::Theirs)), format!("Їхній: {}", r.theirs.target)).clicked() {
+                            dec.insert(id.clone(), Decision::Theirs);
+                        }
+                    });
+                    ui.add_space(3.0);
+                }
+            });
+            ui.horizontal(|ui| {
+                if primary_button(ui, "Злити").clicked() {
+                    go = true;
+                }
+                if plain_button(ui, "Скасувати").clicked() {
+                    close = true;
+                }
+            });
+        });
+        if go {
+            let d = dec.clone();
+            self.message = self.st.merge_branch_with(&src, &move |id| d.get(id).cloned()).unwrap_or_else(|e| e);
+            close = true;
+        }
+        if !close && open {
+            self.merge_win = Some((src, rows, dec));
+        }
+    }
+
+    fn rename_window(&mut self, ctx: &egui::Context) {
+        let Some((from, mut to)) = self.rename_win.take() else { return };
+        let mut open = true;
+        let (mut go, mut close) = (false, false);
+        egui::Window::new("Назва гілки").open(&mut open).collapsible(false).resizable(false).show(ctx, |ui| {
+            ui.add(egui::TextEdit::singleline(&mut to).desired_width(260.0));
+            ui.horizontal(|ui| {
+                if primary_button(ui, "Перейменувати").clicked() {
+                    go = true;
+                }
+                if plain_button(ui, "Скасувати").clicked() {
+                    close = true;
+                }
+            });
+        });
+        if go {
+            self.message = self.st.rename_branch(&from, &to).map(|_| format!("Гілка «{}»", to.trim())).unwrap_or_else(|e| e);
+            close = true;
+        }
+        if !close && open {
+            self.rename_win = Some((from, to));
         }
     }
 

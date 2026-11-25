@@ -211,9 +211,37 @@ impl AppState {
         let d = dir.to_string_lossy().to_string();
         let exts: Vec<String> = self.host.reg.extensions();
         let listed = list_json(&self.roots, &d, Some(exts))?;
+        // як у старому застосунку: лише файли з відомим форматом; для RPG Maker перевага папці `data`, коли обрано цілу гру
+        // (інакше файли з однаковою назвою з `data1`, резервних тек тощо рахувались би двічі); решта файлів — за відносним шляхом
+        // шляхи з платформи мають префікс `\\?\`: для порівняння його знімаємо
+        let norm = |t: &str| t.replace('\\', "/").trim_start_matches("//?/").to_string();
+        let root_n = norm(&d);
+        let rel = |path: &str| -> String {
+            let p = norm(path);
+            p.strip_prefix(root_n.as_str()).unwrap_or(&p).trim_start_matches('/').to_string()
+        };
+        let is_rpg = |n: &str| transly_core::engine::format_of(n) == Some("rpgmaker");
+        let mut items: Vec<(String, String, Option<String>)> = Vec::new(); // (назва в проєкті, шлях, оригінал)
+        let readable: Vec<&transly_platform::JsonFile> = listed.iter().filter(|f| transly_core::engine::format_of(&f.name).is_some() || self.host.reg.handler_of(&f.name).is_some()).collect();
+        let rpg: Vec<&transly_platform::JsonFile> = readable.iter().copied().filter(|f| is_rpg(&f.name)).collect();
+        let in_data: Vec<&transly_platform::JsonFile> = rpg.iter().copied().filter(|f| {
+            let r = rel(&f.path);
+            r.rsplit_once('/').is_none_or(|(dir, _)| dir == "data" || dir.ends_with("/data"))
+        }).collect();
+        let mut chosen: Vec<&transly_platform::JsonFile> = if !in_data.is_empty() { in_data } else if !rpg.is_empty() { rpg.clone() } else { readable.clone() };
+        // у грі RPG Maker файли, які бере формат плагіна, лишаються (інші сторонні файли ні)
+        if !rpg.is_empty() {
+            chosen.extend(readable.iter().copied().filter(|f| !is_rpg(&f.name) && self.host.reg.handler_of(&f.name).is_some()));
+        }
+        for f in chosen {
+            let name = if is_rpg(&f.name) { f.name.clone() } else { rel(&f.path) };
+            items.push((name, f.path.clone(), f.orig.clone()));
+        }
+        items.sort_by(|a, b| transly_core::collate::locale_compare(&a.0, &b.0));
         let mut raw: Vec<(String, String)> = Vec::new();
-        for f in &listed {
-            raw.push((f.name.clone(), read_text(&self.roots, &f.path)?));
+        for (name, path, orig) in &items {
+            // файл гри міг уже містити переклад (збірка пише в нього): оригінал береться з резервної копії поруч
+            raw.push((name.clone(), read_text(&self.roots, orig.as_deref().unwrap_or(path))?));
         }
         // назви мап беруться з MapInfos.json: він невеликий, тримається окремо
         let infos: Option<GameFile> = raw.iter().find(|(n, _)| n.rsplit('/').next().unwrap_or(n) == "MapInfos.json").map(|(n, t)| GameFile { name: n.clone(), json: serde_json::from_str(t).unwrap_or(serde_json::Value::Null), text: None });
@@ -2395,6 +2423,44 @@ menu.quit=Quit game
         let list = s.scenes_list(f);
         assert_eq!(list.len(), 2, "{list:?}");
         assert_eq!(s.source_of(f, list[1].1), "Two line");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// Перевірка на справжній грі: `TRANSLY_GAME=<тека data> cargo test -p transly-app --release real_game -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn real_game() {
+        let Some(dir) = std::env::var_os("TRANSLY_GAME").map(PathBuf::from) else { return };
+        let mut s = AppState::default();
+        s.open_game(&dir).unwrap();
+        let per: Vec<(String, usize)> = (0..s.file_names().len()).map(|f| (s.file_names()[f].clone(), s.row_count(f))).collect();
+        let total: usize = per.iter().map(|p| p.1).sum();
+        println!("файлів {}, рядків {total}, пам'ять {:.0} МБ", per.len(), rss_mb());
+        let mut top = per.clone();
+        top.sort_by_key(|p| std::cmp::Reverse(p.1));
+        for (n, c) in top.iter().take(8) {
+            println!("  {n}: {c}");
+        }
+        println!("{}", s.last_note);
+    }
+
+    #[test]
+    fn a_whole_game_folder_reads_data_once_and_originals_from_the_backup() {
+        let base = std::env::temp_dir().join(format!("transly-app-wholegame-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let www = base.join("www");
+        for d in ["data", "data1", "data.transly-orig"] {
+            std::fs::create_dir_all(www.join(d)).unwrap();
+        }
+        let actors = |n: &str| format!(r#"[null,{{"id":1,"name":"{n}","nickname":"","profile":"","note":""}}]"#);
+        std::fs::write(www.join("data").join("Actors.json"), actors("Герой")).unwrap();
+        std::fs::write(www.join("data1").join("Actors.json"), actors("Spare")).unwrap();
+        std::fs::write(www.join("data.transly-orig").join("Actors.json"), actors("Hero")).unwrap();
+        let mut s = AppState::default();
+        s.open_game(&www).unwrap();
+        assert_eq!(s.file_names(), vec!["Actors.json".to_string()], "data1 і резервна тека не рахуються окремо");
+        let r = (0..s.row_count(0)).find(|r| s.source_of(0, *r) == "Hero");
+        assert!(r.is_some(), "оригінал береться з резервної копії, а не з перекладеного файлу");
         let _ = std::fs::remove_dir_all(&base);
     }
 

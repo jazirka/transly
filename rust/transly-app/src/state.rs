@@ -859,7 +859,7 @@ impl AppState {
             .iter()
             .filter_map(|u| {
                 let ri = at_key(u)?;
-                Some(SceneLine { row: ri, speaker: u.speaker.clone(), source: u.source.clone(), target: self.target_of(f, ri), status: self.status_of(f, ri), current: ri == r })
+                Some(SceneLine { row: ri, speaker: self.speaker_of_row(f, ri), source: u.source.clone(), target: self.target_of(f, ri), status: self.status_of(f, ri), current: ri == r })
             })
             .collect();
         let first_row = |s: Option<&transly_core::scene::SceneInfo>| s.and_then(|s| s.units.first()).and_then(at_key);
@@ -903,6 +903,51 @@ impl AppState {
         let dir = self.dir.as_ref().ok_or("Проєкт не відкрито")?;
         let changed = restore_jump(&self.roots, &dir.to_string_lossy())?;
         Ok(if changed { "Тестовий плагін прибрано з гри".into() } else { "Тестового плагіна в грі не було".into() })
+    }
+
+    /// Хто говорить у рядку: власне ім'я з гри, потім відображення перекладача (надруковане ім'я, обличчя, позначка, подія).
+    pub fn speaker_of_row(&self, f: usize, r: usize) -> String {
+        let Some(u) = self.unit(f, r) else { return String::new() };
+        let row = transly_core::speakers::SpeakerRow { speaker: &u.speaker, face: u.face.as_deref(), event: u.event.as_deref(), note: u.note.as_deref(), source: Some(&u.source) };
+        transly_core::speakers::speaker_of(&row, self.project.as_ref().and_then(|p| p.speakers.as_ref()))
+    }
+
+    /// Кандидати в мовці з рядків гри (імена в тексті, обличчя, позначки, події) і вже задане ім'я кожного.
+    pub fn speaker_candidates(&self) -> Vec<(transly_core::speakers::SpeakerCandidate, String)> {
+        let map = self.project.as_ref().and_then(|p| p.speakers.as_ref());
+        transly_core::speakers::speaker_candidates(&self.views, 3)
+            .into_iter()
+            .map(|c| {
+                let name = map.and_then(|m| m.get(&c.key)).and_then(|v| v.get("name")).and_then(|n| n.as_str()).unwrap_or("").to_string();
+                (c, name)
+            })
+            .collect()
+    }
+
+    /// Записує імена мовців: порожнє ім'я прибирає відображення.
+    pub fn set_speakers(&mut self, names: &[(String, String)]) -> String {
+        let Some(p) = self.project.as_mut() else { return "Проєкт не відкрито".into() };
+        let now = now_ms();
+        let map = p.speakers.get_or_insert_with(Default::default);
+        let mut changed = 0;
+        for (key, name) in names {
+            let name = transly_core::js::trim(name);
+            let cur = map.get(key).and_then(|v| v.get("name")).and_then(|n| n.as_str()).unwrap_or("");
+            if cur == name {
+                continue;
+            }
+            changed += 1;
+            if name.is_empty() {
+                map.shift_remove(key);
+            } else {
+                map.insert(key.clone(), serde_json::json!({ "name": name, "mt": now }));
+            }
+        }
+        if changed > 0 {
+            self.rev += 1;
+            self.dirty = true;
+        }
+        format!("Імен мовців змінено: {changed}")
     }
 
     pub fn key_of(&self, f: usize, r: usize) -> String {
@@ -1346,6 +1391,37 @@ menu.quit=Quit game
         assert!(marker.exists(), "програму гри запущено");
         assert!(s.remove_jump_plugin().unwrap().contains("прибрано"));
         assert!(!game_dir.join("js").join("plugins").join("TranslyJump.js").exists());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn speakers_are_named_and_shown() {
+        let base = std::env::temp_dir().join(format!("transly-app-spk-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = base.join("MyGame").join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        let cmd = |code: i64, p: &str| format!(r#"{{"code":{code},"indent":0,"parameters":[{p}]}}"#);
+        let mut l: Vec<String> = Vec::new();
+        for t in ["One", "Two", "Three"] {
+            l.push(cmd(101, r#""Face1",2,0,2"#));
+            l.push(cmd(401, &format!("\"{t}\"")));
+        }
+        l.push(cmd(0, ""));
+        std::fs::write(data.join("Map001.json"), format!(r#"{{"displayName":"T","events":[null,{{"id":1,"name":"EV1","x":1,"y":1,"pages":[{{"conditions":{{}},"list":[{}],"trigger":0}}]}}]}}"#, l.join(","))).unwrap();
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        let f = s.file_names().iter().position(|n| n == "Map001.json").unwrap();
+        let one = (0..s.row_count(f)).find(|r| s.source_of(f, *r) == "One").unwrap();
+        assert_eq!(s.speaker_of_row(f, one), "");
+        let cands = s.speaker_candidates();
+        let face = cands.iter().find(|c| c.0.key.starts_with("face:")).unwrap_or_else(|| panic!("обличчя в кандидатах: {:?}", cands.iter().map(|c| c.0.key.clone()).collect::<Vec<_>>()));
+        assert_eq!(face.0.count, 3);
+        let key = face.0.key.clone();
+        assert!(s.set_speakers(&[(key.clone(), "Анна".into())]).ends_with(": 1"));
+        assert_eq!(s.speaker_of_row(f, one), "Анна");
+        assert!(s.set_speakers(&[(key.clone(), "Анна".into())]).ends_with(": 0"), "без змін");
+        s.set_speakers(&[(key.clone(), String::new())]);
+        assert_eq!(s.speaker_of_row(f, one), "");
         let _ = std::fs::remove_dir_all(&base);
     }
 

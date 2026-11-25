@@ -27,6 +27,7 @@ struct App {
     term_en: String,
     term_uk: String,
     itab: usize,
+    spk_win: Option<Vec<(transly_core::speakers::SpeakerCandidate, String)>>,
     import_win: Option<(u8, String)>,
     build_win: Option<state::BuildChoice>,
     fill_win: Option<Vec<(transly_core::autofill::Proposal, bool)>>,
@@ -76,7 +77,7 @@ fn source_job(text: &str, marks: &[(usize, usize, usize)]) -> egui::text::Layout
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
     }
 }
 
@@ -157,6 +158,7 @@ impl App {
         self.fill_window(ctx);
         self.build_window(ctx);
         self.import_window(ctx);
+        self.speakers_window(ctx);
         if let Some(msg) = self.st.finish_sync() {
             self.message = msg;
         }
@@ -245,6 +247,10 @@ impl App {
                 ui.menu_button("Інструменти", |ui| {
                     if ui.add_enabled(self.st.is_open(), egui::Button::new(if self.st.syncing() { "Синхронізація триває…" } else { "Синхронізація через GitHub…" })).clicked() {
                         self.act_sync();
+                        ui.close_menu();
+                    }
+                    if ui.add_enabled(self.st.is_open(), egui::Button::new("Мовці…")).clicked() {
+                        self.spk_win = Some(self.st.speaker_candidates());
                         ui.close_menu();
                     }
                     if ui.button("Плагіни…").clicked() {
@@ -869,6 +875,55 @@ impl App {
         }
         if !close && open {
             self.import_win = Some((kind, text));
+        }
+    }
+
+    fn speakers_window(&mut self, ctx: &egui::Context) {
+        let Some(mut list) = self.spk_win.take() else { return };
+        let mut open = true;
+        let (mut save, mut close) = (false, false);
+        egui::Window::new("Мовці").open(&mut open).collapsible(false).default_width(640.0).default_height(460.0).show(ctx, |ui| {
+            if list.is_empty() {
+                ui.label(RichText::new("У рядках гри нема що визначати: усі діалоги вже мають мовця.").color(MUTE));
+            } else {
+                ui.label(RichText::new("Дайте ім'я тому, хто говорить: за ім'ям у тексті, обличчям, позначкою розробника чи подією. Ім'я з'явиться в таблиці й сцені.").size(11.5).color(MUTE));
+                egui::ScrollArea::vertical().max_height(340.0).show(ui, |ui| {
+                    for (c, name) in list.iter_mut() {
+                        ui.horizontal(|ui| {
+                            let kind = match c.kind {
+                                transly_core::speakers::CandKind::Hdr => "імʼя в тексті",
+                                transly_core::speakers::CandKind::Face => "обличчя",
+                                transly_core::speakers::CandKind::Note => "позначка",
+                                transly_core::speakers::CandKind::Event => "подія",
+                            };
+                            ui.vertical(|ui| {
+                                ui.label(RichText::new(format!("{}  ({kind}, рядків: {})", c.label, c.count)).color(TEXT));
+                                ui.label(RichText::new(&c.sample).size(11.0).color(MUTE));
+                            });
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                ui.add(egui::TextEdit::singleline(name).hint_text("ім'я").desired_width(160.0));
+                            });
+                        });
+                        ui.separator();
+                    }
+                });
+            }
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                if primary_button(ui, "Зберегти").clicked() {
+                    save = true;
+                }
+                if plain_button(ui, "Закрити").clicked() {
+                    close = true;
+                }
+            });
+        });
+        if save {
+            let names: Vec<(String, String)> = list.iter().map(|(c, n)| (c.key.clone(), n.clone())).collect();
+            self.message = self.st.set_speakers(&names);
+        }
+        if !close && open && !save {
+            self.spk_win = Some(list);
         }
     }
 

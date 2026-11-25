@@ -63,6 +63,16 @@ pub struct Counts {
 
 /// Один рядок сцени для вкладки «Сцена».
 #[derive(Clone, Debug)]
+pub struct ActivityItem {
+    pub id: String,
+    pub title: String,
+    pub when: String,
+    pub label: &'static str,
+    pub sample: Vec<(String, String)>,
+    pub more: usize,
+}
+
+#[derive(Clone, Debug)]
 pub struct GroupInfo {
     pub id: String,
     pub name: String,
@@ -1447,6 +1457,33 @@ impl AppState {
         n
     }
 
+    /// Останні масові дії проєкту: (id, заголовок, коли, підпис кнопки, кілька прикладів рядків).
+    pub fn activity(&self) -> Vec<ActivityItem> {
+        let Some(p) = self.project.as_ref() else { return vec![] };
+        let now = now_ms() as f64;
+        transly_core::journal::journal_batches(&self.views, &p.files, 60)
+            .into_iter()
+            .map(|b| ActivityItem {
+                title: transly_core::journal::batch_title(&b),
+                when: transly_core::stamps::ago(b.at as f64, now),
+                label: transly_core::journal::batch_undo_label(&b),
+                sample: b.items.iter().take(6).map(|i| (i.source.clone(), i.target.clone())).collect(),
+                more: b.total.saturating_sub(b.items.len()),
+                id: b.id,
+            })
+            .collect()
+    }
+
+    /// Скасовує (чи повторює) одну дію з журналу: рядки, змінені після неї, не чіпаються.
+    pub fn undo_batch(&mut self, id: &str) -> String {
+        let who = self.who();
+        let Some(p) = self.project.as_mut() else { return "Проєкт не відкрито".into() };
+        let r = transly_core::journal::undo_journal(&mut p.files, id, &who, now_ms(), &mut Self::seeded_rand());
+        self.rev += 1;
+        self.dirty = true;
+        transly_core::journal::undo_report(&r)
+    }
+
     pub fn key_of(&self, f: usize, r: usize) -> String {
         self.unit(f, r).map_or(String::new(), |u| u.key.clone())
     }
@@ -2204,6 +2241,25 @@ menu.quit=Quit game
         assert_eq!(s.target_of(0, hero), "Герой прийшов");
         assert!(!s.undo_last().is_empty());
         assert_eq!(s.target_of(0, hero), "Лицар прийшов");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn activity_lists_batches_and_undoes_one() {
+        let base = std::env::temp_dir().join(format!("transly-app-activity-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = game(&base);
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        s.edit(0, 0, "Один");
+        s.edit(0, 1, "Два");
+        assert!(s.bulk_send(None).contains('2') || s.activity().iter().any(|a| a.title.to_lowercase().contains("надісл")));
+        let list = s.activity();
+        assert!(!list.is_empty(), "є дії в журналі");
+        let first = list[0].clone();
+        assert!(!first.when.is_empty() && !first.sample.is_empty());
+        let msg = s.undo_batch(&first.id);
+        assert!(msg.starts_with("Скасовано"), "{msg}");
         let _ = std::fs::remove_dir_all(&base);
     }
 

@@ -38,6 +38,7 @@ struct App {
     term_en: String,
     term_uk: String,
     itab: usize,
+    activity_win: bool,
     tsync_win: Option<(transly_core::termsync::TermChange, Vec<(transly_core::termsync::TermProposal, bool)>)>,
     wrap_win: Option<(transly_core::wrapconfig::WrapSettings, String, bool)>,
     qar_win: bool,
@@ -96,7 +97,7 @@ fn source_job(text: &str, marks: &[(usize, usize, usize)]) -> egui::text::Layout
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
     }
 }
 
@@ -186,6 +187,7 @@ impl App {
         self.rename_window(ctx);
         self.wrap_window(ctx);
         self.term_sync_window(ctx);
+        self.activity_window(ctx);
         if let Some(msg) = self.st.finish_sync() {
             self.message = msg;
         }
@@ -278,6 +280,10 @@ impl App {
                 ui.menu_button("Інструменти", |ui| {
                     if ui.add_enabled(self.st.is_open(), egui::Button::new(if self.st.syncing() { "Синхронізація триває…" } else { "Синхронізація через GitHub…" })).clicked() {
                         self.act_sync();
+                        ui.close_menu();
+                    }
+                    if ui.add_enabled(self.st.is_open(), egui::Button::new("Активність…")).clicked() {
+                        self.activity_win = true;
                         ui.close_menu();
                     }
                     if ui.add_enabled(self.st.last_term_change.is_some(), egui::Button::new("Оновити за глосарієм…")).clicked() {
@@ -1376,6 +1382,49 @@ impl App {
         if !close && open {
             self.tsync_win = Some((change, rows));
         }
+    }
+
+    fn activity_window(&mut self, ctx: &egui::Context) {
+        if !self.activity_win {
+            return;
+        }
+        let mut open = true;
+        let mut undo: Option<String> = None;
+        egui::Window::new("Активність").open(&mut open).collapsible(false).default_width(640.0).default_height(460.0).show(ctx, |ui| {
+            ui.label(RichText::new("Масові дії (надсилання, вичитка, автозаповнення, заміни, злиття) можна скасувати, поки рядки не змінено, і потім повторити.").size(11.5).color(MUTE));
+            ui.add_space(6.0);
+            let items = self.st.activity();
+            if items.is_empty() {
+                ui.label(RichText::new("Масових дій ще не було").color(MUTE));
+            }
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                for a in items {
+                    egui::Frame::new().fill(PANEL2).corner_radius(CornerRadius::same(R2)).inner_margin(egui::Margin::symmetric(10, 7)).show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new(&a.title).color(TEXT));
+                            ui.label(RichText::new(&a.when).size(11.0).color(MUTE));
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                if ui.small_button(a.label).clicked() {
+                                    undo = Some(a.id.clone());
+                                }
+                            });
+                        });
+                        for (src, tgt) in &a.sample {
+                            ui.label(RichText::new(format!("{}  →  {}", src.replace('\n', " / "), tgt.replace('\n', " / "))).size(11.0).color(MUTE));
+                        }
+                        if a.more > 0 {
+                            ui.label(RichText::new(format!("…і ще {} змінено після цього", a.more)).size(11.0).color(MUTE));
+                        }
+                    });
+                    ui.add_space(4.0);
+                }
+            });
+        });
+        if let Some(id) = undo {
+            self.message = self.st.undo_batch(&id);
+        }
+        self.activity_win = open;
     }
 
     fn strip(&mut self, ctx: &egui::Context) {

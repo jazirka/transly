@@ -61,6 +61,15 @@ pub struct Counts {
 
 /// Один рядок сцени для вкладки «Сцена».
 #[derive(Clone, Debug)]
+pub struct GroupInfo {
+    pub id: String,
+    pub name: String,
+    pub color: String,
+    pub rows: usize,
+    pub translated: usize,
+}
+
+#[derive(Clone, Debug)]
 pub struct SceneLine {
     pub row: usize,
     pub speaker: String,
@@ -115,6 +124,8 @@ struct Visible {
 type QaCache = ((usize, u64), Vec<(usize, String, bool)>);
 
 pub struct AppState {
+    /// Показувати лише рядки цієї групи.
+    pub group_filter: Option<String>,
     scene_cache: std::cell::RefCell<(usize, Option<transly_core::scene::SceneIndex>)>,
     undo: transly_core::undostack::UndoStack,
     pub host: PluginHost,
@@ -143,7 +154,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None }
+        AppState { group_filter: None, scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None }
     }
 }
 
@@ -328,14 +339,25 @@ impl AppState {
     }
 
     fn refresh_visible(&self, f: usize) {
-        let key = (f, Filter::ALL.iter().position(|x| *x == self.filter).unwrap_or(0) as u8, self.search.clone(), self.rev);
+        let key = (f, Filter::ALL.iter().position(|x| *x == self.filter).unwrap_or(0) as u8, format!("{}\u{1}{}", self.search, self.group_filter.clone().unwrap_or_default()), self.rev);
         if self.vis.borrow().key == key {
             return;
         }
         let q = self.search.to_lowercase();
         let mut v = Visible { key, ..Default::default() };
+        let in_group: Option<std::collections::HashSet<String>> = self.group_filter.as_ref().and_then(|id| {
+            let p = self.project.as_ref()?;
+            let data = transly_core::groups::GroupData::of(p);
+            let name = &self.views.get(f)?.name;
+            Some(transly_core::groups::rows_of_group(&data, &self.views, id).into_iter().filter(|r| &r.file == name).map(|r| r.key).collect())
+        });
         for r in 0..self.row_count(f) {
             let st = self.status_of(f, r);
+            if let Some(set) = &in_group {
+                if !self.unit(f, r).is_some_and(|u| set.contains(&u.key)) {
+                    continue;
+                }
+            }
             if !q.is_empty() {
                 let (src, tgt, _) = self.row_view(f, r);
                 let k = self.unit(f, r).map_or("", |u| u.key.as_str());
@@ -992,6 +1014,97 @@ impl AppState {
         transly_core::reference::reference_sets(bundle.as_ref()).into_iter().filter_map(|set| set.texts.get(&v.name).and_then(|m| m.get(&u.key)).map(|t| (set.lang.clone(), t.clone()))).collect()
     }
 
+    /// Групи проєкту: (id, назва, колір, рядків, перекладено).
+    pub fn groups_view(&self) -> Vec<GroupInfo> {
+        let Some(p) = self.project.as_ref() else { return vec![] };
+        let data = transly_core::groups::GroupData::of(p);
+        let rows = transly_core::groups::group_rows(&data, &self.views);
+        transly_core::groups::live_groups(&data)
+            .into_iter()
+            .map(|g| {
+                let rs = rows.get(&g.id).cloned().unwrap_or_default();
+                let pr = transly_core::groups::rows_progress(&rs, &p.files);
+                GroupInfo { id: g.id, name: g.name, color: g.color.unwrap_or_default(), rows: pr.total, translated: pr.translated }
+            })
+            .collect()
+    }
+
+    fn with_groups<R>(&mut self, f: impl FnOnce(&mut transly_core::groups::GroupData, &[FileView]) -> R) -> Option<R> {
+        let p = self.project.as_mut()?;
+        let mut data = transly_core::groups::GroupData::of(p);
+        let r = f(&mut data, &self.views);
+        data.apply(p);
+        self.rev += 1;
+        self.dirty = true;
+        Some(r)
+    }
+
+    fn rand_suffix() -> String {
+        let mut r = Self::seeded_rand();
+        (0..4).map(|_| char::from_digit(r() % 36, 36).unwrap_or('0')).collect()
+    }
+
+    pub fn create_group(&mut self, name: &str) -> String {
+        let suffix = Self::rand_suffix();
+        let now = now_ms();
+        match self.with_groups(|d, _| transly_core::groups::create_group(d, name, now, None, &suffix)).flatten() {
+            Some(g) => format!("Група «{}»", g.name),
+            None => "Назва групи порожня".into(),
+        }
+    }
+
+    pub fn delete_group(&mut self, id: &str) {
+        let now = now_ms();
+        if self.group_filter.as_deref() == Some(id) {
+            self.group_filter = None;
+        }
+        self.with_groups(|d, _| transly_core::groups::delete_group(d, id, now));
+    }
+
+    /// Кладе рядок (`scope` 0), його сцену (1) чи його файл (2) у групу (None — поза групами). Повертає, скільки рядків змінилося.
+    pub fn place_in_group(&mut self, f: usize, r: usize, scope: u8, id: Option<&str>) -> usize {
+        let (Some(file), Some(key)) = (self.views.get(f).map(|v| v.name.clone()), self.unit(f, r).map(|u| u.key.clone())) else { return 0 };
+        let now = now_ms();
+        let rows: Vec<transly_core::groups::RowRef> = match scope {
+            0 => vec![transly_core::groups::RowRef { file: file.clone(), key }],
+            1 => self.scene_view(f, r).map(|sv| sv.lines.iter().filter_map(|l| self.unit(f, l.row).map(|u| transly_core::groups::RowRef { file: file.clone(), key: u.key.clone() })).collect()).unwrap_or_default(),
+            _ => vec![],
+        };
+        let before = self.groups_view().iter().map(|g| g.rows).sum::<usize>();
+        let n = self.with_groups(|d, views| {
+            if scope == 2 {
+                transly_core::groups::place_file(d, &file, id, now);
+                0
+            } else {
+                transly_core::groups::place_rows(d, views, &rows, id, now)
+            }
+        });
+        let after = self.groups_view().iter().map(|g| g.rows).sum::<usize>();
+        let _ = before;
+        n.filter(|n| *n > 0).unwrap_or_else(|| after.abs_diff(before))
+    }
+
+    /// Автоматичні групи: за мовцями (`by_speaker`) чи за сценами. Створює групи з рядками й повертає їх кількість.
+    pub fn auto_groups(&mut self, by_speaker: bool) -> usize {
+        let now = now_ms();
+        let speakers = self.project.as_ref().and_then(|p| p.speakers.clone());
+        let auto = if by_speaker { transly_core::groups::group_by_speaker(&self.views, speakers.as_ref()) } else { transly_core::groups::group_by_scene(&self.views) };
+        let suffixes: Vec<String> = (0..auto.len()).map(|_| Self::rand_suffix()).collect();
+        let n = auto.len().min(200);
+        self.with_groups(|d, views| {
+            for (a, sfx) in auto.iter().zip(&suffixes).take(200) {
+                let name = match &a.sub {
+                    Some(sub) => format!("{sub}: {}", a.name),
+                    None => a.name.clone(),
+                };
+                if let Some(g) = transly_core::groups::create_group(d, &name, now, None, sfx) {
+                    transly_core::groups::place_rows(d, views, &a.rows, Some(&g.id), now);
+                }
+            }
+        });
+        n
+    }
+
     pub fn key_of(&self, f: usize, r: usize) -> String {
         self.unit(f, r).map_or(String::new(), |u| u.key.clone())
     }
@@ -1486,6 +1599,31 @@ menu.quit=Quit game
         let mut s2 = AppState::default();
         s2.open_game(&en).unwrap();
         assert_eq!(s2.references_of(0, hero).len(), 1, "довідка переживає перезапуск");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn groups_collect_rows_and_filter_the_list() {
+        let base = std::env::temp_dir().join(format!("transly-app-groups-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = game(&base);
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        assert_eq!(s.create_group("Головні"), "Група «Головні»");
+        assert_eq!(s.create_group("  "), "Назва групи порожня");
+        let id = s.groups_view()[0].id.clone();
+        assert_eq!(s.place_in_group(0, 0, 0, Some(&id)), 1);
+        let g = &s.groups_view()[0];
+        assert_eq!((g.rows, g.translated), (1, 0));
+        s.group_filter = Some(id.clone());
+        assert_eq!(s.visible_len(0), 1, "у списку лише рядки групи");
+        s.group_filter = None;
+        assert_eq!(s.visible_len(0), s.row_count(0));
+        assert_eq!(s.place_in_group(0, 0, 0, None), 1, "рядок виходить із групи");
+        assert_eq!(s.groups_view()[0].rows, 0);
+        assert!(s.auto_groups(false) == 0, "без сцен автогруп за сценами нема");
+        s.delete_group(&id);
+        assert!(s.groups_view().is_empty());
         let _ = std::fs::remove_dir_all(&base);
     }
 

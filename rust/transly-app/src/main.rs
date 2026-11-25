@@ -27,6 +27,7 @@ struct App {
     term_en: String,
     term_uk: String,
     itab: usize,
+    groups_win: Option<String>,
     ref_win: Option<String>,
     spk_win: Option<Vec<(transly_core::speakers::SpeakerCandidate, String)>>,
     import_win: Option<(u8, String)>,
@@ -78,7 +79,7 @@ fn source_job(text: &str, marks: &[(usize, usize, usize)]) -> egui::text::Layout
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
     }
 }
 
@@ -161,6 +162,7 @@ impl App {
         self.import_window(ctx);
         self.speakers_window(ctx);
         self.reference_window(ctx);
+        self.groups_window(ctx);
         if let Some(msg) = self.st.finish_sync() {
             self.message = msg;
         }
@@ -253,6 +255,10 @@ impl App {
                 ui.menu_button("Інструменти", |ui| {
                     if ui.add_enabled(self.st.is_open(), egui::Button::new(if self.st.syncing() { "Синхронізація триває…" } else { "Синхронізація через GitHub…" })).clicked() {
                         self.act_sync();
+                        ui.close_menu();
+                    }
+                    if ui.add_enabled(self.st.is_open(), egui::Button::new("Групи рядків…")).clicked() {
+                        self.groups_win = Some(String::new());
                         ui.close_menu();
                     }
                     if ui.add_enabled(self.st.is_open(), egui::Button::new("Мовці…")).clicked() {
@@ -965,6 +971,86 @@ impl App {
         }
     }
 
+    fn groups_window(&mut self, ctx: &egui::Context) {
+        let Some(mut name) = self.groups_win.take() else { return };
+        let mut open = true;
+        let cur = self.st.file.zip(self.st.row);
+        let mut act: Option<(String, u8)> = None; // 0 рядок, 1 сцена, 2 файл, 3 показати, 4 видалити
+        let mut create = false;
+        let mut auto: Option<bool> = None;
+        egui::Window::new("Групи рядків").open(&mut open).collapsible(false).default_width(560.0).show(ctx, |ui| {
+            ui.label(RichText::new("Група — набір рядків, який зручно перекладати разом (персонаж, квест, мапа). Додайте вибраний рядок, його сцену чи файл.").size(11.5).color(MUTE));
+            ui.add_space(6.0);
+            for g in self.st.groups_view() {
+                egui::Frame::new().fill(PANEL2).corner_radius(CornerRadius::same(R2)).inner_margin(egui::Margin::symmetric(10, 7)).show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.horizontal(|ui| {
+                        let (d, _) = ui.allocate_exact_size(vec2(12.0, 14.0), Sense::hover());
+                        let col = u32::from_str_radix(g.color.trim_start_matches('#'), 16).map_or(ACCENT, |c| Color32::from_rgb((c >> 16) as u8, (c >> 8) as u8, c as u8));
+                        ui.painter().circle_filled(d.center(), 5.0, col);
+                        ui.label(RichText::new(&g.name).color(TEXT));
+                        ui.label(RichText::new(format!("{} з {} перекладено", g.translated, g.rows)).size(11.0).color(MUTE));
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.small_button("Видалити").clicked() {
+                                act = Some((g.id.clone(), 4));
+                            }
+                            if ui.small_button("Показати").clicked() {
+                                act = Some((g.id.clone(), 3));
+                            }
+                        });
+                    });
+                    if cur.is_some() {
+                        ui.horizontal(|ui| {
+                            for (label, k) in [("+ рядок", 0u8), ("+ сцена", 1), ("+ файл", 2)] {
+                                if ui.small_button(label).clicked() {
+                                    act = Some((g.id.clone(), k));
+                                }
+                            }
+                        });
+                    }
+                });
+                ui.add_space(4.0);
+            }
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                ui.add(egui::TextEdit::singleline(&mut name).hint_text("Назва нової групи").desired_width(220.0));
+                if ui.add_enabled(!name.trim().is_empty(), egui::Button::new(RichText::new("Створити").color(Color32::WHITE)).fill(ACCENT).min_size(vec2(0.0, 26.0))).clicked() {
+                    create = true;
+                }
+            });
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                if plain_button(ui, "Групи за мовцями").clicked() {
+                    auto = Some(true);
+                }
+                if plain_button(ui, "Групи за сценами").clicked() {
+                    auto = Some(false);
+                }
+            });
+        });
+        if let Some((id, k)) = act {
+            match (k, cur) {
+                (3, _) => self.st.group_filter = Some(id),
+                (4, _) => self.st.delete_group(&id),
+                (k, Some((f, r))) => {
+                    let n = self.st.place_in_group(f, r, k, Some(&id));
+                    self.message = format!("У групу додано рядків: {n}");
+                }
+                _ => {}
+            }
+        }
+        if create {
+            self.message = self.st.create_group(&name);
+            name.clear();
+        }
+        if let Some(by_speaker) = auto {
+            self.message = format!("Створено груп: {}", self.st.auto_groups(by_speaker));
+        }
+        if open {
+            self.groups_win = Some(name);
+        }
+    }
+
     fn strip(&mut self, ctx: &egui::Context) {
         egui::SidePanel::left("strip").exact_width(40.0).resizable(false).frame(egui::Frame::new().fill(PANEL).stroke(Stroke::new(1.0_f32, LINE))).show(ctx, |ui| {
             ui.add_space(6.0);
@@ -1285,6 +1371,15 @@ impl App {
             for (i, flt) in Filter::ALL.iter().enumerate() {
                 if chip(&mut fui, flt.label(), counts[i], self.st.filter == *flt).clicked() {
                     self.st.filter = *flt;
+                }
+            }
+            if let Some(id) = self.st.group_filter.clone() {
+                let name = self.st.groups_view().into_iter().find(|g| g.id == id).map_or(String::new(), |g| g.name);
+                let r = ui.allocate_rect(egui::Rect::from_min_size(fr.left_top(), vec2(0.0, 0.0)), Sense::hover());
+                let _ = r;
+                fui.add_space(8.0);
+                if chip(&mut fui, &format!("Група: {name}  x"), self.st.visible_len(f), true).clicked() {
+                    self.st.group_filter = None;
                 }
             }
             self.grid(ui, f);

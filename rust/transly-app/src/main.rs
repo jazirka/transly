@@ -69,6 +69,7 @@ struct App {
     btab: usize,
     bottom_open: bool,
     focus: bool,
+    was_edit: bool,
     /// Клітинка перекладу, що редагується в таблиці: (файл, рядок).
     cell_edit: Option<(usize, usize)>,
     cell_focus: bool,
@@ -112,7 +113,7 @@ fn source_job_sized(text: &str, marks: &[(usize, usize, usize)], size: f32) -> e
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [true, true, false]], comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: false, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [true, true, false]], comment: String::new(), token: String::new() }
     }
 }
 
@@ -285,6 +286,12 @@ impl App {
         self.keys_window(ctx);
         if let Some(msg) = self.st.finish_sync() {
             self.message = msg;
+        }
+        // перехід між режимами: у «Редагуванні» ліворуч спершу рядки, у таблиці — файли
+        let edit_now = self.focus && !self.scene_mode;
+        if edit_now != self.was_edit {
+            self.was_edit = edit_now;
+            self.rail = if edit_now { 1 } else { 0 };
         }
         self.strip(ctx);
         if self.focus && !self.scene_mode {
@@ -691,7 +698,11 @@ impl App {
             return;
         }
         let Some(f) = self.st.file else { return };
-        let h = if self.bottom_open { 210.0 } else { 30.0 };
+        // у старому застосунку згорнутої смужки немає зовсім: панель відкривається з меню «Вигляд»
+        if !self.bottom_open {
+            return;
+        }
+        let h = 210.0;
         egui::TopBottomPanel::bottom("bottom").exact_height(h).resizable(false).show_separator_line(false).frame(card()).show(ctx, |ui| {
             let issues = self.st.file_issues(f);
             let bad = issues.iter().filter(|i| i.2).count();
@@ -744,7 +755,7 @@ impl App {
                     }
                     if terms.is_empty() {
                         ui.add_space(10.0);
-                        ui.label(RichText::new("   Глосарій порожній: додайте термін у вкладці «Переклад»").color(MUTE));
+                        ui.label(RichText::new("   Глосарій порожній: додайте термін у панелі «Пов’язане»").color(MUTE));
                     }
                 } else {
                     for (row, msg, is_bad) in issues.iter().take(500) {

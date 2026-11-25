@@ -5,11 +5,14 @@
 use super::*;
 
 const CARD_R: u8 = 12;
+/// Виділення (біле 15 % на тлі картки) і рамка картки (біле 16 %) суцільними кольорами: без прозорості, щоб рендер у тестах і у вікні збігався.
+const SEL_GRAY: Color32 = Color32::from_rgb(64, 64, 67);
+const CARD_LINE: Color32 = Color32::from_rgb(66, 67, 70);
 const ROW_H: f32 = 34.0;
 
 /// Картка оболонки з відступами зліва й справа (проміжок між картками 6).
 pub(crate) fn card_lr(left: i8, right: i8) -> egui::Frame {
-    egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, Color32::from_white_alpha(41))).corner_radius(CornerRadius::same(CARD_R)).outer_margin(egui::Margin { left, right, top: 0, bottom: 6 }).inner_margin(egui::Margin::ZERO)
+    egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, CARD_LINE)).corner_radius(CornerRadius::same(CARD_R)).outer_margin(egui::Margin { left, right, top: 0, bottom: 6 }).inner_margin(egui::Margin::ZERO)
 }
 
 /// Заокруглення верху картки (всередині рамки: 11).
@@ -44,6 +47,20 @@ fn card_head(ui: &mut egui::Ui, title: &str, sub: Option<&str>, menu: bool) -> (
     (dots, minus)
 }
 
+/// Ліва колонка 306 (картка 300 + проміжок 6): картку малюємо самі, бо рамка панелі egui додає до ширини поля й рамку й обрізає її праворуч.
+fn left_card(ctx: &egui::Context, id: &'static str, add: impl FnOnce(&mut egui::Ui)) {
+    egui::SidePanel::left(id).exact_width(306.0).resizable(false).show_separator_line(false).frame(egui::Frame::new()).show(ctx, |ui| {
+        let full = ui.max_rect();
+        let rect = Rect::from_min_max(pos2(full.left() + 6.0, full.top()), pos2(full.right(), full.bottom() - 6.0));
+        let mut cui = ui.new_child(egui::UiBuilder::new().max_rect(rect));
+        card_lr(0, 0).outer_margin(egui::Margin::ZERO).show(&mut cui, |ui| {
+            ui.set_min_height(rect.height() - 2.0);
+            ui.set_max_height(rect.height() - 2.0);
+            add(ui);
+        });
+    });
+}
+
 impl App {
     // ------------------------------------------------------------------ смужка значків
     pub(crate) fn strip(&mut self, ctx: &egui::Context) {
@@ -65,9 +82,10 @@ impl App {
                     let r = Rect::from_min_size(pos2(x, y), vec2(28.0, 28.0));
                     let resp = ui.interact(r, ui.id().with(("strip", *idx)), Sense::click());
                     let on = *idx == self.rail || (!edit && *idx == 0 && self.rail != 3);
+                    let tint = over_color(SEL_GRAY, accent_solid(), 0.12);
                     resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, format!("Панель: {tip}")));
                     if on {
-                        ui.painter().rect_filled(r, CornerRadius::same(8), Color32::from_white_alpha(38));
+                        ui.painter().rect_filled(r, CornerRadius::same(8), tint);
                     } else if resp.hovered() {
                         ui.painter().rect_filled(r, CornerRadius::same(8), GHOST_HOVER);
                     }
@@ -84,7 +102,7 @@ impl App {
     // ------------------------------------------------------------------ ліва панель
     /// Ліва картка в таблиці: файли (за замовчуванням) чи «Пов’язане»; у «Редагуванні» — рядки (див. `rows_panel`).
     pub(crate) fn left_panel(&mut self, ctx: &egui::Context) {
-        egui::SidePanel::left("tree").exact_width(300.0).resizable(false).show_separator_line(false).frame(card_lr(6, 0)).show(ctx, |ui| {
+        left_card(ctx, "tree", |ui| {
             let (title, sub) = match self.rail {
                 3 => ("Пов’язане", None),
                 _ => ("Файли гри", None),
@@ -154,7 +172,7 @@ impl App {
                     let cur = self.st.file == Some(i);
                     resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, cur, name.clone()));
                     if cur {
-                        ui.painter().rect_filled(rect, CornerRadius::same(8), Color32::from_white_alpha(38));
+                        ui.painter().rect_filled(rect, CornerRadius::same(8), SEL_GRAY);
                     } else if resp.hovered() {
                         ui.painter().rect_filled(rect, CornerRadius::same(8), GHOST_HOVER);
                     }
@@ -210,7 +228,7 @@ impl App {
                 resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, self.right_secs[mi][i], format!("Права панель: {tip}")));
                 let on = self.right_secs[mi][i];
                 if on {
-                    let fill = if edit { over_color(GROUND, accent(), 0.38) } else { Color32::from_white_alpha(38) };
+                    let fill = if edit { over_color(GROUND, accent(), 0.38) } else { SEL_GRAY };
                     ui.painter().rect_filled(r, CornerRadius::same(8), fill);
                     if edit {
                         ui.painter().rect_stroke(r, CornerRadius::same(8), Stroke::new(1.0_f32, accent_ring()), StrokeKind::Inside);
@@ -368,15 +386,17 @@ impl App {
                         }
                     });
                 }
+                // поля й кнопка в окремих рядках: рядок ширший за картку виштовхував би її рамку
+                let w = (ui.available_width() - ui.spacing().item_spacing.x - 16.0) / 2.0;
                 ui.horizontal(|ui| {
-                    ui.add(egui::TextEdit::singleline(&mut self.term_en).hint_text("слово").desired_width(90.0));
-                    ui.add(egui::TextEdit::singleline(&mut self.term_uk).hint_text("переклад").desired_width(90.0));
-                    if plain_button(ui, "Додати термін").clicked() {
-                        self.message = self.st.add_term(&self.term_en, &self.term_uk);
-                        self.term_en.clear();
-                        self.term_uk.clear();
-                    }
+                    ui.add(egui::TextEdit::singleline(&mut self.term_en).hint_text("слово").desired_width(w));
+                    ui.add(egui::TextEdit::singleline(&mut self.term_uk).hint_text("переклад").desired_width(w));
                 });
+                if plain_button(ui, "Додати термін").clicked() {
+                    self.message = self.st.add_term(&self.term_en, &self.term_uk);
+                    self.term_en.clear();
+                    self.term_uk.clear();
+                }
             });
         });
     }
@@ -565,6 +585,10 @@ impl App {
                     ui.painter().text(pos2(hdr.left() + xs[i] + 8.0, hdr.center().y), Align2::LEFT_CENTER, title, ip(12.0), MUTE);
                 }
             }
+            let sep = Color32::from_rgb(0x33, 0x35, 0x3a);
+            for k in [1usize, 2, 4, 5, 6] {
+                ui.painter().vline(hdr.left() + xs[k], (hdr.top() + 6.0)..=(hdr.bottom() - 6.0), Stroke::new(1.0_f32, sep));
+            }
             let total = self.st.visible_len(f);
             let bad_rows: std::collections::HashSet<usize> = self.st.file_issues(f).into_iter().map(|i| i.0).collect();
             let editing = self.cell_edit;
@@ -586,6 +610,10 @@ impl App {
                         ui.painter().rect_filled(body, CornerRadius::same(8), ROW_HOVER);
                     } else if i % 2 == 0 {
                         ui.painter().rect_filled(body, CornerRadius::same(8), ZEBRA);
+                    }
+                    ui.painter().hline(rect.x_range(), rect.bottom() - 1.0, Stroke::new(1.0_f32, LINE_SOFT));
+                    for k in [1usize, 2, 4, 5, 6] {
+                        ui.painter().vline(rect.left() + xs[k], rect.top()..=(rect.bottom() - 1.0), Stroke::new(1.0_f32, LINE_SOFT));
                     }
                     let col = |k: usize, wd: f32| Rect::from_min_size(pos2(rect.left() + xs[k], rect.top()), vec2(wd, ROW_H - 1.0));
                     let mid = rect.top() + 15.0;
@@ -668,7 +696,7 @@ impl App {
     // ------------------------------------------------------------------ «Редагування»
     /// Ліва картка «Рядки»: заголовок із назвою файлу, рядки-картки, внизу сторінки по 50.
     pub(crate) fn rows_panel(&mut self, ctx: &egui::Context) {
-        egui::SidePanel::left("rows").exact_width(300.0).resizable(false).show_separator_line(false).frame(card_lr(6, 0)).show(ctx, |ui| {
+        left_card(ctx, "rows", |ui| {
             let name = self.st.file.and_then(|f| self.st.file_names().get(f).cloned()).map(|n| n.trim_end_matches(".json").to_string()).unwrap_or_default();
             match self.rail {
                 2 => {
@@ -712,7 +740,7 @@ impl App {
                 let on = cur.as_deref() == Some(title.as_str());
                 resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, format!("Сцена {title}")));
                 if on {
-                    ui.painter().rect_filled(rect.shrink2(vec2(6.0, 1.0)), CornerRadius::same(8), Color32::from_white_alpha(38));
+                    ui.painter().rect_filled(rect.shrink2(vec2(6.0, 1.0)), CornerRadius::same(8), SEL_GRAY);
                 } else if resp.hovered() {
                     ui.painter().rect_filled(rect.shrink2(vec2(6.0, 1.0)), CornerRadius::same(8), GHOST_HOVER);
                 }
@@ -750,8 +778,8 @@ impl App {
                 let (src, tgt, st) = self.st.row_view(f, r);
                 resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, sel, format!("{src} — {tgt}")));
                 if sel {
-                    ui.painter().rect_filled(card, CornerRadius::same(8), Color32::from_white_alpha(38));
-                    ui.painter().rect_stroke(card, CornerRadius::same(8), Stroke::new(1.0_f32, Color32::from_white_alpha(41)), StrokeKind::Inside);
+                    ui.painter().rect_filled(card, CornerRadius::same(8), SEL_GRAY);
+                    ui.painter().rect_stroke(card, CornerRadius::same(8), Stroke::new(1.0_f32, CARD_LINE), StrokeKind::Inside);
                 } else if resp.hovered() {
                     ui.painter().rect_filled(card, CornerRadius::same(8), ROW_HOVER);
                 }
@@ -778,6 +806,9 @@ impl App {
         });
         // сторінки по 50 рядків: «‹ 13 / 14 ›»
         let pages = total.div_ceil(50).max(1);
+        if pages <= 1 {
+            return; // як у старому: одну сторінку без перемикача
+        }
         let page = cur_pos.map_or(0, |p| p / 50) + 1;
         let pill_r = Rect::from_center_size(pos2(area.center().x, area.bottom() - 26.0), vec2(122.0, 31.0));
         ui.painter().rect_filled(pill_r, CornerRadius::same(16), BG);
@@ -810,7 +841,9 @@ impl App {
         let (src, _tgt, st) = self.st.row_view(f, r);
         let (sl, tl) = self.st.project.as_ref().map_or(("EN".to_string(), "UK".to_string()), |p| (p.source_lang.to_uppercase(), p.target_lang.to_uppercase()));
         egui::ScrollArea::vertical().id_salt("editc").auto_shrink([false; 2]).show(ui, |ui| {
-            egui::Frame::new().inner_margin(egui::Margin { left: 38, right: 38, top: 16, bottom: 28 }).show(ui, |ui| {
+            // як у старому: колонка не ширша за 716, центрована, поля не менші за 22
+            let side = ((ui.available_width() - 716.0) / 2.0).max(22.0).floor() as i8;
+            egui::Frame::new().inner_margin(egui::Margin { left: side, right: side, top: 16, bottom: 28 }).show(ui, |ui| {
                 ui.spacing_mut().item_spacing.y = 0.0;
                 // шлях і стан (висота 24)
                 let (cr, _) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::hover());
@@ -853,8 +886,8 @@ impl App {
                 ui.add_space(6.0);
                 // Оригінал · EN ───▶ Переклад · UK
                 let (hr, _) = ui.allocate_exact_size(vec2(ui.available_width(), 17.0), Sense::hover());
-                let lg = ui.painter().layout_no_wrap(format!("Оригінал · {sl}"), ip(12.0), MUTE);
-                let rg = ui.painter().layout_no_wrap(format!("Переклад · {tl}"), ip(12.0), MUTE);
+                let lg = ui.painter().layout_no_wrap(format!("Оригінал · {sl}").to_uppercase(), ip(11.5), MUTE);
+                let rg = ui.painter().layout_no_wrap(format!("Переклад · {tl}").to_uppercase(), ip(11.5), MUTE);
                 let (lw, rw) = (lg.size().x, rg.size().x);
                 ui.painter().galley(pos2(hr.left(), hr.center().y - lg.size().y / 2.0), lg, MUTE);
                 ui.painter().galley(pos2(hr.right() - rw, hr.center().y - rg.size().y / 2.0), rg, MUTE);
@@ -863,7 +896,7 @@ impl App {
                 ui.painter().add(egui::Shape::convex_polygon(vec![pos2(x1, hr.center().y - 3.5), pos2(x1 + 7.0, hr.center().y), pos2(x1, hr.center().y + 3.5)], Color32::from_rgb(0x4a, 0x4d, 0x54), Stroke::NONE));
                 ui.add_space(6.0);
                 // поле перекладу: рамка 12, нижня панель 49
-                let frame = egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, Color32::from_white_alpha(41))).corner_radius(CornerRadius::same(CARD_R));
+                let frame = egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, CARD_LINE)).corner_radius(CornerRadius::same(CARD_R));
                 let out = frame.show(ui, |ui| {
                     ui.set_width(ui.available_width());
                     let te = ui.add(egui::TextEdit::multiline(&mut self.draft).desired_rows(5).desired_width(f32::INFINITY).font(ip(15.0)).frame(false).margin(vec2(14.0, 12.0)));

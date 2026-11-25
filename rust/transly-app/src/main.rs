@@ -27,6 +27,7 @@ struct App {
     term_en: String,
     term_uk: String,
     itab: usize,
+    build_win: Option<state::BuildChoice>,
     fill_win: Option<Vec<(transly_core::autofill::Proposal, bool)>>,
     find_win: Option<(String, String, bool, bool)>,
     plugins_win: bool,
@@ -74,7 +75,7 @@ fn source_job(text: &str, marks: &[(usize, usize, usize)]) -> egui::text::Layout
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
     }
 }
 
@@ -153,6 +154,7 @@ impl App {
         self.plugins_window(ctx);
         self.find_window(ctx);
         self.fill_window(ctx);
+        self.build_window(ctx);
         if let Some(msg) = self.st.finish_sync() {
             self.message = msg;
         }
@@ -307,8 +309,8 @@ impl App {
                             };
                         }
                     }
-                    if plain_button(ui, "Зібрати в гру").clicked() {
-                        self.message = self.st.build_into_game(true).unwrap_or_else(|e| e);
+                    if plain_button(ui, "Зібрати в гру…").clicked() {
+                        self.build_win = Some(self.st.build_defaults());
                     }
                     ui.menu_button("Дії", |ui| {
                         let f = self.st.file;
@@ -785,6 +787,46 @@ impl App {
             self.draft_for = None;
         } else if !close && open {
             self.fill_win = Some(list);
+        }
+    }
+
+    fn build_window(&mut self, ctx: &egui::Context) {
+        let Some(mut c) = self.build_win else { return };
+        let mut open = true;
+        let (mut go, mut close) = (false, false);
+        let preview = self.st.build_preview(&c);
+        egui::Window::new("Збірка в гру").open(&mut open).collapsible(false).resizable(false).default_width(420.0).show(ctx, |ui| {
+            ui.checkbox(&mut c.only_approved, "Лише вичитані рядки");
+            ui.add_enabled(!c.only_approved, egui::Checkbox::new(&mut c.include_drafts, "Додати чернетки (щоб перевірити переклад у грі)"));
+            ui.checkbox(&mut c.block_errors, "Рядки з помилкою QA лишати мовою оригіналу");
+            ui.add_space(8.0);
+            match &preview {
+                Ok((inc, skip, blocked)) => {
+                    ui.label(RichText::new(format!("У грі буде рядків: {inc}")).color(TEXT));
+                    ui.label(RichText::new(format!("Поза збіркою: {skip}{}", if *blocked > 0 { format!(" (з них через помилки QA: {blocked})") } else { String::new() })).color(MUTE));
+                }
+                Err(e) => {
+                    ui.label(RichText::new(e).color(BAD));
+                }
+            }
+            ui.label(RichText::new("Файли гри не змінюються безповоротно: копії оригіналів лежать поруч, їх можна повернути.").size(11.0).color(MUTE));
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if primary_button(ui, "Зібрати").clicked() {
+                    go = true;
+                }
+                if plain_button(ui, "Закрити").clicked() {
+                    close = true;
+                }
+            });
+        });
+        if go {
+            self.message = self.st.build_with(&c).unwrap_or_else(|e| e);
+            self.build_win = None;
+        } else if close || !open {
+            self.build_win = None;
+        } else {
+            self.build_win = Some(c);
         }
     }
 

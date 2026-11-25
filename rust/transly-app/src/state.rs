@@ -31,6 +31,14 @@ pub enum RowStatus {
     Approved,
 }
 
+/// Що перекладач обрав у вікні збірки.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BuildChoice {
+    pub only_approved: bool,
+    pub include_drafts: bool,
+    pub block_errors: bool,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct SettingsView {
     pub name: String,
@@ -800,15 +808,31 @@ impl AppState {
         Ok(path.to_string_lossy().to_string())
     }
 
+    /// Параметри збірки за замовчуванням (з налаштувань проєкту).
+    pub fn build_defaults(&self) -> BuildChoice {
+        BuildChoice { only_approved: false, include_drafts: true, block_errors: self.settings_view().is_none_or(|v| v.block_errors) }
+    }
+
+    fn build_result(&self, c: &BuildChoice) -> Result<transly_core::build::BuildResult, String> {
+        let p = self.project.as_ref().ok_or("Проєкт не відкрито")?;
+        let opts = BuildOptions { only_approved: c.only_approved, include_drafts: c.include_drafts && !c.only_approved, block_errors: c.block_errors, qa: self.qa_options() };
+        Ok(build(&self.game, &self.views, p, &opts))
+    }
+
+    /// Скільки рядків потрапить у збірку з такими параметрами: (у грі, поза збіркою, заблоковано помилками QA). Нічого не пишеться.
+    pub fn build_preview(&self, c: &BuildChoice) -> Result<(usize, usize, usize), String> {
+        let r = self.build_result(c)?;
+        Ok((r.included, r.skipped, r.blocked.len()))
+    }
+
     /// Збирає переклад і кладе файли в теку гри (копії оригіналів лишаються поруч). Повертає підсумок.
-    pub fn build_into_game(&mut self, include_drafts: bool) -> Result<String, String> {
-        let (Some(p), Some(dir)) = (&self.project, &self.dir) else { return Err("Проєкт не відкрито".into()) };
-        let qa = self.qa_options();
-        let opts = BuildOptions { only_approved: false, include_drafts, block_errors: true, qa };
-        let res = build(&self.game, &self.views, p, &opts);
+    pub fn build_with(&mut self, c: &BuildChoice) -> Result<String, String> {
+        let res = self.build_result(c)?;
+        let dir = self.dir.as_ref().ok_or("Проєкт не відкрито")?;
         let out: Vec<OutFile> = res.files.iter().map(|f| OutFile { name: f.name.rsplit('/').next().unwrap_or(&f.name).to_string(), content: file_text(f) }).collect();
         let n = apply_data(&self.roots, &dir.to_string_lossy(), &out)?;
-        Ok(format!("Збірка: записано {n} файлів, рядків у грі {}, поза збіркою {}", res.included, res.skipped))
+        let unsupported = if res.unsupported.is_empty() { String::new() } else { format!(", без запису (немає плагіна формату): {}", res.unsupported.len()) };
+        Ok(format!("Збірка: записано {n} файлів, рядків у грі {}, поза збіркою {}{unsupported}", res.included, res.skipped))
     }
 
     /// Повертає оригінальні файли гри з резервної копії.
@@ -839,7 +863,7 @@ mod tests {
         s.open_game(&data).unwrap();
         s.submit(0, 0, "Герой").unwrap();
         let before = std::fs::read_to_string(data.join("Actors.json")).unwrap();
-        let msg = s.build_into_game(true).unwrap();
+        let msg = s.build_with(&s.build_defaults()).unwrap();
         assert!(msg.contains("записано"), "{msg}");
         let built = std::fs::read_to_string(data.join("Actors.json")).unwrap();
         assert!(built.contains("Герой") && !before.contains("Герой"));
@@ -1077,6 +1101,28 @@ menu.quit=Quit game
         assert_eq!(s.row, Some(0), "рядок з перекладом не входить у фільтр");
         s.row = Some(0);
         assert!(!s.step_row(-1), "на початку списку далі нема куди");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn build_choices_change_what_goes_into_the_game() {
+        let base = std::env::temp_dir().join(format!("transly-app-buildopts-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = game(&base);
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        s.edit(0, 0, "Герой");
+        let drafts = BuildChoice { only_approved: false, include_drafts: true, block_errors: true };
+        let no_drafts = BuildChoice { include_drafts: false, ..drafts };
+        let only_appr = BuildChoice { only_approved: true, ..drafts };
+        assert_eq!(s.build_preview(&drafts).unwrap().0, 1);
+        assert_eq!(s.build_preview(&no_drafts).unwrap().0, 0, "чернетки не беруться");
+        s.submit(0, 0, "Герой").unwrap();
+        assert_eq!(s.build_preview(&no_drafts).unwrap().0, 1);
+        assert_eq!(s.build_preview(&only_appr).unwrap().0, 0, "лише вичитані");
+        s.bulk_approve(None);
+        assert_eq!(s.build_preview(&only_appr).unwrap().0, 1);
+        assert!(s.build_with(&only_appr).unwrap().contains("рядків у грі 1"));
         let _ = std::fs::remove_dir_all(&base);
     }
 

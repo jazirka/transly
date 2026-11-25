@@ -136,6 +136,10 @@ struct Visible {
 type QaCache = ((usize, u64), Vec<(usize, String, bool)>);
 
 pub struct AppState {
+    /// Фільтр «Мовець» і «Довжина» (0 усі, 1 далеко від оригіналу, 2 довші, 3 коротші).
+    pub speaker_filter: Option<String>,
+    pub len_filter: u8,
+    speakers_cache: std::cell::RefCell<(u64, usize, bool)>,
     tm_cache: std::cell::RefCell<Option<(u64, TmIndex)>>,
     /// Остання зміна перекладу терміна: за нею пропонуються заміни в рядках.
     pub last_term_change: Option<transly_core::termsync::TermChange>,
@@ -177,7 +181,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![], saved_ms: None, session_start: now_ms(), session_edits: 0 }
+        AppState { speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![], saved_ms: None, session_start: now_ms(), session_edits: 0 }
     }
 }
 
@@ -420,7 +424,7 @@ impl AppState {
     }
 
     fn refresh_visible(&self, f: usize) {
-        let key = (f, Filter::ALL.iter().position(|x| *x == self.filter).unwrap_or(0) as u8, format!("{}\u{1}{}", self.search, self.group_filter.clone().unwrap_or_default()), self.rev);
+        let key = (f, Filter::ALL.iter().position(|x| *x == self.filter).unwrap_or(0) as u8, format!("{}\u{1}{}\u{1}{}\u{1}{}", self.search, self.group_filter.clone().unwrap_or_default(), self.speaker_filter.clone().unwrap_or_default(), self.len_filter), self.rev);
         if self.vis.borrow().key == key {
             return;
         }
@@ -436,6 +440,26 @@ impl AppState {
             let st = self.status_of(f, r);
             if let Some(set) = &in_group {
                 if !self.unit(f, r).is_some_and(|u| set.contains(&u.key)) {
+                    continue;
+                }
+            }
+            if let Some(who) = &self.speaker_filter {
+                if &self.speaker_of_row(f, r) != who {
+                    continue;
+                }
+            }
+            if self.len_filter > 0 {
+                let (src, tgt, _) = self.row_view(f, r);
+                if tgt.is_empty() {
+                    continue;
+                }
+                let dev = transly_core::qa::length_deviation(&src, &tgt);
+                let ok = match self.len_filter {
+                    1 => dev.abs() > 40,
+                    2 => dev > 25,
+                    _ => dev < -25,
+                };
+                if !ok {
                     continue;
                 }
             }
@@ -1648,6 +1672,31 @@ impl AppState {
             Some("locale-json") => "JSON · UTF-8",
             _ => "UTF-8",
         }
+    }
+
+    /// Чи є в файлі рядки з мовцем (тоді в таблиці з'являється колонка «Мовець»). Кеш за зміною даних.
+    pub fn file_has_speakers(&self, f: usize) -> bool {
+        let c = *self.speakers_cache.borrow();
+        if c.0 == self.rev && c.1 == f {
+            return c.2;
+        }
+        let any = (0..self.row_count(f)).any(|r| !self.speaker_of_row(f, r).is_empty());
+        *self.speakers_cache.borrow_mut() = (self.rev, f, any);
+        any
+    }
+
+    /// Мовці файлу для фільтра: (ім'я, скільки рядків), найрозмовніші першими.
+    pub fn file_speakers(&self, f: usize) -> Vec<(String, usize)> {
+        let mut by: indexmap::IndexMap<String, usize> = indexmap::IndexMap::new();
+        for r in 0..self.row_count(f) {
+            let who = self.speaker_of_row(f, r);
+            if !who.is_empty() {
+                *by.entry(who).or_insert(0) += 1;
+            }
+        }
+        let mut v: Vec<(String, usize)> = by.into_iter().collect();
+        v.sort_by_key(|a| std::cmp::Reverse(a.1));
+        v
     }
 
     pub fn key_of(&self, f: usize, r: usize) -> String {

@@ -2199,6 +2199,27 @@ impl App {
                     self.st.filter = *flt;
                 }
             }
+            if self.st.file_has_speakers(f) {
+                let cur = self.st.speaker_filter.clone();
+                egui::ComboBox::from_id_salt("spk-filter").selected_text(cur.clone().map_or("Мовець: усі".to_string(), |c| format!("Мовець: {c}"))).width(150.0).show_ui(&mut fui, |ui| {
+                    if ui.selectable_label(cur.is_none(), "Усі мовці").clicked() {
+                        self.st.speaker_filter = None;
+                    }
+                    for (name, n) in self.st.file_speakers(f) {
+                        if ui.selectable_label(cur.as_deref() == Some(name.as_str()), format!("{name}  ({n})")).clicked() {
+                            self.st.speaker_filter = Some(name);
+                        }
+                    }
+                });
+            }
+            let len_names = ["Довжина: усі", "Далеко від оригіналу", "Довші за оригінал", "Коротші за оригінал"];
+            egui::ComboBox::from_id_salt("len-filter").selected_text(len_names[self.st.len_filter as usize]).width(170.0).show_ui(&mut fui, |ui| {
+                for (i, n) in len_names.iter().enumerate() {
+                    if ui.selectable_label(self.st.len_filter as usize == i, *n).clicked() {
+                        self.st.len_filter = i as u8;
+                    }
+                }
+            });
             if let Some(id) = self.st.group_filter.clone() {
                 let name = self.st.groups_view().into_iter().find(|g| g.id == id).map_or(String::new(), |g| g.name);
                 let r = ui.allocate_rect(egui::Rect::from_min_size(fr.left_top(), vec2(0.0, 0.0)), Sense::hover());
@@ -2609,7 +2630,8 @@ impl App {
         }
         // колонки, як у старому застосунку: №, стан, ключ, мовець, оригінал, переклад, позначки, довжина
         let wide = w > 1000.0;
-        let fixed = [34.0_f32, 30.0, 96.0, 104.0];
+        let has_spk = self.st.file_has_speakers(f);
+        let fixed = [34.0_f32, 30.0, 96.0, if has_spk { 104.0 } else { 0.0 }];
         let tail = [if wide { 128.0_f32 } else { 0.0 }, 68.0];
         let flex = ((w - fixed.iter().sum::<f32>() - tail.iter().sum::<f32>() - 12.0) / 2.0).max(120.0);
         let cols = [fixed[0], fixed[1], fixed[2], fixed[3], flex, flex, tail[0], tail[1]];
@@ -2792,6 +2814,22 @@ mod ui_tests {
         h.get_by_label("ПЕРЕКЛАД");
         h.get_by_label("Пам’ять");
         assert!(h.get_all_by_label("Надіслати").count() >= 1, "кнопка є в інспекторі");
+    }
+
+    #[test]
+    fn the_length_filter_keeps_only_translated_rows_far_from_the_original() {
+        let data = game("lenfilter");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        let f = app.st.file.unwrap_or(0);
+        assert!(!app.st.file_has_speakers(f));
+        let all = app.st.visible_len(f);
+        app.st.edit(f, 0, "Герой, дуже-дуже-дуже довгий переклад короткого слова");
+        app.st.len_filter = 1;
+        let far = app.st.visible_len(f);
+        assert!(far >= 1 && far < all, "лишились лише перекладені рядки з великим відхиленням");
+        app.st.len_filter = 0;
+        assert_eq!(app.st.visible_len(f), all);
     }
 
     #[test]

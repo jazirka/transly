@@ -48,6 +48,8 @@ pub struct SettingsView {
     pub tolerance_pct: f64,
     pub block_errors: bool,
     pub propagate: bool,
+    /// Однакові рядки: `ask` (спитати), `auto` (копіювати самі), `off`.
+    pub link_mode: String,
     pub line_limit: f64,
 }
 
@@ -352,7 +354,8 @@ impl AppState {
         match submit(self.entry(f, r), &u, Stage::Translate, now_ms(), &opts) {
             SubmitResult::Ok(e) => {
                 let e = record_change(self.entry(f, r), &e, "надіслано", &e.target.clone(), &self.who(), now_ms(), None);
-                self.put(f, name, u.key, e);
+                self.put(f, name, u.key.clone(), e);
+                self.after_send_links(f, &u.key);
                 Ok(())
             }
             SubmitResult::Err(m) => Err(m),
@@ -588,6 +591,12 @@ impl AppState {
             tolerance_pct: get("tolerancePct").and_then(|v| v.as_f64()).unwrap_or(25.0),
             block_errors: get("blockErrors").and_then(|v| v.as_bool()).unwrap_or(true),
             propagate: get("propagate").and_then(|v| v.as_bool()).unwrap_or(true),
+            link_mode: match transly_core::links::link_mode_of(Some(&p.settings)) {
+                transly_core::links::LinkMode::Ask => "ask",
+                transly_core::links::LinkMode::Auto => "auto",
+                transly_core::links::LinkMode::Off => "off",
+            }
+            .to_string(),
             line_limit: get("lineLimit").and_then(|v| v.as_f64()).unwrap_or(0.0),
         })
     }
@@ -600,7 +609,8 @@ impl AppState {
         p.settings.insert("who".into(), serde_json::json!(v.who));
         p.settings.insert("tolerancePct".into(), serde_json::json!(v.tolerance_pct));
         p.settings.insert("blockErrors".into(), serde_json::json!(v.block_errors));
-        p.settings.insert("propagate".into(), serde_json::json!(v.propagate));
+        p.settings.insert("propagate".into(), serde_json::json!(v.link_mode != "off"));
+        p.settings.insert("linkMode".into(), serde_json::json!(v.link_mode));
         p.settings.insert("lineLimit".into(), serde_json::json!(v.line_limit));
         p.settings_at = Some(now_ms());
         self.rev += 1;
@@ -1339,6 +1349,58 @@ impl AppState {
         self.set_project_branch(r)
     }
 
+    pub fn link_mode(&self) -> transly_core::links::LinkMode {
+        transly_core::links::link_mode_of(self.project.as_ref().map(|p| &p.settings))
+    }
+
+    /// Після надсилання: за режимом проєкту двійники рядка заповнюються (`ask`: лише порожні; `auto`: і старіші) як чернетки.
+    fn after_send_links(&mut self, f: usize, key: &str) {
+        let mode = self.link_mode();
+        if mode == transly_core::links::LinkMode::Off {
+            return;
+        }
+        let Some(p) = self.project.as_ref() else { return };
+        let file = self.views[f].name.clone();
+        let idx = transly_core::links::LinkIndex::new(&self.views);
+        let sync = transly_core::links::after_send(p, &idx, mode, &file, key, now_ms());
+        if sync.changes.is_empty() {
+            return;
+        }
+        let who = self.who();
+        let mut rand = Self::seeded_rand();
+        let Some(p) = self.project.as_mut() else { return };
+        let id = commit_rows(&mut p.files, &sync.changes, "links", &who, now_ms(), None, &mut rand);
+        self.undo.record(&id);
+        self.last_note = format!("Однакові рядки: заповнено {}{}", sync.filled + sync.updated, if sync.pending > 0 { format!(", чекає вашого рішення {}", sync.pending) } else { String::new() });
+        self.rev += 1;
+        self.dirty = true;
+    }
+
+    /// Головний рядок гнізда і чи цей рядок від'єднаний: (цей рядок головний, від'єднаний).
+    pub fn link_flags(&self, f: usize, r: usize) -> Option<(bool, bool)> {
+        let p = self.project.as_ref()?;
+        let key = self.unit(f, r)?.key.clone();
+        let idx = transly_core::links::LinkIndex::new(&self.views);
+        let v = transly_core::links::link_view(p, &idx, &self.views[f].name, &key)?;
+        Some((v.main == Some(v.self_i), v.rows[v.self_i].state == transly_core::links::LinkState::Unlinked))
+    }
+
+    /// 0 — зробити головним, 1 — зняти головного, 2 — не йти за двійниками, 3 — знову йти.
+    pub fn link_action(&mut self, f: usize, r: usize, what: u8) {
+        let Some(u) = self.unit(f, r).cloned() else { return };
+        let file = self.views[f].name.clone();
+        let now = now_ms();
+        let Some(p) = self.project.as_mut() else { return };
+        match what {
+            0 => transly_core::links::set_main(p, &file, &u.key, &u.source, now),
+            1 => transly_core::links::clear_main(p, &u.source, now),
+            2 => transly_core::links::unlink_row(p, &file, &u.key, &u.source, now),
+            _ => transly_core::links::relink_row(p, &file, &u.key, now),
+        }
+        self.rev += 1;
+        self.dirty = true;
+    }
+
     pub fn key_of(&self, f: usize, r: usize) -> String {
         self.unit(f, r).map_or(String::new(), |u| u.key.clone())
     }
@@ -1908,6 +1970,9 @@ menu.quit=Quit game
         let f = s.file_names().iter().position(|n| n == "Map001.json").unwrap();
         let rows: Vec<usize> = (0..s.row_count(f)).filter(|r| s.source_of(f, *r) == "Welcome to the village, traveler").collect();
         assert_eq!(rows.len(), 3);
+        let mut v = s.settings_view().unwrap();
+        v.link_mode = "off".into();
+        s.apply_settings(&v);
         assert_eq!(s.link_info(f, rows[0]), Some((2, 0, 0, 0)), "еталона ще нема");
         s.edit(f, rows[0], "Ласкаво просимо, мандрівнику");
         s.submit(f, rows[0], "Ласкаво просимо, мандрівнику").unwrap();
@@ -2034,6 +2099,42 @@ menu.quit=Quit game
         println!("після таблиць: {:.0} МБ", rss_mb());
         s.save_project().unwrap();
         println!("після збереження: {:.0} МБ", rss_mb());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn link_modes_main_and_unlink() {
+        let base = std::env::temp_dir().join(format!("transly-app-linkmodes-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = base.join("MyGame").join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        let cmd = |code: i64, p: &str| format!(r#"{{"code":{code},"indent":0,"parameters":[{p}]}}"#);
+        let page = |t: &str| format!(r#"{{"conditions":{{}},"list":[{},{},{}],"trigger":0}}"#, cmd(101, r#""",0,0,2"#), cmd(401, &format!("\"{t}\"")), cmd(0, ""));
+        let ev = |id: i64| format!(r#"{{"id":{id},"name":"EV{id}","x":1,"y":1,"pages":[{}]}}"#, page("Welcome to the village, traveler"));
+        std::fs::write(data.join("Map001.json"), format!(r#"{{"displayName":"T","events":[null,{},{},{}]}}"#, ev(1), ev(2), ev(3))).unwrap();
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        let f = s.file_names().iter().position(|n| n == "Map001.json").unwrap();
+        let rows: Vec<usize> = (0..s.row_count(f)).filter(|r| s.source_of(f, *r) == "Welcome to the village, traveler").collect();
+        // режим «спитати»: після надсилання порожні двійники заповнюються самі
+        assert_eq!(s.link_mode(), transly_core::links::LinkMode::Ask);
+        s.link_action(f, rows[2], 2);
+        assert_eq!(s.link_flags(f, rows[2]), Some((false, true)));
+        s.submit(f, rows[0], "Ласкаво просимо").unwrap();
+        assert_eq!(s.target_of(f, rows[1]), "Ласкаво просимо");
+        assert_eq!(s.target_of(f, rows[2]), "", "від'єднаний рядок не чіпається");
+        s.link_action(f, rows[2], 3);
+        s.link_action(f, rows[1], 0);
+        assert_eq!(s.link_flags(f, rows[1]), Some((true, false)));
+        s.link_action(f, rows[1], 1);
+        assert_eq!(s.link_flags(f, rows[1]), Some((false, false)));
+        // режим «вимкнено»
+        let mut v = s.settings_view().unwrap();
+        v.link_mode = "off".into();
+        s.apply_settings(&v);
+        assert_eq!(s.link_mode(), transly_core::links::LinkMode::Off);
+        s.submit(f, rows[2], "Інакше").unwrap();
+        assert_eq!(s.target_of(f, rows[0]), "Ласкаво просимо");
         let _ = std::fs::remove_dir_all(&base);
     }
 

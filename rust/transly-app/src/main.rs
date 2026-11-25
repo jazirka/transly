@@ -566,8 +566,12 @@ impl App {
                 ui.label("Помилки QA блокують надсилання");
                 ui.checkbox(&mut v.block_errors, "");
                 ui.end_row();
-                ui.label("Однакові рядки перекладати разом");
-                ui.checkbox(&mut v.propagate, "");
+                ui.label("Однакові рядки");
+                ui.horizontal(|ui| {
+                    ui.selectable_value(&mut v.link_mode, "ask".to_string(), "після надсилання заповнювати порожні");
+                    ui.selectable_value(&mut v.link_mode, "auto".to_string(), "оновлювати всі самі");
+                    ui.selectable_value(&mut v.link_mode, "off".to_string(), "не чіпати");
+                });
                 ui.end_row();
             });
             ui.add_space(10.0);
@@ -1432,6 +1436,24 @@ impl App {
             ui.add_space(4.0);
             label_caps(ui, "Однакові рядки");
             ui.label(RichText::new(format!("Ще {others} з таким самим оригіналом: порожніх {fills}, старіших {updates}, змінених вручну {edited}")).size(11.5).color(MUTE));
+            if let Some((is_main, unlinked)) = self.st.link_flags(f, r) {
+                ui.horizontal(|ui| {
+                    if is_main {
+                        if plain_button(ui, "Зняти головного").clicked() {
+                            self.st.link_action(f, r, 1);
+                        }
+                    } else if plain_button(ui, "Зробити головним").clicked() {
+                        self.st.link_action(f, r, 0);
+                    }
+                    if unlinked {
+                        if plain_button(ui, "Знову йти за копіями").clicked() {
+                            self.st.link_action(f, r, 3);
+                        }
+                    } else if plain_button(ui, "Не йти за копіями").clicked() {
+                        self.st.link_action(f, r, 2);
+                    }
+                });
+            }
             if fills + updates + edited > 0 {
                 ui.horizontal(|ui| {
                     if fills + updates > 0 && plain_button(ui, "Заповнити копії").clicked() {

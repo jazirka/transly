@@ -27,6 +27,7 @@ struct App {
     term_en: String,
     term_uk: String,
     itab: usize,
+    fill_win: Option<Vec<(transly_core::autofill::Proposal, bool)>>,
     find_win: Option<(String, String, bool, bool)>,
     plugins_win: bool,
     sync_win: Option<(transly_platform::github::GithubSettings, String)>,
@@ -73,7 +74,7 @@ fn source_job(text: &str, marks: &[(usize, usize, usize)]) -> egui::text::Layout
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
     }
 }
 
@@ -142,6 +143,7 @@ impl eframe::App for App {
         self.sync_window(ctx);
         self.plugins_window(ctx);
         self.find_window(ctx);
+        self.fill_window(ctx);
         if let Some(msg) = self.st.finish_sync() {
             self.message = msg;
         }
@@ -237,6 +239,10 @@ impl App {
                         if ui.button("Повторити скасоване").clicked() {
                             self.message = self.st.redo_last();
                             self.draft_for = None;
+                            ui.close_menu();
+                        }
+                        if ui.button("Автозаповнення…").clicked() {
+                            self.fill_win = Some(self.st.autofill_proposals(500).into_iter().map(|p| (p, true)).collect());
                             ui.close_menu();
                         }
                         if ui.button("Пошук і заміна…").clicked() {
@@ -636,6 +642,56 @@ impl App {
             self.find_win = None;
         } else {
             self.find_win = Some((find, repl, case, word));
+        }
+    }
+
+    fn fill_window(&mut self, ctx: &egui::Context) {
+        let Some(mut list) = self.fill_win.take() else { return };
+        let mut open = true;
+        let (mut apply, mut close) = (false, false);
+        egui::Window::new("Автозаповнення").open(&mut open).collapsible(false).default_width(640.0).default_height(460.0).show(ctx, |ui| {
+            if list.is_empty() {
+                ui.label(RichText::new("Немає чого заповнювати: усі короткі рядки або вже перекладені, або мають невідомі слова.").color(MUTE));
+            } else {
+                ui.label(RichText::new("Рядки, де кожне слово вже відоме з ваших перекладів і глосарія. Знімете позначку з зайвих.").color(MUTE));
+                ui.horizontal(|ui| {
+                    if plain_button(ui, "Позначити всі").clicked() {
+                        list.iter_mut().for_each(|x| x.1 = true);
+                    }
+                    if plain_button(ui, "Зняти всі").clicked() {
+                        list.iter_mut().for_each(|x| x.1 = false);
+                    }
+                });
+                egui::ScrollArea::vertical().max_height(340.0).show(ui, |ui| {
+                    for (p, on) in list.iter_mut() {
+                        ui.horizontal(|ui| {
+                            ui.checkbox(on, "");
+                            ui.vertical(|ui| {
+                                ui.label(RichText::new(&p.source).color(SRC_TEXT));
+                                ui.label(RichText::new(&p.target).color(TEXT));
+                            });
+                        });
+                        ui.separator();
+                    }
+                });
+            }
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                let n = list.iter().filter(|x| x.1).count();
+                if ui.add_enabled(n > 0, egui::Button::new(RichText::new(format!("Записати чернетками ({n})")).color(Color32::WHITE)).fill(ACCENT).min_size(vec2(0.0, 26.0))).clicked() {
+                    apply = true;
+                }
+                if plain_button(ui, "Закрити").clicked() {
+                    close = true;
+                }
+            });
+        });
+        if apply {
+            let picked: Vec<_> = list.iter().filter(|x| x.1).map(|x| x.0.clone()).collect();
+            self.message = self.st.apply_autofill(&picked);
+            self.draft_for = None;
+        } else if !close && open {
+            self.fill_win = Some(list);
         }
     }
 

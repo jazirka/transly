@@ -710,6 +710,46 @@ impl AppState {
         transly_core::journal::undo_report(&r)
     }
 
+    /// Пропозиції автозаповнення: неперекладені короткі рядки, чиї слова вже відомі з перекладених (і з глосарія).
+    pub fn autofill_proposals(&self, limit: usize) -> Vec<transly_core::autofill::Proposal> {
+        let Some(p) = self.project.as_ref() else { return vec![] };
+        // вчаться й на чернетках: пропозиції все одно переглядає сам перекладач
+        let opts = transly_core::autofill::FillOpts { drafts: true };
+        let dict = transly_core::autofill::learn_words(&self.views, p, opts);
+        transly_core::autofill::proposals(&self.views, p, Some(&dict), limit, opts)
+    }
+
+    /// Записує обрані пропозиції чернетками однією дією журналу.
+    pub fn apply_autofill(&mut self, picked: &[transly_core::autofill::Proposal]) -> String {
+        let now = now_ms();
+        let mut changes = Vec::new();
+        {
+            let Some(p) = self.project.as_ref() else { return "Проєкт не відкрито".into() };
+            for pr in picked {
+                let Some(v) = self.views.iter().find(|v| v.name == pr.file) else { continue };
+                let Some(u) = v.units.iter().find(|u| u.key == pr.key) else { continue };
+                let prev = p.files.get(&pr.file).and_then(|m| m.get(&pr.key));
+                // чужого перекладу не перезаписуємо
+                if prev.is_some_and(|e| !e.target.trim().is_empty()) {
+                    continue;
+                }
+                let next = edit(prev, u, &pr.target, Stage::Translate, now);
+                changes.push(transly_core::journal::RowChange { file: pr.file.clone(), key: pr.key.clone(), text: pr.target.clone(), next, what: None });
+            }
+        }
+        if changes.is_empty() {
+            return "Нічого не записано".into();
+        }
+        let n = changes.len();
+        let who = self.who();
+        let p = self.project.as_mut().expect("проєкт відкрито");
+        let id = commit_rows(&mut p.files, &changes, "autofill", &who, now, None, &mut Self::seeded_rand());
+        self.undo.record(&id);
+        self.rev += 1;
+        self.dirty = true;
+        format!("Автозаповнено рядків: {n} (чернетки)")
+    }
+
     pub fn key_of(&self, f: usize, r: usize) -> String {
         self.unit(f, r).map_or(String::new(), |u| u.key.clone())
     }
@@ -973,6 +1013,31 @@ menu.quit=Quit game
         assert!(s.redo_last().starts_with("Повторено"));
         assert_eq!(s.progress().approved, 2);
         assert_eq!(s.redo_last(), "Немає що повторювати");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn autofill_fills_short_lines_from_known_words() {
+        let base = std::env::temp_dir().join(format!("transly-app-fill-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = base.join("MyGame").join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        let row = |i: usize, n: &str| format!(r#"{{"id":{i},"name":"{n}","nickname":"","profile":"","note":""}}"#);
+        std::fs::write(data.join("Actors.json"), format!("[null,{},{},{},{}]", row(1, "Red"), row(2, "Blue"), row(3, "Red Blue"), row(4, "Blue Red"))).unwrap();
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        let at = |s: &AppState, name: &str| (0..s.row_count(0)).find(|r| s.source_of(0, *r) == name).unwrap();
+        let (red, blue) = (at(&s, "Red"), at(&s, "Blue"));
+        s.edit(0, red, "Червоний");
+        s.edit(0, blue, "Синій");
+        let props = s.autofill_proposals(100);
+        assert!(props.iter().any(|p| p.source == "Red Blue" && p.target.to_lowercase().contains("червон") && p.target.to_lowercase().contains("син")), "{props:?}");
+        let n = s.apply_autofill(&props);
+        assert!(n.starts_with("Автозаповнено"), "{n}");
+        let rb = at(&s, "Red Blue");
+        assert!(!s.target_of(0, rb).is_empty());
+        assert!(s.undo_last().starts_with("Скасовано"));
+        assert!(s.target_of(0, rb).is_empty());
         let _ = std::fs::remove_dir_all(&base);
     }
 

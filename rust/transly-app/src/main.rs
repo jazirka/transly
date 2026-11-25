@@ -224,7 +224,7 @@ fn game_job(text: &str, size: f32, actor_name: &dyn Fn(usize) -> Option<String>)
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [true, true, false]], comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), token: String::new() }
     }
 }
 
@@ -553,6 +553,10 @@ impl App {
                     }
                     let resp = icons::button(ui, "menu", "Дії: масові дії, скасування, автозаповнення, пошук і заміна", false, MUTE);
                     pop(ui, &resp, "actpop", |ui| self.menu_actions(ui));
+                    // сповіщення: як у старому дзвоник між «Запустити» і «Дії»; поки що заглушка
+                    if icons::button(ui, "bell", "Сповіщення: що потребує уваги й що змінили інші", false, MUTE).clicked() {
+                        self.message = "Сповіщення: розділ у розробці".into();
+                    }
                     ui.add_enabled_ui(can, |ui| {
                         if icons::button(ui, "play", "Запустити (виконати вибране зліва)", false, OK).clicked() {
                             self.run_selected();
@@ -3077,5 +3081,55 @@ mod ui_tests {
         h.set_size(egui::vec2(1360.0, 800.0));
         h.run();
         h.render().unwrap().save(dir_out.join("ref-table.png")).unwrap();
+    }
+
+    /// Знімки для порівняння з веб-версією на спільних даних: `TRANSLY_FIXTURE=<тека з ParityGame і project.json> TRANSLY_SHOTS=<тека> cargo test -p transly-app parity_shots -- --ignored`.
+    #[test]
+    #[ignore]
+    fn parity_shots() {
+        let (Some(fix), Some(out)) = (std::env::var_os("TRANSLY_FIXTURE").map(std::path::PathBuf::from), std::env::var_os("TRANSLY_SHOTS").map(std::path::PathBuf::from)) else { return };
+        std::fs::create_dir_all(&out).unwrap();
+        let mut app = App::default();
+        app.st.open_game(&fix.join("ParityGame").join("data")).unwrap();
+        app.st.open_project_file(&fix.join("project.json")).unwrap();
+        let names = app.st.file_names();
+        let actors = names.iter().position(|n| n.starts_with("Actors")).unwrap_or(0);
+        let enemies = names.iter().position(|n| n.starts_with("Enemies")).unwrap_or(0);
+        let map = names.iter().position(|n| n.starts_with("Map001")).unwrap_or(0);
+        app.st.file = Some(actors);
+        let mut h = Harness::builder().with_size(egui::vec2(1360.0, 800.0)).build_state(|ctx, app: &mut App| {
+            theme::apply(ctx);
+            app.frame(ctx);
+        }, app);
+        let mut shot = |h: &mut Harness<'static, App>, n: &str| {
+            h.run();
+            h.render().unwrap().save(out.join(format!("{n}.png"))).unwrap();
+        };
+        shot(&mut h, "01-table-nosel");
+        h.state_mut().st.row = Some(1);
+        shot(&mut h, "02-table-row");
+        h.state_mut().st.file = Some(enemies);
+        h.state_mut().st.row = Some(0);
+        shot(&mut h, "03-table-enemies");
+        h.state_mut().checked = (enemies, [2usize].into_iter().collect());
+        shot(&mut h, "04-table-checked");
+        h.state_mut().checked = (enemies, Default::default());
+        h.state_mut().focus = true;
+        h.state_mut().rail = 1;
+        shot(&mut h, "05-edit");
+        h.state_mut().rail = 2;
+        shot(&mut h, "06-edit-scenes");
+        h.state_mut().rail = 3;
+        shot(&mut h, "07-edit-related");
+        h.state_mut().right_secs = [[true, false, false]; 2];
+        shot(&mut h, "08-right-activity");
+        h.state_mut().right_secs = [[false, false, true]; 2];
+        shot(&mut h, "09-right-comments");
+        h.state_mut().right_secs = [[false, true, false]; 2];
+        h.state_mut().focus = false;
+        h.state_mut().st.file = Some(map);
+        h.state_mut().st.row = Some(0);
+        h.state_mut().scene_mode = true;
+        shot(&mut h, "10-scene");
     }
 }

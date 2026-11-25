@@ -687,7 +687,9 @@ impl App {
             if cr.hovered() {
                 ui.painter().rect_filled(cx, CornerRadius::same(R1), GHOST_HOVER);
             }
-            icons::paint(ui, Rect::from_center_size(cx.center(), vec2(11.0, 11.0)), "close", if on || cr.hovered() { TEXT } else { MUTE });
+            if on || resp.hovered() || cr.hovered() {
+                icons::paint(ui, Rect::from_center_size(cx.center(), vec2(11.0, 11.0)), "close", if on || cr.hovered() { TEXT } else { MUTE });
+            }
             if cr.clicked() {
                 close = Some(t);
             } else if resp.clicked() {
@@ -1202,54 +1204,71 @@ impl App {
             return;
         }
         ui.add_space(14.0);
-        ui.label(RichText::new("ВНЕСКИ").font(ip(11.5)).color(MUTE));
-        ui.add_space(6.0);
         let mut act: Option<(u8, String)> = None;
-        for (v, t) in &list {
-            egui::Frame::new().fill(if v.current { PANEL2 } else { BG }).stroke(Stroke::new(1.0_f32, if v.approved { OK } else { LINE })).corner_radius(CornerRadius::same(8)).inner_margin(egui::Margin::symmetric(12, 9)).show(ui, |ui| {
-                ui.set_width(ui.available_width());
-                ui.spacing_mut().item_spacing.y = 6.0;
-                let (hd, _) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::hover());
-                let mut x = hd.left();
-                let who = if v.who.is_empty() { "—".to_string() } else { v.who.clone() };
-                let g = ui.painter().layout_no_wrap(who, ip(12.0), VIOLET);
-                let w = g.size().x;
-                ui.painter().galley(pos2(x, hd.center().y - g.size().y / 2.0), g, VIOLET);
-                x += w + 8.0;
-                if v.current {
-                    ui.painter().text(pos2(x, hd.center().y), Align2::LEFT_CENTER, if v.approved { "у рядку · вичитано" } else { "у рядку" }, ip(11.5), if v.approved { OK } else { MUTE });
+        // картка, як у старому: заголовок «ВНЕСКИ N» і рядки з аватаром, іменем, датою, позначкою й кнопками
+        egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, CARD_LINE)).corner_radius(CornerRadius::same(CARD_R)).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.spacing_mut().item_spacing.y = 0.0;
+            card_head(ui, "Внески", Some(&list.len().to_string()));
+            let n = list.len();
+            for (i, (v, t)) in list.iter().enumerate() {
+                let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), 66.0), Sense::hover());
+                if i + 1 < n {
+                    ui.painter().hline(row.x_range(), row.bottom(), Stroke::new(1.0_f32, LINE));
                 }
-                // кнопки справа: кошик, галочка, «−», «+»
-                let mut rx = hd.right();
+                // аватар: колір від імені
+                let who = if v.who.is_empty() { "Хтось".to_string() } else { v.who.clone() };
+                let col = [VIOLET, INFO, OK, WARN][who.bytes().fold(0usize, |a, b| a.wrapping_mul(31).wrapping_add(b as usize)) % 4];
+                let c = pos2(row.left() + 26.0, row.top() + 24.0);
+                ui.painter().circle_filled(c, 12.0, col);
+                ui.painter().text(c, Align2::CENTER_CENTER, who.chars().next().map(|ch| ch.to_uppercase().to_string()).unwrap_or_default(), ip(11.5), BG);
+                // ім'я, дата, позначка
+                let mut x = row.left() + 46.0;
+                let g = ui.painter().layout_no_wrap(who.clone(), ip(12.5), TEXT);
+                let w = g.size().x;
+                ui.painter().galley(pos2(x, row.top() + 24.0 - g.size().y / 2.0), g, TEXT);
+                x += w + 8.0;
+                let when = chrono::DateTime::from_timestamp_millis(v.at).map(|d| d.with_timezone(&chrono::Local).format("%d.%m, %H:%M").to_string()).unwrap_or_default();
+                let g = ui.painter().layout_no_wrap(when, ip(12.0), MUTE);
+                let w = g.size().x;
+                ui.painter().galley(pos2(x, row.top() + 24.0 - g.size().y / 2.0), g, MUTE);
+                x += w + 8.0;
+                let tag = if v.current && v.approved { Some(("вичитано", OK)) } else if v.current { Some(("у рядку", accent_text())) } else if v.approved { Some(("вичитано", OK)) } else { None };
+                if let Some((label, color)) = tag {
+                    let g = ui.painter().layout_no_wrap(label.to_string(), ip(11.5), color);
+                    let pill = Rect::from_min_size(pos2(x, row.top() + 24.0 - 10.0), vec2(g.size().x + 14.0, 20.0));
+                    ui.painter().rect(pill, CornerRadius::same(7), over_color(BG, color, 0.12), Stroke::new(1.0_f32, over_color(BG, color, 0.55)), egui::StrokeKind::Inside);
+                    ui.painter().galley(pos2(pill.left() + 7.0, pill.center().y - g.size().y / 2.0), g, color);
+                }
+                ui.painter().text(pos2(row.left() + 46.0, row.top() + 48.0), Align2::LEFT_CENTER, &v.text, ip(13.5), TEXT);
+                // кнопки справа: кошик, галочка, «−», «+» (28 px, рамка)
+                let mut rx = row.right() - 14.0;
                 let id = v.id.clone();
                 let mut btn = |ui: &mut egui::Ui, w: f32, label: &str, tip: &str, on: bool, color: Color32, kind: u8| {
-                    let rect = Rect::from_min_size(pos2(rx - w, hd.top()), vec2(w, 22.0));
-                    rx -= w + 4.0;
+                    let rect = Rect::from_min_size(pos2(rx - w, row.top() + 10.0), vec2(w, 28.0));
+                    rx -= w + 6.0;
                     let resp = ui.interact(rect, ui.id().with(("var", &id, kind)), Sense::click());
                     resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("{tip}: {}", v.text)));
-                    ui.painter().rect_filled(rect, CornerRadius::same(8), if on { over_color(BG, color, 0.30) } else if resp.hovered() { BTN_HOVER } else { BTN });
+                    let fill = if on { over_color(BG, color, 0.30) } else if resp.hovered() { BTN_HOVER } else { BTN };
+                    ui.painter().rect(rect, CornerRadius::same(8), fill, Stroke::new(1.0_f32, if on { over_color(BG, color, 0.7) } else { LINE }), egui::StrokeKind::Inside);
                     let ink = if on { color } else { TEXT };
                     match label {
-                        "✓" => icons::paint(ui, Rect::from_center_size(rect.center(), vec2(13.0, 13.0)), "check", ink),
-                        "x" => icons::paint(ui, Rect::from_center_size(rect.center(), vec2(13.0, 13.0)), "trash", ink),
+                        "✓" => icons::paint(ui, Rect::from_center_size(rect.center(), vec2(14.0, 14.0)), "check", ink),
+                        "x" => icons::paint(ui, Rect::from_center_size(rect.center(), vec2(14.0, 14.0)), "trash", if v.current { MUTE } else { ink }),
                         _ => {
-                            ui.painter().text(rect.center(), Align2::CENTER_CENTER, label, ip(11.5), ink);
+                            ui.painter().text(rect.center(), Align2::CENTER_CENTER, label, ip(12.0), ink);
                         }
                     }
                     if resp.on_hover_text(tip).clicked() {
                         act = Some((kind, id.clone()));
                     }
                 };
-                if !v.current {
-                    btn(ui, 24.0, "x", "Зняти внесок із картки", false, MUTE, 3);
-                }
-                btn(ui, 24.0, "✓", if v.approved { "Вичитано: повернути на доопрацювання" } else { "Затвердити: переклад іде в рядок, рядок вичитано" }, v.approved, OK, 2);
-                btn(ui, 38.0, &format!("-{}", t.down), "Проти", t.mine == -1, BAD, 1);
-                btn(ui, 38.0, &format!("+{}", t.up), "За", t.mine == 1, OK, 0);
-                ui.label(RichText::new(&v.text).font(ip(13.5)).color(TEXT));
-            });
-            ui.add_space(6.0);
-        }
+                btn(ui, 28.0, "x", "Зняти внесок із картки", false, MUTE, 3);
+                btn(ui, 28.0, "✓", if v.approved { "Вичитано: повернути на доопрацювання" } else { "Затвердити: переклад іде в рядок, рядок вичитано" }, v.approved, OK, 2);
+                btn(ui, 46.0, &format!("\u{2212} {}", t.down), "Проти", t.mine == -1, BAD, 1);
+                btn(ui, 46.0, &format!("+ {}", t.up), "За", t.mine == 1, OK, 0);
+            }
+        });
         match act {
             Some((0, id)) => self.st.vote_variant(f, r, &id, 1),
             Some((1, id)) => self.st.vote_variant(f, r, &id, -1),
@@ -1356,7 +1375,7 @@ impl App {
                     let (n, o) = (self.draft.chars().count(), src.chars().count());
                     let cx = bar.right() - 64.0;
                     let warn = o > 0 && n as f32 > o as f32 * 1.25;
-                    ui.painter().text(pos2(cx, bar.center().y - 8.0), Align2::CENTER_CENTER, n.to_string(), mp(13.0), if warn { WARN } else { TEXT });
+                    ui.painter().text(pos2(cx, bar.center().y - 8.0), Align2::CENTER_CENTER, n.to_string(), mp(13.0), if warn { WARN } else if n > 0 { OK } else { TEXT });
                     ui.painter().hline((cx - 9.0)..=(cx + 9.0), bar.center().y, Stroke::new(1.0_f32, MUTE));
                     ui.painter().text(pos2(cx, bar.center().y + 8.0), Align2::CENTER_CENTER, o.to_string(), mp(12.0), MUTE);
                     let sr = Rect::from_center_size(pos2(bar.right() - 28.0, bar.center().y), vec2(36.0, 30.0));

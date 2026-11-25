@@ -1799,5 +1799,12 @@ mod ui_tests {
         h.state_mut().focus = true;
         h.run();
         h.render().unwrap().save(dir.join("focus.png")).unwrap();
+        h.state_mut().focus = false;
+        h.state_mut().itab = 2;
+        h.state_mut().qar_win = true;
+        h.state_mut().wrap_win = Some((h.state().st.wrap_settings(), "Мандрівник дістався перекладацького містечка наприкінці осені, і там на нього чекав старий друг.".into(), false));
+        h.state_mut().groups_win = Some(String::new());
+        h.run();
+        h.render().unwrap().save(dir.join("windows.png")).unwrap();
     }
 }

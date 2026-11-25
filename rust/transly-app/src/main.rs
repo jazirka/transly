@@ -112,7 +112,7 @@ fn source_job_sized(text: &str, marks: &[(usize, usize, usize)], size: f32) -> e
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, comment: String::new(), token: String::new() }
     }
 }
 
@@ -1813,7 +1813,7 @@ impl App {
     }
 
     fn tree(&mut self, ctx: &egui::Context) {
-        egui::SidePanel::left("tree").exact_width(258.0).resizable(false).show_separator_line(false).frame(card()).show(ctx, |ui| {
+        egui::SidePanel::left("tree").exact_width(321.0).resizable(false).show_separator_line(false).frame(card()).show(ctx, |ui| {
             let (h, _) = ui.allocate_exact_size(vec2(ui.available_width(), 28.0), Sense::hover());
             ui.painter().text(h.left_center() + vec2(10.0, 0.0), Align2::LEFT_CENTER, ["ФАЙЛИ ГРИ", "РЯДКИ", "СЦЕНИ", "ПОВ’ЯЗАНЕ"][self.rail], FontId::proportional(11.0), MUTE);
             ui.painter().hline(h.x_range(), h.bottom(), Stroke::new(1.0_f32, LINE));
@@ -1903,7 +1903,7 @@ impl App {
     }
 
     fn inspector(&mut self, ctx: &egui::Context) {
-        let width = if self.focus { (ctx.screen_rect().width() - 40.0 - 330.0).max(380.0) } else { 380.0 };
+        let width = if self.focus { (ctx.screen_rect().width() - 40.0 - 330.0).max(380.0) } else { 356.0 };
         egui::SidePanel::right("insp").exact_width(width).resizable(false).show_separator_line(false).frame(card()).show(ctx, |ui| {
             let (tabs, _) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::hover());
             ui.painter().hline(tabs.x_range(), tabs.bottom(), Stroke::new(1.0_f32, LINE));
@@ -2967,5 +2967,12 @@ mod ui_tests {
         }, app);
         h.run();
         h.render().unwrap().save(dir_out.join("ref-edit.png")).unwrap();
+        // таблиця при масштабі 1,0 (1360×800, як макет у CSS-пікселях)
+        h.state_mut().focus = false;
+        h.state_mut().rail = 0;
+        h.state_mut().st.row = Some(6);
+        h.set_size(egui::vec2(1360.0, 800.0));
+        h.run();
+        h.render().unwrap().save(dir_out.join("ref-table.png")).unwrap();
     }
 }

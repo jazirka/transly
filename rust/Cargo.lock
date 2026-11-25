@@ -644,6 +644,12 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
 name = "base64"
+version = "0.21.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
+
+[[package]]
+name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
@@ -1443,6 +1449,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui_extras"
+version = "0.31.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "624659a2e972a46f4d5f646557906c55f1cd5a0836eddbe610fdf1afba1b4226"
+dependencies = [
+ "ahash",
+ "egui",
+ "enum-map",
+ "log",
+ "profiling",
+ "resvg 0.37.0",
+]
+
+[[package]]
 name = "egui_glow"
 version = "0.31.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1496,6 +1516,27 @@ name = "endi"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "66b7e2430c6dff6a955451e2cfc438f09cea1965a9d6f87f7e3b90decc014099"
+
+[[package]]
+name = "enum-map"
+version = "2.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6866f3bfdf8207509a033af1a75a7b08abda06bbaaeae6669323fd5a097df2e9"
+dependencies = [
+ "enum-map-derive",
+ "serde",
+]
+
+[[package]]
+name = "enum-map-derive"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f282cfdfe92516eb26c2af8589c274c7c17681f5ecc03c18255fe741c6aa64eb"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
 
 [[package]]
 name = "enumflags2"
@@ -1753,7 +1794,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "parlance",
  "read-fonts",
- "roxmltree",
+ "roxmltree 0.21.2",
  "smallvec",
  "windows 0.62.2",
  "windows-core 0.62.2",
@@ -2358,7 +2399,7 @@ dependencies = [
  "icu_provider",
  "objc2 0.6.5",
  "pulldown-cmark",
- "resvg",
+ "resvg 0.49.0",
  "skrifa",
 ]
 
@@ -2386,7 +2427,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rayon",
- "resvg",
+ "resvg 0.49.0",
  "rowan",
  "rspolib",
  "serde",
@@ -2434,7 +2475,7 @@ dependencies = [
  "pin-weak",
  "portable-atomic",
  "raw-window-handle",
- "resvg",
+ "resvg 0.49.0",
  "rgb",
  "scopeguard",
  "skrifa",
@@ -2817,7 +2858,7 @@ dependencies = [
  "byteorder-lite",
  "moxcms",
  "num-traits",
- "png",
+ "png 0.18.1",
  "tiff",
  "zune-core",
  "zune-jpeg",
@@ -2832,6 +2873,12 @@ dependencies = [
  "byteorder-lite",
  "quick-error",
 ]
+
+[[package]]
+name = "imagesize"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "029d73f573d8e8d63e6d5020011d3255b28c3ba85d6cf870a07184ed23de9284"
 
 [[package]]
 name = "imagesize"
@@ -3026,6 +3073,15 @@ dependencies = [
  "accesskit 0.17.1",
  "accesskit_consumer 0.25.0",
  "parking_lot",
+]
+
+[[package]]
+name = "kurbo"
+version = "0.9.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd85a5776cd9500c2e2059c8c76c3b01528566b7fcbaf8098b55a33fc298849b"
+dependencies = [
+ "arrayvec",
 ]
 
 [[package]]
@@ -3299,7 +3355,7 @@ dependencies = [
  "objc2-app-kit 0.3.2",
  "objc2-core-foundation",
  "objc2-foundation 0.3.2",
- "png",
+ "png 0.18.1",
  "thiserror 2.0.21",
  "windows-sys 0.61.2",
 ]
@@ -4003,7 +4059,7 @@ version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c6fd9027e2d9319be6349febd1db4e8d02aa544921200c9b777720ac34a3aa89"
 dependencies = [
- "siphasher",
+ "siphasher 1.0.4",
 ]
 
 [[package]]
@@ -4072,6 +4128,19 @@ name = "plain"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
+
+[[package]]
+name = "png"
+version = "0.17.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "82151a2fc869e011c153adc57cf2789ccb8d9906ce52c0b39a6b5697749d7526"
+dependencies = [
+ "bitflags 1.3.2",
+ "crc32fast",
+ "fdeflate",
+ "flate2",
+ "miniz_oxide 0.8.9",
+]
 
 [[package]]
 name = "png"
@@ -4375,6 +4444,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "rctree"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b42e27ef78c35d3998403c1d26f3efd9e135d3e5121b0a4845cc5cc27547f4f"
+
+[[package]]
 name = "read-fonts"
 version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4449,6 +4524,20 @@ checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 
 [[package]]
 name = "resvg"
+version = "0.37.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cadccb3d99a9efb8e5e00c16fbb732cbe400db2ec7fc004697ee7d97d86cf1f4"
+dependencies = [
+ "log",
+ "pico-args",
+ "rgb",
+ "svgtypes 0.13.0",
+ "tiny-skia 0.11.4",
+ "usvg 0.37.0",
+]
+
+[[package]]
+name = "resvg"
 version = "0.49.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1572844b6727a1bf842190e9947641a68ac44bed83f50afb4bd1407a2564bee8"
@@ -4459,9 +4548,9 @@ dependencies = [
  "log",
  "pico-args",
  "rgb",
- "svgtypes",
+ "svgtypes 0.16.2",
  "tiny-skia 0.12.0",
- "usvg",
+ "usvg 0.49.0",
  "zune-jpeg",
 ]
 
@@ -4524,6 +4613,12 @@ dependencies = [
  "rustc-hash 1.1.0",
  "text-size",
 ]
+
+[[package]]
+name = "roxmltree"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3cd14fd5e3b777a7422cca79358c57a8f6e3a703d9ac187448d0daf220c2407f"
 
 [[package]]
 name = "roxmltree"
@@ -4814,6 +4909,12 @@ checksum = "7a9c6883ca9c3c7c90e888de77b7a5c849c779d25d74a1269b0218b14e8b136c"
 dependencies = [
  "log",
 ]
+
+[[package]]
+name = "siphasher"
+version = "0.3.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38b58827f4464d87d377d175e90bf58eb00fd8716ff0a62f80356b5e61555d0d"
 
 [[package]]
 name = "siphasher"
@@ -5158,12 +5259,22 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "svgtypes"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e44e288cd960318917cbd540340968b90becc8bc81f171345d706e7a89d9d70"
+dependencies = [
+ "kurbo 0.9.5",
+ "siphasher 0.3.11",
+]
+
+[[package]]
+name = "svgtypes"
 version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f12b12995e3638c70618c1facb1ce65302f6a6f706b675f07c58a5d7391120e"
 dependencies = [
- "kurbo",
- "siphasher",
+ "kurbo 0.13.1",
+ "siphasher 1.0.4",
 ]
 
 [[package]]
@@ -5336,6 +5447,7 @@ dependencies = [
  "bytemuck",
  "cfg-if",
  "log",
+ "png 0.17.16",
  "tiny-skia-path 0.11.4",
 ]
 
@@ -5350,7 +5462,7 @@ dependencies = [
  "bytemuck",
  "cfg-if",
  "log",
- "png",
+ "png 0.18.1",
  "tiny-skia-path 0.12.0",
 ]
 
@@ -5505,6 +5617,7 @@ version = "0.0.1"
 dependencies = [
  "chrono",
  "eframe",
+ "egui_extras",
  "egui_kittest",
  "indexmap",
  "rfd",
@@ -5719,6 +5832,20 @@ checksum = "daf8dba3b7eb870caf1ddeed7bc9d2a049f3cfdfae7cb521b087cc33ae4c49da"
 
 [[package]]
 name = "usvg"
+version = "0.37.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38b0a51b72ab80ca511d126b77feeeb4fb1e972764653e61feac30adc161a756"
+dependencies = [
+ "base64 0.21.7",
+ "log",
+ "pico-args",
+ "usvg-parser",
+ "usvg-tree",
+ "xmlwriter",
+]
+
+[[package]]
+name = "usvg"
 version = "0.49.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d09b73ee83641d390ad7ffd9000f347b16eb128e437675b6ff277ea5c7fcf22c"
@@ -5728,21 +5855,51 @@ dependencies = [
  "flate2",
  "fontdb",
  "harfrust",
- "imagesize",
- "kurbo",
+ "imagesize 0.15.0",
+ "kurbo 0.13.1",
  "log",
  "pico-args",
- "roxmltree",
+ "roxmltree 0.21.2",
  "simplecss",
- "siphasher",
+ "siphasher 1.0.4",
  "skrifa",
  "strict-num",
- "svgtypes",
+ "svgtypes 0.16.2",
  "tiny-skia-path 0.12.0",
  "unicode-bidi",
  "unicode-script",
  "unicode-vo",
  "xmlwriter",
+]
+
+[[package]]
+name = "usvg-parser"
+version = "0.37.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9bd4e3c291f45d152929a31f0f6c819245e2921bfd01e7bd91201a9af39a2bdc"
+dependencies = [
+ "data-url",
+ "flate2",
+ "imagesize 0.12.0",
+ "kurbo 0.9.5",
+ "log",
+ "roxmltree 0.19.0",
+ "simplecss",
+ "siphasher 0.3.11",
+ "svgtypes 0.13.0",
+ "usvg-tree",
+]
+
+[[package]]
+name = "usvg-tree"
+version = "0.37.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ee3d202ebdb97a6215604b8f5b4d6ef9024efd623cf2e373a6416ba976ec7d3"
+dependencies = [
+ "rctree",
+ "strict-num",
+ "svgtypes 0.13.0",
+ "tiny-skia-path 0.11.4",
 ]
 
 [[package]]
@@ -6860,7 +7017,7 @@ checksum = "cae90d1d9f6d1d36ef116b0b1e651a6d7c12ba925439d4d06ff9adc94662a3d8"
 dependencies = [
  "font-types",
  "indexmap",
- "kurbo",
+ "kurbo 0.13.1",
  "log",
  "read-fonts",
 ]

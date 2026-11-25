@@ -13,10 +13,6 @@ pub const TEXT: Color32 = Color32::from_rgb(0xdf, 0xe1, 0xe5);
 pub const SRC_TEXT: Color32 = Color32::from_rgb(0xc8, 0xcc, 0xd3);
 pub const MUTE: Color32 = Color32::from_rgb(0x86, 0x8a, 0x91);
 pub const DIM: Color32 = Color32::from_rgb(0x5f, 0x63, 0x69);
-pub const ACCENT: Color32 = Color32::from_rgb(0x8b, 0x72, 0xe8);
-pub const ACCENT_HOVER: Color32 = Color32::from_rgb(0x9a, 0x85, 0xee);
-pub const SEL: Color32 = Color32::from_rgb(0x3a, 0x31, 0x70);
-pub const SEL_SOFT: Color32 = Color32::from_rgb(0x2a, 0x25, 0x48);
 pub const OK: Color32 = Color32::from_rgb(0x5f, 0xb8, 0x65);
 pub const WARN: Color32 = Color32::from_rgb(0xe5, 0xa0, 0x4b);
 pub const BAD: Color32 = Color32::from_rgb(0xf7, 0x54, 0x64);
@@ -28,12 +24,90 @@ pub const GHOST_HOVER: Color32 = Color32::from_rgb(0x39, 0x3b, 0x40);
 pub const ZEBRA: Color32 = Color32::from_rgb(0x20, 0x22, 0x25);
 pub const ROW_HOVER: Color32 = Color32::from_rgb(0x26, 0x28, 0x2c);
 pub const TRACK: Color32 = Color32::from_rgb(0x3a, 0x3d, 0x42);
-pub const CHIP_ON: Color32 = Color32::from_rgb(0x2f, 0x2a, 0x58);
-pub const CHIP_ON_LINE: Color32 = Color32::from_rgb(0x5a, 0x4a, 0x9a);
-pub const CHIP_ON_TEXT: Color32 = Color32::from_rgb(0xd9, 0xd0, 0xff);
 pub const FILTERS_BG: Color32 = Color32::from_rgb(0x22, 0x24, 0x27);
 pub const TREE_HOVER: Color32 = Color32::from_rgb(0x34, 0x36, 0x3a);
 pub const INPUT_BG: Color32 = Color32::from_rgb(0x17, 0x18, 0x1a);
+
+/// Колір акценту береться з теми проєкту (відтінок від назви гри, `transly_core::theme`): як у старому застосунку.
+#[derive(Clone, Copy)]
+struct Palette {
+    accent: Color32,
+    solid: Color32,
+    hi: Color32,
+    text: Color32,
+    ring: Color32,
+    chip: Color32,
+    sel: Color32,
+    hue: u32,
+}
+
+fn hex_color(s: &str) -> Color32 {
+    let v = u32::from_str_radix(s.trim_start_matches('#'), 16).unwrap_or(0x8b72e8);
+    Color32::from_rgb((v >> 16) as u8, (v >> 8) as u8, v as u8)
+}
+
+fn over(base: Color32, top: Color32, a: f32) -> Color32 {
+    let m = |b: u8, t: u8| (b as f32 * (1.0 - a) + t as f32 * a).round() as u8;
+    Color32::from_rgb(m(base.r(), top.r()), m(base.g(), top.g()), m(base.b(), top.b()))
+}
+
+fn palette_of(hue: u32) -> Palette {
+    let tk = transly_core::theme::theme_tokens(hue);
+    let g = |k: &str| hex_color(tk.get(k).map_or("#8b72e8", |s| s.as_str()));
+    let accent = g("--accent");
+    Palette { accent, solid: g("--accent-solid"), hi: g("--accent-hi"), text: g("--accent-text"), ring: over(BG, accent, 0.5), chip: over(BG, accent, 0.16), sel: over(BG, accent, 0.30), hue }
+}
+
+static PAL: std::sync::RwLock<Option<Palette>> = std::sync::RwLock::new(None);
+
+fn pal() -> Palette {
+    if let Some(p) = *PAL.read().unwrap() {
+        return p;
+    }
+    let p = palette_of(transly_core::theme::theme_hue("Transly", None));
+    *PAL.write().unwrap() = Some(p);
+    p
+}
+
+/// Відтінок теми проєкту; повертає true, коли він змінився (тоді стиль треба застосувати знову).
+pub fn set_hue(hue: u32) -> bool {
+    if pal().hue == hue {
+        return false;
+    }
+    *PAL.write().unwrap() = Some(palette_of(hue));
+    true
+}
+
+pub fn accent() -> Color32 {
+    pal().accent
+}
+/// Заповнена головна дія (кнопка «Надіслати»): така яскрава, як дозволяє білий текст на ній.
+pub fn accent_solid() -> Color32 {
+    pal().solid
+}
+pub fn accent_hover() -> Color32 {
+    pal().hi
+}
+pub fn accent_text() -> Color32 {
+    pal().text
+}
+pub fn accent_ring() -> Color32 {
+    pal().ring
+}
+pub fn chip_on() -> Color32 {
+    pal().chip
+}
+/// Вибраний рядок у вікні, де працюєш (відтінок теми).
+pub fn sel_use() -> Color32 {
+    pal().sel
+}
+/// Вибраний рядок у вікні, де зараз не працюєш: нейтральний сірий.
+pub fn sel_soft() -> Color32 {
+    over(BG, Color32::WHITE, 0.15)
+}
+
+/// Тло оболонки між картками: трохи світліше за картки.
+pub const GROUND: Color32 = Color32::from_rgb(0x25, 0x27, 0x2a);
 
 pub const R1: u8 = 4;
 pub const R2: u8 = 8;
@@ -52,14 +126,20 @@ fn install_fonts(ctx: &egui::Context) {
 
 pub fn apply(ctx: &egui::Context) {
     install_fonts(ctx);
+    egui_extras::install_image_loaders(ctx);
+    apply_style(ctx);
+}
+
+/// Кольори й розміри; викликається знову, коли тема проєкту змінила акцент.
+pub fn apply_style(ctx: &egui::Context) {
     let mut v = egui::Visuals::dark();
-    v.panel_fill = PANEL;
+    v.panel_fill = GROUND;
     v.window_fill = PANEL;
     v.extreme_bg_color = BG;
     v.faint_bg_color = ZEBRA;
     v.override_text_color = Some(TEXT);
-    v.selection.bg_fill = SEL;
-    v.selection.stroke = Stroke::new(1.0_f32, ACCENT);
+    v.selection.bg_fill = sel_use();
+    v.selection.stroke = Stroke::new(1.0_f32, accent());
     v.hyperlink_color = Color32::from_rgb(0x8f, 0xb2, 0xf7);
     let r = CornerRadius::same(R2);
     for w in [&mut v.widgets.noninteractive, &mut v.widgets.inactive, &mut v.widgets.hovered, &mut v.widgets.active, &mut v.widgets.open] {

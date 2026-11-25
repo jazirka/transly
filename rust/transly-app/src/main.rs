@@ -5,6 +5,7 @@
 // у випуску без чорного вікна консолі
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod icons;
 mod plugins;
 mod state;
 mod theme;
@@ -41,6 +42,7 @@ struct App {
     term_en: String,
     term_uk: String,
     itab: usize,
+    keys_win: bool,
     rail: usize,
     run_cfg: usize,
     tree_closed: std::collections::HashSet<usize>,
@@ -105,8 +107,71 @@ fn source_job(text: &str, marks: &[(usize, usize, usize)]) -> egui::text::Layout
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
     }
+}
+
+/// Картка оболонки: заокруглена панель на тлі між картками (як у старому застосунку).
+fn card() -> egui::Frame {
+    egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(CornerRadius::same(10)).outer_margin(egui::Margin::same(4)).inner_margin(egui::Margin::ZERO)
+}
+
+/// Верх картки: заокруглені лише верхні кути.
+fn top_round() -> CornerRadius {
+    CornerRadius { nw: 10, ne: 10, sw: 0, se: 0 }
+}
+
+
+/// Число з пробілами між тисячами (22 000 → «22 000»).
+fn fmt_n(n: usize) -> String {
+    let s = n.to_string();
+    let mut out = String::new();
+    for (i, c) in s.chars().enumerate() {
+        if i > 0 && (s.len() - i).is_multiple_of(3) {
+            out.push('\u{a0}');
+        }
+        out.push(c);
+    }
+    out
+}
+
+/// Таблетка верхньої панелі: аватар з літерами проєкту чи піктограма, назва, стрілка; рамка — для головної дії.
+fn pill(ui: &mut egui::Ui, avatar: Option<&str>, icon: Option<&str>, text: &str, caret: bool, border: bool) -> egui::Response {
+    let galley = ui.painter().layout_no_wrap(text.to_string(), FontId::proportional(13.0), TEXT);
+    let lead = if avatar.is_some() { 30.0 } else if icon.is_some() { 26.0 } else { 10.0 };
+    let w = lead + galley.size().x + if caret { 26.0 } else { 12.0 };
+    let (rect, resp) = ui.allocate_exact_size(vec2(w, 32.0), Sense::click());
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, text));
+    if resp.hovered() {
+        ui.painter().rect_filled(rect, CornerRadius::same(16), GHOST_HOVER);
+    }
+    if border {
+        ui.painter().rect_stroke(rect, CornerRadius::same(16), Stroke::new(1.0_f32, LINE), StrokeKind::Inside);
+    }
+    if let Some(letters) = avatar {
+        let c = pos2(rect.left() + 17.0, rect.center().y);
+        ui.painter().circle_filled(c, 11.0, accent_solid());
+        ui.painter().text(c, Align2::CENTER_CENTER, letters, FontId::proportional(10.0), Color32::WHITE);
+    } else if let Some(ic) = icon {
+        icons::paint(ui, Rect::from_center_size(pos2(rect.left() + 17.0, rect.center().y), vec2(16.0, 16.0)), ic, MUTE);
+    }
+    ui.painter().galley(pos2(rect.left() + lead, rect.center().y - galley.size().y / 2.0), galley.clone(), TEXT);
+    if caret {
+        icons::paint(ui, Rect::from_center_size(pos2(rect.left() + lead + galley.size().x + 12.0, rect.center().y), vec2(12.0, 12.0)), "caret", MUTE);
+    }
+    resp
+}
+
+/// Випадний список під кнопкою: відкривається кліком, закривається кліком у списку чи поза ним.
+fn pop(ui: &egui::Ui, resp: &egui::Response, id: &str, add: impl FnOnce(&mut egui::Ui)) {
+    let pid = ui.make_persistent_id(id);
+    if resp.clicked() {
+        ui.memory_mut(|m| m.toggle_popup(pid));
+    }
+    egui::popup::popup_below_widget(ui, pid, resp, egui::popup::PopupCloseBehavior::CloseOnClick, |ui| {
+        ui.set_min_width(200.0);
+        add(ui);
+    });
 }
 
 fn dot_color(s: RowStatus) -> Option<Color32> {
@@ -131,7 +196,7 @@ fn label_caps(ui: &mut egui::Ui, text: &str) {
 }
 
 fn primary_button(ui: &mut egui::Ui, text: &str) -> egui::Response {
-    ui.add(egui::Button::new(RichText::new(text).color(Color32::WHITE)).fill(ACCENT).stroke(Stroke::new(1.0_f32, ACCENT_HOVER)).min_size(vec2(0.0, 26.0)))
+    ui.add(egui::Button::new(RichText::new(text).color(Color32::WHITE)).fill(accent_solid()).stroke(Stroke::new(1.0_f32, accent_hover())).min_size(vec2(0.0, 26.0)))
 }
 
 fn plain_button(ui: &mut egui::Ui, text: &str) -> egui::Response {
@@ -140,11 +205,11 @@ fn plain_button(ui: &mut egui::Ui, text: &str) -> egui::Response {
 
 fn chip(ui: &mut egui::Ui, text: &str, count: usize, on: bool) -> egui::Response {
     let label = format!("{text}  {count}");
-    let galley = ui.painter().layout_no_wrap(label, FontId::proportional(12.0), if on { CHIP_ON_TEXT } else { MUTE });
+    let galley = ui.painter().layout_no_wrap(label, FontId::proportional(12.0), if on { accent_text() } else { MUTE });
     let size = vec2(galley.size().x + 18.0, 24.0);
     let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
     resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, format!("{text} {count}")));
-    let (fill, line, col) = if on { (CHIP_ON, CHIP_ON_LINE, CHIP_ON_TEXT) } else if resp.hovered() { (PANEL, LINE, TEXT) } else { (Color32::TRANSPARENT, LINE, MUTE) };
+    let (fill, line, col) = if on { (chip_on(), accent_ring(), accent_text()) } else if resp.hovered() { (PANEL, LINE, TEXT) } else { (Color32::TRANSPARENT, LINE, MUTE) };
     ui.painter().rect(rect, CornerRadius::same(R3), fill, Stroke::new(1.0_f32, line), StrokeKind::Inside);
     ui.painter().text(rect.left_center() + vec2(9.0, 0.0), Align2::LEFT_CENTER, format!("{text}  {count}"), FontId::proportional(12.0), col);
     resp
@@ -175,6 +240,10 @@ impl App {
         }
         ctx.request_repaint_after(std::time::Duration::from_secs(5));
         self.hotkeys(ctx);
+        let hue = transly_core::theme::theme_hue(self.st.project.as_ref().map_or("Transly", |p| p.name.as_str()), self.st.project.as_ref().and_then(|p| p.settings.get("hue")));
+        if theme::set_hue(hue) {
+            theme::apply_style(ctx);
+        }
         self.topbar(ctx);
         self.statusbar(ctx);
         self.bottom(ctx);
@@ -195,6 +264,7 @@ impl App {
         self.wrap_window(ctx);
         self.term_sync_window(ctx);
         self.activity_window(ctx);
+        self.keys_window(ctx);
         if let Some(msg) = self.st.finish_sync() {
             self.message = msg;
         }
@@ -236,49 +306,53 @@ impl App {
         }
     }
 
-    /// Верхня панель, як у старому застосунку: логотип, меню, проєкт і гілка, прогрес, збірка, дії, пошук.
+    /// Верхня панель, як у старому застосунку: логотип, меню, проєкт і гілка, режими, прогрес, збірка, запуск.
     fn topbar(&mut self, ctx: &egui::Context) {
-        egui::TopBottomPanel::top("topbar").exact_height(44.0).frame(egui::Frame::new().fill(PANEL).inner_margin(egui::Margin::symmetric(10, 0)).stroke(Stroke::new(1.0_f32, LINE))).show(ctx, |ui| {
+        egui::TopBottomPanel::top("topbar").exact_height(50.0).show_separator_line(false).frame(egui::Frame::new().fill(GROUND).inner_margin(egui::Margin::symmetric(12, 0))).show(ctx, |ui| {
             ui.horizontal_centered(|ui| {
-                let (r, _) = ui.allocate_exact_size(vec2(22.0, 22.0), Sense::hover());
-                ui.painter().rect_filled(r, CornerRadius::same(R2), ACCENT);
-                ui.painter().text(r.center(), Align2::CENTER_CENTER, "T", FontId::monospace(11.0), Color32::WHITE);
-                ui.add_space(4.0);
-                ui.menu_button("Меню", |ui| {
+                ui.spacing_mut().item_spacing.x = 6.0;
+                let can = self.st.is_open();
+                // логотип
+                let (r, _) = ui.allocate_exact_size(vec2(26.0, 26.0), Sense::hover());
+                ui.painter().circle_filled(r.center(), 13.0, accent_solid());
+                ui.painter().text(r.center(), Align2::CENTER_CENTER, "T", FontId::proportional(13.0), Color32::WHITE);
+                // головне меню
+                egui::menu::menu_custom_button(ui, egui::Button::image(icons::image("menu", MUTE, 16.0)).frame(false).min_size(vec2(30.0, 30.0)), |ui| {
                     ui.menu_button("Файл", |ui| self.menu_file(ui));
                     ui.menu_button("Вигляд", |ui| self.menu_view(ui));
                     ui.menu_button("Інструменти", |ui| self.menu_tools(ui));
                 });
-                let can = self.st.is_open();
+                // проєкт
                 let name = self.st.project.as_ref().map_or("Transly".to_string(), |p| p.name.clone());
-                ui.menu_button(RichText::new(format!("{name}  v")).color(TEXT), |ui| {
+                let letters = self.st.project.as_ref().map_or("T".to_string(), transly_core::projname::icon_letters);
+                let resp = pill(ui, Some(&letters), None, &name, true, false);
+                pop(ui, &resp, "projpop", |ui| {
                     if ui.button("Відкрити гру…").clicked() {
                         self.open_dialog();
-                        ui.close_menu();
                     }
                     if ui.add_enabled(can, egui::Button::new("Зберегти")).clicked() {
                         self.message = self.st.save_project().map(|p| format!("Збережено: {p}")).unwrap_or_else(|e| e);
-                        ui.close_menu();
                     }
                     if ui.add_enabled(can, egui::Button::new("Налаштування проєкту…")).clicked() {
                         self.act_settings();
-                        ui.close_menu();
                     }
                 });
+                // гілка
                 if can {
-                    let lang = self.st.project.as_ref().map_or(String::new(), |p| p.target_lang.clone());
-                    if ui.add(egui::Button::new(RichText::new(format!("{lang}/{}", self.st.current_branch())).color(TEXT)).corner_radius(CornerRadius::same(14))).clicked() {
+                    let br = self.st.current_branch();
+                    let resp = pill(ui, None, Some("branch"), &br, true, false);
+                    if resp.clicked() {
                         self.br_win = Some(String::new());
                     }
                 }
                 ui.add_space(6.0);
-                // режим: Таблиця (усі рядки), Редагування (один рядок на всю ширину), Сцена (репліки події поспіль)
+                // режим: Таблиця, Редагування, Сцена
                 ui.add_enabled_ui(can, |ui| {
                     egui::Frame::new().fill(BTN).corner_radius(CornerRadius::same(R2)).inner_margin(egui::Margin::symmetric(2, 2)).show(ui, |ui| {
                         ui.spacing_mut().item_spacing.x = 2.0;
-                        let modes = [("Таблиця", !self.focus && !self.scene_mode), ("Редагування", self.focus && !self.scene_mode), ("Сцена", self.scene_mode)];
-                        for (i, (label, on)) in modes.into_iter().enumerate() {
-                            if ui.selectable_label(on, label).on_hover_text(["Усі рядки файлу", "Один рядок на всю ширину", "Репліки події поспіль"][i]).clicked() {
+                        let modes = [("table", "Таблиця: усі рядки файлу", !self.focus && !self.scene_mode), ("edit", "Редагування: один рядок", self.focus && !self.scene_mode), ("scene", "Сцена: репліки подій поспіль", self.scene_mode)];
+                        for (i, (ic, tip, on)) in modes.into_iter().enumerate() {
+                            if icons::button(ui, ic, tip, on, MUTE).clicked() {
                                 self.focus = i == 1;
                                 self.scene_mode = i == 2;
                             }
@@ -288,8 +362,8 @@ impl App {
                 ui.add_space(8.0);
                 if can {
                     let p = self.st.progress();
-                    let pct = (p.approved * 100).checked_div(p.total).unwrap_or(0);
-                    let (r, _) = ui.allocate_exact_size(vec2(110.0, 6.0), Sense::hover());
+                    let pc = |n: usize| (n * 100).checked_div(p.total).unwrap_or(0);
+                    let (r, _) = ui.allocate_exact_size(vec2(150.0, 6.0), Sense::hover());
                     ui.painter().rect_filled(r, CornerRadius::same(R1), TRACK);
                     let mut x = r.left();
                     for (n, col) in [(p.approved, OK), (p.sent, INFO), (p.draft, WARN)] {
@@ -297,42 +371,34 @@ impl App {
                         ui.painter().rect_filled(Rect::from_min_size(pos2(x, r.top()), vec2(w, 6.0)), CornerRadius::ZERO, col);
                         x += w;
                     }
-                    let text = format!("{pct}% вичитано · {} з {}", p.draft + p.sent + p.approved, p.total);
-                    if ctx.screen_rect().width() > 1560.0 {
-                        ui.label(RichText::new(text).size(12.0).color(MUTE));
+                    let done = p.draft + p.sent + p.approved;
+                    let full = format!("Перекладено {}% ({} з {}) · надіслано {}% · вичитано {}%", pc(done), fmt_n(done), fmt_n(p.total), pc(p.sent), pc(p.approved));
+                    if ctx.screen_rect().width() > 1500.0 {
+                        ui.label(RichText::new(full).monospace().size(11.5).color(MUTE));
                     } else {
-                        ui.label(RichText::new(format!("{pct}%")).size(12.0).color(MUTE)).on_hover_text(text);
+                        ui.label(RichText::new(format!("{}%", pc(done))).monospace().size(11.5).color(MUTE)).on_hover_text(full);
                     }
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.add_enabled(can, egui::TextEdit::singleline(&mut self.st.search).hint_text("Пошук у рядках…").desired_width(220.0).margin(vec2(10.0, 4.0)));
-                    ui.menu_button("Дії", |ui| self.menu_actions(ui));
+                    ui.spacing_mut().item_spacing.x = 4.0;
+                    if icons::button(ui, "keys", "Гарячі клавіші", false, MUTE).clicked() {
+                        self.keys_win = !self.keys_win;
+                    }
+                    let resp = icons::button(ui, "menu", "Дії: масові дії, скасування, автозаповнення, пошук і заміна", false, MUTE);
+                    pop(ui, &resp, "actpop", |ui| self.menu_actions(ui));
                     ui.add_enabled_ui(can, |ui| {
-                        if ui.button("Запуск").on_hover_text("Виконати вибране зліва: збірка чи запуск гри").clicked() {
+                        if icons::button(ui, "play", "Запустити (виконати вибране зліва)", false, OK).clicked() {
                             self.run_selected();
                         }
-                        ui.menu_button(RichText::new(format!("{}  v", ["Збірка (файл)", "Збірка (гра)", "Поточна сцена"][self.run_cfg])).color(TEXT), |ui| {
+                        let (name, ic) = [("Збірка (файл)", "file"), ("Збірка (гра)", "game"), ("Поточна сцена", "flag")][self.run_cfg];
+                        let resp = pill(ui, None, Some(ic), name, true, true);
+                        pop(ui, &resp, "cfgpop", |ui| {
                             for (i, (name, sub)) in [("Збірка (файл)", "Записати переклад у файли гри (з вибором параметрів)"), ("Збірка (гра)", "Записати переклад із чернетками й запустити гру"), ("Поточна сцена", "Те саме, але гра починається зі сцени вибраного рядка")].iter().enumerate() {
                                 if ui.selectable_label(self.run_cfg == i, *name).on_hover_text(*sub).clicked() {
                                     self.run_cfg = i;
-                                    ui.close_menu();
                                 }
                             }
                         });
-                        if plain_button(ui, "Зберегти").clicked() {
-                            self.message = match self.st.save_project() {
-                                Ok(p) => format!("Збережено: {p}"),
-                                Err(e) => e,
-                            };
-                        }
-                        if primary_button(ui, "Надіслати").clicked() {
-                            if let Some((f, r)) = self.st.file.zip(self.st.row) {
-                                self.message = match self.st.submit(f, r, &self.draft) {
-                                    Ok(()) => "Надіслано".into(),
-                                    Err(e) => e,
-                                };
-                            }
-                        }
                     });
                 });
             });
@@ -520,7 +586,7 @@ impl App {
     }
 
     fn statusbar(&mut self, ctx: &egui::Context) {
-        egui::TopBottomPanel::bottom("status").exact_height(24.0).frame(egui::Frame::new().fill(PANEL).inner_margin(egui::Margin::symmetric(10, 0)).stroke(Stroke::new(1.0_f32, LINE))).show(ctx, |ui| {
+        egui::TopBottomPanel::bottom("status").exact_height(26.0).show_separator_line(false).frame(egui::Frame::new().fill(GROUND).inner_margin(egui::Margin::symmetric(12, 0))).show(ctx, |ui| {
             ui.horizontal_centered(|ui| {
                 ui.spacing_mut().item_spacing.x = 16.0;
                 let small = |t: String, c: Color32| RichText::new(t).size(11.5).color(c);
@@ -572,7 +638,7 @@ impl App {
     fn bottom(&mut self, ctx: &egui::Context) {
         let Some(f) = self.st.file else { return };
         let h = if self.bottom_open { 210.0 } else { 30.0 };
-        egui::TopBottomPanel::bottom("bottom").exact_height(h).resizable(false).frame(egui::Frame::new().fill(PANEL).stroke(Stroke::new(1.0_f32, LINE))).show(ctx, |ui| {
+        egui::TopBottomPanel::bottom("bottom").exact_height(h).resizable(false).show_separator_line(false).frame(card()).show(ctx, |ui| {
             let issues = self.st.file_issues(f);
             let bad = issues.iter().filter(|i| i.2).count();
             let terms = self.st.terms();
@@ -591,7 +657,7 @@ impl App {
                     ui.painter().circle_filled(pos2(r.right() - 8.0, r.center().y - 5.0), 3.0, BAD);
                 }
                 if on {
-                    ui.painter().hline(r.x_range(), tabs.bottom() - 1.0, Stroke::new(2.0_f32, ACCENT));
+                    ui.painter().hline(r.x_range(), tabs.bottom() - 1.0, Stroke::new(2.0_f32, accent()));
                 }
                 if resp.clicked() {
                     self.btab = i;
@@ -891,7 +957,7 @@ impl App {
             ui.label(RichText::new(if find.is_empty() { "Введіть, що шукати".to_string() } else { format!("Буде змінено рядків: {count}") }).color(MUTE));
             ui.add_space(6.0);
             ui.horizontal(|ui| {
-                if ui.add_enabled(count > 0, egui::Button::new(RichText::new("Замінити все").color(Color32::WHITE)).fill(ACCENT).min_size(vec2(0.0, 26.0))).clicked() {
+                if ui.add_enabled(count > 0, egui::Button::new(RichText::new("Замінити все").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 26.0))).clicked() {
                     apply = true;
                 }
                 if plain_button(ui, "Закрити").clicked() {
@@ -947,7 +1013,7 @@ impl App {
             ui.add_space(6.0);
             ui.horizontal(|ui| {
                 let n = list.iter().filter(|x| x.1).count();
-                if ui.add_enabled(n > 0, egui::Button::new(RichText::new(format!("Записати чернетками ({n})")).color(Color32::WHITE)).fill(ACCENT).min_size(vec2(0.0, 26.0))).clicked() {
+                if ui.add_enabled(n > 0, egui::Button::new(RichText::new(format!("Записати чернетками ({n})")).color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 26.0))).clicked() {
                     apply = true;
                 }
                 if plain_button(ui, "Закрити").clicked() {
@@ -1023,7 +1089,7 @@ impl App {
             ui.add(egui::TextEdit::multiline(&mut text).desired_rows(10).desired_width(f32::INFINITY));
             ui.add_space(6.0);
             ui.horizontal(|ui| {
-                if ui.add_enabled(!text.trim().is_empty(), egui::Button::new(RichText::new("Імпортувати").color(Color32::WHITE)).fill(ACCENT).min_size(vec2(0.0, 26.0))).clicked() {
+                if ui.add_enabled(!text.trim().is_empty(), egui::Button::new(RichText::new("Імпортувати").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 26.0))).clicked() {
                     go = true;
                 }
                 if plain_button(ui, "Закрити").clicked() {
@@ -1102,7 +1168,7 @@ impl App {
             });
             ui.add_space(6.0);
             ui.horizontal(|ui| {
-                if ui.add_enabled(!lang.trim().is_empty(), egui::Button::new(RichText::new("Обрати папку…").color(Color32::WHITE)).fill(ACCENT).min_size(vec2(0.0, 26.0))).clicked() {
+                if ui.add_enabled(!lang.trim().is_empty(), egui::Button::new(RichText::new("Обрати папку…").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 26.0))).clicked() {
                     go = true;
                 }
                 if plain_button(ui, "Закрити").clicked() {
@@ -1136,7 +1202,7 @@ impl App {
                     ui.set_width(ui.available_width());
                     ui.horizontal(|ui| {
                         let (d, _) = ui.allocate_exact_size(vec2(12.0, 14.0), Sense::hover());
-                        let col = u32::from_str_radix(g.color.trim_start_matches('#'), 16).map_or(ACCENT, |c| Color32::from_rgb((c >> 16) as u8, (c >> 8) as u8, c as u8));
+                        let col = u32::from_str_radix(g.color.trim_start_matches('#'), 16).map_or(accent(), |c| Color32::from_rgb((c >> 16) as u8, (c >> 8) as u8, c as u8));
                         ui.painter().circle_filled(d.center(), 5.0, col);
                         ui.label(RichText::new(&g.name).color(TEXT));
                         ui.label(RichText::new(format!("{} з {} перекладено", g.translated, g.rows)).size(11.0).color(MUTE));
@@ -1164,7 +1230,7 @@ impl App {
             ui.add_space(6.0);
             ui.horizontal(|ui| {
                 ui.add(egui::TextEdit::singleline(&mut name).hint_text("Назва нової групи").desired_width(220.0));
-                if ui.add_enabled(!name.trim().is_empty(), egui::Button::new(RichText::new("Створити").color(Color32::WHITE)).fill(ACCENT).min_size(vec2(0.0, 26.0))).clicked() {
+                if ui.add_enabled(!name.trim().is_empty(), egui::Button::new(RichText::new("Створити").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 26.0))).clicked() {
                     create = true;
                 }
             });
@@ -1234,7 +1300,7 @@ impl App {
             ui.add_space(6.0);
             ui.horizontal(|ui| {
                 ui.add(egui::TextEdit::singleline(&mut name).hint_text("Назва нової гілки").desired_width(220.0));
-                if ui.add_enabled(!name.trim().is_empty(), egui::Button::new(RichText::new("Створити з поточної").color(Color32::WHITE)).fill(ACCENT).min_size(vec2(0.0, 26.0))).clicked() {
+                if ui.add_enabled(!name.trim().is_empty(), egui::Button::new(RichText::new("Створити з поточної").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 26.0))).clicked() {
                     create = true;
                 }
             });
@@ -1496,7 +1562,7 @@ impl App {
                 }
             });
             ui.horizontal(|ui| {
-                if ui.add_enabled(n > 0, egui::Button::new(RichText::new("Оновити вибрані").color(Color32::WHITE)).fill(ACCENT).min_size(vec2(0.0, 26.0))).clicked() {
+                if ui.add_enabled(n > 0, egui::Button::new(RichText::new("Оновити вибрані").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 26.0))).clicked() {
                     go = true;
                 }
                 if plain_button(ui, "Закрити").clicked() {
@@ -1557,8 +1623,25 @@ impl App {
         self.activity_win = open;
     }
 
+    fn keys_window(&mut self, ctx: &egui::Context) {
+        if !self.keys_win {
+            return;
+        }
+        let mut open = true;
+        egui::Window::new("Гарячі клавіші").open(&mut open).collapsible(false).resizable(false).show(ctx, |ui| {
+            egui::Grid::new("keys").num_columns(2).spacing([24.0, 6.0]).show(ui, |ui| {
+                for (k, what) in [("Ctrl+Enter", "надіслати рядок і перейти до наступного"), ("Ctrl+S", "зберегти проєкт"), ("F2", "режим «Редагування»"), ("↑ / ↓", "попередній / наступний рядок (поки не набираєте текст)")] {
+                    ui.label(RichText::new(k).monospace().color(TEXT));
+                    ui.label(RichText::new(what).color(MUTE));
+                    ui.end_row();
+                }
+            });
+        });
+        self.keys_win = open;
+    }
+
     fn strip(&mut self, ctx: &egui::Context) {
-        egui::SidePanel::left("strip").exact_width(40.0).resizable(false).frame(egui::Frame::new().fill(PANEL).stroke(Stroke::new(1.0_f32, LINE))).show(ctx, |ui| {
+        egui::SidePanel::left("strip").exact_width(40.0).resizable(false).show_separator_line(false).frame(egui::Frame::new().fill(GROUND)).show(ctx, |ui| {
             ui.add_space(6.0);
             ui.vertical_centered(|ui| {
                 for (i, (g, tip)) in [("Ф", "Файли"), ("Р", "Рядки файлу"), ("С", "Сцени файлу"), ("П", "Пов’язане з рядком: терміни, однакові рядки")].iter().enumerate() {
@@ -1569,7 +1652,7 @@ impl App {
                         ui.painter().rect_filled(r, CornerRadius::same(R2), GHOST_HOVER);
                     }
                     if on {
-                        ui.painter().rect_filled(Rect::from_min_size(pos2(r.left() - 5.0, r.top() + 7.0), vec2(3.0, r.height() - 14.0)), CornerRadius::same(R1), ACCENT);
+                        ui.painter().rect_filled(Rect::from_min_size(pos2(r.left() - 5.0, r.top() + 7.0), vec2(3.0, r.height() - 14.0)), CornerRadius::same(R1), accent());
                     }
                     ui.painter().text(r.center(), Align2::CENTER_CENTER, g, FontId::proportional(15.0), if on { TEXT } else { MUTE });
                     if resp.on_hover_text(*tip).clicked() {
@@ -1604,7 +1687,7 @@ impl App {
                         let on = cur.as_deref() == Some(title.as_str());
                         resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, format!("Сцена {title}")));
                         if on {
-                            ui.painter().rect_filled(rect, CornerRadius::ZERO, SEL);
+                            ui.painter().rect_filled(rect, CornerRadius::ZERO, sel_use());
                         } else if resp.hovered() {
                             ui.painter().rect_filled(rect, CornerRadius::ZERO, TREE_HOVER);
                         }
@@ -1663,7 +1746,7 @@ impl App {
     }
 
     fn tree(&mut self, ctx: &egui::Context) {
-        egui::SidePanel::left("tree").exact_width(250.0).resizable(false).frame(egui::Frame::new().fill(PANEL).stroke(Stroke::new(1.0_f32, LINE))).show(ctx, |ui| {
+        egui::SidePanel::left("tree").exact_width(258.0).resizable(false).show_separator_line(false).frame(card()).show(ctx, |ui| {
             let (h, _) = ui.allocate_exact_size(vec2(ui.available_width(), 28.0), Sense::hover());
             ui.painter().text(h.left_center() + vec2(10.0, 0.0), Align2::LEFT_CENTER, ["ФАЙЛИ ГРИ", "РЯДКИ", "СЦЕНИ", "ПОВ’ЯЗАНЕ"][self.rail], FontId::proportional(11.0), MUTE);
             ui.painter().hline(h.x_range(), h.bottom(), Stroke::new(1.0_f32, LINE));
@@ -1719,7 +1802,7 @@ impl App {
                         let cur = self.st.file == Some(i);
                         resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, cur, name.clone()));
                         if cur {
-                            ui.painter().rect_filled(rect, CornerRadius::ZERO, SEL);
+                            ui.painter().rect_filled(rect, CornerRadius::ZERO, sel_use());
                         } else if resp.hovered() {
                             ui.painter().rect_filled(rect, CornerRadius::ZERO, TREE_HOVER);
                         }
@@ -1754,7 +1837,7 @@ impl App {
 
     fn inspector(&mut self, ctx: &egui::Context) {
         let width = if self.focus { (ctx.screen_rect().width() - 40.0 - 330.0).max(380.0) } else { 380.0 };
-        egui::SidePanel::right("insp").exact_width(width).resizable(false).frame(egui::Frame::new().fill(PANEL).stroke(Stroke::new(1.0_f32, LINE))).show(ctx, |ui| {
+        egui::SidePanel::right("insp").exact_width(width).resizable(false).show_separator_line(false).frame(card()).show(ctx, |ui| {
             let (tabs, _) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::hover());
             ui.painter().hline(tabs.x_range(), tabs.bottom(), Stroke::new(1.0_f32, LINE));
             let mut x = tabs.left() + 4.0;
@@ -1766,7 +1849,7 @@ impl App {
                 resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, *t));
                 ui.painter().text(r.center(), Align2::CENTER_CENTER, t, FontId::proportional(12.5), if on || resp.hovered() { TEXT } else { MUTE });
                 if on {
-                    ui.painter().hline(r.x_range(), tabs.bottom() - 1.0, Stroke::new(2.0_f32, ACCENT));
+                    ui.painter().hline(r.x_range(), tabs.bottom() - 1.0, Stroke::new(2.0_f32, accent()));
                 }
                 if resp.clicked() {
                     self.itab = i;
@@ -1848,7 +1931,7 @@ impl App {
         label_caps(ui, "Переклад");
         let rows = if self.focus { 9 } else { 5 };
         let resp = ui.add(egui::TextEdit::multiline(&mut self.draft).desired_rows(rows).desired_width(f32::INFINITY).font(FontId::proportional(13.5)).margin(vec2(10.0, 9.0)).background_color(BG));
-        ui.painter().rect_stroke(resp.rect, CornerRadius::same(R2), Stroke::new(1.0_f32, ACCENT), StrokeKind::Outside);
+        ui.painter().rect_stroke(resp.rect, CornerRadius::same(R2), Stroke::new(1.0_f32, accent()), StrokeKind::Outside);
         let src_len = self.st.source_of(f, r).chars().count().max(1);
         let ratio = (self.draft.chars().count() as f32 / src_len as f32).min(1.5);
         let (m, _) = ui.allocate_exact_size(vec2(ui.available_width(), 3.0), Sense::hover());
@@ -1868,7 +1951,7 @@ impl App {
         });
         ui.add_space(8.0);
         for i in self.st.issues(f, r, &self.draft) {
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 let (d, _) = ui.allocate_exact_size(vec2(10.0, 14.0), Sense::hover());
                 let col = if i.severity == transly_core::qa::Severity::Bad { BAD } else { WARN };
                 ui.painter().circle_filled(d.center(), 4.0, col);
@@ -1886,9 +1969,9 @@ impl App {
             });
         }
         ui.horizontal(|ui| {
-            ui.add(egui::TextEdit::singleline(&mut self.term_en).hint_text("слово").desired_width(110.0));
-            ui.add(egui::TextEdit::singleline(&mut self.term_uk).hint_text("переклад").desired_width(110.0));
-            if plain_button(ui, "Додати термін").clicked() {
+            ui.add(egui::TextEdit::singleline(&mut self.term_en).hint_text("слово").desired_width(88.0));
+            ui.add(egui::TextEdit::singleline(&mut self.term_uk).hint_text("переклад").desired_width(88.0));
+            if plain_button(ui, "Додати").clicked() {
                 self.message = self.st.add_term(&self.term_en, &self.term_uk);
                 self.term_en.clear();
                 self.term_uk.clear();
@@ -1959,7 +2042,7 @@ impl App {
         for l in &v.lines {
             let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 46.0), Sense::click());
             resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, l.current, format!("{}: {}", l.speaker, l.source)));
-            ui.painter().rect_filled(rect, CornerRadius::same(R1), if l.current { SEL } else if resp.hovered() { TREE_HOVER } else { PANEL2 });
+            ui.painter().rect_filled(rect, CornerRadius::same(R1), if l.current { sel_use() } else if resp.hovered() { TREE_HOVER } else { PANEL2 });
             paint_dot(ui, pos2(rect.left() + 12.0, rect.top() + 14.0), l.status);
             let clip = Rect::from_min_max(pos2(rect.left() + 24.0, rect.top()), pos2(rect.right() - 6.0, rect.bottom()));
             let p = ui.painter().with_clip_rect(clip);
@@ -2017,7 +2100,7 @@ impl App {
     }
 
     fn editor(&mut self, ctx: &egui::Context) {
-        egui::CentralPanel::default().frame(egui::Frame::new().fill(BG)).show(ctx, |ui| {
+        egui::CentralPanel::default().frame(card()).show(ctx, |ui| {
             ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
             self.st.sync_tabs();
             let Some(f) = self.st.file else {
@@ -2027,7 +2110,7 @@ impl App {
             let name = self.st.file_names().get(f).cloned().unwrap_or_default();
             // вкладки відкритих файлів: назва, скільки рядків ще без перекладу, закрити
             let (tabs, _) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::hover());
-            ui.painter().rect_filled(tabs, CornerRadius::ZERO, PANEL);
+            ui.painter().rect_filled(tabs, top_round(), PANEL);
             ui.painter().hline(tabs.x_range(), tabs.bottom(), Stroke::new(1.0_f32, LINE));
             let progress = self.st.file_progress();
             let names = self.st.file_names();
@@ -2045,7 +2128,7 @@ impl App {
                 let on = t == f;
                 ui.painter().rect_filled(rect, CornerRadius::ZERO, if on { Color32::from_rgb(0x25, 0x28, 0x2c) } else if resp.hovered() { TREE_HOVER } else { PANEL });
                 if on {
-                    ui.painter().hline(rect.x_range(), rect.bottom(), Stroke::new(2.0_f32, ACCENT));
+                    ui.painter().hline(rect.x_range(), rect.bottom(), Stroke::new(2.0_f32, accent()));
                 }
                 let mut tx = rect.left() + 12.0;
                 ui.painter().with_clip_rect(rect.shrink2(vec2(2.0, 0.0))).galley(pos2(tx, rect.center().y - galley.size().y / 2.0), galley.clone(), TEXT);
@@ -2090,6 +2173,7 @@ impl App {
             let counts = self.st.filter_counts(f);
             let mut fui = ui.new_child(egui::UiBuilder::new().max_rect(fr.shrink2(vec2(10.0, 0.0))).layout(egui::Layout::left_to_right(egui::Align::Center)));
             fui.spacing_mut().item_spacing.x = 6.0;
+            fui.add(egui::TextEdit::singleline(&mut self.st.search).hint_text("Фільтр у цьому файлі").desired_width(190.0).margin(vec2(10.0, 4.0)));
             for (i, flt) in Filter::ALL.iter().enumerate() {
                 if chip(&mut fui, flt.label(), counts[i], self.st.filter == *flt).clicked() {
                     self.st.filter = *flt;
@@ -2132,7 +2216,7 @@ impl App {
                 let Some(r) = self.st.visible_at(f, i) else { continue };
                 let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::click());
                 let sel = self.st.row == Some(r);
-                ui.painter().rect_filled(rect, CornerRadius::ZERO, if sel { SEL } else if resp.hovered() { TREE_HOVER } else { PANEL });
+                ui.painter().rect_filled(rect, CornerRadius::ZERO, if sel { sel_use() } else if resp.hovered() { TREE_HOVER } else { PANEL });
                 ui.painter().hline(rect.x_range(), rect.bottom(), Stroke::new(1.0_f32, LINE_SOFT));
                 let (src, tgt, st) = self.st.row_view(f, r);
                 resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, sel, format!("{src} — {tgt}")));
@@ -2182,7 +2266,7 @@ impl App {
                 let Some(r) = self.st.visible_at(f, i) else { continue };
                 let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::click());
                 let sel = self.st.row == Some(r);
-                let bg = if sel { SEL } else if resp.hovered() { ROW_HOVER } else if i % 2 == 1 { ZEBRA } else { BG };
+                let bg = if sel { sel_use() } else if resp.hovered() { ROW_HOVER } else if i % 2 == 1 { ZEBRA } else { BG };
                 ui.painter().rect_filled(rect, CornerRadius::ZERO, bg);
                 ui.painter().hline(rect.x_range(), rect.bottom(), Stroke::new(1.0_f32, LINE_SOFT));
                 let (src, tgt, st) = self.st.row_view(f, r);
@@ -2213,7 +2297,7 @@ impl App {
                     ui.painter().with_clip_rect(tcell).galley(pos2(x + 8.0, gy.max(rect.top() + 3.0)), g, TEXT);
                 }
                 if sel {
-                    ui.painter().rect_stroke(tcell.shrink(1.0), CornerRadius::same(R1), Stroke::new(1.0_f32, ACCENT), StrokeKind::Inside);
+                    ui.painter().rect_stroke(tcell.shrink(1.0), CornerRadius::same(R1), Stroke::new(1.0_f32, accent()), StrokeKind::Inside);
                 }
                 x += cols[5];
                 if wide {
@@ -2223,7 +2307,7 @@ impl App {
                         let cw = (g.size().x + 22.0).min(cols[6] - 12.0);
                         let chip = Rect::from_min_size(pos2(x + 6.0, rect.top() + 6.0), vec2(cw, 20.0));
                         ui.painter().rect_filled(chip, CornerRadius::same(10), BTN);
-                        ui.painter().circle_filled(pos2(chip.left() + 8.0, chip.center().y), 3.0, ACCENT);
+                        ui.painter().circle_filled(pos2(chip.left() + 8.0, chip.center().y), 3.0, accent());
                         ui.painter().with_clip_rect(chip.shrink2(vec2(4.0, 0.0))).galley(pos2(chip.left() + 15.0, chip.center().y - g.size().y / 2.0), g, TEXT);
                     }
                     x += cols[6];
@@ -2338,7 +2422,7 @@ mod ui_tests {
         h.get_by_label("ОРИГІНАЛ");
         h.get_by_label("ПЕРЕКЛАД");
         h.get_by_label("Пам’ять");
-        assert!(h.get_all_by_label("Надіслати").count() >= 2, "кнопка є на панелі й в інспекторі");
+        assert!(h.get_all_by_label("Надіслати").count() >= 1, "кнопка є в інспекторі");
     }
 
     #[test]
@@ -2370,13 +2454,13 @@ mod ui_tests {
         let mut h = harness(app);
         h.run();
         assert!(!h.state().focus);
-        h.get_by_label("Редагування").click();
+        h.get_by_label("Редагування: один рядок").click();
         h.run();
         assert!(h.state().focus);
-        h.get_all_by_label("Сцена").next().unwrap().click();
+        h.get_by_label("Сцена: репліки подій поспіль").click();
         h.run();
         assert!(h.state().scene_mode && !h.state().focus);
-        h.get_by_label("Таблиця").click();
+        h.get_by_label("Таблиця: усі рядки файлу").click();
         h.run();
         assert!(!h.state().focus && !h.state().scene_mode);
     }

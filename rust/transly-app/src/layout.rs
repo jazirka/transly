@@ -44,6 +44,18 @@ fn card_head(ui: &mut egui::Ui, title: &str, sub: Option<&str>) {
     }
 }
 
+/// Прапорець 14×14 (як у старому): рамка, при відміченні заливка кольору теми й пташка.
+fn paint_check(ui: &egui::Ui, c: egui::Pos2, on: bool, hover: bool) {
+    let r = Rect::from_center_size(c, vec2(14.0, 14.0));
+    ui.painter().rect_filled(r, CornerRadius::same(4), if on { accent_solid() } else { BG });
+    ui.painter().rect_stroke(r, CornerRadius::same(4), Stroke::new(1.0_f32, if on { accent_solid() } else if hover { TEXT } else { MUTE }), StrokeKind::Inside);
+    if on {
+        let p = Stroke::new(1.6_f32, Color32::WHITE);
+        ui.painter().line_segment([pos2(c.x - 3.5, c.y), pos2(c.x - 1.0, c.y + 2.8)], p);
+        ui.painter().line_segment([pos2(c.x - 1.0, c.y + 2.8), pos2(c.x + 3.8, c.y - 3.0)], p);
+    }
+}
+
 /// Ліва колонка 306 (картка 300 + проміжок 6): картку малюємо самі, бо рамка панелі egui додає до ширини поля й рамку й обрізає її праворуч.
 fn left_card(ctx: &egui::Context, id: &'static str, add: impl FnOnce(&mut egui::Ui)) {
     egui::SidePanel::left(id).exact_width(306.0).resizable(false).show_separator_line(false).frame(egui::Frame::new()).show(ctx, |ui| {
@@ -745,7 +757,52 @@ impl App {
             for k in [1usize, 2, 4, 5, 6] {
                 ui.painter().vline(hdr.left() + xs[k], (hdr.top() + 6.0)..=(hdr.bottom() - 6.0), Stroke::new(1.0_f32, sep));
             }
+            if self.checked.0 != f {
+                self.checked = (f, Default::default());
+            }
             let total = self.st.visible_len(f);
+            {
+                let all_on = total > 0 && self.checked.1.len() >= total && (0..total).all(|i| self.st.visible_at(f, i).is_some_and(|r| self.checked.1.contains(&r)));
+                let c = pos2(hdr.left() + xs[0] + num_w / 2.0, hdr.center().y);
+                let resp = ui.interact(Rect::from_center_size(c, vec2(22.0, 22.0)), ui.id().with("selall"), Sense::click());
+                resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, all_on, "Вибрати всі видимі рядки"));
+                paint_check(ui, c, all_on, resp.hovered());
+                if resp.clicked() {
+                    if all_on {
+                        self.checked.1.clear();
+                    } else {
+                        self.checked.1 = (0..total).filter_map(|i| self.st.visible_at(f, i)).collect();
+                    }
+                }
+            }
+            if !self.checked.1.is_empty() {
+                let (bar, _) = ui.allocate_exact_size(vec2(w, 34.0), Sense::hover());
+                ui.painter().rect_filled(bar, CornerRadius::ZERO, over_color(PANEL, accent(), 0.16));
+                ui.painter().text(pos2(bar.left() + 12.0, bar.center().y), Align2::LEFT_CENTER, format!("Вибрано {}", self.checked.1.len()), ip(12.5), TEXT);
+                let mut bx = bar.left() + 110.0;
+                let mut act: Option<u8> = None;
+                for (i, label) in ["Надіслати", "Вичитати", "Зняти вибір"].iter().enumerate() {
+                    let g = ui.painter().layout_no_wrap(label.to_string(), ip(12.0), TEXT);
+                    let r = Rect::from_min_size(pos2(bx, bar.top() + 5.0), vec2(g.size().x + 20.0, 24.0));
+                    let resp = ui.interact(r, ui.id().with(("bulk", i)), Sense::click());
+                    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("{label} вибрані")));
+                    ui.painter().rect_filled(r, CornerRadius::same(8), if resp.hovered() { BTN_HOVER } else { BTN });
+                    ui.painter().galley(pos2(r.left() + 10.0, r.center().y - g.size().y / 2.0), g.clone(), TEXT);
+                    if resp.clicked() {
+                        act = Some(i as u8);
+                    }
+                    bx += r.width() + 6.0;
+                }
+                match act {
+                    Some(0) | Some(1) => {
+                        let rows = self.checked.1.clone();
+                        self.message = self.st.bulk_rows(f, &rows, act == Some(1));
+                        self.checked.1.clear();
+                    }
+                    Some(_) => self.checked.1.clear(),
+                    None => {}
+                }
+            }
             let bad_rows: std::collections::HashSet<usize> = self.st.file_issues(f).into_iter().map(|i| i.0).collect();
             let editing = self.cell_edit;
             let mut commit: Option<bool> = None; // Some(true) — зберегти й далі, Some(false) — скасувати
@@ -774,7 +831,22 @@ impl App {
                     let col = |k: usize, wd: f32| Rect::from_min_size(pos2(rect.left() + xs[k], rect.top()), vec2(wd, ROW_H - 1.0));
                     let mid = rect.top() + 15.0;
                     // номер і стан
-                    ui.painter().text(pos2(rect.left() + xs[0] + num_w / 2.0, rect.top() + 13.0), Align2::CENTER_CENTER, format!("{}", r + 1), mp(12.0), DIM);
+                    let ck_c = pos2(rect.left() + xs[0] + num_w / 2.0, rect.top() + 13.0);
+                    let is_checked = self.checked.1.contains(&r);
+                    let ck_resp = (resp.hovered() || sel || is_checked || !self.checked.1.is_empty()).then(|| ui.interact(Rect::from_center_size(ck_c, vec2(22.0, 22.0)), ui.id().with(("rowck", r)), Sense::click()));
+                    match &ck_resp {
+                        Some(cr) => {
+                            cr.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, is_checked, format!("Вибрати рядок {}", r + 1)));
+                            paint_check(ui, ck_c, is_checked, cr.hovered());
+                        }
+                        None => {
+                            ui.painter().text(ck_c, Align2::CENTER_CENTER, format!("{}", r + 1), mp(12.0), DIM);
+                        }
+                    }
+                    let ck_clicked = ck_resp.as_ref().is_some_and(|c| c.clicked());
+                    if ck_clicked && !self.checked.1.remove(&r) {
+                        self.checked.1.insert(r);
+                    }
                     paint_state(ui, pos2(rect.left() + xs[1] + st_w / 2.0, rect.top() + 17.0), st, bad_rows.contains(&r));
                     ui.painter().with_clip_rect(col(2, key_w)).text(pos2(rect.left() + xs[2] + 8.0, rect.top() + 20.0), Align2::LEFT_CENTER, short_key(&self.st.key_of(f, r)), mp(12.0), MUTE);
                     if who {
@@ -811,7 +883,7 @@ impl App {
                     let ltxt = if tgt.is_empty() { "—".to_string() } else { format!("{}/{}", tgt.chars().count(), src.chars().count()) };
                     let dev = if tgt.is_empty() { 0 } else { transly_core::qa::length_deviation(&src, &tgt).abs() };
                     ui.painter().text(pos2(rect.left() + xs[6] + len_w - 10.0, rect.top() + 14.0), Align2::RIGHT_CENTER, ltxt, mp(12.0), if dev > 40 { BAD } else if dev > 15 { WARN } else { MUTE });
-                    if resp.clicked() && editing.is_none_or(|e| e != (f, r)) {
+                    if resp.clicked() && !ck_clicked && editing.is_none_or(|e| e != (f, r)) {
                         self.st.row = Some(r);
                         self.cell_edit = None;
                     }

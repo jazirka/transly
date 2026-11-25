@@ -903,7 +903,16 @@ impl AppState {
         self.bulk(only, true)
     }
 
+    /// Надсилає (чернетки) чи вичитує (надіслані) вибрані рядки файлу однією дією журналу.
+    pub fn bulk_rows(&mut self, f: usize, rows: &std::collections::HashSet<usize>, approve: bool) -> String {
+        self.bulk_in(Some(f), Some(rows), approve)
+    }
+
     fn bulk(&mut self, only: Option<usize>, approve: bool) -> String {
+        self.bulk_in(only, None, approve)
+    }
+
+    fn bulk_in(&mut self, only: Option<usize>, rows: Option<&std::collections::HashSet<usize>>, approve: bool) -> String {
         let Some(p) = self.project.as_ref() else { return "Проєкт не відкрито".into() };
         let opts = SubmitOptions { qa: self.qa_options(), block_errors: self.settings_view().is_none_or(|v| v.block_errors) };
         let now = now_ms();
@@ -913,7 +922,10 @@ impl AppState {
                 continue;
             }
             let Some(ents) = p.files.get(&v.name) else { continue };
-            for u in &v.units {
+            for (ri, u) in v.units.iter().enumerate() {
+                if rows.is_some_and(|set| !set.contains(&ri)) {
+                    continue;
+                }
                 let Some(e) = ents.get(&u.key) else { continue };
                 let st = row_state(Some(e));
                 if (approve && st != RowState::Sent) || (!approve && st != RowState::Draft) {

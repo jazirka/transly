@@ -70,6 +70,8 @@ struct App {
     bottom_open: bool,
     focus: bool,
     was_edit: u8,
+    /// Відмічені прапорцями рядки таблиці: (файл, рядки).
+    checked: (usize, std::collections::HashSet<usize>),
     /// Репліка сцени, що набирається: (рядок, текст); пишеться в проєкт при виході з поля.
     scene_draft: Option<(usize, String)>,
     /// Клітинка перекладу, що редагується в таблиці: (файл, рядок).
@@ -115,7 +117,7 @@ fn source_job_sized(text: &str, marks: &[(usize, usize, usize)], size: f32) -> e
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [true, true, false]], comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [true, true, false]], comment: String::new(), token: String::new() }
     }
 }
 
@@ -1893,6 +1895,24 @@ mod ui_tests {
     }
 
     #[test]
+    fn ticked_rows_are_sent_together() {
+        let data = game("ticks");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.st.edit(0, 0, "Герой");
+        app.st.edit(0, 1, "Хоробрий");
+        let mut h = harness(app);
+        h.run();
+        h.get_by_label("Вибрати всі видимі рядки").click();
+        h.run();
+        assert_eq!(h.state().checked.1.len(), 4);
+        h.get_by_label("Надіслати вибрані").click();
+        h.run();
+        assert_eq!(h.state().st.progress().sent, 2, "надіслано лише чернетки з вибраних");
+        assert!(h.state().checked.1.is_empty());
+    }
+
+    #[test]
     fn the_mode_switch_changes_the_layout_and_back() {
         let data = game("focus");
         let mut app = App::default();
@@ -1965,6 +1985,10 @@ mod ui_tests {
         let mut h = harness(app);
         h.run();
         h.render().unwrap().save(dir.join("table.png")).unwrap();
+        h.state_mut().checked = (0, [0usize, 1].into_iter().collect());
+        h.run();
+        h.render().unwrap().save(dir.join("table-checked.png")).unwrap();
+        h.state_mut().checked = (0, Default::default());
         h.state_mut().focus = true;
         h.run();
         h.render().unwrap().save(dir.join("focus.png")).unwrap();

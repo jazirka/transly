@@ -13,6 +13,9 @@ use eframe::egui::{self, pos2, vec2, Align2, Color32, CornerRadius, FontId, Rect
 use state::{AppState, Filter, RowStatus};
 use theme::*;
 
+/// Вікно «Оновити за глосарієм»: зміна терміна й рядки (пропозиція, вибрано, вибір форми на кожен проміжок).
+type TermSyncWin = (transly_core::termsync::TermChange, Vec<(transly_core::termsync::TermProposal, bool, Vec<i64>)>);
+
 fn main() -> eframe::Result {
     let opts = eframe::NativeOptions { viewport: egui::ViewportBuilder::default().with_inner_size([1360.0, 800.0]).with_min_inner_size([1000.0, 600.0]).with_title("Transly"), ..Default::default() };
     eframe::run_native("Transly", opts, Box::new(|cc| {
@@ -39,7 +42,7 @@ struct App {
     term_uk: String,
     itab: usize,
     activity_win: bool,
-    tsync_win: Option<(transly_core::termsync::TermChange, Vec<(transly_core::termsync::TermProposal, bool)>)>,
+    tsync_win: Option<TermSyncWin>,
     wrap_win: Option<(transly_core::wrapconfig::WrapSettings, String, bool)>,
     qar_win: bool,
     br_win: Option<String>,
@@ -1336,7 +1339,7 @@ impl App {
             self.message = format!("Рядків зі старою формою «{}» не знайдено", change.old.join("», «"));
             return;
         }
-        self.tsync_win = Some((change, sync.proposals.into_iter().map(|p| { let t = p.tick; (p, t) }).collect()));
+        self.tsync_win = Some((change, sync.proposals.into_iter().map(|p| { let (t, c) = (p.tick, vec![-1i64; p.spans.len()]); (p, t, c) }).collect()));
     }
 
     fn term_sync_window(&mut self, ctx: &egui::Context) {
@@ -1355,12 +1358,29 @@ impl App {
                 }
             });
             egui::ScrollArea::vertical().max_height(340.0).show(ui, |ui| {
-                for (p, on) in rows.iter_mut() {
+                for (p, on, choice) in rows.iter_mut() {
                     egui::Frame::new().fill(PANEL2).corner_radius(CornerRadius::same(R2)).inner_margin(egui::Margin::symmetric(10, 6)).show(ui, |ui| {
                         ui.set_width(ui.available_width());
                         ui.checkbox(on, RichText::new(format!("{} · {}", p.file, if p.conf.level == "high" { "впевнено" } else { "перевірте" })).size(11.0).color(MUTE));
                         ui.label(RichText::new(&p.before).color(MUTE));
-                        ui.label(RichText::new(&p.after).color(TEXT));
+                        ui.label(RichText::new(transly_core::termsync::apply_spans(&p.before, &p.spans, choice)).color(TEXT));
+                        for (si, sp) in p.spans.iter().enumerate() {
+                            if sp.alts.is_empty() {
+                                continue;
+                            }
+                            let cur = choice[si];
+                            let shown = if cur < 0 { sp.text.clone() } else { sp.alts.get(cur as usize).map_or(sp.text.clone(), |a| a.text.clone()) };
+                            egui::ComboBox::from_id_salt(format!("alt-{}-{}-{si}", p.file, p.key)).selected_text(format!("інша форма: {shown}")).show_ui(ui, |ui| {
+                                if ui.selectable_label(cur < 0, &sp.text).clicked() {
+                                    choice[si] = -1;
+                                }
+                                for (ai, a) in sp.alts.iter().enumerate() {
+                                    if ui.selectable_label(cur == ai as i64, &a.text).clicked() {
+                                        choice[si] = ai as i64;
+                                    }
+                                }
+                            });
+                        }
                     });
                     ui.add_space(3.0);
                 }
@@ -1375,7 +1395,7 @@ impl App {
             });
         });
         if go {
-            let picks: Vec<_> = rows.iter().filter(|r| r.1).map(|r| (r.0.clone(), vec![-1i64; r.0.spans.len()])).collect();
+            let picks: Vec<_> = rows.iter().filter(|r| r.1).map(|r| (r.0.clone(), r.2.clone())).collect();
             self.message = format!("Оновлено рядків: {}", self.st.apply_term_sync(&picks));
             close = true;
         }

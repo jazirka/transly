@@ -70,6 +70,13 @@ struct App {
     bottom_open: bool,
     focus: bool,
     was_edit: u8,
+    /// Картинки гри (піктограми, обличчя, вороги) як текстури; None — файлу в теці гри немає.
+    pic_tex: std::collections::HashMap<String, Option<egui::TextureHandle>>,
+    /// Вікно «Тексти плагінів»: вибрані назви команд.
+    plug_win: Option<std::collections::BTreeSet<String>>,
+    upd: UpdUi,
+    /// Вікно реле-синхронізації: правка адреси, пароля й періоду.
+    relay_win: Option<state::RelayCfg>,
     /// Вікно «Конструкції»: знайдені пропозиції; відкладені («Не зараз») пам'ятаються до кінця сеансу.
     mine_win: Option<Vec<transly_core::mine::ConstructionSuggestion>>,
     mine_no: std::collections::HashSet<String>,
@@ -89,6 +96,31 @@ struct App {
     right_secs: [[bool; 3]; 2],
     comment: String,
     token: String,
+}
+
+/// Відповіді потоків оновлення.
+enum UpdMsg {
+    Checked(Result<transly_platform::selfupdate::Latest, String>),
+    Downloaded(Result<std::path::PathBuf, String>),
+}
+
+/// Стан вікна «Оновлення».
+struct UpdUi {
+    win: bool,
+    repo: String,
+    token: String,
+    status: String,
+    latest: Option<transly_platform::selfupdate::Latest>,
+    rx: Option<std::sync::mpsc::Receiver<UpdMsg>>,
+    /// Перевірка при старті вже була; поточна відповідь тиха (без повідомлення, коли нового нема).
+    auto_done: bool,
+    silent: bool,
+}
+
+impl Default for UpdUi {
+    fn default() -> Self {
+        UpdUi { win: false, repo: "jazirka/transly".into(), token: String::new(), status: String::new(), latest: None, rx: None, auto_done: false, silent: false }
+    }
 }
 
 const TERM_COLORS: [Color32; 4] = [VIOLET, INFO, OK, WARN];
@@ -123,9 +155,76 @@ fn source_job_sized(text: &str, marks: &[(usize, usize, usize)], size: f32) -> e
     job
 }
 
+/// Кольори вікна повідомлень RPG Maker (`\C[n]`): близькі до тих, що показує гра, але не точні для ігор із власним скіном.
+const GAME_COLORS: [(u8, u8, u8); 32] = [
+    (0xff, 0xff, 0xff), (0x20, 0xa0, 0xd6), (0xff, 0x78, 0x4c), (0x66, 0xcc, 0x40), (0x99, 0xcc, 0xff), (0xcc, 0xc0, 0xff), (0xff, 0xff, 0xa0), (0x80, 0x80, 0x80),
+    (0xc0, 0xc0, 0xc0), (0x20, 0x80, 0xcc), (0xff, 0x38, 0x20), (0x00, 0xa0, 0x40), (0x60, 0x80, 0xc0), (0x80, 0x60, 0xc0), (0xff, 0xcc, 0x20), (0x00, 0x00, 0x00),
+    (0x84, 0xaa, 0xff), (0xff, 0xff, 0x40), (0xff, 0x20, 0x20), (0x20, 0x20, 0x40), (0xe0, 0x80, 0x40), (0xf0, 0xc0, 0x40), (0x40, 0x40, 0xc0), (0x20, 0xe0, 0x20),
+    (0x40, 0x80, 0xc0), (0x80, 0x40, 0xc0), (0xc0, 0x40, 0x80), (0x80, 0x80, 0x40), (0xc0, 0xc0, 0x00), (0x40, 0xc0, 0xc0), (0x40, 0x40, 0x80), (0x60, 0x20, 0x60),
+];
+
+/// Текст так, як його покаже вікно повідомлень: кольори `\C[n]` застосовано, `\N[n]` — ім'я героя, коди часу (`\.` `\|` `\!`…) відкинуто,
+/// решта керівних кодів (`\V[n]`, `\I[n]`, `\P[n]`) лишається як є.
+fn game_job(text: &str, size: f32, actor_name: &dyn Fn(usize) -> Option<String>) -> egui::text::LayoutJob {
+    use egui::text::{LayoutJob, TextFormat};
+    let fmt = |c: Color32| TextFormat { font_id: FontId::proportional(size), color: c, ..Default::default() };
+    let mut job = LayoutJob::default();
+    let mut color = TEXT;
+    let chars: Vec<char> = text.chars().collect();
+    let (mut i, mut buf) = (0usize, String::new());
+    let flush = |job: &mut LayoutJob, buf: &mut String, c: Color32| {
+        if !buf.is_empty() {
+            job.append(buf, 0.0, fmt(c));
+            buf.clear();
+        }
+    };
+    while i < chars.len() {
+        if chars[i] != '\\' {
+            buf.push(chars[i]);
+            i += 1;
+            continue;
+        }
+        // двократна скісна риска — одна
+        if chars.get(i + 1) == Some(&'\\') {
+            buf.push('\\');
+            i += 2;
+            continue;
+        }
+        if chars.get(i + 1).is_some_and(|c| "{}.|!><^$".contains(*c)) {
+            i += 2;
+            continue;
+        }
+        let name: String = chars[i + 1..].iter().take_while(|c| c.is_ascii_alphabetic()).collect();
+        let after = i + 1 + name.len();
+        if !name.is_empty() && chars.get(after) == Some(&'[') {
+            if let Some(end) = chars[after..].iter().position(|c| *c == ']') {
+                let num: String = chars[after + 1..after + end].iter().collect();
+                let n: usize = num.parse().unwrap_or(0);
+                match name.to_uppercase().as_str() {
+                    "C" => {
+                        flush(&mut job, &mut buf, color);
+                        color = if n == 0 { TEXT } else { GAME_COLORS.get(n).map_or(TEXT, |(r, g, b)| Color32::from_rgb(*r, *g, *b)) };
+                    }
+                    "N" => match actor_name(n) {
+                        Some(a) => buf.push_str(&a),
+                        None => buf.push_str(&chars[i..=after + end].iter().collect::<String>()),
+                    },
+                    _ => buf.push_str(&chars[i..=after + end].iter().collect::<String>()),
+                }
+                i = after + end + 1;
+                continue;
+            }
+        }
+        buf.push('\\');
+        i += 1;
+    }
+    flush(&mut job, &mut buf, color);
+    job
+}
+
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [true, true, false]], comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [true, true, false]], comment: String::new(), token: String::new() }
     }
 }
 
@@ -263,6 +362,10 @@ impl App {
         self.bottom(ctx);
         self.settings_window(ctx);
         self.sync_window(ctx);
+        self.relay_window(ctx);
+        self.relay_auto();
+        self.plug_window(ctx);
+        self.update_window(ctx);
         self.plugins_window(ctx);
         self.find_window(ctx);
         self.fill_window(ctx);
@@ -758,6 +861,26 @@ impl App {
                 self.mine_win = Some(self.st.mine_suggestions());
                 ui.close_menu();
             }
+            if ui.add_enabled(self.st.is_open(), egui::Button::new(if self.st.syncing() { "Синхронізація триває…" } else { "Синхронізація через реле…" })).clicked() {
+                self.relay_win = Some(self.st.relay.clone());
+                ui.close_menu();
+            }
+            if ui.button("Оновлення…").clicked() {
+                self.upd.win = true;
+                if self.upd.latest.is_none() {
+                    self.upd.token = self.token.clone();
+                }
+                ui.close_menu();
+            }
+            if ui.add_enabled(self.st.is_open(), egui::Button::new("Тексти плагінів…")).on_hover_text("Деякі ігри показують текст командами плагінів, а не вікнами повідомлень: позначте, які команди брати").clicked() {
+                let (names, asked) = self.st.plugin_choice();
+                let mut chosen: std::collections::BTreeSet<String> = names.into_iter().collect();
+                if !asked {
+                    chosen.extend(self.st.plugin_candidates().into_iter().filter(|c| c.likely).map(|c| c.name));
+                }
+                self.plug_win = Some(chosen);
+                ui.close_menu();
+            }
             if ui.add_enabled(self.st.is_open(), egui::Button::new("Активність…")).clicked() {
                 self.activity_win = true;
                 ui.close_menu();
@@ -1145,6 +1268,273 @@ impl App {
             self.sync_win = None;
         } else {
             self.sync_win = Some((cfg, token));
+        }
+    }
+
+    /// Автообмін із реле: коли налаштовано період і він минув, обмін починається сам (без вікон і повідомлень, крім помилки).
+    fn relay_auto(&mut self) {
+        let r = &self.st.relay;
+        if r.every_min == 0 || !r.configured() || !self.st.is_open() || self.st.syncing() {
+            return;
+        }
+        if state::now_ms() - r.last >= i64::from(r.every_min) * 60_000 {
+            if let Err(e) = self.st.start_relay_sync() {
+                self.message = e;
+                self.st.relay.every_min = 0;
+            }
+        }
+    }
+
+    /// «Синхронізація через реле»: власне сховище між вашими пристроями; усе шифрується паролем, реле бачить лише байти.
+    fn relay_window(&mut self, ctx: &egui::Context) {
+        let Some(mut cfg) = self.relay_win.clone() else { return };
+        let mut open = true;
+        let (mut go, mut save) = (false, false);
+        egui::Window::new("Синхронізація через реле").open(&mut open).collapsible(false).resizable(false).default_width(460.0).show(ctx, |ui| {
+            egui::Grid::new("relay_grid").num_columns(2).spacing([14.0, 10.0]).show(ui, |ui| {
+                ui.label("Адреса сервера");
+                ui.add(egui::TextEdit::singleline(&mut cfg.url).hint_text("https://…").desired_width(280.0));
+                ui.end_row();
+                ui.label("Пароль синхронізації");
+                ui.add(egui::TextEdit::singleline(&mut cfg.passphrase).password(true).desired_width(280.0));
+                ui.end_row();
+                ui.label("Само, раз на (хв, 0 — вручну)");
+                ui.add(egui::DragValue::new(&mut cfg.every_min).range(0..=1440));
+                ui.end_row();
+            });
+            if let Some(p) = transly_platform::relay::url_problem(&cfg.url).filter(|_| !cfg.url.trim().is_empty()) {
+                ui.label(RichText::new(p).color(WARN));
+            }
+            ui.label(RichText::new("Той самий пароль на кожному пристрої дає ту саму «кімнату». Пароль не передається, лише шифрує дані (щонайменше 8 символів). Адреса й пароль лишаються на цьому пристрої, у файл проєкту не потрапляють.").size(11.0).color(MUTE));
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if ui.add_enabled(cfg.configured() && !self.st.syncing(), egui::Button::new(RichText::new("Синхронізувати").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 26.0))).clicked() {
+                    go = true;
+                }
+                if plain_button(ui, "Зберегти").clicked() {
+                    save = true;
+                }
+            });
+        });
+        if go || save {
+            cfg.last = self.st.relay.last;
+            self.st.relay = cfg.clone();
+            self.st.relay.save();
+            if go {
+                self.message = match self.st.start_relay_sync() {
+                    Ok(()) => "Синхронізація почалась…".into(),
+                    Err(e) => e,
+                };
+            }
+            self.relay_win = None;
+        } else if !open {
+            self.relay_win = None;
+        } else {
+            self.relay_win = Some(cfg);
+        }
+    }
+
+    /// Тиха перевірка оновлень при старті (раз за сеанс, не для локальної збірки): знайшла нове — лише повідомлення.
+    fn update_auto(&mut self) {
+        if self.upd.auto_done || transly_platform::selfupdate::build_id() == "dev" {
+            return;
+        }
+        self.upd.auto_done = true;
+        self.upd.silent = true;
+        self.update_check();
+    }
+
+    fn update_check(&mut self) {
+        if self.upd.rx.is_some() {
+            return;
+        }
+        self.upd.status = "Перевіряю…".into();
+        let (repo, token) = (self.upd.repo.clone(), self.upd.token.clone());
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(UpdMsg::Checked(transly_platform::selfupdate::check_latest(&repo, &token)));
+        });
+        self.upd.rx = Some(rx);
+    }
+
+    fn update_download(&mut self) {
+        let Some(asset) = self.upd.latest.as_ref().and_then(|l| l.asset.clone()) else { return };
+        if self.upd.rx.is_some() {
+            return;
+        }
+        self.upd.status = "Завантажую оновлення…".into();
+        let token = self.upd.token.clone();
+        let dir = std::env::temp_dir().join("transly-native-update");
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(UpdMsg::Downloaded(transly_platform::selfupdate::download_new(&asset, &token, &dir)));
+        });
+        self.upd.rx = Some(rx);
+    }
+
+    /// Забирає відповіді потоків оновлення; після завантаження запускає заміну файлу й просить закритися.
+    fn update_poll(&mut self, ctx: &egui::Context) {
+        let Some(msg) = self.upd.rx.as_ref().and_then(|r| r.try_recv().ok()) else { return };
+        self.upd.rx = None;
+        match msg {
+            UpdMsg::Checked(Err(e)) => {
+                self.upd.status = e.clone();
+                if !self.upd.silent {
+                    self.message = e;
+                }
+            }
+            UpdMsg::Checked(Ok(l)) => {
+                let newer = l.newer;
+                self.upd.status = if newer { "Є нова версія.".into() } else { "У вас остання версія.".into() };
+                if newer && self.upd.silent {
+                    self.message = "Є нова версія: відкрийте «Інструменти → Оновлення…»".into();
+                } else if !self.upd.silent {
+                    self.message = self.upd.status.clone();
+                }
+                self.upd.latest = Some(l);
+            }
+            UpdMsg::Downloaded(Err(e)) => {
+                self.upd.status = e.clone();
+                self.message = e;
+            }
+            UpdMsg::Downloaded(Ok(path)) => {
+                // зберегти проєкт, запустити помічника (він підмінить файл після закриття) і закритися
+                let _ = self.st.save_project();
+                match transly_platform::selfupdate::spawn_replace(&path, true) {
+                    Ok(()) => {
+                        self.upd.status = "Оновлення встановиться, коли застосунок закриється; він запуститься знову.".into();
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                    Err(e) => {
+                        self.upd.status = e.clone();
+                        self.message = e;
+                    }
+                }
+            }
+        }
+        self.upd.silent = false;
+    }
+
+    /// «Оновлення…»: версія збірки, перевірка, завантаження й встановлення (файл підміняється після закриття, застосунок стартує знову).
+    fn update_window(&mut self, ctx: &egui::Context) {
+        self.update_poll(ctx);
+        self.update_auto();
+        if self.upd.rx.is_some() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(300));
+        }
+        if !self.upd.win {
+            return;
+        }
+        let mut open = true;
+        let (mut check, mut install) = (false, false);
+        let busy = self.upd.rx.is_some();
+        let can_install = self.upd.latest.as_ref().is_some_and(|l| l.newer && l.asset.is_some()) && !busy;
+        egui::Window::new("Оновлення").open(&mut open).collapsible(false).resizable(false).default_width(440.0).show(ctx, |ui| {
+            let id = transly_platform::selfupdate::build_id();
+            ui.label(RichText::new(format!("Версія збірки: {}", if id == "dev" { "локальна".to_string() } else { id.chars().take(7).collect() })).color(MUTE));
+            ui.add_space(6.0);
+            egui::Grid::new("upd_grid").num_columns(2).spacing([14.0, 10.0]).show(ui, |ui| {
+                ui.label("Репозиторій зі збірками");
+                ui.add(egui::TextEdit::singleline(&mut self.upd.repo).desired_width(240.0));
+                ui.end_row();
+                ui.label("Токен (лише для приватного)");
+                ui.add(egui::TextEdit::singleline(&mut self.upd.token).password(true).desired_width(240.0));
+                ui.end_row();
+            });
+            if let Some(l) = &self.upd.latest {
+                ui.add_space(6.0);
+                let when = chrono::DateTime::parse_from_rfc3339(&l.release.published).map(|d| d.with_timezone(&chrono::Local).format("%d.%m.%Y %H:%M").to_string()).unwrap_or_default();
+                ui.label(RichText::new(format!("Останній реліз: {}{}", l.release.sha.chars().take(7).collect::<String>(), if when.is_empty() { String::new() } else { format!(" · {when}") })).color(TEXT));
+                if let Some((name, _, size)) = &l.asset {
+                    ui.label(RichText::new(format!("Файл: {name} ({:.1} МБ)", *size as f64 / 1_048_576.0)).size(11.5).color(MUTE));
+                }
+            }
+            if !self.upd.status.is_empty() {
+                ui.add_space(6.0);
+                ui.label(RichText::new(&self.upd.status).color(MUTE));
+            }
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if ui.add_enabled(!busy, egui::Button::new("Перевірити зараз")).clicked() {
+                    check = true;
+                }
+                if ui.add_enabled(can_install, egui::Button::new(RichText::new("Завантажити й встановити").color(Color32::WHITE)).fill(accent_solid())).clicked() {
+                    install = true;
+                }
+            });
+        });
+        if check {
+            self.update_check();
+        }
+        if install {
+            self.update_download();
+        }
+        if !open {
+            self.upd.win = false;
+        }
+    }
+
+    /// «Тексти плагінів»: команди плагінів (код 356), що трапляються в грі; позначені несуть текст для гравця й потрапляють у таблицю.
+    fn plug_window(&mut self, ctx: &egui::Context) {
+        let Some(mut chosen) = self.plug_win.clone() else { return };
+        let cands = self.st.plugin_candidates();
+        let (saved, _) = self.st.plugin_choice();
+        let known: std::collections::HashSet<&str> = cands.iter().map(|c| c.name.as_str()).collect();
+        let keep: Vec<String> = saved.iter().filter(|n| !known.contains(n.as_str())).cloned().collect();
+        let mut open = true;
+        let (mut apply, mut cancel) = (false, false);
+        egui::Window::new("Тексти плагінів").open(&mut open).collapsible(false).default_width(520.0).default_height(440.0).show(ctx, |ui| {
+            ui.label(RichText::new("Деякі ігри показують текст не у вікнах повідомлень, а командами плагінів (спливаючі репліки, пункти меню). Позначте команди, чий текст треба перекладати. Що саме в них, видно з прикладів.").color(MUTE));
+            ui.add_space(6.0);
+            if cands.is_empty() {
+                ui.label(RichText::new("У цій грі не знайдено команд плагінів із текстом.").color(MUTE));
+            }
+            egui::ScrollArea::vertical().auto_shrink([false, true]).max_height(300.0).show(ui, |ui| {
+                for c in &cands {
+                    let mut on = chosen.contains(&c.name);
+                    ui.horizontal(|ui| {
+                        if ui.checkbox(&mut on, "").changed() {
+                            if on {
+                                chosen.insert(c.name.clone());
+                            } else {
+                                chosen.remove(&c.name);
+                            }
+                        }
+                        ui.vertical(|ui| {
+                            ui.label(RichText::new(&c.name).strong().color(TEXT));
+                            ui.label(RichText::new(format!("{} з текстом{}{}", c.with_text, if c.with_text < c.count { format!(" із {}", c.count) } else { String::new() }, if c.likely { " · схоже на текст для гравця" } else { "" })).size(11.5).color(MUTE));
+                            for x in c.samples.iter().take(3) {
+                                ui.label(RichText::new(format!("«{}»", x.replace('\n', " "))).size(11.5).color(DIM));
+                            }
+                        });
+                    });
+                    ui.add_space(4.0);
+                }
+            });
+            if !keep.is_empty() {
+                ui.label(RichText::new(format!("Також увімкнено раніше: {}.", keep.join(", "))).color(MUTE));
+            }
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if primary_button(ui, "Застосувати").clicked() {
+                    apply = true;
+                }
+                if plain_button(ui, "Скасувати").clicked() {
+                    cancel = true;
+                }
+            });
+        });
+        if apply {
+            let mut names = keep.clone();
+            names.extend(chosen.iter().cloned());
+            self.message = self.st.set_plugin_commands(&names);
+            self.draft_for = None;
+            self.cell_edit = None;
+            self.plug_win = None;
+        } else if cancel || !open {
+            self.plug_win = None;
+        } else {
+            self.plug_win = Some(chosen);
         }
     }
 
@@ -2285,6 +2675,139 @@ mod ui_tests {
         h.get_all_by_label("Додати").next().unwrap().click();
         h.run();
         assert_eq!(h.state().st.terms().len(), 1, "запис додано в глосарій");
+    }
+
+    #[test]
+    fn the_relay_window_saves_the_settings_and_refuses_a_bad_address() {
+        let data = game("relay");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.relay_win = Some(state::RelayCfg { url: "not a url".into(), passphrase: "correct horse battery".into(), every_min: 0, last: 0 });
+        let mut h = harness(app);
+        h.run();
+        h.get_by_label("Зберегти").click();
+        h.run();
+        assert!(h.state().relay_win.is_none());
+        assert_eq!(h.state().st.relay.passphrase, "correct horse battery");
+        assert!(!h.state().st.relay.configured(), "адреса не схожа на адресу");
+        assert_eq!(h.state_mut().st.start_relay_sync().unwrap_err(), "Адреса сервера має починатися з https:// (для власної мережі можна http://)");
+        h.state_mut().st.relay.url = "https://relay.example".into();
+        assert!(h.state().st.relay.configured());
+    }
+
+    #[test]
+    fn the_update_window_checks_the_repository_name_without_the_network() {
+        let mut app = App::default();
+        app.upd.win = true;
+        app.upd.repo = "не-репозиторій".into();
+        let mut h = harness(app);
+        h.run();
+        h.get_by_label("Перевірити зараз").click();
+        for _ in 0..30 {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            h.run();
+            if h.state().upd.rx.is_none() {
+                break;
+            }
+        }
+        assert_eq!(h.state().upd.status, "Репозиторій вкажіть як «власник/назва»");
+        assert!(h.state().upd.latest.is_none());
+    }
+
+    #[test]
+    fn plugin_command_texts_join_the_table_when_chosen_and_stay_after_reopening() {
+        let base = std::env::temp_dir().join(format!("transly-ui-plug-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = base.join("MyGame").join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        let cmd = |t: &str| format!(r#"{{"code":356,"indent":0,"parameters":["GabText {t}"]}}"#);
+        let l = [cmd("Hello there, my friend"), cmd("Welcome to the old town"), cmd("Where did you come from today"), cmd("The road is long and dark"), r#"{"code":0,"indent":0,"parameters":[]}"#.to_string()].join(",");
+        std::fs::write(data.join("Map001.json"), format!(r#"{{"displayName":"Зал","events":[null,{{"id":1,"name":"Зал","x":1,"y":1,"pages":[{{"conditions":{{}},"list":[{l}],"trigger":0}}]}}]}}"#)).unwrap();
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        let rows = |a: &App| a.st.file_names().iter().position(|n| n == "Map001.json").map_or(0, |f| a.st.row_count(f));
+        let before = rows(&app);
+        let cands = app.st.plugin_candidates();
+        assert!(cands.iter().any(|c| c.name == "GabText" && c.with_text == 4), "{:?}", cands.iter().map(|c| (&c.name, c.with_text)).collect::<Vec<_>>());
+        app.plug_win = Some(["GabText".to_string()].into_iter().collect());
+        let mut h = harness(app);
+        h.run();
+        h.get_by_label("Застосувати").click();
+        h.run();
+        assert!(rows(h.state()) > before, "тексти команди з'явились у таблиці");
+        // після повторного відкриття вибір лишається (він у налаштуваннях проєкту)
+        h.state_mut().st.save_project().unwrap();
+        let after = rows(h.state());
+        let mut again = App::default();
+        again.st.open_game(&data).unwrap();
+        assert_eq!(rows(&again), after);
+    }
+
+    #[test]
+    fn strands_show_glossary_terms_with_their_state_and_game_names_with_their_translation() {
+        use transly_core::strands::StrandState;
+        let base = std::env::temp_dir().join(format!("transly-ui-strands-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = base.join("MyGame").join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        std::fs::write(data.join("Actors.json"), r#"[null,{"id":1,"name":"Harold","nickname":"","profile":"","note":""}]"#).unwrap();
+        std::fs::write(data.join("Items.json"), r#"[null,{"id":1,"name":"Sword","description":"Harold swings the sword of light","note":""}]"#).unwrap();
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.st.add_term("sword", "меч");
+        let fi = app.st.file_names().iter().position(|n| n == "Items.json").unwrap();
+        let ri = (0..app.st.row_count(fi)).find(|r| app.st.source_of(fi, *r).starts_with("Harold swings")).unwrap();
+        let before = app.st.strands(fi, ri);
+        assert_eq!(before.len(), 1);
+        assert_eq!(before[0].0.state, StrandState::Pending, "ще не перекладено");
+        app.st.edit(fi, ri, "Гарольд змахує мечем світла");
+        assert_eq!(app.st.strands(fi, ri)[0].0.state, StrandState::Ok, "«меч» є в перекладі (у формі «мечем»)");
+        app.st.edit(fi, ri, "Гарольд змахує клинком світла");
+        assert_eq!(app.st.strands(fi, ri)[0].0.state, StrandState::Missing);
+        let names = app.st.game_names_in(fi, ri);
+        assert!(names.iter().any(|(g, _)| g.name == "Harold"), "ім'я з бази даних Actors знайдено в описі");
+        app.st.row = Some(ri);
+        app.rail = 3;
+        let mut h = harness(app);
+        h.run();
+    }
+
+    #[test]
+    fn icons_and_faces_come_from_the_game_images() {
+        use state::Pic;
+        let base = std::env::temp_dir().join(format!("transly-ui-pics-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let root = base.join("MyGame");
+        let data = root.join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        std::fs::create_dir_all(root.join("img").join("system")).unwrap();
+        std::fs::write(data.join("Items.json"), r#"[null,{"id":1,"name":"Potion","description":"Heals","iconIndex":5,"note":"<Picture: potion_big>"}]"#).unwrap();
+        image::RgbaImage::from_pixel(512, 64, image::Rgba([200, 30, 30, 255])).save(root.join("img").join("system").join("IconSet.png")).unwrap();
+        let mut app = App::default();
+        app.st.open_game(&root).unwrap();
+        let fi = app.st.file_names().iter().position(|n| n == "Items.json").unwrap();
+        let ri = (0..app.st.row_count(fi)).find(|r| app.st.source_of(fi, *r) == "Potion").unwrap();
+        let pics = app.st.pics_of(fi, ri);
+        assert!(pics.contains(&Pic::Icon { n: 5, label: "Potion".into() }), "{pics:?}");
+        assert!(pics.iter().any(|p| matches!(p, Pic::Picture { name, .. } if name == "potion_big")));
+        assert!(app.st.game_image("img/system/IconSet.png").is_some());
+        assert!(app.st.game_image("img/pictures/potion_big.png").is_none(), "немає файлу — немає картинки");
+        app.st.row = Some(ri);
+        app.focus = true;
+        let mut h = harness(app);
+        h.run();
+        assert!(h.state().pic_tex.get("icon:5").is_some_and(|t| t.is_some()), "піктограму вирізано з IconSet.png");
+        assert!(h.state().pic_tex.get("picture:potion_big").is_some_and(|t| t.is_none()));
+    }
+
+    #[test]
+    fn message_codes_are_shown_the_way_the_game_window_shows_them() {
+        let who = |n: usize| (n == 1).then(|| "Гарольд".to_string());
+        let job = game_job(r"\C[2]Увага!\C[0] \N[1], йди\.\! далі \V[3] \ ", 14.0, &who);
+        let text: String = job.sections.iter().map(|s| &job.text[s.byte_range.clone()]).collect::<Vec<_>>().concat();
+        assert_eq!(text, r"Увага! Гарольд, йди далі \V[3] \ ", "імена підставлено, коди часу прибрано, інші коди лишились");
+        assert_eq!(job.sections[0].format.color, Color32::from_rgb(0xff, 0x78, 0x4c), r"\C[2] фарбує текст");
+        assert_eq!(job.sections[1].format.color, TEXT, r"\C[0] повертає колір");
     }
 
     #[test]

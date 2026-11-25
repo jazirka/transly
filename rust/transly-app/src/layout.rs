@@ -3,6 +3,7 @@
 //! решта, права колонка 350 зі смужкою значків 34; таблиця: рядки 34, шапка 26; редагування: поле перекладу з нижньою панеллю.
 
 use super::*;
+use state::Pic;
 
 const CARD_R: u8 = 12;
 /// Виділення (біле 15 % на тлі картки) і рамка картки (біле 16 %) суцільними кольорами: без прозорості, щоб рендер у тестах і у вікні збігався.
@@ -374,20 +375,7 @@ impl App {
                         }
                     });
                 }
-                let terms = self.st.terms();
-                let mut seen = std::collections::BTreeSet::new();
-                for (_, _, ti) in self.st.source_marks(f, r) {
-                    if seen.insert(ti) {
-                        if let Some(t) = terms.get(ti) {
-                            ui.horizontal(|ui| {
-                                ui.colored_label(TERM_COLORS[ti % TERM_COLORS.len()], "●");
-                                ui.label(RichText::new(&t.en).color(TEXT));
-                                ui.label(RichText::new("-").color(DIM));
-                                ui.label(RichText::new(&t.uk).color(TEXT));
-                            });
-                        }
-                    }
-                }
+                self.strands_ui(ui, f, r);
                 if let Some((o, fl, up, ed)) = self.st.link_info(f, r) {
                     ui.label(RichText::new(format!("Ще {o} з таким самим оригіналом: порожніх {fl}, старіших {up}, змінених вручну {ed}")).size(11.0).color(MUTE));
                     ui.horizontal(|ui| {
@@ -422,6 +410,71 @@ impl App {
                 }
             });
         });
+    }
+
+    /// Нитки рядка в «Пов’язаному»: картка на кожен запис глосарія, що є в оригіналі (слово, фраза, конструкція з пропуском),
+    /// зі станом у перекладі; і картки назв, які гра визначає сама (предмети, персонажі…) з їхнім перекладом у базі даних.
+    fn strands_ui(&mut self, ui: &mut egui::Ui, f: usize, r: usize) {
+        use transly_core::strands::{StrandKind, StrandState};
+        for (s, t) in self.st.strands(f, r) {
+            let (state, col) = match s.state {
+                StrandState::Ok => ("є в перекладі", OK),
+                StrandState::Alt => ("передано варіантом", INFO),
+                StrandState::Missing => ("немає в перекладі", BAD),
+                StrandState::Pending => ("ще не перекладено", MUTE),
+            };
+            let kind = match s.kind {
+                StrandKind::Word => "слово",
+                StrandKind::Phrase => "фраза",
+                StrandKind::Construction => "конструкція",
+            };
+            egui::Frame::new().fill(PANEL2).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(CornerRadius::same(8)).inner_margin(egui::Margin::symmetric(10, 7)).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.spacing_mut().item_spacing.y = 3.0;
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 7.0;
+                    let (d, _) = ui.allocate_exact_size(vec2(10.0, 14.0), Sense::hover());
+                    ui.painter().circle_filled(d.center(), 5.0, TERM_COLORS[s.ci % TERM_COLORS.len()]);
+                    ui.label(RichText::new(&t.en).strong().color(TEXT));
+                    ui.label(RichText::new("→").color(MUTE));
+                    ui.label(RichText::new(&t.uk).strong().color(TEXT));
+                });
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(kind).font(mp(10.5)).color(MUTE));
+                    ui.label(RichText::new("·").color(DIM));
+                    ui.label(RichText::new(state).font(mp(10.5)).color(col));
+                });
+            });
+        }
+        let names = self.st.game_names_in(f, r);
+        if !names.is_empty() {
+            ui.label(RichText::new("НАЗВИ З ГРИ").size(10.5).color(MUTE));
+            for (g, tr) in names {
+                let mut open_it = false;
+                egui::Frame::new().fill(PANEL2).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(CornerRadius::same(8)).inner_margin(egui::Margin::symmetric(10, 7)).show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 7.0;
+                        ui.label(RichText::new(&g.name).strong().color(TEXT));
+                        ui.label(RichText::new("→").color(MUTE));
+                        if tr.is_empty() {
+                            ui.label(RichText::new("ще не перекладено").color(MUTE));
+                        } else {
+                            ui.label(RichText::new(&tr).strong().color(TEXT));
+                        }
+                    });
+                    ui.label(RichText::new(g.file.trim_end_matches(".json")).font(mp(10.5)).color(DIM));
+                    if plain_button(ui, "Показати").clicked() {
+                        open_it = true;
+                    }
+                });
+                if open_it {
+                    self.st.open_ref(&g.file, &g.key);
+                    self.draft_for = None;
+                    self.cell_edit = None;
+                }
+            }
+        }
     }
 
     // ------------------------------------------------------------------ центр
@@ -1055,6 +1108,92 @@ impl App {
         }
     }
 
+    /// Картинка гри як текстура (з кешу). `None`, коли в теці гри такого файлу немає.
+    fn pic_texture(&mut self, ctx: &egui::Context, pic: &Pic) -> Option<egui::TextureHandle> {
+        let key = match pic {
+            Pic::Icon { n, .. } => format!("icon:{n}"),
+            Pic::Face { name, index, .. } => format!("face:{name}:{index}"),
+            Pic::Enemy { name, .. } => format!("enemy:{name}"),
+            Pic::Picture { name, .. } => format!("picture:{name}"),
+        };
+        if let Some(t) = self.pic_tex.get(&key) {
+            return t.clone();
+        }
+        let tex = self.build_pic(ctx, pic, &key);
+        self.pic_tex.insert(key, tex.clone());
+        tex
+    }
+
+    fn build_pic(&self, ctx: &egui::Context, pic: &Pic, key: &str) -> Option<egui::TextureHandle> {
+        let load = |rel: &str| self.st.game_image(rel).and_then(|b| image::load_from_memory_with_format(&b, image::ImageFormat::Png).ok()).map(|i| i.to_rgba8());
+        let crop = |img: &image::RgbaImage, x: u32, y: u32, w: u32, h: u32| -> Option<egui::ColorImage> {
+            if w == 0 || h == 0 || x + w > img.width() || y + h > img.height() {
+                return None;
+            }
+            let sub = image::imageops::crop_imm(img, x, y, w, h).to_image();
+            Some(egui::ColorImage::from_rgba_unmultiplied([w as usize, h as usize], sub.as_raw()))
+        };
+        let color = match pic {
+            Pic::Icon { n, .. } => {
+                let img = load("img/system/IconSet.png")?;
+                crop(&img, (*n as u32 % 16) * 32, (*n as u32 / 16) * 32, 32, 32)?
+            }
+            Pic::Face { name, index, .. } => {
+                let img = load(&format!("img/faces/{name}.png"))?;
+                let (cw, ch) = (img.width() / 4, img.height() / 2);
+                crop(&img, (*index as u32 % 4) * cw, (*index as u32 / 4) * ch, cw, ch)?
+            }
+            Pic::Enemy { name, .. } => {
+                let img = load(&format!("img/enemies/{name}.png")).or_else(|| load(&format!("img/sv_enemies/{name}.png")))?;
+                crop(&img, 0, 0, img.width(), img.height())?
+            }
+            Pic::Picture { name, .. } => {
+                let img = load(&format!("img/pictures/{name}.png"))?;
+                crop(&img, 0, 0, img.width(), img.height())?
+            }
+        };
+        Some(ctx.load_texture(key, color, egui::TextureOptions::NEAREST))
+    }
+
+    /// Картинки до рядка над полем перекладу: піктограма, обличчя, ворог (як у старому застосунку; ≤ 96 у висоту, обличчя 72).
+    fn pics_ui(&mut self, ui: &mut egui::Ui, f: usize, r: usize) {
+        let pics = self.st.pics_of(f, r);
+        if pics.is_empty() {
+            return;
+        }
+        let ctx = ui.ctx().clone();
+        let mut shown: Vec<(egui::TextureHandle, String, egui::Vec2)> = Vec::new();
+        for p in &pics {
+            let Some(t) = self.pic_texture(&ctx, p) else { continue };
+            let sz = t.size_vec2();
+            let size = match p {
+                Pic::Icon { .. } => sz,
+                Pic::Face { .. } => vec2(72.0, 72.0),
+                _ => {
+                    let k = (96.0 / sz.y).min(1.0);
+                    sz * k
+                }
+            };
+            let label = match p {
+                Pic::Icon { label, .. } | Pic::Face { label, .. } | Pic::Enemy { label, .. } | Pic::Picture { label, .. } => label.clone(),
+            };
+            shown.push((t, label, size));
+        }
+        if shown.is_empty() {
+            return;
+        }
+        ui.add_space(8.0);
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = vec2(10.0, 6.0);
+            for (t, label, size) in shown {
+                let resp = ui.add(egui::Image::new(&t).fit_to_exact_size(size));
+                if !label.is_empty() {
+                    resp.on_hover_text(label);
+                }
+            }
+        });
+    }
+
     /// «Внески» під полем: по картці на кожен надісланий переклад рядка (найновіші першими): автор, текст, голоси «+» і «−»,
     /// галочка (переклад іде в рядок і рядок вичитано) і кошик (зняти внесок з картки).
     fn contributions_ui(&mut self, ui: &mut egui::Ui, f: usize, r: usize) {
@@ -1173,6 +1312,7 @@ impl App {
                     ui.set_width(ui.available_width());
                     ui.label(source_job_sized(&self.st.source_of(f, r), &self.st.source_marks(f, r), 15.0 * 0.936));
                 });
+                self.pics_ui(ui, f, r);
                 for (lang, text) in self.st.references_of(f, r) {
                     ui.add_space(10.0);
                     ui.label(RichText::new(format!("ДОВІДКА · {}", lang.to_uppercase())).font(ip(12.0)).color(MUTE));
@@ -1234,6 +1374,18 @@ impl App {
                 });
                 if out.inner {
                     ui.painter().rect_stroke(out.response.rect, CornerRadius::same(CARD_R), Stroke::new(1.0_f32, accent()), StrokeKind::Inside);
+                }
+                // як у грі: кольори й імена з керівних кодів, коли вони є в оригіналі чи перекладі
+                if self.draft.contains('\\') || src.contains('\\') {
+                    ui.add_space(8.0);
+                    let who = |n: usize| self.st.actor_name(n);
+                    let shown = if self.draft.trim().is_empty() { src.clone() } else { self.draft.clone() };
+                    let job = game_job(&shown, 14.0, &who);
+                    egui::Frame::new().fill(Color32::from_rgb(0x10, 0x10, 0x18)).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(CornerRadius::same(8)).inner_margin(egui::Margin::symmetric(14, 10)).show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        ui.label(RichText::new("ЯК У ГРІ").size(10.5).color(MUTE));
+                        ui.label(job);
+                    });
                 }
                 ui.add_space(8.0);
                 self.contributions_ui(ui, f, r);

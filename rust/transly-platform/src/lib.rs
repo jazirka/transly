@@ -4,6 +4,8 @@
 //! і повідомляє результат через `Roots::allow` + `Picked::add`.
 
 pub mod github;
+pub mod relay;
+pub mod selfupdate;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -461,9 +463,8 @@ pub fn download_asset(url: &str, token: &str, dest: &Path) -> Result<u64, String
         .timeout_read(std::time::Duration::from_secs(60))
         .build();
     // what GitHub says about the file (size, sha-256): the download is checked against it
-    let meta: Option<serde_json::Value> = agent
-        .get(url)
-        .set("Authorization", &format!("Bearer {token}"))
+    let authed = |req: ureq::Request| if token.is_empty() { req } else { req.set("Authorization", &format!("Bearer {token}")) };
+    let meta: Option<serde_json::Value> = authed(agent.get(url))
         .set("Accept", "application/vnd.github+json")
         .call()
         .ok()
@@ -476,7 +477,7 @@ pub fn download_asset(url: &str, token: &str, dest: &Path) -> Result<u64, String
         403 | 404 => "немає доступу до релізу (токен має мати право читати вміст репозиторію)".to_string(),
         _ => format!("помилка {c}"),
     };
-    let first = match agent.get(url).set("Authorization", &format!("Bearer {token}")).set("Accept", "application/octet-stream").call() {
+    let first = match authed(agent.get(url)).set("Accept", "application/octet-stream").call() {
         Ok(r) => r,
         Err(ureq::Error::Status(c, _)) => return Err(format!("GitHub: {}", status_err(c))),
         Err(e) => return Err(format!("Немає з’єднання з GitHub: {e}")),

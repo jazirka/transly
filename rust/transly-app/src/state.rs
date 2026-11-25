@@ -91,6 +91,16 @@ pub struct SceneLine {
     pub current: bool,
 }
 
+/// Картинка з файлів гри до рядка.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Pic {
+    Icon { n: usize, label: String },
+    Face { name: String, index: usize, label: String },
+    Enemy { name: String, label: String },
+    /// Тег `<Picture: назва>` у примітці: `img/pictures/назва.png`.
+    Picture { name: String, label: String },
+}
+
 /// Результати «Пошуку скрізь».
 #[derive(Default)]
 pub struct SearchHits {
@@ -156,6 +166,12 @@ pub struct AppState {
     /// Фільтр «Мовець» і «Довжина» (0 усі, 1 далеко від оригіналу, 2 довші, 3 коротші).
     /// Скільки масових дій записано в стек скасування (за зміною показується «Скасувати» у сповіщенні).
     pub undo_count: u64,
+    /// Розібраний файл бази даних, з якого щойно брали картинки рядка: (назва файлу, JSON).
+    db_cache: std::cell::RefCell<Option<(String, serde_json::Value)>>,
+    names_cache: std::cell::RefCell<Option<(usize, transly_core::gamenames::GameNameIndex)>>,
+    /// Реле-синхронізація: адреса, пароль, як часто й коли востаннє (лишається на цьому пристрої, у файл проєкту не потрапляє).
+    pub relay: RelayCfg,
+    relay_rx: Option<std::sync::mpsc::Receiver<Result<transly_platform::relay::SyncReport, String>>>,
     pub speaker_filter: Option<String>,
     pub len_filter: u8,
     speakers_cache: std::cell::RefCell<(u64, usize, bool)>,
@@ -200,7 +216,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { undo_count: 0, speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![], saved_ms: None, session_start: now_ms(), session_edits: 0 }
+        AppState { undo_count: 0, db_cache: std::cell::RefCell::new(None), names_cache: std::cell::RefCell::new(None), relay: RelayCfg::load(), relay_rx: None, speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![], saved_ms: None, session_start: now_ms(), session_edits: 0 }
     }
 }
 
@@ -218,10 +234,42 @@ fn plugins_dir() -> Option<PathBuf> {
     Some(base.join("Transly").join("plugins"))
 }
 
+/// Налаштування реле-синхронізації: лежать окремо від проєкту, у теці даних програми (`relay.json`).
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct RelayCfg {
+    pub url: String,
+    pub passphrase: String,
+    /// Як часто синхронізувати само, хвилин (0 — лише вручну).
+    #[serde(rename = "everyMin")]
+    pub every_min: u32,
+    pub last: i64,
+}
+
+impl RelayCfg {
+    fn path() -> Option<PathBuf> {
+        plugins_dir().and_then(|p| p.parent().map(|d| d.join("relay.json")))
+    }
+
+    pub fn load() -> RelayCfg {
+        Self::path().and_then(|p| std::fs::read_to_string(p).ok()).and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
+    }
+
+    pub fn save(&self) {
+        if let Some(p) = Self::path() {
+            let _ = std::fs::create_dir_all(p.parent().unwrap_or(Path::new(".")));
+            let _ = std::fs::write(p, serde_json::to_string_pretty(self).unwrap_or_default());
+        }
+    }
+
+    pub fn configured(&self) -> bool {
+        transly_platform::relay::url_problem(&self.url).is_none() && self.passphrase.chars().count() >= 8
+    }
+}
+
 /// Файли гри (назва, сирий текст) і рядки, зчитані з теки.
 type LoadedDir = (Vec<(String, String)>, Vec<FileView>);
 
-fn now_ms() -> i64 {
+pub fn now_ms() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64)
 }
 
@@ -270,25 +318,78 @@ impl AppState {
             // файл гри міг уже містити переклад (збірка пише в нього): оригінал береться з резервної копії поруч
             raw.push((name.clone(), read_text(&self.roots, orig.as_deref().unwrap_or(path))?));
         }
+        let views = self.build_views(&raw, &ExtractOptions::default());
+        Ok((raw, views))
+    }
+
+    /// Рядки всіх файлів гри з сирого тексту. Вбудовані формати читає ядро, решта — обробники плагінів; `opts` — які команди
+    /// плагінів гри (код 356) несуть текст для гравця.
+    fn build_views(&self, raw: &[(String, String)], opts: &ExtractOptions) -> Vec<FileView> {
         // назви мап беруться з MapInfos.json: він невеликий, тримається окремо
         let infos: Option<GameFile> = raw.iter().find(|(n, _)| n.rsplit('/').next().unwrap_or(n) == "MapInfos.json").map(|(n, t)| GameFile { name: n.clone(), json: serde_json::from_str(t).unwrap_or(serde_json::Value::Null), text: None });
         let mut views: Vec<FileView> = Vec::new();
-        for (name, text) in &raw {
+        for (name, text) in raw {
             let gf = if name.to_lowercase().ends_with(".json") { GameFile { name: name.clone(), json: serde_json::from_str(text).unwrap_or(serde_json::Value::Null), text: None } } else { GameFile { name: name.clone(), json: serde_json::Value::Null, text: Some(text.clone()) } };
             if transly_core::engine::format_of(name).is_some() {
                 let batch: Vec<GameFile> = match &infos {
                     Some(i) if i.name != gf.name => vec![i.clone(), gf],
                     _ => vec![gf],
                 };
-                views.extend(read_game(&batch, &ExtractOptions::default()).into_iter().filter(|v| &v.name == name));
+                views.extend(read_game(&batch, opts).into_iter().filter(|v| &v.name == name));
             } else if let Some(h) = self.host.reg.handler_of(name) {
-                let units = h.extract(&gf, &ExtractOptions::default());
+                let units = h.extract(&gf, opts);
                 if !units.is_empty() {
                     views.push(FileView { name: name.clone(), units, label: None });
                 }
             }
         }
-        Ok((raw, views))
+        views
+    }
+
+    /// Команди плагінів, чий текст витягається (налаштування проєкту `pluginCommands`).
+    fn extract_options(&self) -> ExtractOptions {
+        let names = self.project.as_ref().and_then(|p| p.settings.get("pluginCommands")).and_then(|v| v.as_array()).map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default();
+        ExtractOptions { plugin_commands: names }
+    }
+
+    /// Команди плагінів, що трапляються в грі, і чи несуть вони текст (для вікна «Тексти плагінів»).
+    pub fn plugin_candidates(&self) -> Vec<transly_core::plugins::PluginCandidate> {
+        transly_core::plugins::plugin_candidates(&self.game_files())
+    }
+
+    /// Які команди вже вибрано і чи користувача про це питали.
+    pub fn plugin_choice(&self) -> (Vec<String>, bool) {
+        let st = self.project.as_ref().map(|p| &p.settings);
+        let names = st.and_then(|m| m.get("pluginCommands")).and_then(|v| v.as_array()).map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default();
+        (names, st.and_then(|m| m.get("pluginsAsked")).and_then(|v| v.as_bool()).unwrap_or(false))
+    }
+
+    /// Записує вибір команд і заново читає рядки гри: тексти цих команд з'являються в таблиці (переклади лишаються на місцях).
+    pub fn set_plugin_commands(&mut self, names: &[String]) -> String {
+        let Some(p) = self.project.as_mut() else { return "Проєкт не відкрито".into() };
+        p.settings.insert("pluginCommands".into(), serde_json::json!(names));
+        p.settings.insert("pluginsAsked".into(), serde_json::json!(true));
+        let opts = self.extract_options();
+        let before: usize = self.views.iter().map(|v| v.units.len()).sum();
+        let cur = self.file.and_then(|f| self.views.get(f).map(|v| v.name.clone()));
+        let views = self.build_views(&self.game_raw, &opts);
+        let after: usize = views.iter().map(|v| v.units.len()).sum();
+        let Some(p) = self.project.as_mut() else { return "Проєкт не відкрито".into() };
+        for v in &views {
+            let entries = p.files.entry(v.name.clone()).or_default();
+            reconcile(&v.units, entries, now_ms());
+        }
+        self.views = views;
+        self.file = cur.and_then(|n| self.views.iter().position(|v| v.name == n)).or(if self.views.is_empty() { None } else { Some(0) });
+        self.tabs.retain(|t| *t < self.views.len());
+        self.row = None;
+        *self.scene_cache.borrow_mut() = (usize::MAX, None);
+        *self.names_cache.borrow_mut() = None;
+        *self.db_cache.borrow_mut() = None;
+        *self.auto_limit.borrow_mut() = None;
+        self.rev += 1;
+        self.dirty = true;
+        if after >= before { format!("Тексти плагінів: рядків у грі стало {after} (було {before})") } else { format!("Тексти плагінів: рядків стало {after} (було {before}); переклади лишились у проєкті") }
     }
 
     /// Файли гри для збірки: розбираються з сирого тексту лише коли потрібні й одразу відпускаються.
@@ -324,9 +425,19 @@ impl AppState {
                 reconcile(&v.units, entries, now_ms());
             }
         }
+        // проєкт обрав команди плагінів із текстом: рядки читаються з ними (раніше їх не було)
+        let cmds: Vec<String> = project.settings.get("pluginCommands").and_then(|v| v.as_array()).map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default();
+        let mut views = views;
+        if !cmds.is_empty() {
+            views = self.build_views(&files, &ExtractOptions { plugin_commands: cmds });
+            for v in &views {
+                reconcile(&v.units, project.files.entry(v.name.clone()).or_default(), now_ms());
+            }
+        }
         // гра могла оновитися: переклади зіставляються з новими рядками за текстом оригіналу (ключі зсуваються)
         self.last_note = unreadable;
         *self.scene_cache.borrow_mut() = (usize::MAX, None);
+        *self.names_cache.borrow_mut() = None;
         *self.auto_limit.borrow_mut() = None;
         let old_snap: Option<indexmap::IndexMap<String, Vec<Unit>>> = project.snapshot.as_ref().and_then(|v| serde_json::from_value(v.clone()).ok());
         if old_snap.is_some() {
@@ -837,11 +948,66 @@ impl AppState {
     }
 
     pub fn syncing(&self) -> bool {
-        self.sync_rx.is_some()
+        self.sync_rx.is_some() || self.relay_rx.is_some()
     }
+
+    /// Починає обмін із реле в окремому потоці (мережа не блокує вікно). Результат забирає `finish_sync`.
+    pub fn start_relay_sync(&mut self) -> Result<(), String> {
+        if self.syncing() {
+            return Err("Синхронізація вже триває".into());
+        }
+        let project = self.project.clone().ok_or("Проєкт не відкрито")?;
+        if let Some(p) = transly_platform::relay::url_problem(&self.relay.url) {
+            return Err(p.into());
+        }
+        let keys = transly_platform::relay::derive_keys(&self.relay.passphrase)?;
+        let (url, since) = (self.relay.url.trim().to_string(), self.relay.last);
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let mut t = transly_platform::relay::HttpTransport::new(&url);
+            let _ = tx.send(transly_platform::relay::sync_once(&mut t, &keys, &project, since, now_ms()));
+        });
+        self.relay_rx = Some(rx);
+        Ok(())
+    }
+
+    fn finish_relay(&mut self) -> Option<String> {
+        let res = self.relay_rx.as_ref()?.try_recv().ok()?;
+        self.relay_rx = None;
+        Some(match res {
+            Err(e) => e,
+            Ok(rep) => {
+                let mut parts: Vec<String> = Vec::new();
+                if rep.got_snapshot {
+                    parts.push("отримано оригінальні рядки".into());
+                }
+                if rep.conflicts > 0 {
+                    parts.push(format!("конфліктів: {} (лишилась новіша правка)", rep.conflicts));
+                }
+                if rep.dropped_by_reset > 0 {
+                    parts.push(transly_core::project::reset_note(rep.dropped_by_reset));
+                }
+                if let Some(live) = &self.project {
+                    // за час запиту перекладач міг друкувати: результат зливається з поточним проєктом, а не замінює його
+                    let mut merged = transly_core::session::adopt_synced(live, &rep.project, false);
+                    transly_core::stamps::stamp(&mut merged, transly_core::stamps::StampKind::Copy, "синхронізація", now_ms(), None);
+                    self.project = Some(merged);
+                }
+                self.relay.last = now_ms();
+                self.relay.save();
+                self.rev += 1;
+                self.dirty = true;
+                format!("Синхронізовано{}", if parts.is_empty() { String::new() } else { format!(": {}", parts.join(", ")) })
+            }
+        })
+    }
+
 
     /// Забирає результат синхронізації, коли він готовий: зливає з проєктом, яким він став за час запиту.
     pub fn finish_sync(&mut self) -> Option<String> {
+        if let Some(m) = self.finish_relay() {
+            return Some(m);
+        }
         let res = self.sync_rx.as_ref()?.try_recv().ok()?;
         self.sync_rx = None;
         Some(match res {
@@ -1099,6 +1265,105 @@ impl AppState {
             self.submit(f, r, &v.text)?;
         }
         self.approve_row(f, r)
+    }
+
+    /// Ім'я героя за номером для `\N[n]`: переклад, а коли його нема, оригінал імені з `Actors.json`.
+    pub fn actor_name(&self, n: usize) -> Option<String> {
+        let fi = self.views.iter().position(|v| v.name.rsplit('/').next() == Some("Actors.json"))?;
+        let key = format!("[{n}].name");
+        let ri = self.views[fi].units.iter().position(|u| u.key == key)?;
+        let tr = self.target_of(fi, ri);
+        Some(if tr.is_empty() { self.source_of(fi, ri) } else { tr })
+    }
+
+    /// Картинки до рядка з файлів самої гри: піктограма предмета, обличчя персонажа чи репліки, вороги, `<Picture: назва>` у примітці.
+    pub fn pics_of(&self, f: usize, r: usize) -> Vec<Pic> {
+        let Some(u) = self.unit(f, r) else { return Vec::new() };
+        let mut out: Vec<Pic> = Vec::new();
+        if let Some(face) = u.face.as_deref() {
+            if let Some((name, idx)) = face.rsplit_once('#') {
+                if let Ok(i) = idx.parse::<usize>() {
+                    out.push(Pic::Face { name: name.to_string(), index: i, label: String::new() });
+                }
+            }
+        }
+        let Some(view) = self.views.get(f) else { return out };
+        let file = view.name.rsplit('/').next().unwrap_or(&view.name).to_string();
+        let key = u.key.as_str();
+        let Some(idx) = key.strip_prefix('[').and_then(|k| k.split_once("].")).and_then(|(n, _)| n.parse::<usize>().ok()) else { return out };
+        if !self.game_raw.iter().any(|(n, _)| n == &view.name) {
+            return out;
+        }
+        let mut cache = self.db_cache.borrow_mut();
+        if cache.as_ref().is_none_or(|(n, _)| n != &view.name) {
+            let json = self.game_raw.iter().find(|(n, _)| n == &view.name).and_then(|(_, t)| serde_json::from_str::<serde_json::Value>(t).ok()).unwrap_or(serde_json::Value::Null);
+            *cache = Some((view.name.clone(), json));
+        }
+        let Some(row) = cache.as_ref().and_then(|(_, j)| j.as_array()).and_then(|a| a.get(idx)).and_then(|v| v.as_object()) else { return out };
+        let label = row.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        if let Some(note) = row.get("note").and_then(|v| v.as_str()) {
+            let re = regex::Regex::new(r"(?i)<\s*Picture\s*:\s*([^<>]+?)\s*>").expect("візерунок");
+            for m in re.captures_iter(note) {
+                let name = m[1].to_string();
+                if name.contains(['\\', '/']) || name.contains("..") || out.len() >= 4 {
+                    continue;
+                }
+                out.push(Pic::Picture { name: name.clone(), label: name });
+            }
+        }
+        let num = |k: &str| row.get(k).and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let text = |k: &str| row.get(k).and_then(|v| v.as_str()).filter(|s| !s.is_empty()).map(String::from);
+        if ["Items.json", "Weapons.json", "Armors.json", "Skills.json", "States.json"].contains(&file.as_str()) {
+            if num("iconIndex") > 0.0 {
+                out.push(Pic::Icon { n: num("iconIndex") as usize, label });
+            }
+        } else if file == "Actors.json" {
+            if let Some(name) = text("faceName") {
+                out.push(Pic::Face { name, index: num("faceIndex") as usize, label });
+            }
+        } else if file == "Enemies.json" {
+            if let Some(name) = text("battlerName") {
+                out.push(Pic::Enemy { name, label });
+            }
+        }
+        out
+    }
+
+    /// Байти зображення з теки гри (`img/…`). Шукає в теці, яку відкрито, і в її батьківській (для MV файли лежать у `www`).
+    pub fn game_image(&self, rel: &str) -> Option<Vec<u8>> {
+        let dir = self.dir.as_ref()?;
+        let mut bases: Vec<PathBuf> = vec![dir.clone()];
+        if let Some(p) = dir.parent() {
+            bases.push(p.to_path_buf());
+        }
+        bases.iter().find_map(|b| transly_platform::read_image(&self.roots, &b.to_string_lossy(), rel).ok())
+    }
+
+    /// Нитки рядка: кожен запис глосарія, що є в оригіналі, і чи передає його переклад (власний відповідник, варіант, нічого, ще не перекладено).
+    pub fn strands(&self, f: usize, r: usize) -> Vec<(transly_core::strands::Strand, Term)> {
+        let terms = self.terms();
+        let (src, tgt) = (self.source_of(f, r), self.target_of(f, r));
+        transly_core::strands::strands_of(&src, &tgt, &terms).into_iter().filter_map(|s| terms.get(s.term).cloned().map(|t| (s, t))).collect()
+    }
+
+    /// Назви, які гра визначає сама (предмети, навички, персонажі…) і які згадано в оригіналі рядка, з їхніми поточними перекладами.
+    pub fn game_names_in(&self, f: usize, r: usize) -> Vec<(transly_core::gamenames::GameName, String)> {
+        let stamp = self.views.iter().map(|v| v.units.len()).sum::<usize>() + self.views.len();
+        let mut cache = self.names_cache.borrow_mut();
+        if cache.as_ref().is_none_or(|(s, _)| *s != stamp) {
+            *cache = Some((stamp, transly_core::gamenames::GameNameIndex::new(&self.views, 3)));
+        }
+        let Some((_, idx)) = cache.as_ref() else { return Vec::new() };
+        let own = self.unit(f, r).map(|u| u.key.clone());
+        let src = self.source_of(f, r);
+        idx.find(&src)
+            .into_iter()
+            .filter(|g| !(self.views.get(f).is_some_and(|v| v.name == g.file) && own.as_deref() == Some(g.key.as_str())))
+            .map(|g| {
+                let tr = self.views.iter().position(|v| v.name == g.file).and_then(|fi| self.views[fi].units.iter().position(|u| u.key == g.key).map(|ri| self.target_of(fi, ri))).unwrap_or_default();
+                (g, tr)
+            })
+            .collect()
     }
 
     /// Конструкції («take … off»), які рядки вже передають одним словом, але яких ще немає в глосарії (до 20 000 перекладених рядків).

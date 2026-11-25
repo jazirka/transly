@@ -43,7 +43,14 @@ jobs:
         run: cargo test -p transly-core -p transly-platform -p transly-app
       - name: Build
         working-directory: rust
-        run: cargo build --release -p transly-app
+        shell: bash
+        env:
+          # the app knows which build it is (to offer a newer release of "rust-latest") and which repository its updates may come from
+          TRANSLY_BUILD_ID: ${{ github.sha }}
+          TRANSLY_UPDATE_REPO: ${{ github.repository }}
+        run: |
+          export TRANSLY_BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          cargo build --release -p transly-app
       - name: Collect
         shell: bash
         run: |

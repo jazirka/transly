@@ -1,0 +1,80 @@
+name: Rust app
+
+# The native Transly (rust/transly-app, egui): tests of the Rust crates on every push to the working branch, and, run by hand with "release",
+# a Windows .exe published as the "rust-latest" pre-release. It never touches "desktop-latest" (the old Tauri app stays the current build
+# until the new one reaches parity).
+
+on:
+  push:
+    branches: [ccr-a0ee6fc6-t2at3x]
+    paths:
+      - 'rust/**'
+      - '.github/workflows/rust-app.yml'
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Publish the .exe as the "rust-latest" pre-release'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+          components: clippy
+      - uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: rust
+      - name: Clippy
+        working-directory: rust
+        run: cargo clippy -p transly-core -p transly-platform -p transly-app --all-targets -- -D warnings
+      - name: Tests
+        working-directory: rust
+        run: cargo test -p transly-core -p transly-platform -p transly-app
+      - name: Build
+        working-directory: rust
+        run: cargo build --release -p transly-app
+      - name: Collect
+        shell: bash
+        run: |
+          mkdir out
+          cp rust/target/release/transly-app.exe out/Transly-native.exe
+          ls -la out
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: transly-native
+          path: out/*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: ${{ needs.build.result == 'success' && github.event_name == 'workflow_dispatch' && inputs.release }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: transly-native
+          path: out
+      - name: Publish as a pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls out/*.exe >/dev/null 2>&1 || { echo "::error::No file to publish"; exit 1; }
+          TMP="native-build-$GITHUB_RUN_ID"
+          gh release create "$TMP" out/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+            --title "Transly: native version (Rust, egui)" \
+            --notes "Native build on egui, commit $GITHUB_SHA. Not yet at parity with the desktop app: the project file format is the same, so projects open in both."
+          gh release delete rust-latest --yes --cleanup-tag --repo "$GITHUB_REPOSITORY" || true
+          gh release edit "$TMP" --tag rust-latest --target "$GITHUB_SHA" --repo "$GITHUB_REPOSITORY"

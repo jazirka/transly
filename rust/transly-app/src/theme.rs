@@ -165,3 +165,6 @@ pub fn apply_style(ctx: &egui::Context) {
     st.text_styles.insert(TextStyle::Monospace, FontId::new(11.0, FontFamily::Monospace));
     ctx.set_style(st);
 }
+
+/// Виділений пункт списку (суцільний колір: біле 15 % на тлі картки).
+pub const SEL_GRAY_UI: Color32 = Color32::from_rgb(64, 64, 67);

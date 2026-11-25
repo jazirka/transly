@@ -70,6 +70,11 @@ struct App {
     bottom_open: bool,
     focus: bool,
     was_edit: u8,
+    /// Сповіщення внизу: (текст, коли з'явилось, чи можна скасувати); останнє показане повідомлення й лічильник скасувань.
+    toast: Option<(String, std::time::Instant, bool)>,
+    toast_seen: (String, u64),
+    /// «Пошук скрізь»: (запит, вибраний результат); None — закрито.
+    search_win: Option<(String, usize)>,
     /// Відмічені прапорцями рядки таблиці: (файл, рядки).
     checked: (usize, std::collections::HashSet<usize>),
     /// Репліка сцени, що набирається: (рядок, текст); пишеться в проєкт при виході з поля.
@@ -117,7 +122,7 @@ fn source_job_sized(text: &str, marks: &[(usize, usize, usize)], size: f32) -> e
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [true, true, false]], comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [true, true, false]], comment: String::new(), token: String::new() }
     }
 }
 
@@ -271,6 +276,8 @@ impl App {
         self.term_sync_window(ctx);
         self.activity_window(ctx);
         self.keys_window(ctx);
+        self.search_window(ctx);
+        self.toast_ui(ctx);
         if let Some(msg) = self.st.finish_sync() {
             self.message = msg;
         }
@@ -294,6 +301,16 @@ impl App {
     /// Клавіші: Ctrl+Enter — надіслати й перейти далі, Ctrl+S — зберегти, F2 — «Фокус», стрілки вгору/вниз — між рядками (поки не набирається текст).
     fn hotkeys(&mut self, ctx: &egui::Context) {
         use egui::{Key, KeyboardShortcut, Modifiers};
+        if ctx.input_mut(|i| i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND | Modifiers::SHIFT, Key::Enter))) {
+            // вичитати й перейти до наступного на вичитку
+            if let Some((f, r)) = self.st.file.zip(self.st.row) {
+                self.message = match self.st.approve_row(f, r) {
+                    Ok(()) => self.st.jump_queue(transly_core::queue::QueueKind::Unreviewed, true),
+                    Err(e) => e,
+                };
+                self.draft_for = None;
+            }
+        }
         if ctx.input_mut(|i| i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, Key::Enter))) {
             if let Some((f, r)) = self.st.file.zip(self.st.row) {
                 self.message = match self.st.submit(f, r, &self.draft) {
@@ -305,11 +322,33 @@ impl App {
                 };
             }
         }
+        if ctx.input_mut(|i| i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, Key::K))) && self.st.is_open() {
+            self.search_win = Some((String::new(), 0));
+        }
         if ctx.input_mut(|i| i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, Key::S))) && self.st.is_open() {
             self.message = self.st.save_project().map(|p| format!("Збережено: {p}")).unwrap_or_else(|e| e);
         }
         if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::F2)) {
             self.focus = !self.focus;
+        }
+        {
+            use transly_core::queue::QueueKind;
+            let mut go: Option<(QueueKind, bool)> = None;
+            let alt_shift = Modifiers { alt: true, shift: true, ..Default::default() };
+            if ctx.input_mut(|i| i.consume_key(alt_shift, Key::ArrowDown)) {
+                go = Some((QueueKind::Untranslated, true));
+            } else if ctx.input_mut(|i| i.consume_key(alt_shift, Key::ArrowUp)) {
+                go = Some((QueueKind::Untranslated, false));
+            } else if ctx.input_mut(|i| i.consume_key(Modifiers::SHIFT, Key::F8)) {
+                go = Some((QueueKind::Error, false));
+            } else if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::F8)) {
+                go = Some((QueueKind::Error, true));
+            }
+            if let Some((kind, fwd)) = go {
+                self.message = self.st.jump_queue(kind, fwd);
+                self.draft_for = None;
+                self.cell_edit = None;
+            }
         }
         if !ctx.wants_keyboard_input() {
             if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::ArrowDown)) {
@@ -339,6 +378,7 @@ impl App {
                 // головне меню
                 egui::menu::menu_custom_button(ui, egui::Button::image(icons::image("menu", MUTE, 16.0)).frame(false).min_size(vec2(28.0, 28.0)), |ui| {
                     ui.menu_button("Файл", |ui| self.menu_file(ui));
+                    ui.menu_button("Перехід", |ui| self.menu_goto(ui));
                     ui.menu_button("Вигляд", |ui| self.menu_view(ui));
                     ui.menu_button("Інструменти", |ui| self.menu_tools(ui));
                 });
@@ -462,6 +502,173 @@ impl App {
                 self.act_settings();
                 ui.close_menu();
             }
+    }
+
+    /// «Пошук скрізь» (Ctrl+K): файли, рядки й терміни одним списком; стрілки й Enter, клік відкриває результат.
+    fn search_window(&mut self, ctx: &egui::Context) {
+        let Some((mut q, mut sel)) = self.search_win.take() else { return };
+        let hits = self.st.search_all(&q, 8);
+        // позиції результатів по порядку: файли, рядки, терміни
+        let n = hits.files.len() + hits.rows.len() + hits.terms.len();
+        let (down, up, enter, esc) = ctx.input_mut(|i| (i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown), i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp), i.consume_key(egui::Modifiers::NONE, egui::Key::Enter), i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)));
+        if n > 0 {
+            if down {
+                sel = (sel + 1) % n;
+            }
+            if up {
+                sel = (sel + n - 1) % n;
+            }
+        }
+        sel = sel.min(n.saturating_sub(1));
+        let mut pick: Option<usize> = (enter && n > 0).then_some(sel);
+        let mut open = !esc;
+        let names = self.st.file_names();
+        egui::Window::new("Пошук скрізь").title_bar(false).anchor(Align2::CENTER_TOP, vec2(0.0, 70.0)).fixed_size(vec2(560.0, 0.0)).frame(egui::Frame::new().fill(PANEL).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(CornerRadius::same(12)).inner_margin(egui::Margin::same(12))).show(ctx, |ui| {
+            let te = ui.add(egui::TextEdit::singleline(&mut q).hint_text("Файл, рядок чи термін").desired_width(f32::INFINITY).font(ip(14.0)).margin(vec2(10.0, 8.0)));
+            te.request_focus();
+            ui.add_space(8.0);
+            let mut idx = 0usize;
+            let group = |ui: &mut egui::Ui, title: String| {
+                ui.add_space(4.0);
+                ui.label(RichText::new(title.to_uppercase()).size(11.0).color(MUTE));
+            };
+            let item = |ui: &mut egui::Ui, idx: usize, dot: Option<RowStatus>, title: &str, sub: &str, place: &str| -> bool {
+                let h = if sub.is_empty() && place.is_empty() { 26.0 } else { 48.0 };
+                let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click());
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("{title} {sub}")));
+                if idx == sel {
+                    ui.painter().rect_filled(rect, CornerRadius::same(8), SEL_GRAY_UI);
+                } else if resp.hovered() {
+                    ui.painter().rect_filled(rect, CornerRadius::same(8), GHOST_HOVER);
+                }
+                let mut x = rect.left() + 10.0;
+                if let Some(st) = dot {
+                    paint_state(ui, pos2(x + 4.0, rect.top() + 14.0), st, false);
+                    x += 18.0;
+                }
+                let clip = Rect::from_min_max(pos2(x, rect.top()), pos2(rect.right() - 8.0, rect.bottom()));
+                let p = ui.painter().with_clip_rect(clip);
+                p.text(pos2(x, rect.top() + 14.0), Align2::LEFT_CENTER, title.replace('\n', " "), ip(13.0), TEXT);
+                if !sub.is_empty() {
+                    p.text(pos2(x, rect.top() + 30.0), Align2::LEFT_CENTER, sub.replace('\n', " "), ip(12.0), MUTE);
+                }
+                if !place.is_empty() {
+                    ui.painter().text(pos2(rect.right() - 10.0, rect.top() + 14.0), Align2::RIGHT_CENTER, place, mp(11.0), DIM);
+                }
+                resp.clicked()
+            };
+            if !hits.files.is_empty() {
+                group(ui, "Файли".into());
+                for (_, name) in &hits.files {
+                    if item(ui, idx, None, name.trim_end_matches(".json"), "", "") {
+                        pick = Some(idx);
+                    }
+                    idx += 1;
+                }
+            }
+            if !hits.rows.is_empty() {
+                let more = if hits.rows_total > hits.rows.len() { format!("Рядки · показано {} з {}{}", hits.rows.len(), hits.rows_total, if hits.rows_total >= 999 { "+" } else { "" }) } else { "Рядки".into() };
+                group(ui, more);
+                for r in &hits.rows {
+                    let place = format!("{} · {}", names.get(r.file).map_or("", |n| n.trim_end_matches(".json")), short_key(&self.st.key_of(r.file, r.row)));
+                    if item(ui, idx, Some(r.status), &r.source, &r.target, &place) {
+                        pick = Some(idx);
+                    }
+                    idx += 1;
+                }
+            }
+            if !hits.terms.is_empty() {
+                group(ui, "Терміни".into());
+                for (en, uk) in &hits.terms {
+                    if item(ui, idx, None, en, uk, "") {
+                        pick = Some(idx);
+                    }
+                    idx += 1;
+                }
+            }
+            if n == 0 {
+                ui.label(RichText::new("Нічого не знайдено").color(MUTE));
+            }
+        });
+        if let Some(p) = pick.filter(|p| *p < n) {
+            let (nf, nr) = (hits.files.len(), hits.rows.len());
+            if p < nf {
+                self.st.file = Some(hits.files[p].0);
+                self.st.row = None;
+            } else if p < nf + nr {
+                let r = &hits.rows[p - nf];
+                self.st.filter = Filter::All;
+                self.st.search.clear();
+                self.st.file = Some(r.file);
+                self.st.row = Some(r.row);
+            } else {
+                let (en, _) = &hits.terms[p - nf - nr];
+                self.message = format!("Термін «{en}»: відкрийте його в панелі «Пов’язане» біля рядка, де він трапляється");
+            }
+            self.draft_for = None;
+            self.cell_edit = None;
+            open = false;
+        }
+        if open {
+            self.search_win = Some((q, sel));
+        }
+    }
+
+    /// Сповіщення внизу посередині на 6 с: нове повідомлення; після масової дії з кнопкою «Скасувати».
+    fn toast_ui(&mut self, ctx: &egui::Context) {
+        let undo_now = self.st.undo_count;
+        if (self.message.as_str(), undo_now) != (self.toast_seen.0.as_str(), self.toast_seen.1) {
+            let undoable = undo_now != self.toast_seen.1;
+            if !self.message.is_empty() {
+                self.toast = Some((self.message.clone(), std::time::Instant::now(), undoable));
+            }
+            self.toast_seen = (self.message.clone(), undo_now);
+        }
+        let Some((text, since, undoable)) = self.toast.clone() else { return };
+        if since.elapsed().as_secs() >= 6 {
+            self.toast = None;
+            return;
+        }
+        ctx.request_repaint_after(std::time::Duration::from_millis(500));
+        let mut undo = false;
+        let mut close = false;
+        egui::Area::new(egui::Id::new("toast")).anchor(Align2::CENTER_BOTTOM, vec2(0.0, -48.0)).order(egui::Order::Foreground).show(ctx, |ui| {
+            egui::Frame::new().fill(PANEL).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(CornerRadius::same(10)).inner_margin(egui::Margin::symmetric(14, 9)).show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(&text).color(TEXT));
+                    if undoable && plain_button(ui, "Скасувати").clicked() {
+                        undo = true;
+                    }
+                    if plain_button(ui, "x").clicked() {
+                        close = true;
+                    }
+                });
+            });
+        });
+        if undo {
+            self.message = self.st.undo_last();
+            self.toast_seen = (self.message.clone(), self.st.undo_count);
+            self.toast = Some((self.message.clone(), std::time::Instant::now(), false));
+        } else if close {
+            self.toast = None;
+        }
+    }
+
+    fn menu_goto(&mut self, ui: &mut egui::Ui) {
+        if ui.button("Пошук скрізь…  (Ctrl+K)").clicked() {
+            self.search_win = Some((String::new(), 0));
+            ui.close_menu();
+        }
+        ui.separator();
+        use transly_core::queue::QueueKind;
+        for (kind, text) in [(QueueKind::Untranslated, "Наступний рядок без перекладу  (Alt+Shift+↓)"), (QueueKind::Error, "Наступна помилка QA  (F8)"), (QueueKind::Advice, "Наступна порада"), (QueueKind::Unreviewed, "Наступний на вичитку"), (QueueKind::SourceChanged, "Наступний зі зміненим оригіналом")] {
+            if ui.button(text).clicked() {
+                self.message = self.st.jump_queue(kind, true);
+                self.draft_for = None;
+                self.cell_edit = None;
+                ui.close_menu();
+            }
+        }
     }
 
     fn menu_view(&mut self, ui: &mut egui::Ui) {
@@ -1910,6 +2117,84 @@ mod ui_tests {
         h.run();
         assert_eq!(h.state().st.progress().sent, 2, "надіслано лише чернетки з вибраних");
         assert!(h.state().checked.1.is_empty());
+        // після масової дії сповіщення має «Скасувати»
+        h.run();
+        h.get_by_label("Скасувати").click();
+        h.run();
+        assert_eq!(h.state().st.progress().sent, 0, "«Скасувати» у сповіщенні повертає надіслане");
+    }
+
+    #[test]
+    fn jumping_to_the_next_untranslated_row_wraps_and_clears_filters() {
+        let data = game("jump");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.st.edit(0, 0, "Герой");
+        app.st.edit(0, 1, "Хоробрий");
+        app.st.row = Some(0);
+        app.st.search = "Wise".into();
+        let mut h = harness(app);
+        h.run();
+        press(&mut h, egui::Modifiers { alt: true, shift: true, ..Default::default() }, egui::Key::ArrowDown);
+        h.run();
+        assert_eq!(h.state().st.row, Some(2), "перший рядок без перекладу після поточного");
+        assert!(h.state().st.search.is_empty(), "фільтри скинуто, щоб рядок було видно");
+        assert!(h.state().message.contains("Без перекладу: 1 з 2"), "{}", h.state().message);
+        h.state_mut().st.edit(0, 2, "Маг");
+        h.state_mut().st.edit(0, 3, "Мудрий");
+        press(&mut h, egui::Modifiers::NONE, egui::Key::F8);
+        h.run();
+        assert_eq!(h.state().message, "Помилок QA немає");
+    }
+
+    #[test]
+    fn search_everywhere_finds_rows_and_enter_opens_the_hit() {
+        let data = game("searchall");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.st.edit(0, 0, "Герой");
+        let hits = app.st.search_all("герой", 8);
+        assert_eq!(hits.rows.len(), 1, "шукає й у перекладах");
+        assert_eq!(app.st.search_all("hero", 8).rows_total, 1);
+        assert_eq!(app.st.search_all("", 8).files.len(), 1);
+        app.search_win = Some(("wise".into(), 0));
+        let mut h = harness(app);
+        h.run();
+        press(&mut h, egui::Modifiers::NONE, egui::Key::Enter);
+        h.run();
+        assert_eq!(h.state().st.row, Some(3), "відкрито рядок із Wise");
+        assert!(h.state().search_win.is_none());
+        // Ctrl+K відкриває вікно, Esc закриває
+        press(&mut h, egui::Modifiers::COMMAND, egui::Key::K);
+        h.run();
+        assert!(h.state().search_win.is_some());
+        press(&mut h, egui::Modifiers::NONE, egui::Key::Escape);
+        h.run();
+        assert!(h.state().search_win.is_none());
+    }
+
+    #[test]
+    fn contributions_are_voted_ticked_and_dropped() {
+        let data = game("contrib");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.st.submit(0, 0, "Герой").unwrap();
+        app.st.submit(0, 0, "Воїн").unwrap();
+        let list = app.st.contributions(0, 0);
+        assert_eq!(list.len(), 2, "кожен надісланий текст — окремий внесок");
+        let old = list.iter().find(|(v, _)| v.text == "Герой").unwrap().0.clone();
+        app.st.vote_variant(0, 0, &old.id, 1);
+        assert_eq!(app.st.contributions(0, 0).iter().find(|(v, _)| v.id == old.id).unwrap().1.up, 1);
+        app.st.vote_variant(0, 0, &old.id, 1);
+        assert_eq!(app.st.contributions(0, 0).iter().find(|(v, _)| v.id == old.id).unwrap().1.up, 0, "той самий голос ще раз знімає його");
+        // галочка на старому внеску: переклад іде в рядок і рядок вичитано
+        app.st.tick_variant(0, 0, &old.id).unwrap();
+        assert_eq!(app.st.target_of(0, 0), "Герой");
+        assert_eq!(app.st.progress().approved, 1);
+        // знята картка зникає зі списку
+        let other = app.st.contributions(0, 0).into_iter().find(|(v, _)| v.text == "Воїн").unwrap().0;
+        app.st.drop_variant(0, 0, &other.id);
+        assert!(app.st.contributions(0, 0).iter().all(|(v, _)| v.text != "Воїн"));
     }
 
     #[test]
@@ -1989,6 +2274,8 @@ mod ui_tests {
         h.run();
         h.render().unwrap().save(dir.join("table-checked.png")).unwrap();
         h.state_mut().checked = (0, Default::default());
+        h.state_mut().st.submit(0, 0, "Герой").unwrap();
+        h.state_mut().st.submit(0, 0, "Воїн").unwrap();
         h.state_mut().focus = true;
         h.run();
         h.render().unwrap().save(dir.join("focus.png")).unwrap();

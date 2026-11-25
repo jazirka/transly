@@ -91,6 +91,23 @@ pub struct SceneLine {
     pub current: bool,
 }
 
+/// Результати «Пошуку скрізь».
+#[derive(Default)]
+pub struct SearchHits {
+    pub files: Vec<(usize, String)>,
+    pub rows: Vec<SearchRow>,
+    pub rows_total: usize,
+    pub terms: Vec<(String, String)>,
+}
+
+pub struct SearchRow {
+    pub file: usize,
+    pub row: usize,
+    pub source: String,
+    pub target: String,
+    pub status: RowStatus,
+}
+
 #[derive(Clone, Debug)]
 pub struct SceneView {
     pub title: String,
@@ -137,6 +154,8 @@ type QaCache = ((usize, u64), Vec<(usize, String, bool)>);
 
 pub struct AppState {
     /// Фільтр «Мовець» і «Довжина» (0 усі, 1 далеко від оригіналу, 2 довші, 3 коротші).
+    /// Скільки масових дій записано в стек скасування (за зміною показується «Скасувати» у сповіщенні).
+    pub undo_count: u64,
     pub speaker_filter: Option<String>,
     pub len_filter: u8,
     speakers_cache: std::cell::RefCell<(u64, usize, bool)>,
@@ -181,7 +200,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![], saved_ms: None, session_start: now_ms(), session_edits: 0 }
+        AppState { undo_count: 0, speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![], saved_ms: None, session_start: now_ms(), session_edits: 0 }
     }
 }
 
@@ -866,7 +885,7 @@ impl AppState {
         let n = changes.len();
         let p = self.project.as_mut().ok_or("Проєкт не відкрито")?;
         let id = commit_rows(&mut p.files, &changes, "replace", &who, now_ms(), None, &mut rand);
-        self.undo.record(&id);
+        self.note_undo(&id);
         self.rev += 1;
         self.dirty = true;
         Ok(n)
@@ -945,7 +964,7 @@ impl AppState {
         let who = self.who();
         let p = self.project.as_mut().expect("проєкт відкрито");
         let id = commit_rows(&mut p.files, &changes, if approve { "approve" } else { "send" }, &who, now, None, &mut Self::seeded_rand());
-        self.undo.record(&id);
+        self.note_undo(&id);
         self.rev += 1;
         self.dirty = true;
         format!("{}: {n}{}", if approve { "Вичитано" } else { "Надіслано" }, if blocked > 0 { format!(", з помилками QA лишилось {blocked}") } else { String::new() })
@@ -1013,7 +1032,7 @@ impl AppState {
         let who = self.who();
         let p = self.project.as_mut().expect("проєкт відкрито");
         let id = commit_rows(&mut p.files, &changes, "autofill", &who, now, None, &mut Self::seeded_rand());
-        self.undo.record(&id);
+        self.note_undo(&id);
         self.rev += 1;
         self.dirty = true;
         format!("Автозаповнено рядків: {n} (чернетки)")
@@ -1035,6 +1054,110 @@ impl AppState {
         let changed = target != self.row;
         self.row = target;
         changed
+    }
+
+    /// Внески до рядка (надіслані переклади від усіх перекладачів) з підрахунком голосів.
+    pub fn contributions(&self, f: usize, r: usize) -> Vec<(transly_core::variants::Variant, transly_core::variants::Tally)> {
+        let e = self.entry(f, r);
+        let who = self.who();
+        transly_core::variants::sent_variants(e).into_iter().map(|v| {
+            let t = transly_core::variants::tally_of(e, &v.id, &who);
+            (v, t)
+        }).collect()
+    }
+
+    /// Голос за внесок (+1) чи проти (-1); той самий голос ще раз знімає його.
+    pub fn vote_variant(&mut self, f: usize, r: usize, id: &str, v: i8) {
+        let Some(u) = self.unit(f, r).cloned() else { return };
+        let Some(e) = self.entry(f, r).cloned() else { return };
+        let name = self.views[f].name.clone();
+        let next = transly_core::variants::cast_vote(&e, id, &self.who(), v, now_ms());
+        self.put(f, name, u.key, next);
+    }
+
+    /// Зняти внесок із картки (рядок, що його тримає, не знімається).
+    pub fn drop_variant(&mut self, f: usize, r: usize, id: &str) {
+        let Some(u) = self.unit(f, r).cloned() else { return };
+        let Some(e) = self.entry(f, r).cloned() else { return };
+        let name = self.views[f].name.clone();
+        let next = transly_core::variants::set_dropped(&e, id, &self.who(), false, now_ms());
+        self.put(f, name, u.key, next);
+    }
+
+    /// Галочка внеску: переклад іде в рядок і рядок вичитано; галочка вичитаного повертає рядок на доопрацювання.
+    pub fn tick_variant(&mut self, f: usize, r: usize, id: &str) -> Result<(), String> {
+        let Some(v) = self.contributions(f, r).into_iter().map(|c| c.0).find(|v| v.id == id) else { return Err("Внесок не знайдено".into()) };
+        if v.approved {
+            let Some(u) = self.unit(f, r).cloned() else { return Err("Немає рядка".into()) };
+            let Some(e) = self.entry(f, r).cloned() else { return Err("Немає рядка".into()) };
+            let name = self.views[f].name.clone();
+            let next = transly_core::workflow::send_back(&e, now_ms());
+            self.put(f, name, u.key, next);
+            return Ok(());
+        }
+        if !v.current {
+            self.submit(f, r, &v.text)?;
+        }
+        self.approve_row(f, r)
+    }
+
+    /// «Пошук скрізь»: файли, рядки (за оригіналом, перекладом і ключем) і терміни. Групи мають власні ліміти;
+    /// для рядків повертається ще й повне число збігів (до 999).
+    pub fn search_all(&self, q: &str, cap_rows: usize) -> SearchHits {
+        let q = q.trim().to_lowercase();
+        let mut hits = SearchHits::default();
+        if q.is_empty() {
+            hits.files = self.views.iter().enumerate().take(8).map(|(i, v)| (i, v.name.clone())).collect();
+            return hits;
+        }
+        for (i, v) in self.views.iter().enumerate() {
+            if v.name.to_lowercase().contains(&q) && hits.files.len() < 8 {
+                hits.files.push((i, v.name.clone()));
+            }
+        }
+        'outer: for (fi, v) in self.views.iter().enumerate() {
+            for (ri, u) in v.units.iter().enumerate() {
+                let tgt = self.target_of(fi, ri);
+                if !(u.source.to_lowercase().contains(&q) || tgt.to_lowercase().contains(&q) || u.key.to_lowercase().contains(&q)) {
+                    continue;
+                }
+                hits.rows_total += 1;
+                if hits.rows.len() < cap_rows {
+                    hits.rows.push(SearchRow { file: fi, row: ri, source: u.source.clone(), target: tgt, status: self.status_of(fi, ri) });
+                } else if hits.rows_total >= 999 {
+                    break 'outer;
+                }
+            }
+        }
+        hits.terms = self.terms().into_iter().filter(|t| format!("{} {}", t.en, t.uk).to_lowercase().contains(&q)).take(4).map(|t| (t.en, t.uk)).collect();
+        hits
+    }
+
+    fn note_undo(&mut self, id: &str) {
+        self.undo.record(id);
+        self.undo_count += 1;
+    }
+
+    /// Перехід до наступного/попереднього рядка черги по всьому проєкту (без перекладу, помилка QA, порада, на вичитку, змінений оригінал).
+    /// Скидає фільтри таблиці, щоб рядок було видно. Повертає повідомлення.
+    pub fn jump_queue(&mut self, kind: transly_core::queue::QueueKind, forward: bool) -> String {
+        use transly_core::queue::{next_in, position_of, queue_rows};
+        let Some(p) = self.project.as_ref() else { return "Проєкт не відкрито".into() };
+        let rows = queue_rows(&self.views, p, kind, &self.qa_options());
+        let here = self.file.zip(self.row).and_then(|(f, r)| self.views.get(f).and_then(|v| v.units.get(r).map(|u| (v.name.as_str(), u.key.as_str()))));
+        let at = position_of(&self.views, here);
+        let (label_empty, title) = kind.label();
+        let Some((hit, place)) = next_in(&rows, at, forward) else { return label_empty.to_string() };
+        let Some(fi) = self.views.iter().position(|v| v.name == hit.file) else { return label_empty.to_string() };
+        let Some(ri) = self.views[fi].units.iter().position(|u| u.key == hit.key) else { return label_empty.to_string() };
+        self.filter = Filter::All;
+        self.search.clear();
+        self.group_filter = None;
+        self.speaker_filter = None;
+        self.len_filter = 0;
+        self.file = Some(fi);
+        self.row = Some(ri);
+        format!("{title}: {place} з {}", rows.len())
     }
 
     /// Імпорт пам'яті перекладів: рядки «оригінал, табуляція, переклад».
@@ -1360,7 +1483,7 @@ impl AppState {
         let p = self.project.as_mut().ok_or("Проєкт не відкрито")?;
         if n > 0 {
             let id = commit_rows(&mut p.files, &plan.changes, &plan.kind, &who, now_ms(), None, &mut rand);
-            self.undo.record(&id);
+            self.note_undo(&id);
             self.rev += 1;
             self.dirty = true;
         }
@@ -1404,7 +1527,7 @@ impl AppState {
         let mut rand = Self::seeded_rand();
         let Some(p) = self.project.as_mut() else { return 0 };
         let id = commit_rows(&mut p.files, &changes, "links", &who, now_ms(), None, &mut rand);
-        self.undo.record(&id);
+        self.note_undo(&id);
         self.rev += 1;
         self.dirty = true;
         n
@@ -1448,7 +1571,7 @@ impl AppState {
         let mut rand = Self::seeded_rand();
         let Some(p) = self.project.as_mut() else { return 0 };
         let cid = commit_rows(&mut p.files, &changes, "qafix", &who, now_ms(), None, &mut rand);
-        self.undo.record(&cid);
+        self.note_undo(&cid);
         self.rev += 1;
         self.dirty = true;
         n
@@ -1496,7 +1619,7 @@ impl AppState {
             let mut rand = Self::seeded_rand();
             let p = self.project.as_mut().ok_or("Проєкт не відкрито")?;
             let id = commit_rows(&mut p.files, &plan.changes, &plan.kind, &who, now_ms(), None, &mut rand);
-            self.undo.record(&id);
+            self.note_undo(&id);
             self.rev += 1;
             self.dirty = true;
         }
@@ -1530,7 +1653,7 @@ impl AppState {
         let mut rand = Self::seeded_rand();
         let Some(p) = self.project.as_mut() else { return };
         let id = commit_rows(&mut p.files, &sync.changes, "links", &who, now_ms(), None, &mut rand);
-        self.undo.record(&id);
+        self.note_undo(&id);
         self.last_note = format!("Однакові рядки: заповнено {}{}", sync.filled + sync.updated, if sync.pending > 0 { format!(", чекає вашого рішення {}", sync.pending) } else { String::new() });
         self.rev += 1;
         self.dirty = true;
@@ -1582,7 +1705,7 @@ impl AppState {
         let mut rand = Self::seeded_rand();
         let Some(p) = self.project.as_mut() else { return 0 };
         let id = commit_rows(&mut p.files, &changes, "terms", &who, now_ms(), None, &mut rand);
-        self.undo.record(&id);
+        self.note_undo(&id);
         self.rev += 1;
         self.dirty = true;
         n

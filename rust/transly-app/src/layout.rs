@@ -1055,6 +1055,77 @@ impl App {
         }
     }
 
+    /// «Внески» під полем: по картці на кожен надісланий переклад рядка (найновіші першими): автор, текст, голоси «+» і «−»,
+    /// галочка (переклад іде в рядок і рядок вичитано) і кошик (зняти внесок з картки).
+    fn contributions_ui(&mut self, ui: &mut egui::Ui, f: usize, r: usize) {
+        let list = self.st.contributions(f, r);
+        if list.is_empty() {
+            return;
+        }
+        ui.add_space(14.0);
+        ui.label(RichText::new("ВНЕСКИ").font(ip(11.5)).color(MUTE));
+        ui.add_space(6.0);
+        let mut act: Option<(u8, String)> = None;
+        for (v, t) in &list {
+            egui::Frame::new().fill(if v.current { PANEL2 } else { BG }).stroke(Stroke::new(1.0_f32, if v.approved { OK } else { LINE })).corner_radius(CornerRadius::same(8)).inner_margin(egui::Margin::symmetric(12, 9)).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.spacing_mut().item_spacing.y = 6.0;
+                let (hd, _) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::hover());
+                let mut x = hd.left();
+                let who = if v.who.is_empty() { "—".to_string() } else { v.who.clone() };
+                let g = ui.painter().layout_no_wrap(who, ip(12.0), VIOLET);
+                let w = g.size().x;
+                ui.painter().galley(pos2(x, hd.center().y - g.size().y / 2.0), g, VIOLET);
+                x += w + 8.0;
+                if v.current {
+                    ui.painter().text(pos2(x, hd.center().y), Align2::LEFT_CENTER, if v.approved { "у рядку · вичитано" } else { "у рядку" }, ip(11.5), if v.approved { OK } else { MUTE });
+                }
+                // кнопки справа: кошик, галочка, «−», «+»
+                let mut rx = hd.right();
+                let id = v.id.clone();
+                let mut btn = |ui: &mut egui::Ui, w: f32, label: &str, tip: &str, on: bool, color: Color32, kind: u8| {
+                    let rect = Rect::from_min_size(pos2(rx - w, hd.top()), vec2(w, 22.0));
+                    rx -= w + 4.0;
+                    let resp = ui.interact(rect, ui.id().with(("var", &id, kind)), Sense::click());
+                    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("{tip}: {}", v.text)));
+                    ui.painter().rect_filled(rect, CornerRadius::same(8), if on { over_color(BG, color, 0.30) } else if resp.hovered() { BTN_HOVER } else { BTN });
+                    let ink = if on { color } else { TEXT };
+                    match label {
+                        "✓" => icons::paint(ui, Rect::from_center_size(rect.center(), vec2(13.0, 13.0)), "check", ink),
+                        "x" => icons::paint(ui, Rect::from_center_size(rect.center(), vec2(13.0, 13.0)), "trash", ink),
+                        _ => {
+                            ui.painter().text(rect.center(), Align2::CENTER_CENTER, label, ip(11.5), ink);
+                        }
+                    }
+                    if resp.on_hover_text(tip).clicked() {
+                        act = Some((kind, id.clone()));
+                    }
+                };
+                if !v.current {
+                    btn(ui, 24.0, "x", "Зняти внесок із картки", false, MUTE, 3);
+                }
+                btn(ui, 24.0, "✓", if v.approved { "Вичитано: повернути на доопрацювання" } else { "Затвердити: переклад іде в рядок, рядок вичитано" }, v.approved, OK, 2);
+                btn(ui, 38.0, &format!("-{}", t.down), "Проти", t.mine == -1, BAD, 1);
+                btn(ui, 38.0, &format!("+{}", t.up), "За", t.mine == 1, OK, 0);
+                ui.label(RichText::new(&v.text).font(ip(13.5)).color(TEXT));
+            });
+            ui.add_space(6.0);
+        }
+        match act {
+            Some((0, id)) => self.st.vote_variant(f, r, &id, 1),
+            Some((1, id)) => self.st.vote_variant(f, r, &id, -1),
+            Some((2, id)) => {
+                self.message = match self.st.tick_variant(f, r, &id) {
+                    Ok(()) => "Готово".into(),
+                    Err(e) => e,
+                };
+                self.draft_for = None;
+            }
+            Some((_, id)) => self.st.drop_variant(f, r, &id),
+            None => {}
+        }
+    }
+
     /// Центр «Редагування»: шлях і стан, оригінал, довідки, «Оригінал ──▶ Переклад», поле з нижньою панеллю. Усе в ширині 716 (поля 38).
     pub(crate) fn edit_center(&mut self, ui: &mut egui::Ui, f: usize) {
         let Some(r) = self.st.row else {
@@ -1165,6 +1236,7 @@ impl App {
                     ui.painter().rect_stroke(out.response.rect, CornerRadius::same(CARD_R), Stroke::new(1.0_f32, accent()), StrokeKind::Inside);
                 }
                 ui.add_space(8.0);
+                self.contributions_ui(ui, f, r);
                 for i in self.st.issues(f, r, &self.draft) {
                     ui.horizontal_wrapped(|ui| {
                         let (d, _) = ui.allocate_exact_size(vec2(10.0, 14.0), Sense::hover());

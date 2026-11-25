@@ -1161,6 +1161,49 @@ impl AppState {
         Ok(format!("Злито рядків: {n}; конфліктів лишилось (поточна гілка збережена): {conflicts}"))
     }
 
+    /// Рядки з таким самим оригіналом: (усього інших, порожніх, старіших, змінених після еталона). None, коли двійників нема чи еталона ще нема.
+    pub fn link_info(&self, f: usize, r: usize) -> Option<(usize, usize, usize, usize)> {
+        let p = self.project.as_ref()?;
+        let key = self.unit(f, r)?.key.clone();
+        let idx = transly_core::links::LinkIndex::new(&self.views);
+        let others = idx.others(&self.views[f].name, &key);
+        if others == 0 {
+            return None;
+        }
+        match transly_core::links::plan_link_sync(p, &idx, &self.views[f].name, &key) {
+            Some(plan) => Some((others, plan.fills.len(), plan.updates.len(), plan.edited.len())),
+            None => Some((others, 0, 0, 0)),
+        }
+    }
+
+    /// Копіює переклад рядка в його двійників (порожні й старіші; змінені — лише з `with_edited`). Чернетки, одна дія журналу зі «Скасувати».
+    pub fn apply_links(&mut self, f: usize, r: usize, with_edited: bool) -> usize {
+        let Some(p) = self.project.as_ref() else { return 0 };
+        let Some(key) = self.unit(f, r).map(|u| u.key.clone()) else { return 0 };
+        let idx = transly_core::links::LinkIndex::new(&self.views);
+        let Some(plan) = transly_core::links::plan_link_sync(p, &idx, &self.views[f].name, &key) else { return 0 };
+        let Some(rf) = plan.view.reference else { return 0 };
+        let reference = plan.view.rows[rf].target.clone();
+        let mut pick: Vec<usize> = plan.fills.iter().chain(plan.updates.iter()).copied().collect();
+        if with_edited {
+            pick.extend(plan.edited.iter().copied());
+        }
+        let rows: Vec<&transly_core::links::LinkRowView> = pick.iter().map(|&i| &plan.view.rows[i]).collect();
+        let changes = transly_core::links::link_changes(&reference, &rows, now_ms());
+        let n = changes.len();
+        if n == 0 {
+            return 0;
+        }
+        let who = self.who();
+        let mut rand = Self::seeded_rand();
+        let Some(p) = self.project.as_mut() else { return 0 };
+        let id = commit_rows(&mut p.files, &changes, "links", &who, now_ms(), None, &mut rand);
+        self.undo.record(&id);
+        self.rev += 1;
+        self.dirty = true;
+        n
+    }
+
     pub fn key_of(&self, f: usize, r: usize) -> String {
         self.unit(f, r).map_or(String::new(), |u| u.key.clone())
     }
@@ -1706,6 +1749,33 @@ menu.quit=Quit game
         assert!(s.delete_branch("main").is_err());
         s.delete_branch("варіант").unwrap();
         assert_eq!(s.branches_view().len(), 1);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn identical_sources_are_filled_from_the_reference() {
+        let base = std::env::temp_dir().join(format!("transly-app-links-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = base.join("MyGame").join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        let cmd = |code: i64, p: &str| format!(r#"{{"code":{code},"indent":0,"parameters":[{p}]}}"#);
+        let page = |t: &str| format!(r#"{{"conditions":{{}},"list":[{},{},{}],"trigger":0}}"#, cmd(101, r#""",0,0,2"#), cmd(401, &format!("\"{t}\"")), cmd(0, ""));
+        let ev = |id: i64| format!(r#"{{"id":{id},"name":"EV{id}","x":1,"y":1,"pages":[{}]}}"#, page("Welcome to the village, traveler"));
+        std::fs::write(data.join("Map001.json"), format!(r#"{{"displayName":"T","events":[null,{},{},{}]}}"#, ev(1), ev(2), ev(3))).unwrap();
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        let f = s.file_names().iter().position(|n| n == "Map001.json").unwrap();
+        let rows: Vec<usize> = (0..s.row_count(f)).filter(|r| s.source_of(f, *r) == "Welcome to the village, traveler").collect();
+        assert_eq!(rows.len(), 3);
+        assert_eq!(s.link_info(f, rows[0]), Some((2, 0, 0, 0)), "еталона ще нема");
+        s.edit(f, rows[0], "Ласкаво просимо, мандрівнику");
+        s.submit(f, rows[0], "Ласкаво просимо, мандрівнику").unwrap();
+        assert_eq!(s.link_info(f, rows[0]), Some((2, 2, 0, 0)));
+        assert_eq!(s.apply_links(f, rows[0], false), 2);
+        assert_eq!(s.target_of(f, rows[2]), "Ласкаво просимо, мандрівнику");
+        assert_eq!(s.apply_links(f, rows[0], false), 0, "повторно нічого");
+        assert!(!s.undo_last().is_empty());
+        assert_eq!(s.target_of(f, rows[2]), "");
         let _ = std::fs::remove_dir_all(&base);
     }
 

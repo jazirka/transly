@@ -1226,6 +1226,23 @@ impl App {
             label_caps(ui, &format!("Довідка · {lang}"));
             ui.label(RichText::new(text).color(SRC_TEXT));
         }
+        if let Some((others, fills, updates, edited)) = self.st.link_info(f, r) {
+            ui.add_space(4.0);
+            label_caps(ui, "Однакові рядки");
+            ui.label(RichText::new(format!("Ще {others} з таким самим оригіналом: порожніх {fills}, старіших {updates}, змінених вручну {edited}")).size(11.5).color(MUTE));
+            if fills + updates + edited > 0 {
+                ui.horizontal(|ui| {
+                    if fills + updates > 0 && plain_button(ui, "Заповнити копії").clicked() {
+                        let n = self.st.apply_links(f, r, false);
+                        self.message = format!("Скопійовано в рядки (чернетки): {n}");
+                    }
+                    if edited > 0 && plain_button(ui, "Перезаписати й змінені").clicked() {
+                        let n = self.st.apply_links(f, r, true);
+                        self.message = format!("Скопійовано в рядки (чернетки): {n}");
+                    }
+                });
+            }
+        }
         ui.add_space(8.0);
         label_caps(ui, "Переклад");
         let rows = if self.focus { 9 } else { 5 };

@@ -531,6 +531,7 @@ impl AppState {
                 qa.tolerance_pct = t;
             }
             qa.line_limit = p.settings.get("lineLimit").and_then(|v| v.as_f64()).filter(|l| *l > 0.0);
+            qa.rules = Some(transly_core::qaconfig::qa_of(p.settings.get("qa")));
         }
         qa
     }
@@ -1204,6 +1205,50 @@ impl AppState {
         n
     }
 
+    /// Правила форми: (id, назва, пояснення, рівень, рядків із приміткою у файлі, виправних).
+    pub fn qa_rules_view(&self, f: usize) -> Vec<(String, String, String, String, usize, usize)> {
+        let Some(p) = self.project.as_ref() else { return vec![] };
+        let opts = self.qa_options();
+        let rules = transly_core::qaconfig::qa_of(p.settings.get("qa"));
+        let stats = self.views.get(f).map(|v| transly_core::qaadvice::rule_stats(v, &p.files, &opts)).unwrap_or_default();
+        transly_core::qarules::QA_RULES
+            .iter()
+            .map(|r| {
+                let st = stats.iter().find(|s| s.id == r.id);
+                (r.id.to_string(), r.title.to_string(), r.explain.to_string(), rules.sev[r.id].as_str().to_string(), st.map_or(0, |s| s.rows), st.map_or(0, |s| s.fixable))
+            })
+            .collect()
+    }
+
+    pub fn set_rule_level(&mut self, id: &str, level: &str) {
+        let Some(l) = transly_core::qarules::RuleSeverity::parse(level) else { return };
+        let Some(p) = self.project.as_mut() else { return };
+        let q = transly_core::qaconfig::with_rule_level(p.settings.get("qa"), id, l);
+        p.settings.insert("qa".into(), q);
+        p.settings_at = Some(now_ms());
+        self.rev += 1;
+        self.dirty = true;
+    }
+
+    /// Виправляє правило в усіх файлах однією дією журналу.
+    pub fn fix_qa_rule(&mut self, id: &str) -> usize {
+        let Some(p) = self.project.as_ref() else { return 0 };
+        let opts = self.qa_options();
+        let changes = transly_core::qaadvice::fix_rule(&self.views, &p.files, id, &opts, now_ms());
+        let n = changes.len();
+        if n == 0 {
+            return 0;
+        }
+        let who = self.who();
+        let mut rand = Self::seeded_rand();
+        let Some(p) = self.project.as_mut() else { return 0 };
+        let cid = commit_rows(&mut p.files, &changes, "qafix", &who, now_ms(), None, &mut rand);
+        self.undo.record(&cid);
+        self.rev += 1;
+        self.dirty = true;
+        n
+    }
+
     pub fn key_of(&self, f: usize, r: usize) -> String {
         self.unit(f, r).map_or(String::new(), |u| u.key.clone())
     }
@@ -1776,6 +1821,24 @@ menu.quit=Quit game
         assert_eq!(s.apply_links(f, rows[0], false), 0, "повторно нічого");
         assert!(!s.undo_last().is_empty());
         assert_eq!(s.target_of(f, rows[2]), "");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn qa_rules_levels_and_fix() {
+        let base = std::env::temp_dir().join(format!("transly-app-qarules-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = game(&base);
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        let v = s.qa_rules_view(0);
+        assert_eq!(v.len(), transly_core::qarules::QA_RULES.len());
+        let (id, def) = (v[0].0.clone(), v[0].3.clone());
+        s.set_rule_level(&id, "off");
+        assert_eq!(s.qa_rules_view(0)[0].3, "off");
+        s.set_rule_level(&id, &def);
+        assert_eq!(s.qa_rules_view(0)[0].3, def);
+        assert_eq!(s.fix_qa_rule(&id), 0, "нічого виправляти");
         let _ = std::fs::remove_dir_all(&base);
     }
 

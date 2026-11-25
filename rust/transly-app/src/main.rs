@@ -27,6 +27,7 @@ struct App {
     term_en: String,
     term_uk: String,
     itab: usize,
+    qar_win: bool,
     br_win: Option<String>,
     groups_win: Option<String>,
     ref_win: Option<String>,
@@ -80,7 +81,7 @@ fn source_job(text: &str, marks: &[(usize, usize, usize)]) -> egui::text::Layout
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, br_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, qar_win: false, br_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
     }
 }
 
@@ -165,6 +166,7 @@ impl App {
         self.reference_window(ctx);
         self.groups_window(ctx);
         self.branches_window(ctx);
+        self.qarules_window(ctx);
         if let Some(msg) = self.st.finish_sync() {
             self.message = msg;
         }
@@ -257,6 +259,10 @@ impl App {
                 ui.menu_button("Інструменти", |ui| {
                     if ui.add_enabled(self.st.is_open(), egui::Button::new(if self.st.syncing() { "Синхронізація триває…" } else { "Синхронізація через GitHub…" })).clicked() {
                         self.act_sync();
+                        ui.close_menu();
+                    }
+                    if ui.add_enabled(self.st.is_open(), egui::Button::new("Правила QA…")).clicked() {
+                        self.qar_win = true;
                         ui.close_menu();
                     }
                     if ui.add_enabled(self.st.is_open(), egui::Button::new("Гілки перекладу…")).clicked() {
@@ -1109,6 +1115,51 @@ impl App {
         if open {
             self.br_win = Some(name);
         }
+    }
+
+    fn qarules_window(&mut self, ctx: &egui::Context) {
+        if !self.qar_win {
+            return;
+        }
+        let f = self.st.file.unwrap_or(0);
+        let mut open = true;
+        let mut set: Option<(String, &'static str)> = None;
+        let mut fix: Option<String> = None;
+        egui::Window::new("Правила QA").open(&mut open).collapsible(false).default_width(620.0).default_height(440.0).show(ctx, |ui| {
+            ui.label(RichText::new("Правила про форму перекладу: літери чужого алфавіту, приховані знаки, пробіли тощо. Кількість — у поточному файлі.").size(11.5).color(MUTE));
+            ui.add_space(6.0);
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                for (id, title, explain, level, rows, fixable) in self.st.qa_rules_view(f) {
+                    egui::Frame::new().fill(PANEL2).corner_radius(CornerRadius::same(R2)).inner_margin(egui::Margin::symmetric(10, 7)).show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new(&title).color(TEXT));
+                            ui.label(RichText::new(format!("рядків: {rows}")).size(11.0).color(MUTE));
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                if fixable > 0 && ui.small_button(format!("Виправити ({fixable})")).clicked() {
+                                    fix = Some(id.clone());
+                                }
+                                for (lv, label) in [("bad", "Помилка"), ("warn", "Порада"), ("off", "Вимкнено")] {
+                                    if ui.selectable_label(level == lv, label).clicked() {
+                                        set = Some((id.clone(), lv));
+                                    }
+                                }
+                            });
+                        });
+                        ui.label(RichText::new(&explain).size(11.0).color(MUTE));
+                    });
+                    ui.add_space(4.0);
+                }
+            });
+        });
+        if let Some((id, lv)) = set {
+            self.st.set_rule_level(&id, lv);
+        }
+        if let Some(id) = fix {
+            let n = self.st.fix_qa_rule(&id);
+            self.message = format!("Виправлено рядків: {n}");
+        }
+        self.qar_win = open;
     }
 
     fn strip(&mut self, ctx: &egui::Context) {

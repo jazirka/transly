@@ -39,7 +39,19 @@ pub const R1: u8 = 4;
 pub const R2: u8 = 8;
 pub const R3: u8 = 12;
 
+/// Вбудовані шрифти (SIL OFL, тексти ліцензій лежать поруч): Inter — інтерфейс, JetBrains Mono — ключі й числа.
+fn install_fonts(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+    fonts.font_data.insert("Inter".into(), std::sync::Arc::new(egui::FontData::from_static(include_bytes!("../assets/fonts/Inter.ttf"))));
+    fonts.font_data.insert("JetBrainsMono".into(), std::sync::Arc::new(egui::FontData::from_static(include_bytes!("../assets/fonts/JetBrainsMono.ttf"))));
+    // перші в черзі; типові лишаються запасними (символи, яких немає в Inter)
+    fonts.families.entry(FontFamily::Proportional).or_default().insert(0, "Inter".into());
+    fonts.families.entry(FontFamily::Monospace).or_default().insert(0, "JetBrainsMono".into());
+    ctx.set_fonts(fonts);
+}
+
 pub fn apply(ctx: &egui::Context) {
+    install_fonts(ctx);
     let mut v = egui::Visuals::dark();
     v.panel_fill = PANEL;
     v.window_fill = PANEL;

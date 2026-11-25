@@ -59,6 +59,25 @@ pub struct Counts {
     pub approved: usize,
 }
 
+/// Один рядок сцени для вкладки «Сцена».
+#[derive(Clone, Debug)]
+pub struct SceneLine {
+    pub row: usize,
+    pub speaker: String,
+    pub source: String,
+    pub target: String,
+    pub status: RowStatus,
+    pub current: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct SceneView {
+    pub title: String,
+    pub lines: Vec<SceneLine>,
+    pub prev: Option<usize>,
+    pub next: Option<usize>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Filter {
     All,
@@ -96,6 +115,7 @@ struct Visible {
 type QaCache = ((usize, u64), Vec<(usize, String, bool)>);
 
 pub struct AppState {
+    scene_cache: std::cell::RefCell<(usize, Option<transly_core::scene::SceneIndex>)>,
     undo: transly_core::undostack::UndoStack,
     pub host: PluginHost,
     pub sync_state: FilesState,
@@ -123,7 +143,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None }
+        AppState { scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None }
     }
 }
 
@@ -191,6 +211,7 @@ impl AppState {
         }
         // гра могла оновитися: переклади зіставляються з новими рядками за текстом оригіналу (ключі зсуваються)
         self.last_note = String::new();
+        *self.scene_cache.borrow_mut() = (usize::MAX, None);
         let old_snap: Option<indexmap::IndexMap<String, Vec<Unit>>> = project.snapshot.as_ref().and_then(|v| serde_json::from_value(v.clone()).ok());
         if old_snap.is_some() {
             let plan = plan_ingest(old_snap.as_ref(), &views, &project.files, now_ms());
@@ -822,6 +843,34 @@ impl AppState {
         format!("Додано термінів: {added}, уже є: {}, з іншим перекладом (не змінено): {}, пропущено рядків: {}", plan.same.len(), plan.differ.len(), table.skipped)
     }
 
+    /// Сцена вибраного рядка: назва, рядки в порядку гри (з перекладами) і перші рядки сусідніх сцен.
+    pub fn scene_view(&self, f: usize, r: usize) -> Option<SceneView> {
+        let v = self.views.get(f)?;
+        let key = self.unit(f, r)?.key.clone();
+        if self.scene_cache.borrow().0 != f {
+            *self.scene_cache.borrow_mut() = (f, transly_core::scene::build_scene_index(&v.units));
+        }
+        let cache = self.scene_cache.borrow();
+        let idx = cache.1.as_ref()?;
+        let sc = transly_core::scene::scene_at(Some(idx), &key)?;
+        let at_key = |u: &Unit| v.units.iter().position(|x| x.key == u.key);
+        let lines = sc
+            .units
+            .iter()
+            .filter_map(|u| {
+                let ri = at_key(u)?;
+                Some(SceneLine { row: ri, speaker: u.speaker.clone(), source: u.source.clone(), target: self.target_of(f, ri), status: self.status_of(f, ri), current: ri == r })
+            })
+            .collect();
+        let first_row = |s: Option<&transly_core::scene::SceneInfo>| s.and_then(|s| s.units.first()).and_then(at_key);
+        Some(SceneView {
+            title: transly_core::scene::scene_title(sc),
+            lines,
+            prev: first_row(transly_core::scene::step_scene(Some(idx), &key, -1)),
+            next: first_row(transly_core::scene::step_scene(Some(idx), &key, 1)),
+        })
+    }
+
     pub fn key_of(&self, f: usize, r: usize) -> String {
         self.unit(f, r).map_or(String::new(), |u| u.key.clone())
     }
@@ -1190,6 +1239,37 @@ menu.quit=Quit game
         let again = s.import_terms_table("Оригінал;Переклад\nsword;клинок\n");
         assert!(again.contains("з іншим перекладом (не змінено): 1"), "{again}");
         assert!(s.import_terms_table("Оригінал;Опис\nx;y\n").starts_with("У таблиці не знайдено"));
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn the_scene_tab_lists_the_event_lines_and_neighbours() {
+        let base = std::env::temp_dir().join(format!("transly-app-scene-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = base.join("MyGame").join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        let cmd = |code: i64, p: &str| format!(r#"{{"code":{code},"indent":0,"parameters":[{p}]}}"#);
+        let page = |texts: &[&str]| {
+            let mut l: Vec<String> = Vec::new();
+            for t in texts {
+                l.push(cmd(101, r#""",0,0,2,"Анна""#));
+                l.push(cmd(401, &format!("\"{t}\"")));
+            }
+            l.push(cmd(0, ""));
+            format!(r#"{{"conditions":{{}},"list":[{}],"trigger":0}}"#, l.join(","))
+        };
+        let ev = |id: i64, texts: &[&str]| format!(r#"{{"id":{id},"name":"EV{id}","x":1,"y":1,"pages":[{}]}}"#, page(texts));
+        std::fs::write(data.join("Map001.json"), format!(r#"{{"displayName":"Town","events":[null,{},{}]}}"#, ev(1, &["Hello there", "Come in"]), ev(2, &["Second scene"]))).unwrap();
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        let f = s.file_names().iter().position(|n| n == "Map001.json").unwrap();
+        let r = (0..s.row_count(f)).find(|r| s.source_of(f, *r) == "Hello there").unwrap();
+        let v = s.scene_view(f, r).expect("сцена є");
+        assert_eq!(v.lines.len(), 2);
+        assert!(v.lines[0].current && !v.lines[1].current);
+        assert!(v.prev.is_none());
+        let next = v.next.expect("є наступна сцена");
+        assert_eq!(s.source_of(f, next), "Second scene");
         let _ = std::fs::remove_dir_all(&base);
     }
 

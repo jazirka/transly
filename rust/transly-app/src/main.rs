@@ -936,7 +936,7 @@ impl App {
             let (tabs, _) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::hover());
             ui.painter().hline(tabs.x_range(), tabs.bottom(), Stroke::new(1.0_f32, LINE));
             let mut x = tabs.left() + 4.0;
-            for (i, t) in ["Переклад", "Пам’ять", "Історія", "Коментарі"].iter().enumerate() {
+            for (i, t) in ["Переклад", "Пам’ять", "Сцена", "Історія", "Коментарі"].iter().enumerate() {
                 let w = t.chars().count() as f32 * 7.2 + 22.0;
                 let r = Rect::from_min_size(pos2(x, tabs.top()), vec2(w, 34.0));
                 let resp = ui.interact(r, ui.id().with(("itab", i)), Sense::click());
@@ -966,7 +966,8 @@ impl App {
                     match self.itab {
                         0 => self.tab_translate(ui, f, r),
                         1 => self.tab_memory(ui, f, r),
-                        2 => self.tab_history(ui, f, r),
+                        2 => self.tab_scene(ui, f, r),
+                        3 => self.tab_history(ui, f, r),
                         _ => self.tab_comments(ui, f, r),
                     }
                 });
@@ -1061,6 +1062,42 @@ impl App {
                 self.draft = m.t.clone();
                 self.itab = 0;
             }
+        }
+    }
+
+    fn tab_scene(&mut self, ui: &mut egui::Ui, f: usize, r: usize) {
+        let Some(v) = self.st.scene_view(f, r) else {
+            label_caps(ui, "Сцена");
+            ui.label(RichText::new("Цей рядок не належить сцені (база даних чи текстовий формат)").color(MUTE));
+            return;
+        };
+        ui.horizontal(|ui| {
+            if ui.add_enabled(v.prev.is_some(), egui::Button::new("<")).clicked() {
+                self.st.row = v.prev;
+            }
+            if ui.add_enabled(v.next.is_some(), egui::Button::new(">")).clicked() {
+                self.st.row = v.next;
+            }
+            ui.label(RichText::new(&v.title).color(TEXT));
+        });
+        ui.add_space(4.0);
+        for l in &v.lines {
+            let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 46.0), Sense::click());
+            resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, l.current, format!("{}: {}", l.speaker, l.source)));
+            ui.painter().rect_filled(rect, CornerRadius::same(R1), if l.current { SEL } else if resp.hovered() { TREE_HOVER } else { PANEL2 });
+            paint_dot(ui, pos2(rect.left() + 12.0, rect.top() + 14.0), l.status);
+            let clip = Rect::from_min_max(pos2(rect.left() + 24.0, rect.top()), pos2(rect.right() - 6.0, rect.bottom()));
+            let p = ui.painter().with_clip_rect(clip);
+            if !l.speaker.is_empty() {
+                p.text(pos2(clip.left(), rect.top() + 6.0), Align2::LEFT_TOP, &l.speaker, FontId::proportional(11.0), VIOLET);
+            }
+            p.text(pos2(clip.left(), rect.top() + 18.0), Align2::LEFT_TOP, l.source.replace('\n', " / "), FontId::proportional(12.5), SRC_TEXT);
+            let t = if l.target.is_empty() { "-".to_string() } else { l.target.replace('\n', " / ") };
+            p.text(pos2(clip.left(), rect.top() + 32.0), Align2::LEFT_TOP, t, FontId::proportional(12.0), MUTE);
+            if resp.clicked() {
+                self.st.row = Some(l.row);
+            }
+            ui.add_space(3.0);
         }
     }
 

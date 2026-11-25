@@ -70,6 +70,9 @@ struct App {
     bottom_open: bool,
     focus: bool,
     was_edit: u8,
+    /// Вікно «Конструкції»: знайдені пропозиції; відкладені («Не зараз») пам'ятаються до кінця сеансу.
+    mine_win: Option<Vec<transly_core::mine::ConstructionSuggestion>>,
+    mine_no: std::collections::HashSet<String>,
     /// Сповіщення внизу: (текст, коли з'явилось, чи можна скасувати); останнє показане повідомлення й лічильник скасувань.
     toast: Option<(String, std::time::Instant, bool)>,
     toast_seen: (String, u64),
@@ -122,7 +125,7 @@ fn source_job_sized(text: &str, marks: &[(usize, usize, usize)], size: f32) -> e
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [true, true, false]], comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [true, true, false]], comment: String::new(), token: String::new() }
     }
 }
 
@@ -277,6 +280,7 @@ impl App {
         self.activity_window(ctx);
         self.keys_window(ctx);
         self.search_window(ctx);
+        self.mine_window(ctx);
         self.toast_ui(ctx);
         if let Some(msg) = self.st.finish_sync() {
             self.message = msg;
@@ -654,6 +658,69 @@ impl App {
         }
     }
 
+    /// «Конструкції»: пропозиції записів у глосарій за вже перекладеними рядками; «Додати», «Показати» (перший рядок), «Не зараз».
+    fn mine_window(&mut self, ctx: &egui::Context) {
+        let Some(list) = self.mine_win.clone() else { return };
+        let mut open = true;
+        let mut add: Option<usize> = None;
+        let mut show: Option<usize> = None;
+        let mut no: Option<usize> = None;
+        let shown: Vec<&transly_core::mine::ConstructionSuggestion> = list.iter().filter(|x| !self.mine_no.contains(&x.en)).collect();
+        egui::Window::new("Конструкції").open(&mut open).collapsible(false).default_width(560.0).default_height(460.0).show(ctx, |ui| {
+            if shown.is_empty() {
+                ui.add_space(8.0);
+                ui.label(RichText::new("Нових конструкцій не знайдено: або їх немає, або всі вже в глосарії.").color(MUTE));
+                return;
+            }
+            ui.label(RichText::new("Звороти, які ваші рядки вже передають одним словом. Додайте запис у глосарій, і QA стежитиме за цим словом.").color(MUTE));
+            ui.add_space(6.0);
+            egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
+                for (i, x) in shown.iter().take(20).enumerate() {
+                    egui::Frame::new().fill(PANEL2).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(CornerRadius::same(8)).inner_margin(egui::Margin::symmetric(12, 9)).show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new(&x.en).strong().color(TEXT));
+                            ui.label(RichText::new("→").color(MUTE));
+                            ui.label(RichText::new(&x.uk).strong().color(TEXT));
+                        });
+                        ui.label(RichText::new(format!("так уже перекладено в {} рядках", x.rows.len())).size(11.5).color(MUTE));
+                        ui.horizontal(|ui| {
+                            if primary_button(ui, "Додати").clicked() {
+                                add = Some(i);
+                            }
+                            if plain_button(ui, &format!("Показати {}", x.rows.len())).clicked() {
+                                show = Some(i);
+                            }
+                            if plain_button(ui, "Не зараз").clicked() {
+                                no = Some(i);
+                            }
+                        });
+                    });
+                    ui.add_space(6.0);
+                }
+            });
+        });
+        if let Some(i) = add {
+            let x = shown[i].clone();
+            self.message = self.st.add_term(&x.en, &x.uk);
+            self.mine_win = Some(self.st.mine_suggestions());
+        } else if let Some(i) = show {
+            let x = shown[i].clone();
+            if let Some(r) = x.rows.first() {
+                if self.st.open_ref(&r.file, &r.key) {
+                    self.draft_for = None;
+                    self.cell_edit = None;
+                    self.message = format!("«{}»: показано перший із {} рядків", x.en, x.rows.len());
+                }
+            }
+        } else if let Some(i) = no {
+            self.mine_no.insert(shown[i].en.clone());
+        }
+        if !open {
+            self.mine_win = None;
+        }
+    }
+
     fn menu_goto(&mut self, ui: &mut egui::Ui) {
         if ui.button("Пошук скрізь…  (Ctrl+K)").clicked() {
             self.search_win = Some((String::new(), 0));
@@ -685,6 +752,10 @@ impl App {
     fn menu_tools(&mut self, ui: &mut egui::Ui) {
             if ui.add_enabled(self.st.is_open(), egui::Button::new(if self.st.syncing() { "Синхронізація триває…" } else { "Синхронізація через GitHub…" })).clicked() {
                 self.act_sync();
+                ui.close_menu();
+            }
+            if ui.add_enabled(self.st.is_open(), egui::Button::new("Конструкції…")).on_hover_text("Звороти на кшталт «take … off», які рядки вже передають одним словом, а в глосарії їх ще немає").clicked() {
+                self.mine_win = Some(self.st.mine_suggestions());
                 ui.close_menu();
             }
             if ui.add_enabled(self.st.is_open(), egui::Button::new("Активність…")).clicked() {
@@ -2195,6 +2266,25 @@ mod ui_tests {
         let other = app.st.contributions(0, 0).into_iter().find(|(v, _)| v.text == "Воїн").unwrap().0;
         app.st.drop_variant(0, 0, &other.id);
         assert!(app.st.contributions(0, 0).iter().all(|(v, _)| v.text != "Воїн"));
+    }
+
+    #[test]
+    fn constructions_are_proposed_and_added_to_the_glossary() {
+        // самі пропозиції перевіряють золоті вектори ядра; тут — вікно: «Додати» пише запис у глосарій, «Не зараз» ховає картку
+        let data = game("mine");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        let sug = |en: &str, uk: &str| transly_core::mine::ConstructionSuggestion { en: en.into(), uk: uk.into(), rows: vec![transly_core::mine::MineRef { file: "Actors.json".into(), key: "[1].name".into() }] };
+        app.mine_win = Some(vec![sug("take … off", "зняти"), sug("put … on", "одягти")]);
+        let mut h = harness(app);
+        h.run();
+        h.get_all_by_label("Не зараз").next().unwrap().click();
+        h.run();
+        assert_eq!(h.state().mine_no.len(), 1);
+        assert_eq!(h.get_all_by_label("Додати").count(), 1, "відкладена картка зникла");
+        h.get_all_by_label("Додати").next().unwrap().click();
+        h.run();
+        assert_eq!(h.state().st.terms().len(), 1, "запис додано в глосарій");
     }
 
     #[test]

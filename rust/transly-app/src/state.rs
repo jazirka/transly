@@ -1101,6 +1101,27 @@ impl AppState {
         self.approve_row(f, r)
     }
 
+    /// Конструкції («take … off»), які рядки вже передають одним словом, але яких ще немає в глосарії (до 20 000 перекладених рядків).
+    pub fn mine_suggestions(&self) -> Vec<transly_core::mine::ConstructionSuggestion> {
+        let Some(p) = self.project.as_ref() else { return Vec::new() };
+        let terms: Vec<String> = self.terms().into_iter().map(|t| t.en).collect();
+        transly_core::mine::mine_constructions(&self.views, p, &terms, &mut || {}, 20000, 2500)
+    }
+
+    /// Відкриває перший рядок зі списку посилань (файл за назвою, рядок за ключем).
+    pub fn open_ref(&mut self, file: &str, key: &str) -> bool {
+        let Some(fi) = self.views.iter().position(|v| v.name == file) else { return false };
+        let Some(ri) = self.views[fi].units.iter().position(|u| u.key == key) else { return false };
+        self.filter = Filter::All;
+        self.search.clear();
+        self.group_filter = None;
+        self.speaker_filter = None;
+        self.len_filter = 0;
+        self.file = Some(fi);
+        self.row = Some(ri);
+        true
+    }
+
     /// «Пошук скрізь»: файли, рядки (за оригіналом, перекладом і ключем) і терміни. Групи мають власні ліміти;
     /// для рядків повертається ще й повне число збігів (до 999).
     pub fn search_all(&self, q: &str, cap_rows: usize) -> SearchHits {

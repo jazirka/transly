@@ -6,6 +6,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod icons;
+mod layout;
 mod plugins;
 mod state;
 mod theme;
@@ -41,7 +42,6 @@ struct App {
     message: String,
     term_en: String,
     term_uk: String,
-    itab: usize,
     rows_scroll_to: Option<bool>,
     keys_win: bool,
     rail: usize,
@@ -69,16 +69,16 @@ struct App {
     btab: usize,
     bottom_open: bool,
     focus: bool,
+    /// Клітинка перекладу, що редагується в таблиці: (файл, рядок).
+    cell_edit: Option<(usize, usize)>,
+    cell_focus: bool,
+    /// Розділи правої колонки (Активність, Пов’язане, Обговорення) окремо для таблиці й «Редагування».
+    right_secs: [[bool; 3]; 2],
     comment: String,
     token: String,
 }
 
 const TERM_COLORS: [Color32; 4] = [VIOLET, INFO, OK, WARN];
-
-/// Оригінал із підкресленими термінами глосарія (колір за номером терміна).
-fn source_job(text: &str, marks: &[(usize, usize, usize)]) -> egui::text::LayoutJob {
-    source_job_sized(text, marks, 13.5)
-}
 
 fn source_job_sized(text: &str, marks: &[(usize, usize, usize)], size: f32) -> egui::text::LayoutJob {
     use egui::text::{LayoutJob, TextFormat};
@@ -112,7 +112,7 @@ fn source_job_sized(text: &str, marks: &[(usize, usize, usize)], size: f32) -> e
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [true, true, false]], comment: String::new(), token: String::new() }
     }
 }
 
@@ -121,13 +121,14 @@ fn card() -> egui::Frame {
     egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(CornerRadius::same(10)).outer_margin(egui::Margin { left: 4, right: 4, top: 0, bottom: 6 }).inner_margin(egui::Margin::ZERO)
 }
 
-fn pl_pos(x: f32, y: f32) -> egui::Pos2 {
-    pos2(x, y)
+/// Шрифт інтерфейсу (Inter) заданого розміру.
+pub(crate) fn ip(size: f32) -> FontId {
+    FontId::proportional(size)
 }
 
-/// Верх картки: заокруглені лише верхні кути.
-fn top_round() -> CornerRadius {
-    CornerRadius { nw: 10, ne: 10, sw: 0, se: 0 }
+/// Моноширинний шрифт (ключі, числа).
+pub(crate) fn mp(size: f32) -> FontId {
+    FontId::monospace(size)
 }
 
 
@@ -230,18 +231,6 @@ fn plain_button(ui: &mut egui::Ui, text: &str) -> egui::Response {
     ui.add(egui::Button::new(text).min_size(vec2(0.0, 26.0)))
 }
 
-fn chip(ui: &mut egui::Ui, text: &str, count: usize, on: bool) -> egui::Response {
-    let label = format!("{text}  {count}");
-    let galley = ui.painter().layout_no_wrap(label, FontId::proportional(12.0), if on { accent_text() } else { MUTE });
-    let size = vec2(galley.size().x + 18.0, 24.0);
-    let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
-    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, format!("{text} {count}")));
-    let (fill, line, col) = if on { (chip_on(), accent_ring(), accent_text()) } else if resp.hovered() { (PANEL, LINE, TEXT) } else { (Color32::TRANSPARENT, LINE, MUTE) };
-    ui.painter().rect(rect, CornerRadius::same(R3), fill, Stroke::new(1.0_f32, line), StrokeKind::Inside);
-    ui.painter().text(rect.left_center() + vec2(9.0, 0.0), Align2::LEFT_CENTER, format!("{text}  {count}"), FontId::proportional(12.0), col);
-    resp
-}
-
 impl eframe::App for App {
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         if self.st.dirty {
@@ -299,13 +288,12 @@ impl App {
         }
         self.strip(ctx);
         if self.focus && !self.scene_mode {
-            // «Редагування»: список рядків ліворуч, великий редактор посередині, «Активність» і «Пов'язане» праворуч
+            // «Редагування»: список рядків ліворуч, великий редактор посередині
             self.rows_panel(ctx);
-            self.side_cards(ctx);
         } else {
-            self.tree(ctx);
-            self.inspector(ctx);
+            self.left_panel(ctx);
         }
+        self.right_panel(ctx);
         self.editor(ctx);
     }
 
@@ -1706,377 +1694,6 @@ impl App {
         self.keys_win = open;
     }
 
-    fn strip(&mut self, ctx: &egui::Context) {
-        egui::SidePanel::left("strip").exact_width(35.5).resizable(false).show_separator_line(false).frame(egui::Frame::new().fill(GROUND)).show(ctx, |ui| {
-            ui.add_space(4.0);
-            ui.vertical_centered(|ui| {
-                ui.spacing_mut().item_spacing.y = 4.0;
-                for (i, (ic, tip)) in [("files", "Файли гри"), ("rows", "Рядки файлу"), ("scene", "Сцени файлу"), ("book", "Пов’язане з рядком: терміни, однакові рядки")].iter().enumerate() {
-                    let (r, resp) = ui.allocate_exact_size(vec2(28.0, 28.0), Sense::click());
-                    let on = i == self.rail;
-                    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, format!("Панель: {tip}")));
-                    if on {
-                        ui.painter().rect_filled(r, CornerRadius::same(8), over_color(over_color(GROUND, Color32::WHITE, 0.10), accent(), 0.06));
-                        ui.painter().rect_stroke(r, CornerRadius::same(8), Stroke::new(1.0_f32, over_color(GROUND, Color32::WHITE, 0.22)), StrokeKind::Inside);
-                    } else if resp.hovered() {
-                        ui.painter().rect_filled(r, CornerRadius::same(8), GHOST_HOVER);
-                    }
-                    icons::paint(ui, Rect::from_center_size(r.center(), vec2(16.0, 16.0)), ic, if on { TEXT } else { MUTE });
-                    if resp.on_hover_text(*tip).clicked() {
-                        self.rail = i;
-                    }
-                }
-            });
-        });
-    }
-
-    /// Бічні панелі «Рядки», «Сцени», «Пов’язане» (замість дерева файлів).
-    fn rail_panel(&mut self, ui: &mut egui::Ui) {
-        let Some(f) = self.st.file else {
-            ui.add_space(12.0);
-            ui.vertical_centered(|ui| ui.label(RichText::new("Відкрийте файл").color(MUTE)));
-            return;
-        };
-        match self.rail {
-            1 => self.rows_cards(ui, f),
-            2 => {
-                let list = self.st.scenes_list(f);
-                if list.is_empty() {
-                    ui.add_space(12.0);
-                    ui.vertical_centered(|ui| ui.label(RichText::new("У цьому файлі немає сцен").color(MUTE)));
-                    return;
-                }
-                let cur = self.st.row.and_then(|r| self.st.scene_view(f, r)).map(|v| v.title);
-                egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
-                    ui.spacing_mut().item_spacing.y = 0.0;
-                    for (title, first, n) in list {
-                        let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
-                        let on = cur.as_deref() == Some(title.as_str());
-                        resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, format!("Сцена {title}")));
-                        if on {
-                            ui.painter().rect_filled(rect, CornerRadius::ZERO, sel_use());
-                        } else if resp.hovered() {
-                            ui.painter().rect_filled(rect, CornerRadius::ZERO, TREE_HOVER);
-                        }
-                        ui.painter().text(pos2(rect.right() - 10.0, rect.center().y), Align2::RIGHT_CENTER, n.to_string(), FontId::monospace(10.5), DIM);
-                        let clip = Rect::from_min_max(rect.min + vec2(12.0, 0.0), pos2(rect.right() - 36.0, rect.bottom()));
-                        ui.painter().with_clip_rect(clip).text(pos2(clip.left(), rect.center().y), Align2::LEFT_CENTER, &title, FontId::proportional(12.5), TEXT);
-                        if resp.clicked() {
-                            self.st.row = Some(first);
-                        }
-                    }
-                });
-            }
-            _ => {
-                let Some(r) = self.st.row else {
-                    ui.add_space(12.0);
-                    ui.vertical_centered(|ui| ui.label(RichText::new("Виберіть рядок").color(MUTE)));
-                    return;
-                };
-                egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
-                    egui::Frame::new().inner_margin(egui::Margin::same(12)).show(ui, |ui| {
-                        label_caps(ui, "Терміни глосарія в оригіналі");
-                        let terms = self.st.terms();
-                        let mut seen = std::collections::BTreeSet::new();
-                        for (_, _, ti) in self.st.source_marks(f, r) {
-                            if seen.insert(ti) {
-                                if let Some(t) = terms.get(ti) {
-                                    ui.label(RichText::new(format!("{}  -  {}", t.en, t.uk)).color(TEXT));
-                                }
-                            }
-                        }
-                        if seen.is_empty() {
-                            ui.label(RichText::new("нема").color(MUTE));
-                        }
-                        ui.add_space(8.0);
-                        label_caps(ui, "Однакові рядки");
-                        match self.st.link_info(f, r) {
-                            Some((o, fl, up, ed)) => {
-                                ui.label(RichText::new(format!("Ще {o} з таким самим оригіналом: порожніх {fl}, старіших {up}, змінених вручну {ed}")).color(MUTE));
-                            }
-                            None => {
-                                ui.label(RichText::new("нема").color(MUTE));
-                            }
-                        }
-                        let refs = self.st.references_of(f, r);
-                        if !refs.is_empty() {
-                            ui.add_space(8.0);
-                            label_caps(ui, "Довідкові мови");
-                            for (lang, text) in refs {
-                                ui.label(RichText::new(format!("{lang}: {text}")).color(SRC_TEXT));
-                            }
-                        }
-                    });
-                });
-            }
-        }
-    }
-
-    fn tree(&mut self, ctx: &egui::Context) {
-        egui::SidePanel::left("tree").exact_width(321.0).resizable(false).show_separator_line(false).frame(card()).show(ctx, |ui| {
-            let (h, _) = ui.allocate_exact_size(vec2(ui.available_width(), 28.0), Sense::hover());
-            ui.painter().text(h.left_center() + vec2(10.0, 0.0), Align2::LEFT_CENTER, ["ФАЙЛИ ГРИ", "РЯДКИ", "СЦЕНИ", "ПОВ’ЯЗАНЕ"][self.rail], FontId::proportional(11.0), MUTE);
-            ui.painter().hline(h.x_range(), h.bottom(), Stroke::new(1.0_f32, LINE));
-            if self.rail != 0 {
-                self.rail_panel(ui);
-                return;
-            }
-            let prog = self.st.file_progress();
-            let names = self.st.file_names();
-            // теки, як у старому застосунку: дані гри, мапи, текстові файли
-            let kind = |n: &str| -> usize {
-                let b = n.rsplit('/').next().unwrap_or(n);
-                if !b.to_lowercase().ends_with(".json") {
-                    2
-                } else if b.starts_with("Map") && b[3..].trim_end_matches(".json").chars().all(|c| c.is_ascii_digit()) && b.len() > 8 {
-                    1
-                } else {
-                    0
-                }
-            };
-            let folders = [("data", 0usize), ("maps", 1), ("Тексти", 2)];
-            egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
-                ui.spacing_mut().item_spacing.y = 0.0;
-                for (title, k) in folders {
-                    let members: Vec<usize> = (0..names.len()).filter(|i| kind(&names[*i]) == k).collect();
-                    if members.is_empty() {
-                        continue;
-                    }
-                    let open = !self.tree_closed.contains(&k);
-                    let (hr, hresp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
-                    if hresp.hovered() {
-                        ui.painter().rect_filled(hr, CornerRadius::ZERO, TREE_HOVER);
-                    }
-                    hresp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("Тека {title}")));
-                    let c = pos2(hr.left() + 14.0, hr.center().y);
-                    let tri = if open { vec![pos2(c.x - 4.0, c.y - 2.0), pos2(c.x + 4.0, c.y - 2.0), pos2(c.x, c.y + 3.0)] } else { vec![pos2(c.x - 2.0, c.y - 4.0), pos2(c.x + 3.0, c.y), pos2(c.x - 2.0, c.y + 4.0)] };
-                    ui.painter().add(egui::Shape::convex_polygon(tri, MUTE, Stroke::NONE));
-                    ui.painter().text(pos2(hr.left() + 26.0, hr.center().y), Align2::LEFT_CENTER, title, FontId::proportional(12.5), TEXT);
-                    ui.painter().text(pos2(hr.right() - 10.0, hr.center().y), Align2::RIGHT_CENTER, members.len().to_string(), FontId::monospace(10.5), DIM);
-                    if hresp.clicked() {
-                        if open {
-                            self.tree_closed.insert(k);
-                        } else {
-                            self.tree_closed.remove(&k);
-                        }
-                    }
-                    if !open {
-                        continue;
-                    }
-                    for i in members {
-                        let name = &names[i];
-                        let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::click());
-                        let cur = self.st.file == Some(i);
-                        resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, cur, name.clone()));
-                        if cur {
-                            ui.painter().rect_filled(rect, CornerRadius::ZERO, sel_use());
-                        } else if resp.hovered() {
-                            ui.painter().rect_filled(rect, CornerRadius::ZERO, TREE_HOVER);
-                        }
-                        // значок формату: {} дані, MAP мапа, Aa текст
-                        let (label, bg, fg) = match k {
-                            1 => ("MAP", Color32::from_rgb(0x1f, 0x3a, 0x2c), OK),
-                            2 => ("Aa", Color32::from_rgb(0x2a, 0x2f, 0x4a), INFO),
-                            _ => ("{}", Color32::from_rgb(0x3b, 0x35, 0x24), Color32::from_rgb(0xe5, 0xc0, 0x6a)),
-                        };
-                        let bw = if k == 1 { 26.0 } else { 18.0 };
-                        let badge = Rect::from_min_size(pos2(rect.left() + 22.0, rect.center().y - 8.0), vec2(bw, 16.0));
-                        ui.painter().rect_filled(badge, CornerRadius::same(R1), bg);
-                        ui.painter().text(badge.center(), Align2::CENTER_CENTER, label, FontId::monospace(8.5), fg);
-                        let (total, done) = prog.get(i).copied().unwrap_or((0, 0));
-                        let pct = (done * 100).checked_div(total).unwrap_or(0);
-                        let right = rect.right() - 10.0;
-                        ui.painter().text(pos2(right, rect.center().y), Align2::RIGHT_CENTER, format!("{pct}%"), FontId::monospace(11.0), if pct == 100 { OK } else { MUTE });
-                        let bar = Rect::from_min_size(pos2(right - 62.0, rect.center().y - 2.0), vec2(26.0, 4.0));
-                        ui.painter().rect_filled(bar, CornerRadius::same(R1), Color32::from_rgb(0x3d, 0x40, 0x45));
-                        ui.painter().rect_filled(Rect::from_min_size(bar.min, vec2(bar.width() * pct as f32 / 100.0, 4.0)), CornerRadius::same(R1), if pct == 100 { OK } else { INFO });
-                        let clip = Rect::from_min_max(pos2(badge.right() + 6.0, rect.top()), pos2(bar.left() - 6.0, rect.bottom()));
-                        ui.painter().with_clip_rect(clip).text(pos2(clip.left(), rect.center().y), Align2::LEFT_CENTER, name, FontId::proportional(12.5), TEXT);
-                        if resp.clicked() {
-                            self.st.file = Some(i);
-                            self.st.row = None;
-                        }
-                    }
-                }
-            });
-        });
-    }
-
-    fn inspector(&mut self, ctx: &egui::Context) {
-        let width = if self.focus { (ctx.screen_rect().width() - 40.0 - 330.0).max(380.0) } else { 356.0 };
-        egui::SidePanel::right("insp").exact_width(width).resizable(false).show_separator_line(false).frame(card()).show(ctx, |ui| {
-            let (tabs, _) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::hover());
-            ui.painter().hline(tabs.x_range(), tabs.bottom(), Stroke::new(1.0_f32, LINE));
-            let mut x = tabs.left() + 4.0;
-            for (i, t) in ["Переклад", "Пам’ять", "Сцена", "Історія", "Коментарі"].iter().enumerate() {
-                let w = t.chars().count() as f32 * 7.2 + 22.0;
-                let r = Rect::from_min_size(pos2(x, tabs.top()), vec2(w, 34.0));
-                let resp = ui.interact(r, ui.id().with(("itab", i)), Sense::click());
-                let on = self.itab == i;
-                resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, *t));
-                ui.painter().text(r.center(), Align2::CENTER_CENTER, t, FontId::proportional(12.5), if on || resp.hovered() { TEXT } else { MUTE });
-                if on {
-                    ui.painter().hline(r.x_range(), tabs.bottom() - 1.0, Stroke::new(2.0_f32, accent()));
-                }
-                if resp.clicked() {
-                    self.itab = i;
-                }
-                x += w;
-            }
-            let Some((f, r)) = self.st.file.zip(self.st.row) else {
-                ui.add_space(16.0);
-                ui.vertical_centered(|ui| ui.label(RichText::new("Оберіть рядок").color(MUTE)));
-                return;
-            };
-            if self.draft_for != Some((f, r)) {
-                self.draft = self.st.target_of(f, r);
-                self.draft_for = Some((f, r));
-            }
-            egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
-                egui::Frame::new().inner_margin(egui::Margin::same(12)).show(ui, |ui| {
-                    ui.spacing_mut().item_spacing.y = 5.0;
-                    match self.itab {
-                        0 => self.tab_translate(ui, f, r),
-                        1 => self.tab_memory(ui, f, r),
-                        2 => self.tab_scene(ui, f, r),
-                        3 => self.tab_history(ui, f, r),
-                        _ => self.tab_comments(ui, f, r),
-                    }
-                });
-            });
-        });
-    }
-
-    fn tab_translate(&mut self, ui: &mut egui::Ui, f: usize, r: usize) {
-        label_caps(ui, "Оригінал");
-        egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(CornerRadius::same(R2)).inner_margin(egui::Margin::symmetric(10, 9)).show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.label(source_job(&self.st.source_of(f, r), &self.st.source_marks(f, r)));
-        });
-        ui.label(RichText::new(self.st.key_of(f, r)).monospace().size(10.5).color(MUTE));
-        for (lang, text) in self.st.references_of(f, r) {
-            ui.add_space(4.0);
-            label_caps(ui, &format!("Довідка · {lang}"));
-            ui.label(RichText::new(text).color(SRC_TEXT));
-        }
-        if let Some((others, fills, updates, edited)) = self.st.link_info(f, r) {
-            ui.add_space(4.0);
-            label_caps(ui, "Однакові рядки");
-            ui.label(RichText::new(format!("Ще {others} з таким самим оригіналом: порожніх {fills}, старіших {updates}, змінених вручну {edited}")).size(11.5).color(MUTE));
-            if let Some((is_main, unlinked)) = self.st.link_flags(f, r) {
-                ui.horizontal(|ui| {
-                    if is_main {
-                        if plain_button(ui, "Зняти головного").clicked() {
-                            self.st.link_action(f, r, 1);
-                        }
-                    } else if plain_button(ui, "Зробити головним").clicked() {
-                        self.st.link_action(f, r, 0);
-                    }
-                    if unlinked {
-                        if plain_button(ui, "Знову йти за копіями").clicked() {
-                            self.st.link_action(f, r, 3);
-                        }
-                    } else if plain_button(ui, "Не йти за копіями").clicked() {
-                        self.st.link_action(f, r, 2);
-                    }
-                });
-            }
-            if fills + updates + edited > 0 {
-                ui.horizontal(|ui| {
-                    if fills + updates > 0 && plain_button(ui, "Заповнити копії").clicked() {
-                        let n = self.st.apply_links(f, r, false);
-                        self.message = format!("Скопійовано в рядки (чернетки): {n}");
-                    }
-                    if edited > 0 && plain_button(ui, "Перезаписати й змінені").clicked() {
-                        let n = self.st.apply_links(f, r, true);
-                        self.message = format!("Скопійовано в рядки (чернетки): {n}");
-                    }
-                });
-            }
-        }
-        ui.add_space(8.0);
-        label_caps(ui, "Переклад");
-        let rows = if self.focus { 9 } else { 5 };
-        let resp = ui.add(egui::TextEdit::multiline(&mut self.draft).desired_rows(rows).desired_width(f32::INFINITY).font(FontId::proportional(13.5)).margin(vec2(10.0, 9.0)).background_color(BG));
-        ui.painter().rect_stroke(resp.rect, CornerRadius::same(R2), Stroke::new(1.0_f32, accent()), StrokeKind::Outside);
-        let src_len = self.st.source_of(f, r).chars().count().max(1);
-        let ratio = (self.draft.chars().count() as f32 / src_len as f32).min(1.5);
-        let (m, _) = ui.allocate_exact_size(vec2(ui.available_width(), 3.0), Sense::hover());
-        ui.painter().rect_filled(m, CornerRadius::same(R1), Color32::from_rgb(0x3d, 0x40, 0x45));
-        ui.painter().rect_filled(Rect::from_min_size(m.min, vec2(m.width() * (ratio / 1.5), 3.0)), CornerRadius::same(R1), if ratio > 1.25 { BAD } else { OK });
-        ui.add_space(3.0);
-        ui.horizontal(|ui| {
-            if primary_button(ui, "Надіслати").clicked() {
-                self.message = match self.st.submit(f, r, &self.draft) {
-                    Ok(()) => "Надіслано".into(),
-                    Err(e) => e,
-                };
-            }
-            if plain_button(ui, "Зберегти правку").clicked() {
-                self.st.edit(f, r, &self.draft);
-            }
-        });
-        ui.add_space(8.0);
-        for i in self.st.issues(f, r, &self.draft) {
-            ui.horizontal_wrapped(|ui| {
-                let (d, _) = ui.allocate_exact_size(vec2(10.0, 14.0), Sense::hover());
-                let col = if i.severity == transly_core::qa::Severity::Bad { BAD } else { WARN };
-                ui.painter().circle_filled(d.center(), 4.0, col);
-                ui.label(RichText::new(&i.message).color(TEXT));
-            });
-        }
-        ui.add_space(10.0);
-        label_caps(ui, "Глосарій");
-        for (i, t) in self.st.terms().iter().enumerate() {
-            ui.horizontal(|ui| {
-                ui.colored_label(TERM_COLORS[i % TERM_COLORS.len()], "•");
-                ui.label(RichText::new(&t.en).color(TEXT));
-                ui.label(RichText::new("-").color(DIM));
-                ui.label(RichText::new(&t.uk).color(TEXT));
-            });
-        }
-        ui.horizontal(|ui| {
-            ui.add(egui::TextEdit::singleline(&mut self.term_en).hint_text("слово").desired_width(88.0));
-            ui.add(egui::TextEdit::singleline(&mut self.term_uk).hint_text("переклад").desired_width(88.0));
-            if plain_button(ui, "Додати").clicked() {
-                self.message = self.st.add_term(&self.term_en, &self.term_uk);
-                self.term_en.clear();
-                self.term_uk.clear();
-            }
-        });
-    }
-
-    fn tab_memory(&mut self, ui: &mut egui::Ui, f: usize, r: usize) {
-        label_caps(ui, "Схожі переклади");
-        let ms = self.st.tm_matches(f, r);
-        if ms.is_empty() {
-            ui.label(RichText::new("Схожих рядків ще немає").color(MUTE));
-        }
-        for m in ms {
-            let resp = egui::Frame::new()
-                .fill(Color32::from_rgb(0x29, 0x2b, 0x2e))
-                .stroke(Stroke::new(1.0_f32, LINE))
-                .corner_radius(CornerRadius::same(R2))
-                .inner_margin(egui::Margin::symmetric(8, 7))
-                .show(ui, |ui| {
-                    ui.set_width(ui.available_width());
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new(format!("{}%", m.score)).monospace().strong().color(if m.score >= 85 { OK } else { WARN }));
-                        ui.vertical(|ui| {
-                            ui.label(RichText::new(&m.t).color(TEXT));
-                            ui.label(RichText::new(&m.s).size(11.0).color(MUTE));
-                        });
-                    });
-                })
-                .response
-                .interact(Sense::click());
-            if resp.clicked() {
-                self.draft = m.t.clone();
-                self.itab = 0;
-            }
-        }
-    }
-
     fn tab_scene(&mut self, ui: &mut egui::Ui, f: usize, r: usize) {
         let Some(v) = self.st.scene_view(f, r) else {
             label_caps(ui, "Сцена");
@@ -2126,26 +1743,6 @@ impl App {
         }
     }
 
-    fn tab_history(&mut self, ui: &mut egui::Ui, f: usize, r: usize) {
-        label_caps(ui, "Історія рядка");
-        let rows = self.st.history(f, r);
-        if rows.is_empty() {
-            ui.label(RichText::new("Змін ще не було").color(MUTE));
-        }
-        for h in rows {
-            ui.label(RichText::new(&h.rec.what).size(11.0).color(MUTE));
-            egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(CornerRadius::same(R1)).inner_margin(egui::Margin::symmetric(8, 5)).show(ui, |ui| {
-                ui.set_width(ui.available_width());
-                ui.label(RichText::new(&h.rec.text).color(TEXT));
-            });
-            if h.can_restore && ui.small_button("Повернути цю версію").clicked() {
-                self.draft = h.rec.text.clone();
-                self.itab = 0;
-            }
-            ui.add_space(6.0);
-        }
-    }
-
     fn tab_comments(&mut self, ui: &mut egui::Ui, f: usize, r: usize) {
         label_caps(ui, "Обговорення");
         for t in self.st.threads(f, r) {
@@ -2166,566 +1763,6 @@ impl App {
         }
     }
 
-    fn editor(&mut self, ctx: &egui::Context) {
-        egui::CentralPanel::default().frame(card()).show(ctx, |ui| {
-            ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
-            self.st.sync_tabs();
-            let Some(f) = self.st.file else {
-                ui.centered_and_justified(|ui| ui.label(RichText::new(if self.st.is_open() { "Усі вкладки закрито: виберіть файл зі списку ліворуч" } else { "Відкрийте папку гри: кнопка «Відкрити гру…»" }).color(MUTE)));
-                return;
-            };
-            let name = self.st.file_names().get(f).cloned().unwrap_or_default();
-            self.tabs_bar(ui, f);
-            if self.focus && !self.scene_mode {
-                self.edit_center(ui, f);
-                return;
-            }
-            // хлібні крихти
-            let (cr, _) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::hover());
-            ui.painter().hline(cr.x_range(), cr.bottom(), Stroke::new(1.0_f32, LINE));
-            ui.painter().text(cr.left_center() + vec2(12.0, 0.0), Align2::LEFT_CENTER, format!("Файли  ›  {name}"), FontId::proportional(11.5), MUTE);
-            let n = self.st.row_count(f);
-            ui.painter().text(cr.right_center() - vec2(12.0, 0.0), Align2::RIGHT_CENTER, format!("{n} рядків"), FontId::monospace(11.0), MUTE);
-            // фільтри
-            let (fr, _) = ui.allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::hover());
-            ui.painter().rect_filled(fr, CornerRadius::ZERO, FILTERS_BG);
-            ui.painter().hline(fr.x_range(), fr.bottom(), Stroke::new(1.0_f32, LINE));
-            let counts = self.st.filter_counts(f);
-            let mut fui = ui.new_child(egui::UiBuilder::new().max_rect(fr.shrink2(vec2(10.0, 0.0))).layout(egui::Layout::left_to_right(egui::Align::Center)));
-            fui.spacing_mut().item_spacing.x = 6.0;
-            fui.add(egui::TextEdit::singleline(&mut self.st.search).hint_text("Фільтр у цьому файлі").desired_width(190.0).margin(vec2(10.0, 4.0)));
-            for (i, flt) in Filter::ALL.iter().enumerate() {
-                if chip(&mut fui, flt.label(), counts[i], self.st.filter == *flt).clicked() {
-                    self.st.filter = *flt;
-                }
-            }
-            if self.st.file_has_speakers(f) {
-                let cur = self.st.speaker_filter.clone();
-                egui::ComboBox::from_id_salt("spk-filter").selected_text(cur.clone().map_or("Мовець: усі".to_string(), |c| format!("Мовець: {c}"))).width(150.0).show_ui(&mut fui, |ui| {
-                    if ui.selectable_label(cur.is_none(), "Усі мовці").clicked() {
-                        self.st.speaker_filter = None;
-                    }
-                    for (name, n) in self.st.file_speakers(f) {
-                        if ui.selectable_label(cur.as_deref() == Some(name.as_str()), format!("{name}  ({n})")).clicked() {
-                            self.st.speaker_filter = Some(name);
-                        }
-                    }
-                });
-            }
-            let len_names = ["Довжина: усі", "Далеко від оригіналу", "Довші за оригінал", "Коротші за оригінал"];
-            egui::ComboBox::from_id_salt("len-filter").selected_text(len_names[self.st.len_filter as usize]).width(170.0).show_ui(&mut fui, |ui| {
-                for (i, n) in len_names.iter().enumerate() {
-                    if ui.selectable_label(self.st.len_filter as usize == i, *n).clicked() {
-                        self.st.len_filter = i as u8;
-                    }
-                }
-            });
-            if let Some(id) = self.st.group_filter.clone() {
-                let name = self.st.groups_view().into_iter().find(|g| g.id == id).map_or(String::new(), |g| g.name);
-                let r = ui.allocate_rect(egui::Rect::from_min_size(fr.left_top(), vec2(0.0, 0.0)), Sense::hover());
-                let _ = r;
-                fui.add_space(8.0);
-                if chip(&mut fui, &format!("Група: {name}  x"), self.st.visible_len(f), true).clicked() {
-                    self.st.group_filter = None;
-                }
-            }
-            if self.scene_mode {
-                match self.st.row {
-                    Some(r) => {
-                        egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
-                            ui.add_space(8.0);
-                            egui::Frame::new().inner_margin(egui::Margin::symmetric(14, 0)).show(ui, |ui| self.tab_scene(ui, f, r));
-                        });
-                    }
-                    None => {
-                        ui.centered_and_justified(|ui| ui.label(RichText::new("Виберіть рядок: тут з'являться репліки його сцени").color(MUTE)));
-                    }
-                }
-            } else {
-                self.grid(ui, f);
-            }
-        });
-    }
-
-    /// Вкладки відкритих файлів: значок формату, назва, закрити; вибрана — заокруглена світла «таблетка».
-    fn tabs_bar(&mut self, ui: &mut egui::Ui, f: usize) {
-        let (tabs, _) = ui.allocate_exact_size(vec2(ui.available_width(), 35.0), Sense::hover());
-        ui.painter().rect_filled(tabs, top_round(), PANEL);
-        ui.painter().hline(tabs.x_range(), tabs.bottom(), Stroke::new(1.0_f32, LINE));
-        let names = self.st.file_names();
-        let mut x = tabs.left() + 6.0;
-        let (mut pick, mut close): (Option<usize>, Option<usize>) = (None, None);
-        for t in self.st.tabs.clone() {
-            let Some(tn) = names.get(t) else { continue };
-            let stem = tn.trim_end_matches(".json").to_string();
-            let galley = ui.painter().layout_no_wrap(stem.clone(), FontId::proportional(12.5), TEXT);
-            let on = t == f;
-            let tw = galley.size().x + 62.0 + if on { 14.0 } else { 0.0 };
-            let rect = Rect::from_min_size(pos2(x, tabs.top() + 2.0), vec2(tw, 31.0));
-            let resp = ui.interact(rect, ui.id().with(("tab", t)), Sense::click());
-            resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, format!("Вкладка {tn}")));
-            if on {
-                ui.painter().rect_filled(rect, CornerRadius::same(8), over_color(PANEL, Color32::WHITE, 0.16));
-                ui.painter().rect_stroke(rect, CornerRadius::same(8), Stroke::new(1.0_f32, over_color(PANEL, Color32::WHITE, 0.34)), StrokeKind::Inside);
-            } else if resp.hovered() {
-                ui.painter().rect_filled(rect, CornerRadius::same(8), GHOST_HOVER);
-            }
-            icons::paint(ui, Rect::from_center_size(pos2(rect.left() + 17.0, rect.center().y), vec2(15.0, 15.0)), "json", Color32::from_rgb(0xe5, 0xc0, 0x6a));
-            ui.painter().galley(pos2(rect.left() + 31.0, rect.center().y - galley.size().y / 2.0), galley.clone(), if on { Color32::WHITE } else { MUTE });
-            if on {
-                let cx = Rect::from_center_size(pos2(rect.right() - 15.0, rect.center().y), vec2(16.0, 16.0));
-                let cr = ui.interact(cx, ui.id().with(("tabx", t)), Sense::click());
-                icons::paint(ui, Rect::from_center_size(cx.center(), vec2(12.0, 12.0)), "close", if cr.hovered() { Color32::WHITE } else { MUTE });
-                if cr.clicked() {
-                    close = Some(t);
-                }
-            }
-            if resp.clicked() && close.is_none() {
-                pick = Some(t);
-            }
-            x += tw + 4.0;
-        }
-        if let Some(t) = pick {
-            if self.st.file != Some(t) {
-                self.st.file = Some(t);
-                self.st.row = None;
-                self.draft_for = None;
-            }
-        }
-        if let Some(t) = close {
-            self.st.close_tab(t);
-            self.draft_for = None;
-        }
-    }
-
-    /// Список рядків-карток: крапка стану, номер, поле, ключ, оригінал, переклад; внизу сторінки по 50.
-    fn rows_cards(&mut self, ui: &mut egui::Ui, f: usize) {
-        let total = self.st.visible_len(f);
-        let row_h = 69.0;
-        let bad_rows: std::collections::HashSet<usize> = self.st.file_issues(f).into_iter().map(|i| i.0).collect();
-        let area = ui.available_rect_before_wrap();
-        let cur_pos = self.st.row.and_then(|r| (0..total).find(|i| self.st.visible_at(f, *i) == Some(r)));
-        let mut scroll = egui::ScrollArea::vertical().id_salt(("rowcards", self.focus)).auto_shrink([false; 2]);
-        if let (Some(p), Some(want)) = (cur_pos, self.rows_scroll_to.take()) {
-            if want {
-                scroll = scroll.vertical_scroll_offset((p as f32 * row_h - 3.0 * row_h).max(0.0));
-            }
-        }
-        scroll.show_rows(ui, row_h, total, |ui, range| {
-            ui.spacing_mut().item_spacing.y = 0.0;
-            for i in range {
-                let Some(r) = self.st.visible_at(f, i) else { continue };
-                let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::click());
-                let card = rect.shrink2(vec2(6.0, 1.0));
-                let sel = self.st.row == Some(r);
-                let (src, tgt, st) = self.st.row_view(f, r);
-                resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, sel, format!("{src} — {tgt}")));
-                if sel {
-                    ui.painter().rect_filled(card, CornerRadius::same(8), sel_soft());
-                    ui.painter().rect_stroke(card, CornerRadius::same(8), Stroke::new(1.0_f32, over_color(BG, Color32::WHITE, 0.27)), StrokeKind::Inside);
-                } else if resp.hovered() {
-                    ui.painter().rect_filled(card, CornerRadius::same(8), ROW_HOVER);
-                }
-                let pl = rect.left();
-                let top = rect.top() + 17.0;
-                paint_state(ui, pos2(pl + 19.0, top), st, bad_rows.contains(&r));
-                ui.painter().text(pl_pos(pl + 37.0, top), Align2::LEFT_CENTER, format!("{}", r + 1), FontId::proportional(11.7), TEXT);
-                let ctxl = self.st.kind_label(f, r);
-                for dx in [0.0, 0.5] {
-                    ui.painter().text(pl_pos(pl + 64.0 + dx, top), Align2::LEFT_CENTER, ctxl, FontId::proportional(11.7), accent_text());
-                }
-                ui.painter().text(pl_pos(rect.right() - 16.0, top), Align2::RIGHT_CENTER, short_key(&self.st.key_of(f, r)), FontId::monospace(10.3), MUTE);
-                let clip = Rect::from_min_max(pos2(pl + 30.0, rect.top()), pos2(rect.right() - 8.0, rect.bottom()));
-                let p = ui.painter().with_clip_rect(clip);
-                p.text(pl_pos(pl + 37.0, rect.top() + 35.0), Align2::LEFT_CENTER, src.replace('\n', " / "), FontId::proportional(11.7), TEXT);
-                let (t, c) = if tgt.is_empty() { ("-".to_string(), DIM) } else { (tgt.replace('\n', " / "), SRC_TEXT) };
-                p.text(pl_pos(pl + 37.0, rect.top() + 52.0), Align2::LEFT_CENTER, t, FontId::proportional(11.7), c);
-                if resp.clicked() {
-                    self.st.row = Some(r);
-                }
-            }
-        });
-        // сторінки по 50 рядків: «‹ 13 / 14 ›»
-        let pages = total.div_ceil(50).max(1);
-        let page = cur_pos.map_or(0, |p| p / 50) + 1;
-        let pill_r = Rect::from_center_size(pos2(area.center().x, area.bottom() - 28.0), vec2(122.0, 31.0));
-        ui.painter().rect_filled(pill_r, CornerRadius::same(16), BG);
-        ui.painter().rect_stroke(pill_r, CornerRadius::same(16), Stroke::new(1.0_f32, LINE), StrokeKind::Inside);
-        ui.painter().text(pill_r.center(), Align2::CENTER_CENTER, format!("{page} / {pages}"), FontId::proportional(11.7), TEXT);
-        for (dx, ic, dir) in [(-42.0_f32, "left", -1i64), (42.0, "right", 1)] {
-            let br = Rect::from_center_size(pill_r.center() + vec2(dx, 0.0), vec2(24.0, 24.0));
-            let resp = ui.interact(br, ui.id().with(("pager", dir)), Sense::click());
-            icons::paint(ui, Rect::from_center_size(br.center(), vec2(13.0, 13.0)), ic, if resp.hovered() { TEXT } else { MUTE });
-            if resp.clicked() && total > 0 {
-                let pos = cur_pos.unwrap_or(0) as i64 + dir * 50;
-                let pos = pos.clamp(0, total as i64 - 1) as usize;
-                self.st.row = self.st.visible_at(f, pos);
-                self.rows_scroll_to = Some(true);
-            }
-        }
-    }
-
-    /// Ліва панель режиму «Редагування»: заголовок і список рядків-карток.
-    fn rows_panel(&mut self, ctx: &egui::Context) {
-        egui::SidePanel::left("rows").exact_width(317.0).resizable(false).show_separator_line(false).frame(card()).show(ctx, |ui| {
-            let (h, _) = ui.allocate_exact_size(vec2(ui.available_width(), 35.0), Sense::hover());
-            ui.painter().rect_filled(h, top_round(), PANEL);
-            ui.painter().hline(h.x_range(), h.bottom(), Stroke::new(1.0_f32, LINE));
-            let name = self.st.file.and_then(|f| self.st.file_names().get(f).cloned()).map(|n| n.trim_end_matches(".json").to_string()).unwrap_or_default();
-            ui.painter().text(h.left_center() + vec2(12.0, 0.0), Align2::LEFT_CENTER, "РЯДКИ", FontId::proportional(10.2), MUTE);
-            ui.painter().text(h.left_center() + vec2(54.0, 0.0), Align2::LEFT_CENTER, name, FontId::proportional(11.0), TEXT);
-            let Some(f) = self.st.file else { return };
-            self.rows_cards(ui, f);
-        });
-    }
-
-    /// Права колонка режиму «Редагування»: картки «Активність» і «Пов'язане» на двох рівних половинах, праворуч вузька смужка значків.
-    fn side_cards(&mut self, ctx: &egui::Context) {
-        egui::SidePanel::right("sidecards").exact_width(392.0).resizable(false).show_separator_line(false).frame(egui::Frame::new()).show(ctx, |ui| {
-            // смужка значків на краю
-            let full = ui.max_rect();
-            let rail = Rect::from_min_max(pos2(full.right() - 34.0, full.top()), full.max);
-            ui.painter().rect_filled(rail, CornerRadius::ZERO, GROUND);
-            for (i, (ic, on)) in [("history", true), ("link", true), ("cmt", false)].iter().enumerate() {
-                let r = Rect::from_center_size(pos2(rail.center().x, rail.top() + 18.0 + i as f32 * 36.0), vec2(28.0, 28.0));
-                if *on {
-                    ui.painter().rect_filled(r, CornerRadius::same(8), over_color(GROUND, accent(), 0.38));
-                    ui.painter().rect_stroke(r, CornerRadius::same(8), Stroke::new(1.0_f32, accent_ring()), StrokeKind::Inside);
-                }
-                icons::paint(ui, Rect::from_center_size(r.center(), vec2(16.0, 16.0)), ic, if *on { TEXT } else { MUTE });
-            }
-            let Some(f) = self.st.file else { return };
-            let cards = Rect::from_min_max(full.min, pos2(full.right() - 34.0, full.bottom()));
-            let half = (cards.height() - 0.0) / 2.0;
-            // «Активність»: історія правок вибраного рядка
-            let top_rect = Rect::from_min_max(cards.min + vec2(4.0, 0.0), pos2(cards.right() - 4.0, cards.top() + half - 3.0));
-            let mut cui = ui.new_child(egui::UiBuilder::new().max_rect(top_rect));
-            card().outer_margin(egui::Margin::ZERO).show(&mut cui, |ui| {
-                ui.set_height(top_rect.height() - 2.0);
-                self.card_header(ui, "АКТИВНІСТЬ");
-                match self.st.row {
-                    Some(r) => {
-                        let hist = self.st.history(f, r);
-                        if hist.is_empty() {
-                            ui.add_space(top_rect.height() * 0.32);
-                            ui.vertical_centered(|ui| ui.label(RichText::new("Брак активності").color(MUTE)));
-                        }
-                        egui::ScrollArea::vertical().id_salt("side1").auto_shrink([false; 2]).show(ui, |ui| {
-                            egui::Frame::new().inner_margin(egui::Margin::symmetric(12, 8)).show(ui, |ui| {
-                                for h in hist {
-                                    ui.label(RichText::new(format!("{} · {}", h.rec.who, h.rec.what)).size(10.5).color(MUTE));
-                                    ui.label(RichText::new(&h.rec.text).color(TEXT));
-                                    ui.add_space(6.0);
-                                }
-                            });
-                        });
-                    }
-                    None => {
-                        ui.add_space(top_rect.height() * 0.32);
-                        ui.vertical_centered(|ui| ui.label(RichText::new("Виберіть рядок").color(MUTE)));
-                    }
-                }
-            });
-            // «Пов'язане»: збіги пам'яті, терміни, однакові рядки
-            let bot_rect = Rect::from_min_max(pos2(cards.left() + 4.0, cards.top() + half + 3.0), pos2(cards.right() - 4.0, cards.bottom() - 6.0));
-            let mut cui = ui.new_child(egui::UiBuilder::new().max_rect(bot_rect));
-            card().outer_margin(egui::Margin::ZERO).show(&mut cui, |ui| {
-                ui.set_height(bot_rect.height() - 2.0);
-                self.card_header(ui, "ПОВ’ЯЗАНЕ");
-                let Some(r) = self.st.row else {
-                    ui.add_space(30.0);
-                    ui.vertical_centered(|ui| ui.label(RichText::new("Виберіть рядок").color(MUTE)));
-                    return;
-                };
-                egui::ScrollArea::vertical().id_salt("side2").auto_shrink([false; 2]).show(ui, |ui| {
-                    egui::Frame::new().inner_margin(egui::Margin::symmetric(8, 8)).show(ui, |ui| {
-                        ui.spacing_mut().item_spacing.y = 8.0;
-                        for m in self.st.tm_matches(f, r) {
-                            egui::Frame::new().fill(PANEL2).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(CornerRadius::same(8)).inner_margin(egui::Margin::symmetric(12, 11)).show(ui, |ui| {
-                                ui.set_width(ui.available_width());
-                                ui.spacing_mut().item_spacing.y = 6.0;
-                                ui.horizontal(|ui| {
-                                    ui.spacing_mut().item_spacing.x = 8.0;
-                                    let (d, _) = ui.allocate_exact_size(vec2(8.0, 12.0), Sense::hover());
-                                    ui.painter().circle_filled(d.center(), 4.0, DIM);
-                                    ui.label(RichText::new(&m.t).monospace().size(11.3).color(TEXT));
-                                    egui::Frame::new().stroke(Stroke::new(1.0_f32, accent_ring())).corner_radius(CornerRadius::same(6)).inner_margin(egui::Margin::symmetric(7, 1)).show(ui, |ui| ui.label(RichText::new(format!("пам’ять {}%", m.score)).size(10.8).color(accent_text())));
-                                });
-                                ui.label(RichText::new(format!("«{}» · {}", m.s, m.src.trim_end_matches(".json"))).size(9.8).monospace().color(MUTE));
-                                if ui.add(egui::Button::new(RichText::new("Підставити").monospace().size(9.8)).min_size(vec2(0.0, 26.0))).clicked() {
-                                    self.draft = m.t.clone();
-                                }
-                            });
-                        }
-                        let terms = self.st.terms();
-                        let mut seen = std::collections::BTreeSet::new();
-                        for (_, _, ti) in self.st.source_marks(f, r) {
-                            if seen.insert(ti) {
-                                if let Some(t) = terms.get(ti) {
-                                    ui.label(RichText::new(format!("{}  -  {}", t.en, t.uk)).color(TEXT));
-                                }
-                            }
-                        }
-                        if let Some((o, fl, up, ed)) = self.st.link_info(f, r) {
-                            ui.label(RichText::new(format!("Ще {o} з таким самим оригіналом: порожніх {fl}, старіших {up}, змінених {ed}")).size(10.5).color(MUTE));
-                            if fl + up > 0 && plain_button(ui, "Заповнити копії").clicked() {
-                                let n = self.st.apply_links(f, r, false);
-                                self.message = format!("Скопійовано в рядки (чернетки): {n}");
-                            }
-                        }
-                    });
-                });
-            });
-        });
-    }
-
-    /// Заголовок картки: великі літери на смузі.
-    fn card_header(&self, ui: &mut egui::Ui, title: &str) {
-        let (h, _) = ui.allocate_exact_size(vec2(ui.available_width(), 35.0), Sense::hover());
-        ui.painter().rect_filled(h, top_round(), PANEL);
-        ui.painter().hline(h.x_range(), h.bottom(), Stroke::new(1.0_f32, LINE));
-        ui.painter().text(h.left_center() + vec2(13.0, 0.0), Align2::LEFT_CENTER, title, FontId::proportional(10.5), MUTE);
-    }
-
-    /// Центр режиму «Редагування»: шлях, статус, оригінал, довідки, поле перекладу з нижньою панеллю.
-    fn edit_center(&mut self, ui: &mut egui::Ui, f: usize) {
-        let Some(r) = self.st.row else {
-            ui.centered_and_justified(|ui| ui.label(RichText::new("Виберіть рядок ліворуч").color(MUTE)));
-            return;
-        };
-        if self.draft_for != Some((f, r)) {
-            self.draft = self.st.target_of(f, r);
-            self.draft_for = Some((f, r));
-        }
-        let name = self.st.file_names().get(f).cloned().unwrap_or_default().trim_end_matches(".json").to_string();
-        let (src, _tgt, st) = self.st.row_view(f, r);
-        // шлях і статус (рядок заввишки 56: від низу вкладок до оригіналу)
-        let (cr, _) = ui.allocate_exact_size(vec2(ui.available_width(), 56.0), Sense::hover());
-        let crumb = format!("{name} › {} › {}", src.replace('\n', " ").chars().take(36).collect::<String>(), short_key(&self.st.key_of(f, r)));
-        let g = ui.painter().layout_no_wrap(crumb, FontId::monospace(10.3), TEXT);
-        let gw = g.size().x;
-        ui.painter().galley(pos2(cr.left() + 31.0, cr.center().y - g.size().y / 2.0), g, TEXT);
-        let ctxl = self.st.kind_label(f, r);
-        if !ctxl.is_empty() {
-            ui.painter().vline(cr.left() + 31.0 + gw + 12.0, (cr.center().y - 7.0)..=(cr.center().y + 7.0), Stroke::new(1.0_f32, LINE));
-            ui.painter().text(pos2(cr.left() + 31.0 + gw + 24.0, cr.center().y), Align2::LEFT_CENTER, ctxl, FontId::proportional(10.5), MUTE);
-        }
-        let (label, col) = match st {
-            RowStatus::Untranslated => ("Без перекладу", MUTE),
-            RowStatus::Draft => ("Чернетка", WARN),
-            RowStatus::Sent => ("Чекає вичитування", INFO),
-            RowStatus::Approved => ("Вичитано", OK),
-        };
-        let lg = ui.painter().layout_no_wrap(label.to_string(), FontId::proportional(11.0), TEXT);
-        let pr = Rect::from_min_max(pos2(cr.right() - 31.0 - (lg.size().x + 34.0), cr.center().y - 11.5), pos2(cr.right() - 31.0, cr.center().y + 11.5));
-        ui.painter().rect_stroke(pr, CornerRadius::same(12), Stroke::new(1.0_f32, LINE), StrokeKind::Inside);
-        paint_state(ui, pos2(pr.left() + 14.0, pr.center().y), st, false);
-        ui.painter().galley(pos2(pr.left() + 26.0, pr.center().y - lg.size().y / 2.0), lg, col);
-        let (sl, tl) = self.st.project.as_ref().map_or(("EN".to_string(), "UK".to_string()), |p| (p.source_lang.to_uppercase(), p.target_lang.to_uppercase()));
-        egui::ScrollArea::vertical().id_salt("editc").auto_shrink([false; 2]).show(ui, |ui| {
-            egui::Frame::new().inner_margin(egui::Margin::symmetric(31, 0)).show(ui, |ui| {
-                ui.spacing_mut().item_spacing.y = 0.0;
-                let box_frame = |pad_y: i8| egui::Frame::new().stroke(Stroke::new(1.0_f32, LINE)).corner_radius(CornerRadius::same(10)).inner_margin(egui::Margin::symmetric(14, pad_y));
-                box_frame(13).show(ui, |ui| {
-                    ui.set_width(ui.available_width());
-                    ui.label(source_job_sized(&self.st.source_of(f, r), &self.st.source_marks(f, r), 15.0));
-                });
-                for (lang, text) in self.st.references_of(f, r) {
-                    ui.add_space(14.0);
-                    ui.label(RichText::new(format!("ДОВІДКА · {}", lang.to_uppercase())).size(11.4).color(MUTE));
-                    ui.add_space(4.0);
-                    box_frame(13).show(ui, |ui| {
-                        ui.set_width(ui.available_width());
-                        ui.label(RichText::new(text).italics().size(15.0).color(SRC_TEXT));
-                    });
-                }
-                ui.add_space(14.0);
-                // ОРИГІНАЛ · EN ───▶ ПЕРЕКЛАД · UK
-                let (hr, _) = ui.allocate_exact_size(vec2(ui.available_width(), 16.0), Sense::hover());
-                let lg = ui.painter().layout_no_wrap(format!("ОРИГІНАЛ · {sl}"), FontId::proportional(11.4), MUTE);
-                let rg = ui.painter().layout_no_wrap(format!("ПЕРЕКЛАД · {tl}"), FontId::proportional(11.4), MUTE);
-                let (lw, rw) = (lg.size().x, rg.size().x);
-                ui.painter().galley(pos2(hr.left(), hr.center().y - lg.size().y / 2.0), lg, MUTE);
-                ui.painter().galley(pos2(hr.right() - rw, hr.center().y - rg.size().y / 2.0), rg, MUTE);
-                let (x0, x1) = (hr.left() + lw + 11.0, hr.right() - rw - 22.0);
-                ui.painter().hline(x0..=x1, hr.center().y, Stroke::new(1.0_f32, LINE));
-                ui.painter().add(egui::Shape::convex_polygon(vec![pos2(x1, hr.center().y - 3.5), pos2(x1 + 7.0, hr.center().y), pos2(x1, hr.center().y + 3.5)], LINE, Stroke::NONE));
-                ui.add_space(4.0);
-                // поле перекладу з нижньою панеллю
-                let frame = egui::Frame::new().stroke(Stroke::new(1.0_f32, LINE)).corner_radius(CornerRadius::same(10));
-                frame.show(ui, |ui| {
-                    ui.set_width(ui.available_width());
-                    ui.add(egui::TextEdit::multiline(&mut self.draft).desired_rows(5).desired_width(f32::INFINITY).font(FontId::proportional(15.0)).frame(false).margin(vec2(14.0, 15.0)));
-                    let (bar, _) = ui.allocate_exact_size(vec2(ui.available_width(), 49.0), Sense::hover());
-                    ui.painter().rect_filled(bar, CornerRadius { nw: 0, ne: 0, sw: 10, se: 10 }, PANEL);
-                    ui.painter().hline(bar.x_range(), bar.top(), Stroke::new(1.0_f32, LINE));
-                    let tr = Rect::from_center_size(pos2(bar.left() + 22.0, bar.center().y), vec2(26.0, 26.0));
-                    let tresp = ui.interact(tr, ui.id().with("clear"), Sense::click());
-                    icons::paint(ui, Rect::from_center_size(tr.center(), vec2(15.0, 15.0)), "trash", if tresp.hovered() { TEXT } else { MUTE });
-                    if tresp.on_hover_text("Очистити переклад").clicked() {
-                        self.draft.clear();
-                    }
-                    let (n, o) = (self.draft.chars().count(), src.chars().count());
-                    // лічильник стовпчиком: довжина перекладу над рискою, довжина оригіналу під нею
-                    let cx = bar.right() - 70.0;
-                    let warn = o > 0 && n as f32 > o as f32 * 1.25;
-                    ui.painter().text(pos2(cx, bar.center().y - 8.0), Align2::CENTER_CENTER, n.to_string(), FontId::monospace(10.0), if warn { WARN } else { TEXT });
-                    ui.painter().hline((cx - 11.0)..=(cx + 11.0), bar.center().y, Stroke::new(1.0_f32, MUTE));
-                    ui.painter().text(pos2(cx, bar.center().y + 8.0), Align2::CENTER_CENTER, o.to_string(), FontId::monospace(10.0), MUTE);
-                    let sr = Rect::from_center_size(pos2(bar.right() - 30.0, bar.center().y), vec2(35.0, 35.0));
-                    let sresp = ui.interact(sr, ui.id().with("send"), Sense::click());
-                    ui.painter().rect_filled(sr, CornerRadius::same(8), if sresp.hovered() { TEXT } else { SRC_TEXT });
-                    icons::paint(ui, Rect::from_center_size(sr.center(), vec2(17.0, 17.0)), "send", BG);
-                    sresp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Надіслати"));
-                    if sresp.on_hover_text("Надіслати на вичитку (Ctrl+Enter)").clicked() {
-                        self.message = match self.st.submit(f, r, &self.draft) {
-                            Ok(()) => "Надіслано".into(),
-                            Err(e) => e,
-                        };
-                    }
-                });
-                ui.add_space(8.0);
-                for i in self.st.issues(f, r, &self.draft) {
-                    ui.horizontal_wrapped(|ui| {
-                        let (d, _) = ui.allocate_exact_size(vec2(10.0, 14.0), Sense::hover());
-                        ui.painter().circle_filled(d.center(), 4.0, if i.severity == transly_core::qa::Severity::Bad { BAD } else { WARN });
-                        ui.label(RichText::new(&i.message).color(TEXT));
-                    });
-                }
-            });
-        });
-    }
-
-    /// Вузький список (режим «фокус»): крапка стану, оригінал і переклад у два рядки.
-    fn compact_list(&mut self, ui: &mut egui::Ui, f: usize) {
-        let total = self.st.visible_len(f);
-        let row_h = 42.0;
-        egui::ScrollArea::vertical().auto_shrink([false; 2]).show_rows(ui, row_h, total, |ui, range| {
-            ui.spacing_mut().item_spacing.y = 0.0;
-            for i in range {
-                let Some(r) = self.st.visible_at(f, i) else { continue };
-                let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::click());
-                let sel = self.st.row == Some(r);
-                ui.painter().rect_filled(rect, CornerRadius::ZERO, if sel { sel_use() } else if resp.hovered() { TREE_HOVER } else { PANEL });
-                ui.painter().hline(rect.x_range(), rect.bottom(), Stroke::new(1.0_f32, LINE_SOFT));
-                let (src, tgt, st) = self.st.row_view(f, r);
-                resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, sel, format!("{src} — {tgt}")));
-                paint_dot(ui, pos2(rect.left() + 14.0, rect.top() + 14.0), st);
-                let clip = Rect::from_min_max(pos2(rect.left() + 26.0, rect.top()), pos2(rect.right() - 8.0, rect.bottom()));
-                ui.painter().with_clip_rect(clip).text(pos2(clip.left(), rect.top() + 14.0), Align2::LEFT_CENTER, src.replace('\n', " / "), FontId::proportional(12.5), SRC_TEXT);
-                let t = if tgt.is_empty() { "—".to_string() } else { tgt.replace('\n', " / ") };
-                ui.painter().with_clip_rect(clip).text(pos2(clip.left(), rect.top() + 30.0), Align2::LEFT_CENTER, t, FontId::proportional(12.0), MUTE);
-                if resp.clicked() {
-                    self.st.row = Some(r);
-                }
-            }
-        });
-    }
-
-    fn grid(&mut self, ui: &mut egui::Ui, f: usize) {
-        let w = ui.available_width();
-        if w < 520.0 {
-            self.compact_list(ui, f);
-            return;
-        }
-        // колонки, як у старому застосунку: №, стан, ключ, мовець, оригінал, переклад, позначки, довжина
-        let wide = w > 1000.0;
-        let has_spk = self.st.file_has_speakers(f);
-        let fixed = [34.0_f32, 30.0, 96.0, if has_spk { 104.0 } else { 0.0 }];
-        let tail = [if wide { 128.0_f32 } else { 0.0 }, 68.0];
-        let flex = ((w - fixed.iter().sum::<f32>() - tail.iter().sum::<f32>() - 12.0) / 2.0).max(120.0);
-        let cols = [fixed[0], fixed[1], fixed[2], fixed[3], flex, flex, tail[0], tail[1]];
-        let titles = ["№", "", "Ключ", "Мовець", "Оригінал", "Переклад", if wide { "Позначки" } else { "" }, "Довж."];
-        let (hdr, _) = ui.allocate_exact_size(vec2(w, 26.0), Sense::hover());
-        ui.painter().rect_filled(hdr, CornerRadius::ZERO, PANEL);
-        ui.painter().hline(hdr.x_range(), hdr.bottom(), Stroke::new(1.0_f32, LINE));
-        let mut x = hdr.left();
-        for (title, cw) in titles.iter().zip(cols) {
-            if cw > 0.0 {
-                ui.painter().text(pos2(x + 8.0, hdr.center().y), Align2::LEFT_CENTER, title, FontId::proportional(11.0), MUTE);
-                x += cw;
-                ui.painter().vline(x, hdr.y_range(), Stroke::new(1.0_f32, Color32::from_rgb(0x33, 0x35, 0x3a)));
-            }
-        }
-        let total = self.st.visible_len(f);
-        let row_h = 46.0;
-        let bad_rows: std::collections::HashSet<usize> = self.st.file_issues(f).into_iter().map(|i| i.0).collect();
-        let list_h = (ui.available_height() - 26.0).max(60.0);
-        egui::ScrollArea::vertical().auto_shrink([false; 2]).max_height(list_h).show_rows(ui, row_h, total, |ui, range| {
-            ui.spacing_mut().item_spacing.y = 0.0;
-            for i in range {
-                let Some(r) = self.st.visible_at(f, i) else { continue };
-                let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::click());
-                let sel = self.st.row == Some(r);
-                let bg = if sel { sel_use() } else if resp.hovered() { ROW_HOVER } else if i % 2 == 1 { ZEBRA } else { BG };
-                ui.painter().rect_filled(rect, CornerRadius::ZERO, bg);
-                ui.painter().hline(rect.x_range(), rect.bottom(), Stroke::new(1.0_f32, LINE_SOFT));
-                let (src, tgt, st) = self.st.row_view(f, r);
-                resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, sel, format!("{src} — {tgt}")));
-                let key = short_key(&self.st.key_of(f, r));
-                let who = self.st.speaker_of_row(f, r);
-                let mut x = rect.left();
-                let cell = |x: f32, cw: f32| Rect::from_min_size(pos2(x, rect.top()), vec2(cw, row_h));
-                ui.painter().text(pos2(x + cols[0] - 6.0, rect.center().y), Align2::RIGHT_CENTER, format!("{}", r + 1), FontId::monospace(11.0), DIM);
-                x += cols[0];
-                paint_state(ui, pos2(x + cols[1] / 2.0, rect.center().y), st, bad_rows.contains(&r));
-                x += cols[1];
-                ui.painter().with_clip_rect(cell(x, cols[2])).text(pos2(x + 8.0, rect.center().y), Align2::LEFT_CENTER, key, FontId::monospace(11.0), MUTE);
-                x += cols[2];
-                ui.painter().with_clip_rect(cell(x, cols[3])).text(pos2(x + 8.0, rect.center().y), Align2::LEFT_CENTER, who, FontId::proportional(12.0), VIOLET);
-                x += cols[3];
-                let wrapped = |ui: &egui::Ui, text: &str, color: Color32, size: f32, cw: f32| ui.painter().layout(text.replace('\n', " ").to_string(), FontId::proportional(size), color, cw - 16.0);
-                let g = wrapped(ui, &src, SRC_TEXT, 12.5, cols[4]);
-                let gy = rect.center().y - g.size().y / 2.0;
-                ui.painter().with_clip_rect(cell(x, cols[4])).galley(pos2(x + 8.0, gy.max(rect.top() + 3.0)), g, SRC_TEXT);
-                x += cols[4];
-                let tcell = cell(x, cols[5]);
-                if tgt.is_empty() {
-                    ui.painter().with_clip_rect(tcell).text(pos2(x + 8.0, rect.center().y), Align2::LEFT_CENTER, "не перекладено", FontId::proportional(12.5), DIM);
-                } else {
-                    let g = wrapped(ui, &tgt, TEXT, 12.5, cols[5]);
-                    let gy = rect.center().y - g.size().y / 2.0;
-                    ui.painter().with_clip_rect(tcell).galley(pos2(x + 8.0, gy.max(rect.top() + 3.0)), g, TEXT);
-                }
-                if sel {
-                    ui.painter().rect_stroke(tcell.shrink(1.0), CornerRadius::same(R1), Stroke::new(1.0_f32, accent()), StrokeKind::Inside);
-                }
-                x += cols[5];
-                if wide {
-                    let ctx = self.st.context_of(f, r);
-                    if !ctx.is_empty() {
-                        let g = ui.painter().layout_no_wrap(ctx, FontId::proportional(11.5), TEXT);
-                        let cw = (g.size().x + 22.0).min(cols[6] - 12.0);
-                        let chip = Rect::from_min_size(pos2(x + 6.0, rect.top() + 6.0), vec2(cw, 20.0));
-                        ui.painter().rect_filled(chip, CornerRadius::same(10), BTN);
-                        ui.painter().circle_filled(pos2(chip.left() + 8.0, chip.center().y), 3.0, accent());
-                        ui.painter().with_clip_rect(chip.shrink2(vec2(4.0, 0.0))).galley(pos2(chip.left() + 15.0, chip.center().y - g.size().y / 2.0), g, TEXT);
-                    }
-                    x += cols[6];
-                }
-                if !tgt.is_empty() {
-                    let (t, o) = (tgt.chars().count(), src.chars().count());
-                    let dev = if o == 0 { 0.0 } else { (t as f64 / o as f64 - 1.0).abs() };
-                    let col = if dev > 0.4 { BAD } else if dev > 0.15 { WARN } else { TEXT };
-                    ui.painter().text(pos2(x + cols[7] - 8.0, rect.center().y), Align2::RIGHT_CENTER, format!("{t}/{o}"), FontId::monospace(11.0), col);
-                }
-                if resp.clicked() {
-                    self.st.row = Some(r);
-                }
-            }
-        });
-        // умовні позначки внизу таблиці
-        let (leg, _) = ui.allocate_exact_size(vec2(w, 24.0), Sense::hover());
-        ui.painter().hline(leg.x_range(), leg.top(), Stroke::new(1.0_f32, LINE));
-        let mut lx = leg.left() + 14.0;
-        for (st, bad, label) in [(RowStatus::Untranslated, false, "без перекладу"), (RowStatus::Draft, false, "чернетка"), (RowStatus::Sent, false, "чекає вичитування"), (RowStatus::Approved, false, "вичитано"), (RowStatus::Untranslated, true, "є проблема QA")] {
-            paint_state(ui, pos2(lx, leg.center().y), st, bad);
-            let g = ui.painter().layout_no_wrap(label.to_string(), FontId::proportional(11.5), MUTE);
-            let wd = g.size().x;
-            ui.painter().galley(pos2(lx + 12.0, leg.center().y - g.size().y / 2.0), g, MUTE);
-            lx += wd + 36.0;
-        }
-    }
 }
 
 /// Позначка стану рядка, як у старому застосунку: ✓ вичитано, ● чернетка / чекає вичитування, ○ без перекладу, ▲ проблема QA.
@@ -2807,13 +1844,15 @@ mod ui_tests {
         h.run();
         h.get_by_label("Actors.json");
         h.get_by_label_contains("Hero");
-        // вибір рядка наповнює інспектор
+        // вибраний рядок у таблиці позначений; у «Редагуванні» зʼявляється поле з кнопкою надсилання
         h.state_mut().st.row = Some(0);
         h.run();
-        h.get_by_label("ОРИГІНАЛ");
-        h.get_by_label("ПЕРЕКЛАД");
-        h.get_by_label("Пам’ять");
-        assert!(h.get_all_by_label("Надіслати").count() >= 1, "кнопка є в інспекторі");
+        assert_eq!(h.state().st.row, Some(0));
+        h.get_by_label_contains("Hero");
+        h.state_mut().focus = true;
+        h.state_mut().rail = 1;
+        h.run();
+        assert!(h.get_all_by_label("Надіслати").count() >= 1, "кнопка є в редакторі");
     }
 
     #[test]
@@ -2851,6 +1890,29 @@ mod ui_tests {
         h.run();
         assert_eq!(h.state().st.progress().sent, 1);
         assert_eq!(h.state().st.row, Some(2), "після надсилання курсор іде далі");
+    }
+
+    #[test]
+    fn a_table_cell_is_edited_in_place_and_enter_saves_and_moves_on() {
+        let data = game("cell");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.st.row = Some(0);
+        app.draft = "Герой".into();
+        app.draft_for = Some((0, 0));
+        app.cell_edit = Some((0, 0));
+        app.cell_focus = true;
+        let mut h = harness(app);
+        h.run();
+        press(&mut h, egui::Modifiers::NONE, egui::Key::Enter);
+        h.run();
+        h.run();
+        assert_eq!(h.state().st.target_of(0, 0), "Герой");
+        assert_eq!(h.state().st.row, Some(1), "Enter веде до наступного рядка");
+        assert_eq!(h.state().cell_edit, Some((0, 1)));
+        press(&mut h, egui::Modifiers::NONE, egui::Key::Escape);
+        h.run();
+        assert_eq!(h.state().cell_edit, None);
     }
 
     #[test]
@@ -2898,10 +1960,12 @@ mod ui_tests {
         app.st.row = Some(0);
         let mut h = harness(app);
         h.run();
+        h.state_mut().focus = true;
+        h.state_mut().rail = 1;
         h.state_mut().draft = "Герой".into();
         h.state_mut().draft_for = Some((0, 0));
         h.run();
-        // кнопка «Надіслати» є і в панелі інструментів, і в інспекторі
+        // кнопка «Надіслати» є і в панелі інструментів, і в редакторі
         h.get_all_by_label("Надіслати").last().unwrap().click();
         h.run();
         assert_eq!(h.state().st.progress().sent, 1);
@@ -2958,7 +2022,6 @@ mod ui_tests {
         h.run();
         h.render().unwrap().save(dir_out.join("edit.png")).unwrap();
         h.state_mut().focus = false;
-        h.state_mut().itab = 2;
         h.state_mut().qar_win = true;
         h.state_mut().wrap_win = Some((h.state().st.wrap_settings(), "Мандрівник дістався перекладацького містечка наприкінці осені, і там на нього чекав старий друг.".into(), false));
         h.state_mut().groups_win = Some(String::new());

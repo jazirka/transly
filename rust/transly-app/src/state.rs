@@ -1611,11 +1611,6 @@ impl AppState {
         self.unit(f, r).map_or("", |u| u.kind.label())
     }
 
-    /// Де відбувається рядок (подія, сцена, вид даних): позначка в таблиці.
-    pub fn context_of(&self, f: usize, r: usize) -> String {
-        self.unit(f, r).map(|u| u.context.clone()).unwrap_or_default()
-    }
-
     /// Вкладки відкритих файлів: поточний файл завжди серед них.
     pub fn sync_tabs(&mut self) {
         self.tabs.retain(|f| *f < self.views.len());

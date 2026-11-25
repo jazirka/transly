@@ -41,6 +41,8 @@ struct App {
     term_en: String,
     term_uk: String,
     itab: usize,
+    rail: usize,
+    run_cfg: usize,
     tree_closed: std::collections::HashSet<usize>,
     scene_mode: bool,
     keep_edit: Option<(String, String)>,
@@ -103,7 +105,7 @@ fn source_job(text: &str, marks: &[(usize, usize, usize)]) -> egui::text::Layout
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
     }
 }
 
@@ -306,19 +308,17 @@ impl App {
                     ui.add_enabled(can, egui::TextEdit::singleline(&mut self.st.search).hint_text("Пошук у рядках…").desired_width(220.0).margin(vec2(10.0, 4.0)));
                     ui.menu_button("Дії", |ui| self.menu_actions(ui));
                     ui.add_enabled_ui(can, |ui| {
-                        if ui.button("Запуск").on_hover_text("Запустити гру з вибраного рядка").clicked() {
-                            if let Some((f, r)) = self.st.file.zip(self.st.row) {
-                                if self.st.game_exe().is_none() {
-                                    if let Some(p) = rfd::FileDialog::new().set_title("Оберіть програму гри (Game.exe)").add_filter("Програма", &["exe"]).pick_file() {
-                                        self.st.set_game_exe(&p);
-                                    }
+                        if ui.button("Запуск").on_hover_text("Виконати вибране зліва: збірка чи запуск гри").clicked() {
+                            self.run_selected();
+                        }
+                        ui.menu_button(RichText::new(format!("{}  v", ["Збірка (файл)", "Збірка (гра)", "Поточна сцена"][self.run_cfg])).color(TEXT), |ui| {
+                            for (i, (name, sub)) in [("Збірка (файл)", "Записати переклад у файли гри (з вибором параметрів)"), ("Збірка (гра)", "Записати переклад із чернетками й запустити гру"), ("Поточна сцена", "Те саме, але гра починається зі сцени вибраного рядка")].iter().enumerate() {
+                                if ui.selectable_label(self.run_cfg == i, *name).on_hover_text(*sub).clicked() {
+                                    self.run_cfg = i;
+                                    ui.close_menu();
                                 }
-                                self.message = self.st.play_from(f, r, true).unwrap_or_else(|e| e);
                             }
-                        }
-                        if plain_button(ui, "Зібрати в гру…").clicked() {
-                            self.build_win = Some(self.st.build_defaults());
-                        }
+                        });
                         if plain_button(ui, "Зберегти").clicked() {
                             self.message = match self.st.save_project() {
                                 Ok(p) => format!("Збережено: {p}"),
@@ -458,6 +458,27 @@ impl App {
                 self.find_win = Some((String::new(), String::new(), false, false));
                 ui.close_menu();
             }
+    }
+
+    /// Кнопка «Запуск»: те, що обрано в списку конфігурацій (як у старому застосунку).
+    fn run_selected(&mut self) {
+        if self.run_cfg == 0 {
+            self.build_win = Some(self.st.build_defaults());
+            return;
+        }
+        if self.st.game_exe().is_none() {
+            if let Some(p) = rfd::FileDialog::new().set_title("Оберіть програму гри (Game.exe)").add_filter("Програма", &["exe"]).pick_file() {
+                self.st.set_game_exe(&p);
+            }
+        }
+        self.message = if self.run_cfg == 1 {
+            self.st.play_game().unwrap_or_else(|e| e)
+        } else {
+            match self.st.file.zip(self.st.row) {
+                Some((f, r)) => self.st.play_from(f, r, true).unwrap_or_else(|e| e),
+                None => "Виберіть рядок, зі сцени якого стартувати".into(),
+            }
+        };
     }
 
     // дії меню
@@ -1540,9 +1561,10 @@ impl App {
         egui::SidePanel::left("strip").exact_width(40.0).resizable(false).frame(egui::Frame::new().fill(PANEL).stroke(Stroke::new(1.0_f32, LINE))).show(ctx, |ui| {
             ui.add_space(6.0);
             ui.vertical_centered(|ui| {
-                for (i, g) in ["Ф", "Г", "П", "К"].iter().enumerate() {
+                for (i, (g, tip)) in [("Ф", "Файли"), ("Р", "Рядки файлу"), ("С", "Сцени файлу"), ("П", "Пов’язане з рядком: терміни, однакові рядки")].iter().enumerate() {
                     let (r, resp) = ui.allocate_exact_size(vec2(30.0, 30.0), Sense::click());
-                    let on = i == 0;
+                    let on = i == self.rail;
+                    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, format!("Панель: {tip}")));
                     if on || resp.hovered() {
                         ui.painter().rect_filled(r, CornerRadius::same(R2), GHOST_HOVER);
                     }
@@ -1550,16 +1572,105 @@ impl App {
                         ui.painter().rect_filled(Rect::from_min_size(pos2(r.left() - 5.0, r.top() + 7.0), vec2(3.0, r.height() - 14.0)), CornerRadius::same(R1), ACCENT);
                     }
                     ui.painter().text(r.center(), Align2::CENTER_CENTER, g, FontId::proportional(15.0), if on { TEXT } else { MUTE });
+                    if resp.on_hover_text(*tip).clicked() {
+                        self.rail = i;
+                    }
                 }
             });
         });
     }
 
+    /// Бічні панелі «Рядки», «Сцени», «Пов’язане» (замість дерева файлів).
+    fn rail_panel(&mut self, ui: &mut egui::Ui) {
+        let Some(f) = self.st.file else {
+            ui.add_space(12.0);
+            ui.vertical_centered(|ui| ui.label(RichText::new("Відкрийте файл").color(MUTE)));
+            return;
+        };
+        match self.rail {
+            1 => self.compact_list(ui, f),
+            2 => {
+                let list = self.st.scenes_list(f);
+                if list.is_empty() {
+                    ui.add_space(12.0);
+                    ui.vertical_centered(|ui| ui.label(RichText::new("У цьому файлі немає сцен").color(MUTE)));
+                    return;
+                }
+                let cur = self.st.row.and_then(|r| self.st.scene_view(f, r)).map(|v| v.title);
+                egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
+                    ui.spacing_mut().item_spacing.y = 0.0;
+                    for (title, first, n) in list {
+                        let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
+                        let on = cur.as_deref() == Some(title.as_str());
+                        resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, format!("Сцена {title}")));
+                        if on {
+                            ui.painter().rect_filled(rect, CornerRadius::ZERO, SEL);
+                        } else if resp.hovered() {
+                            ui.painter().rect_filled(rect, CornerRadius::ZERO, TREE_HOVER);
+                        }
+                        ui.painter().text(pos2(rect.right() - 10.0, rect.center().y), Align2::RIGHT_CENTER, n.to_string(), FontId::monospace(10.5), DIM);
+                        let clip = Rect::from_min_max(rect.min + vec2(12.0, 0.0), pos2(rect.right() - 36.0, rect.bottom()));
+                        ui.painter().with_clip_rect(clip).text(pos2(clip.left(), rect.center().y), Align2::LEFT_CENTER, &title, FontId::proportional(12.5), TEXT);
+                        if resp.clicked() {
+                            self.st.row = Some(first);
+                        }
+                    }
+                });
+            }
+            _ => {
+                let Some(r) = self.st.row else {
+                    ui.add_space(12.0);
+                    ui.vertical_centered(|ui| ui.label(RichText::new("Виберіть рядок").color(MUTE)));
+                    return;
+                };
+                egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
+                    egui::Frame::new().inner_margin(egui::Margin::same(12)).show(ui, |ui| {
+                        label_caps(ui, "Терміни глосарія в оригіналі");
+                        let terms = self.st.terms();
+                        let mut seen = std::collections::BTreeSet::new();
+                        for (_, _, ti) in self.st.source_marks(f, r) {
+                            if seen.insert(ti) {
+                                if let Some(t) = terms.get(ti) {
+                                    ui.label(RichText::new(format!("{}  -  {}", t.en, t.uk)).color(TEXT));
+                                }
+                            }
+                        }
+                        if seen.is_empty() {
+                            ui.label(RichText::new("нема").color(MUTE));
+                        }
+                        ui.add_space(8.0);
+                        label_caps(ui, "Однакові рядки");
+                        match self.st.link_info(f, r) {
+                            Some((o, fl, up, ed)) => {
+                                ui.label(RichText::new(format!("Ще {o} з таким самим оригіналом: порожніх {fl}, старіших {up}, змінених вручну {ed}")).color(MUTE));
+                            }
+                            None => {
+                                ui.label(RichText::new("нема").color(MUTE));
+                            }
+                        }
+                        let refs = self.st.references_of(f, r);
+                        if !refs.is_empty() {
+                            ui.add_space(8.0);
+                            label_caps(ui, "Довідкові мови");
+                            for (lang, text) in refs {
+                                ui.label(RichText::new(format!("{lang}: {text}")).color(SRC_TEXT));
+                            }
+                        }
+                    });
+                });
+            }
+        }
+    }
+
     fn tree(&mut self, ctx: &egui::Context) {
         egui::SidePanel::left("tree").exact_width(250.0).resizable(false).frame(egui::Frame::new().fill(PANEL).stroke(Stroke::new(1.0_f32, LINE))).show(ctx, |ui| {
             let (h, _) = ui.allocate_exact_size(vec2(ui.available_width(), 28.0), Sense::hover());
-            ui.painter().text(h.left_center() + vec2(10.0, 0.0), Align2::LEFT_CENTER, "ФАЙЛИ ГРИ", FontId::proportional(11.0), MUTE);
+            ui.painter().text(h.left_center() + vec2(10.0, 0.0), Align2::LEFT_CENTER, ["ФАЙЛИ ГРИ", "РЯДКИ", "СЦЕНИ", "ПОВ’ЯЗАНЕ"][self.rail], FontId::proportional(11.0), MUTE);
             ui.painter().hline(h.x_range(), h.bottom(), Stroke::new(1.0_f32, LINE));
+            if self.rail != 0 {
+                self.rail_panel(ui);
+                return;
+            }
             let prog = self.st.file_progress();
             let names = self.st.file_names();
             // теки, як у старому застосунку: дані гри, мапи, текстові файли
@@ -2339,6 +2450,12 @@ mod ui_tests {
         }
         h.run();
         h.render().unwrap().save(dir_out.join("map.png")).unwrap();
+        for (i, name) in [(1usize, "rail-rows"), (2, "rail-scenes"), (3, "rail-related")] {
+            h.state_mut().rail = i;
+            h.run();
+            h.render().unwrap().save(dir_out.join(format!("{name}.png"))).unwrap();
+        }
+        h.state_mut().rail = 0;
         h.state_mut().itab = 2;
         h.state_mut().qar_win = true;
         h.state_mut().wrap_win = Some((h.state().st.wrap_settings(), "Мандрівник дістався перекладацького містечка наприкінці осені, і там на нього чекав старий друг.".into(), false));

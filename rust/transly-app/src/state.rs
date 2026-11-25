@@ -1543,6 +1543,26 @@ impl AppState {
         }
     }
 
+    /// Запускає гру як є: збирає переклад із чернетками й стартує програму гри (без переходу до сцени).
+    pub fn play_game(&mut self) -> Result<String, String> {
+        let exe = self.game_exe().ok_or("Спершу оберіть програму гри")?;
+        let built = self.build_with(&self.build_defaults())?;
+        launch(&self.roots, &exe)?;
+        Ok(format!("Гру запущено. {built}"))
+    }
+
+    /// Сцени файлу: (назва, перший рядок, скільки рядків).
+    pub fn scenes_list(&self, f: usize) -> Vec<(String, usize, usize)> {
+        let Some(v) = self.views.get(f) else { return vec![] };
+        if self.scene_cache.borrow().0 != f {
+            *self.scene_cache.borrow_mut() = (f, transly_core::scene::build_scene_index(&v.units));
+        }
+        let cache = self.scene_cache.borrow();
+        let Some(idx) = cache.1.as_ref() else { return vec![] };
+        let pos: std::collections::HashMap<&str, usize> = v.units.iter().enumerate().map(|(i, u)| (u.key.as_str(), i)).collect();
+        idx.scenes.iter().map(|sc| (transly_core::scene::scene_title(sc), sc.units.first().and_then(|u| pos.get(u.key.as_str()).copied()).unwrap_or(0), sc.units.len())).collect()
+    }
+
     pub fn key_of(&self, f: usize, r: usize) -> String {
         self.unit(f, r).map_or(String::new(), |u| u.key.clone())
     }
@@ -2356,6 +2376,25 @@ menu.quit=Quit game
         assert_eq!((s.tabs.clone(), s.file), (vec![0], Some(0)));
         s.close_tab(0);
         assert_eq!(s.file, None);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn scenes_list_names_each_event_page() {
+        let base = std::env::temp_dir().join(format!("transly-app-sceneslist-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = base.join("MyGame").join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        let cmd = |code: i64, p: &str| format!(r#"{{"code":{code},"indent":0,"parameters":[{p}]}}"#);
+        let page = |t: &str| format!(r#"{{"conditions":{{}},"list":[{},{},{}],"trigger":0}}"#, cmd(101, r#""",0,0,2"#), cmd(401, &format!("\"{t}\"")), cmd(0, ""));
+        let ev = |id: i64, t: &str| format!(r#"{{"id":{id},"name":"EV{id}","x":1,"y":1,"pages":[{}]}}"#, page(t));
+        std::fs::write(data.join("Map001.json"), format!(r#"{{"displayName":"T","events":[null,{},{}]}}"#, ev(1, "One line"), ev(2, "Two line"))).unwrap();
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        let f = s.file_names().iter().position(|n| n == "Map001.json").unwrap();
+        let list = s.scenes_list(f);
+        assert_eq!(list.len(), 2, "{list:?}");
+        assert_eq!(s.source_of(f, list[1].1), "Two line");
         let _ = std::fs::remove_dir_all(&base);
     }
 

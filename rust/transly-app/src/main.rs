@@ -143,6 +143,7 @@ impl App {
             self.last_save = std::time::Instant::now();
         }
         ctx.request_repaint_after(std::time::Duration::from_secs(5));
+        self.hotkeys(ctx);
         self.menubar(ctx);
         self.toolbar(ctx);
         self.statusbar(ctx);
@@ -161,6 +162,36 @@ impl App {
         }
         self.inspector(ctx);
         self.editor(ctx);
+    }
+
+    /// Клавіші: Ctrl+Enter — надіслати й перейти далі, Ctrl+S — зберегти, F2 — «Фокус», стрілки вгору/вниз — між рядками (поки не набирається текст).
+    fn hotkeys(&mut self, ctx: &egui::Context) {
+        use egui::{Key, KeyboardShortcut, Modifiers};
+        if ctx.input_mut(|i| i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, Key::Enter))) {
+            if let Some((f, r)) = self.st.file.zip(self.st.row) {
+                self.message = match self.st.submit(f, r, &self.draft) {
+                    Ok(()) => {
+                        self.st.step_row(1);
+                        "Надіслано".into()
+                    }
+                    Err(e) => e,
+                };
+            }
+        }
+        if ctx.input_mut(|i| i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, Key::S))) && self.st.is_open() {
+            self.message = self.st.save_project().map(|p| format!("Збережено: {p}")).unwrap_or_else(|e| e);
+        }
+        if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::F2)) {
+            self.focus = !self.focus;
+        }
+        if !ctx.wants_keyboard_input() {
+            if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::ArrowDown)) {
+                self.st.step_row(1);
+            }
+            if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::ArrowUp)) {
+                self.st.step_row(-1);
+            }
+        }
     }
 
     fn menubar(&mut self, ctx: &egui::Context) {
@@ -1129,6 +1160,12 @@ mod ui_tests {
         data
     }
 
+    fn press(h: &mut Harness<'static, App>, mods: egui::Modifiers, key: egui::Key) {
+        h.input_mut().modifiers = mods;
+        h.input_mut().events.push(egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: mods });
+        h.input_mut().events.push(egui::Event::Key { key, physical_key: None, pressed: false, repeat: false, modifiers: mods });
+    }
+
     fn harness(app: App) -> Harness<'static, App> {
         Harness::builder().with_size(egui::vec2(1360.0, 800.0)).build_state(|ctx, app: &mut App| {
             theme::apply(ctx);
@@ -1160,6 +1197,27 @@ mod ui_tests {
         h.get_by_label("ПЕРЕКЛАД");
         h.get_by_label("Пам’ять");
         assert!(h.get_all_by_label("Надіслати").count() >= 2, "кнопка є на панелі й в інспекторі");
+    }
+
+    #[test]
+    fn arrow_keys_move_between_rows_and_ctrl_enter_sends() {
+        let data = game("keys");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        let mut h = harness(app);
+        h.run();
+        press(&mut h, egui::Modifiers::NONE, egui::Key::ArrowDown);
+        h.run();
+        assert_eq!(h.state().st.row, Some(0));
+        press(&mut h, egui::Modifiers::NONE, egui::Key::ArrowDown);
+        h.run();
+        assert_eq!(h.state().st.row, Some(1));
+        h.state_mut().draft = "Герой".into();
+        h.state_mut().draft_for = Some((0, 1));
+        press(&mut h, egui::Modifiers::COMMAND, egui::Key::Enter);
+        h.run();
+        assert_eq!(h.state().st.progress().sent, 1);
+        assert_eq!(h.state().st.row, Some(2), "після надсилання курсор іде далі");
     }
 
     #[test]

@@ -750,6 +750,24 @@ impl AppState {
         format!("Автозаповнено рядків: {n} (чернетки)")
     }
 
+    /// Переходить на `delta` рядків у списку, що проходить фільтр і пошук (межі не перескакує). Повертає, чи рядок змінився.
+    pub fn step_row(&mut self, delta: isize) -> bool {
+        let Some(f) = self.file else { return false };
+        let n = self.visible_len(f);
+        if n == 0 {
+            return false;
+        }
+        let cur = self.row.and_then(|r| (0..n).find(|i| self.visible_at(f, *i) == Some(r)));
+        let next = match cur {
+            Some(i) => (i as isize + delta).clamp(0, n as isize - 1) as usize,
+            None => if delta >= 0 { 0 } else { n - 1 },
+        };
+        let target = self.visible_at(f, next);
+        let changed = target != self.row;
+        self.row = target;
+        changed
+    }
+
     pub fn key_of(&self, f: usize, r: usize) -> String {
         self.unit(f, r).map_or(String::new(), |u| u.key.clone())
     }
@@ -1038,6 +1056,27 @@ menu.quit=Quit game
         assert!(!s.target_of(0, rb).is_empty());
         assert!(s.undo_last().starts_with("Скасовано"));
         assert!(s.target_of(0, rb).is_empty());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn stepping_follows_the_filter() {
+        let base = std::env::temp_dir().join(format!("transly-app-step-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = game(&base);
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        assert!(s.step_row(1));
+        assert_eq!(s.row, Some(0));
+        assert!(s.step_row(1));
+        assert_eq!(s.row, Some(1));
+        s.edit(0, 1, "x");
+        s.filter = Filter::Untranslated;
+        s.row = Some(0);
+        assert!(!s.step_row(1), "у фільтрі лише один рядок: далі нема куди");
+        assert_eq!(s.row, Some(0), "рядок з перекладом не входить у фільтр");
+        s.row = Some(0);
+        assert!(!s.step_row(-1), "на початку списку далі нема куди");
         let _ = std::fs::remove_dir_all(&base);
     }
 

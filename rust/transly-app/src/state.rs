@@ -126,6 +126,8 @@ struct Visible {
 type QaCache = ((usize, u64), Vec<(usize, String, bool)>);
 
 pub struct AppState {
+    /// Остання зміна перекладу терміна: за нею пропонуються заміни в рядках.
+    pub last_term_change: Option<transly_core::termsync::TermChange>,
     auto_limit: std::cell::RefCell<Option<usize>>,
     /// Показувати лише рядки цієї групи.
     pub group_filter: Option<String>,
@@ -157,7 +159,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { auto_limit: std::cell::RefCell::new(None), group_filter: None, scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None }
+        AppState { last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None }
     }
 }
 
@@ -439,14 +441,31 @@ impl AppState {
 
     /// Додає чи змінює термін. Повертає повідомлення для рядка стану.
     pub fn add_term(&mut self, en: &str, uk: &str) -> String {
+        let prev: Option<Term> = self.terms().into_iter().find(|t| t.en.trim().to_lowercase() == en.trim().to_lowercase());
+        if prev.as_ref().is_some_and(|t| t.uk.trim() == uk.trim()) {
+            return "Такий термін уже є".into();
+        }
         let Some(p) = self.project.as_mut() else { return "Проєкт не відкрито".into() };
         let form = TermForm { en: en.into(), uk: uk.into(), ..Default::default() };
-        let res = save_term(p, &form, now_ms(), None);
+        // слово, що вже є в глосарії, редагується (інший переклад замінює старий), а не відхиляється
+        let res = save_term(p, &form, now_ms(), prev.as_ref().map(|t| t.en.as_str()));
         self.rev += 1;
         self.dirty = true;
         match res {
             Some(SaveResult::Added) => "Термін додано".into(),
-            Some(SaveResult::Changed) => "Термін змінено".into(),
+            Some(SaveResult::Changed) => {
+                let alt = prev.as_ref().and_then(|t| t.alt.clone()).unwrap_or_default();
+                let next = self.terms().into_iter().find(|t| t.en.trim().to_lowercase() == en.trim().to_lowercase());
+                if let (Some(pv), Some(nx)) = (prev, next) {
+                    let nalt = nx.alt.clone().unwrap_or_default();
+                    self.last_term_change = transly_core::termsync::term_change(
+                        Some(&transly_core::termsync::TermRendering { en: &pv.en, uk: &pv.uk, alt: &alt }),
+                        &transly_core::termsync::TermRendering { en: &nx.en, uk: &nx.uk, alt: &nalt },
+                    );
+                }
+                let found = self.last_term_change.as_ref().map_or(0, |c| self.term_sync(c).total);
+                if found > 0 { format!("Термін змінено. Рядків зі старою формою: {found} (Інструменти → Оновити за глосарієм)") } else { "Термін змінено".into() }
+            }
             Some(SaveResult::Exists) => "Такий термін уже є".into(),
             None => "Потрібні обидва слова".into(),
         }
@@ -1401,6 +1420,33 @@ impl AppState {
         self.dirty = true;
     }
 
+    /// Рядки зі старою формою терміна й пропонована заміна.
+    pub fn term_sync(&self, change: &transly_core::termsync::TermChange) -> transly_core::termsync::TermSync {
+        match self.project.as_ref() {
+            Some(p) => transly_core::termsync::propose_term_sync(&self.views, p, change, 500, None),
+            None => transly_core::termsync::TermSync { proposals: vec![], total: 0, truncated: false },
+        }
+    }
+
+    /// Застосовує вибрані заміни (`choice` — вибір форми на кожен проміжок, -1 = запропонована). Одна дія журналу зі «Скасувати».
+    pub fn apply_term_sync(&mut self, picks: &[(transly_core::termsync::TermProposal, Vec<i64>)]) -> usize {
+        let Some(p) = self.project.as_ref() else { return 0 };
+        let refs: Vec<(&transly_core::termsync::TermProposal, Vec<i64>)> = picks.iter().map(|(a, b)| (a, b.clone())).collect();
+        let changes = transly_core::termsync::term_changes(&refs, p, now_ms());
+        let n = changes.len();
+        if n == 0 {
+            return 0;
+        }
+        let who = self.who();
+        let mut rand = Self::seeded_rand();
+        let Some(p) = self.project.as_mut() else { return 0 };
+        let id = commit_rows(&mut p.files, &changes, "terms", &who, now_ms(), None, &mut rand);
+        self.undo.record(&id);
+        self.rev += 1;
+        self.dirty = true;
+        n
+    }
+
     pub fn key_of(&self, f: usize, r: usize) -> String {
         self.unit(f, r).map_or(String::new(), |u| u.key.clone())
     }
@@ -2139,6 +2185,29 @@ menu.quit=Quit game
     }
 
     #[test]
+    fn changing_a_term_offers_to_update_the_rows() {
+        let base = std::env::temp_dir().join(format!("transly-app-termsync-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = game(&base);
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        let hero = (0..s.row_count(0)).find(|r| s.source_of(0, *r) == "Hero").unwrap();
+        s.add_term("Hero", "Лицар");
+        s.edit(0, hero, "Лицар прийшов");
+        let msg = s.add_term("Hero", "Герой");
+        assert!(msg.contains("Рядків зі старою формою: 1"), "{msg}");
+        let change = s.last_term_change.clone().unwrap();
+        let sync = s.term_sync(&change);
+        assert_eq!(sync.total, 1);
+        let picks: Vec<_> = sync.proposals.iter().map(|p| (p.clone(), vec![-1i64; p.spans.len()])).collect();
+        assert_eq!(s.apply_term_sync(&picks), 1);
+        assert_eq!(s.target_of(0, hero), "Герой прийшов");
+        assert!(!s.undo_last().is_empty());
+        assert_eq!(s.target_of(0, hero), "Лицар прийшов");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
     fn terms_are_marked_in_the_source_and_qa_reads_them() {
         let base = std::env::temp_dir().join(format!("transly-app-terms-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&base);
@@ -2148,11 +2217,12 @@ menu.quit=Quit game
         let src = s.source_of(0, 0);
         assert!(s.source_marks(0, 0).is_empty());
         assert_eq!(s.add_term(&src, "Герой"), "Термін додано");
-        assert_eq!(s.add_term(&src, "Інший"), "Такий термін уже є");
+        assert_eq!(s.add_term(&src, "Герой"), "Такий термін уже є");
+        assert!(s.add_term(&src, "Інший").starts_with("Термін змінено"));
         assert_eq!(s.terms().len(), 1);
         assert!(!s.source_marks(0, 0).is_empty());
         assert!(!s.issues(0, 0, "Зовсім інше слово").is_empty(), "переклад без терміна дає примітку");
-        assert!(s.issues(0, 0, "Герой").iter().all(|i| i.key != "term"));
+        assert!(s.issues(0, 0, "Інший").iter().all(|i| i.key != "term"));
         let _ = std::fs::remove_dir_all(&base);
     }
 

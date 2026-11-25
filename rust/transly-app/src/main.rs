@@ -38,6 +38,7 @@ struct App {
     term_en: String,
     term_uk: String,
     itab: usize,
+    tsync_win: Option<(transly_core::termsync::TermChange, Vec<(transly_core::termsync::TermProposal, bool)>)>,
     wrap_win: Option<(transly_core::wrapconfig::WrapSettings, String, bool)>,
     qar_win: bool,
     br_win: Option<String>,
@@ -95,7 +96,7 @@ fn source_job(text: &str, marks: &[(usize, usize, usize)]) -> egui::text::Layout
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
     }
 }
 
@@ -184,6 +185,7 @@ impl App {
         self.merge_window(ctx);
         self.rename_window(ctx);
         self.wrap_window(ctx);
+        self.term_sync_window(ctx);
         if let Some(msg) = self.st.finish_sync() {
             self.message = msg;
         }
@@ -276,6 +278,10 @@ impl App {
                 ui.menu_button("Інструменти", |ui| {
                     if ui.add_enabled(self.st.is_open(), egui::Button::new(if self.st.syncing() { "Синхронізація триває…" } else { "Синхронізація через GitHub…" })).clicked() {
                         self.act_sync();
+                        ui.close_menu();
+                    }
+                    if ui.add_enabled(self.st.last_term_change.is_some(), egui::Button::new("Оновити за глосарієм…")).clicked() {
+                        self.open_term_sync();
                         ui.close_menu();
                     }
                     if ui.add_enabled(self.st.is_open(), egui::Button::new("Перенесення рядків…")).clicked() {
@@ -1314,6 +1320,61 @@ impl App {
         }
         if !close && open {
             self.rename_win = Some((from, to));
+        }
+    }
+
+    fn open_term_sync(&mut self) {
+        let Some(change) = self.st.last_term_change.clone() else { return };
+        let sync = self.st.term_sync(&change);
+        if sync.total == 0 {
+            self.message = format!("Рядків зі старою формою «{}» не знайдено", change.old.join("», «"));
+            return;
+        }
+        self.tsync_win = Some((change, sync.proposals.into_iter().map(|p| { let t = p.tick; (p, t) }).collect()));
+    }
+
+    fn term_sync_window(&mut self, ctx: &egui::Context) {
+        let Some((change, mut rows)) = self.tsync_win.take() else { return };
+        let mut open = true;
+        let (mut go, mut close) = (false, false);
+        egui::Window::new(format!("Оновити за глосарієм: {} → {}", change.old.join(", "), change.next)).open(&mut open).collapsible(false).default_width(720.0).default_height(480.0).show(ctx, |ui| {
+            ui.label(RichText::new("Рядки зі старою формою терміна. Позначені лише впевнені заміни, де в оригіналі є цей термін; решту перевірте самі. Статус рядків не змінюється, дію можна скасувати.").size(11.5).color(MUTE));
+            let n = rows.iter().filter(|r| r.1).count();
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(format!("Знайдено {}, вибрано {n}", rows.len())).size(11.5).color(MUTE));
+                if plain_button(ui, "Позначити лише впевнені").clicked() {
+                    for r in rows.iter_mut() {
+                        r.1 = r.0.tick;
+                    }
+                }
+            });
+            egui::ScrollArea::vertical().max_height(340.0).show(ui, |ui| {
+                for (p, on) in rows.iter_mut() {
+                    egui::Frame::new().fill(PANEL2).corner_radius(CornerRadius::same(R2)).inner_margin(egui::Margin::symmetric(10, 6)).show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        ui.checkbox(on, RichText::new(format!("{} · {}", p.file, if p.conf.level == "high" { "впевнено" } else { "перевірте" })).size(11.0).color(MUTE));
+                        ui.label(RichText::new(&p.before).color(MUTE));
+                        ui.label(RichText::new(&p.after).color(TEXT));
+                    });
+                    ui.add_space(3.0);
+                }
+            });
+            ui.horizontal(|ui| {
+                if ui.add_enabled(n > 0, egui::Button::new(RichText::new("Оновити вибрані").color(Color32::WHITE)).fill(ACCENT).min_size(vec2(0.0, 26.0))).clicked() {
+                    go = true;
+                }
+                if plain_button(ui, "Закрити").clicked() {
+                    close = true;
+                }
+            });
+        });
+        if go {
+            let picks: Vec<_> = rows.iter().filter(|r| r.1).map(|r| (r.0.clone(), vec![-1i64; r.0.spans.len()])).collect();
+            self.message = format!("Оновлено рядків: {}", self.st.apply_term_sync(&picks));
+            close = true;
+        }
+        if !close && open {
+            self.tsync_win = Some((change, rows));
         }
     }
 

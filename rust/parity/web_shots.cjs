@@ -29,7 +29,9 @@ const FIX = process.env.FIX, OUT = process.env.OUT;
   await click('#strip [data-lp="glossary"]'); await sleep(400); await shot('07-edit-related');
   await click('#stabs [data-p="act"]'); await sleep(300); await shot('08-right-activity');
   await click('#stabs [data-p="cm"]'); await sleep(300); await shot('09-right-comments');
-  await page.locator('#tree-list .node:has-text("Town")').click().catch(() => {}); await sleep(300);
+  if (!(await page.locator('#tree-list .node:has-text("Town")').isVisible().catch(() => false))) { await click('#strip [data-lp="files"]'); await sleep(300); }
+  await page.locator('#tree-list .node:has-text("Town")').click(); await sleep(500);
+  console.log(await page.evaluate(() => { const b = document.querySelector('[data-m="scene"]'); return JSON.stringify({ dis: b.disabled, aria: b.getAttribute('aria-disabled'), cur: document.querySelector('#tree-list .node.cur')?.textContent, tabs: document.querySelector('#tabs-host')?.textContent }); }));
   await click('[data-m="scene"]'); await sleep(600); await shot('10-scene');
   await click('[data-m="table"]'); await sleep(400);
   await click('#hamb'); await sleep(300); await shot('11-main-menu'); await page.keyboard.press('Escape');

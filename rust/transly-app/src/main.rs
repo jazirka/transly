@@ -251,14 +251,21 @@ fn over_color(base: Color32, top: Color32, a: f32) -> Color32 {
 }
 
 /// Горизонтальний градієнт у прямокутнику.
-fn gradient_h(painter: &egui::Painter, rect: Rect, left: Color32, right: Color32) {
-    let mut mesh = egui::epaint::Mesh::default();
-    let uv = egui::epaint::WHITE_UV;
-    mesh.vertices.push(egui::epaint::Vertex { pos: rect.left_top(), uv, color: left });
-    mesh.vertices.push(egui::epaint::Vertex { pos: rect.right_top(), uv, color: right });
-    mesh.vertices.push(egui::epaint::Vertex { pos: rect.right_bottom(), uv, color: right });
-    mesh.vertices.push(egui::epaint::Vertex { pos: rect.left_bottom(), uv, color: left });
-    mesh.indices.extend([0, 1, 2, 0, 2, 3]);
+/// Еліптична підсвітка: центр кольору `c` з прозорістю `a`, до краю еліпса — нуль (нижня половина еліпса від верху вікна).
+fn glow(painter: &egui::Painter, center: egui::Pos2, radii: egui::Vec2, c: Color32, a: f32) {
+    use egui::epaint::{Mesh, Vertex, WHITE_UV};
+    let mid = Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), (a * 255.0) as u8);
+    let edge = Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), 0);
+    let mut mesh = Mesh::default();
+    mesh.vertices.push(Vertex { pos: center, uv: WHITE_UV, color: mid });
+    let n = 48;
+    for i in 0..=n {
+        let t = std::f32::consts::PI * i as f32 / n as f32;
+        mesh.vertices.push(Vertex { pos: pos2(center.x + radii.x * t.cos(), center.y + radii.y * t.sin()), uv: WHITE_UV, color: edge });
+    }
+    for i in 0..n {
+        mesh.indices.extend([0, i as u32 + 1, i as u32 + 2]);
+    }
     painter.add(egui::Shape::mesh(mesh));
 }
 
@@ -352,6 +359,8 @@ impl App {
         ctx.request_repaint_after(std::time::Duration::from_secs(5));
         // тло оболонки під картками й між ними
         ctx.layer_painter(egui::LayerId::background()).rect_filled(ctx.screen_rect(), CornerRadius::ZERO, GROUND);
+        // підсвічення від значка проєкту (відтінок теми) на всьому тлі: еліпс 520×90 від верху вікна, згасає до нуля, як `.ide` у вебі
+        glow(&ctx.layer_painter(egui::LayerId::background()), pos2(105.0, 0.0), vec2(520.0, 90.0), accent(), 0.16);
         self.hotkeys(ctx);
         let hue = transly_core::theme::theme_hue(self.st.project.as_ref().map_or("Transly", |p| p.name.as_str()), self.st.project.as_ref().and_then(|p| p.settings.get("hue")));
         if theme::set_hue(hue) {
@@ -470,10 +479,7 @@ impl App {
     /// Верхня панель, як у старому застосунку: логотип, меню, проєкт і гілка, режими, прогрес, збірка, запуск.
     /// Розміри — з розмірів старого застосунку в пунктах (знімок у пікселях ÷ 1,25).
     fn topbar(&mut self, ctx: &egui::Context) {
-        egui::TopBottomPanel::top("topbar").exact_height(40.0).show_separator_line(false).frame(egui::Frame::new().fill(GROUND).inner_margin(egui::Margin::symmetric(9, 0))).show(ctx, |ui| {
-            // тепле підсвічування зліва, що згасає до тла: відтінок теми проєкту
-            let bar = ui.max_rect().expand2(vec2(9.0, 0.0));
-            gradient_h(ui.painter(), bar.with_max_x(bar.left() + bar.width() * 0.45), over_color(GROUND, accent(), 0.14), GROUND);
+        egui::TopBottomPanel::top("topbar").exact_height(40.0).show_separator_line(false).frame(egui::Frame::new().fill(Color32::TRANSPARENT).inner_margin(egui::Margin::symmetric(9, 0))).show(ctx, |ui| {
             ui.horizontal_centered(|ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
                 let can = self.st.is_open();
@@ -938,6 +944,10 @@ impl App {
                 ui.close_menu();
             }
             ui.separator();
+            if ui.button("Прибрати тестовий плагін із гри").clicked() {
+                self.message = self.st.remove_jump_plugin().unwrap_or_else(|e| e);
+                ui.close_menu();
+            }
             if ui.button("Скасувати останню дію").clicked() {
                 self.message = self.st.undo_last();
                 self.draft_for = None;
@@ -1018,7 +1028,7 @@ impl App {
     }
 
     fn statusbar(&mut self, ctx: &egui::Context) {
-        egui::TopBottomPanel::bottom("status").exact_height(22.0).show_separator_line(false).frame(egui::Frame::new().fill(GROUND).inner_margin(egui::Margin::symmetric(10, 0))).show(ctx, |ui| {
+        egui::TopBottomPanel::bottom("status").exact_height(22.0).show_separator_line(false).frame(egui::Frame::new().fill(Color32::TRANSPARENT).inner_margin(egui::Margin::symmetric(10, 0))).show(ctx, |ui| {
             ui.horizontal_centered(|ui| {
                 ui.spacing_mut().item_spacing.x = 14.0;
                 let small = |t: String, c: Color32| RichText::new(t).size(11.0).color(c);
@@ -3128,8 +3138,9 @@ mod ui_tests {
         h.state_mut().right_secs = [[false, true, false]; 2];
         h.state_mut().focus = false;
         h.state_mut().st.file = Some(map);
-        h.state_mut().st.row = Some(0);
+        h.state_mut().st.row = Some(1);
         h.state_mut().scene_mode = true;
+        h.state_mut().rail = 2;
         shot(&mut h, "10-scene");
     }
 }

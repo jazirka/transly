@@ -69,7 +69,9 @@ struct App {
     btab: usize,
     bottom_open: bool,
     focus: bool,
-    was_edit: bool,
+    was_edit: u8,
+    /// Репліка сцени, що набирається: (рядок, текст); пишеться в проєкт при виході з поля.
+    scene_draft: Option<(usize, String)>,
     /// Клітинка перекладу, що редагується в таблиці: (файл, рядок).
     cell_edit: Option<(usize, usize)>,
     cell_focus: bool,
@@ -113,7 +115,7 @@ fn source_job_sized(text: &str, marks: &[(usize, usize, usize)], size: f32) -> e
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: false, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [true, true, false]], comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [true, true, false]], comment: String::new(), token: String::new() }
     }
 }
 
@@ -203,23 +205,6 @@ fn pop(ui: &egui::Ui, resp: &egui::Response, id: &str, add: impl FnOnce(&mut egu
     });
 }
 
-fn dot_color(s: RowStatus) -> Option<Color32> {
-    match s {
-        RowStatus::Untranslated => None,
-        RowStatus::Draft => Some(WARN),
-        RowStatus::Sent => Some(INFO),
-        RowStatus::Approved => Some(OK),
-    }
-}
-
-/// Крапка стану: порожнє кільце для «нового», заповнена для решти.
-fn paint_dot(ui: &egui::Ui, c: egui::Pos2, s: RowStatus) {
-    match dot_color(s) {
-        Some(col) => ui.painter().circle_filled(c, 4.0, col),
-        None => ui.painter().circle_stroke(c, 3.5, Stroke::new(1.5_f32, DIM)),
-    };
-}
-
 fn label_caps(ui: &mut egui::Ui, text: &str) {
     ui.label(RichText::new(text.to_uppercase()).size(10.5).color(MUTE));
 }
@@ -287,15 +272,15 @@ impl App {
         if let Some(msg) = self.st.finish_sync() {
             self.message = msg;
         }
-        // перехід між режимами: у «Редагуванні» ліворуч спершу рядки, у таблиці — файли
-        let edit_now = self.focus && !self.scene_mode;
-        if edit_now != self.was_edit {
-            self.was_edit = edit_now;
-            self.rail = if edit_now { 1 } else { 0 };
+        // перехід між режимами: ліворуч рядки («Редагування»), сцени («Сцена») або файли (таблиця)
+        let mode = if self.scene_mode { 2 } else { u8::from(self.focus) };
+        if mode != self.was_edit {
+            self.was_edit = mode;
+            self.rail = [0, 1, 2][mode as usize];
         }
         self.strip(ctx);
-        if self.focus && !self.scene_mode {
-            // «Редагування»: список рядків ліворуч, великий редактор посередині
+        if self.focus || self.scene_mode {
+            // «Редагування» й «Сцена»: рядки чи сцени ліворуч, редактор посередині
             self.rows_panel(ctx);
         } else {
             self.left_panel(ctx);
@@ -1705,55 +1690,6 @@ impl App {
         self.keys_win = open;
     }
 
-    fn tab_scene(&mut self, ui: &mut egui::Ui, f: usize, r: usize) {
-        let Some(v) = self.st.scene_view(f, r) else {
-            label_caps(ui, "Сцена");
-            ui.label(RichText::new("Цей рядок не належить сцені (база даних чи текстовий формат)").color(MUTE));
-            return;
-        };
-        ui.horizontal(|ui| {
-            if ui.add_enabled(v.prev.is_some(), egui::Button::new("<")).clicked() {
-                self.st.row = v.prev;
-            }
-            if ui.add_enabled(v.next.is_some(), egui::Button::new(">")).clicked() {
-                self.st.row = v.next;
-            }
-            ui.label(RichText::new(&v.title).color(TEXT));
-        });
-        ui.horizontal(|ui| {
-            if plain_button(ui, "Запустити гру звідси").clicked() {
-                if self.st.game_exe().is_none() {
-                    if let Some(p) = rfd::FileDialog::new().set_title("Оберіть програму гри (Game.exe)").add_filter("Програма", &["exe"]).pick_file() {
-                        self.st.set_game_exe(&p);
-                    }
-                }
-                self.message = self.st.play_from(f, r, true).unwrap_or_else(|e| e);
-            }
-            if plain_button(ui, "Прибрати тестовий плагін").clicked() {
-                self.message = self.st.remove_jump_plugin().unwrap_or_else(|e| e);
-            }
-        });
-        ui.add_space(4.0);
-        for l in &v.lines {
-            let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 46.0), Sense::click());
-            resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, l.current, format!("{}: {}", l.speaker, l.source)));
-            ui.painter().rect_filled(rect, CornerRadius::same(R1), if l.current { sel_use() } else if resp.hovered() { TREE_HOVER } else { PANEL2 });
-            paint_dot(ui, pos2(rect.left() + 12.0, rect.top() + 14.0), l.status);
-            let clip = Rect::from_min_max(pos2(rect.left() + 24.0, rect.top()), pos2(rect.right() - 6.0, rect.bottom()));
-            let p = ui.painter().with_clip_rect(clip);
-            if !l.speaker.is_empty() {
-                p.text(pos2(clip.left(), rect.top() + 6.0), Align2::LEFT_TOP, &l.speaker, FontId::proportional(11.0), VIOLET);
-            }
-            p.text(pos2(clip.left(), rect.top() + 18.0), Align2::LEFT_TOP, l.source.replace('\n', " / "), FontId::proportional(12.5), SRC_TEXT);
-            let t = if l.target.is_empty() { "-".to_string() } else { l.target.replace('\n', " / ") };
-            p.text(pos2(clip.left(), rect.top() + 32.0), Align2::LEFT_TOP, t, FontId::proportional(12.0), MUTE);
-            if resp.clicked() {
-                self.st.row = Some(l.row);
-            }
-            ui.add_space(3.0);
-        }
-    }
-
     fn tab_comments(&mut self, ui: &mut egui::Ui, f: usize, r: usize) {
         label_caps(ui, "Обговорення");
         for t in self.st.threads(f, r) {
@@ -1927,6 +1863,32 @@ mod ui_tests {
     }
 
     #[test]
+    fn a_scene_line_is_typed_in_its_card_and_saved_when_the_field_loses_focus() {
+        let data = game("scenecard");
+        let dir = data.clone();
+        let cmd = |code: i64, p: &str| format!(r#"{{"code":{code},"indent":0,"parameters":[{p}]}}"#);
+        let l = [cmd(101, r#""",0,0,2,"Оповідач""#), cmd(401, r#""The hall is silent.""#), cmd(0, "")].join(",");
+        std::fs::write(dir.join("Map001.json"), format!(r#"{{"displayName":"Зал","events":[null,{{"id":1,"name":"Зал","x":1,"y":1,"pages":[{{"conditions":{{}},"list":[{l}],"trigger":0}}]}}]}}"#)).unwrap();
+        let mut app = App::default();
+        app.st.open_game(&dir).unwrap();
+        let f = app.st.file_names().iter().position(|n| n == "Map001.json").unwrap();
+        app.st.file = Some(f);
+        app.st.row = app.st.scene_view(f, 1).map(|v| v.lines[0].row);
+        app.scene_mode = true;
+        let mut h = harness(app);
+        h.run();
+        let row = h.state().st.row.unwrap();
+        // набраний текст лежить у чернетці сцени й потрапляє в проєкт при надсиланні
+        h.state_mut().scene_draft = Some((row, "У залі тихо.".into()));
+        h.run();
+        h.get_by_label(&format!("Надіслати репліку {}", row + 1)).click();
+        h.run();
+        assert_eq!(h.state().st.target_of(f, row), "У залі тихо.");
+        assert!(h.state().scene_draft.is_none());
+        assert_eq!(h.state().st.progress().sent, 1);
+    }
+
+    #[test]
     fn the_mode_switch_changes_the_layout_and_back() {
         let data = game("focus");
         let mut app = App::default();
@@ -2022,6 +1984,11 @@ mod ui_tests {
             h.render().unwrap().save(dir_out.join(format!("{name}.png"))).unwrap();
         }
         h.state_mut().rail = 0;
+        h.state_mut().st.row = Some(1);
+        h.state_mut().scene_mode = true;
+        h.run();
+        h.render().unwrap().save(dir_out.join("scene.png")).unwrap();
+        h.state_mut().scene_mode = false;
         {
             let fi = h.state().st.file.unwrap();
             h.state_mut().st.edit(fi, 2, "Привіт? Тут хтось є?");

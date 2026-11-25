@@ -63,7 +63,9 @@ impl App {
     pub(crate) fn strip(&mut self, ctx: &egui::Context) {
         let edit = self.focus && !self.scene_mode;
         egui::SidePanel::left("strip").exact_width(34.0).resizable(false).show_separator_line(false).frame(egui::Frame::new().fill(GROUND)).show(ctx, |ui| {
-            let groups: Vec<Vec<(usize, &str, &str)>> = if edit {
+            let groups: Vec<Vec<(usize, &str, &str)>> = if self.scene_mode {
+                vec![vec![(0, "files", "Файли гри")], vec![(2, "scene", "Сцени файлу")], vec![(3, "book", "Пов’язане з рядком")]]
+            } else if edit {
                 vec![vec![(0, "files", "Файли гри")], vec![(1, "rows", "Рядки файлу"), (2, "scene", "Сцени файлу")], vec![(3, "book", "Пов’язане з рядком")]]
             } else {
                 vec![vec![(0, "files", "Файли гри")], vec![(3, "book", "Пов’язане з рядком")]]
@@ -78,7 +80,7 @@ impl App {
                 for (idx, ic, tip) in g {
                     let r = Rect::from_min_size(pos2(x, y), vec2(28.0, 28.0));
                     let resp = ui.interact(r, ui.id().with(("strip", *idx)), Sense::click());
-                    let on = *idx == self.rail || (!edit && *idx == 0 && self.rail != 3);
+                    let on = *idx == self.rail || (!edit && !self.scene_mode && *idx == 0 && self.rail != 3);
                     let tint = over_color(SEL_GRAY, accent_solid(), 0.12);
                     resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, format!("Панель: {tip}")));
                     if on {
@@ -413,22 +415,155 @@ impl App {
                 return;
             }
             if self.scene_mode {
-                match self.st.row {
-                    Some(r) => {
-                        egui::ScrollArea::vertical().id_salt("scenescroll").auto_shrink([false; 2]).show(ui, |ui| {
-                            ui.add_space(8.0);
-                            egui::Frame::new().inner_margin(egui::Margin::symmetric(14, 0)).show(ui, |ui| self.tab_scene(ui, f, r));
-                        });
-                    }
-                    None => {
-                        ui.centered_and_justified(|ui| ui.label(RichText::new("Виберіть рядок: тут з'являться репліки його сцени").color(MUTE)));
-                    }
-                }
+                self.scene_center(ui, f);
                 return;
             }
             self.filter_row(ui, f);
             self.grid(ui, f);
         });
+    }
+
+    /// Центр режиму «Сцена»: заголовок сцени з переходами, дії над сценою, картки реплік із полем перекладу.
+    pub(crate) fn scene_center(&mut self, ui: &mut egui::Ui, f: usize) {
+        let Some(r) = self.st.row else {
+            ui.centered_and_justified(|ui| ui.label(RichText::new("Виберіть сцену ліворуч або рядок у таблиці").color(MUTE)));
+            return;
+        };
+        let Some(v) = self.st.scene_view(f, r) else {
+            ui.centered_and_justified(|ui| ui.label(RichText::new("Цей рядок не належить сцені (база даних чи текстовий формат)").color(MUTE)));
+            return;
+        };
+        let file = self.st.file_names().get(f).cloned().unwrap_or_default().trim_end_matches(".json").to_string();
+        let side = ((ui.available_width() - 716.0) / 2.0).max(22.0).floor() as i8;
+        let n = v.lines.len();
+        let done = v.lines.iter().filter(|x| x.status != RowStatus::Untranslated).count();
+        let approved = v.lines.iter().filter(|x| x.status == RowStatus::Approved).count();
+        egui::ScrollArea::vertical().id_salt("scenescroll").auto_shrink([false; 2]).show(ui, |ui| {
+            egui::Frame::new().inner_margin(egui::Margin { left: side, right: side, top: 16, bottom: 28 }).show(ui, |ui| {
+                ui.spacing_mut().item_spacing.y = 0.0;
+                let (hd, _) = ui.allocate_exact_size(vec2(ui.available_width(), 44.0), Sense::hover());
+                ui.painter().text(pos2(hd.left() + 38.0, hd.top() + 10.0), Align2::LEFT_CENTER, &v.title, ip(15.0), TEXT);
+                ui.painter().text(pos2(hd.left() + 38.0, hd.top() + 31.0), Align2::LEFT_CENTER, format!("{file} · {n} реплік · перекладено {done} із {n} · вичитано {approved}"), ip(12.0), MUTE);
+                for (dx, ic, to, id) in [(hd.left() + 12.0, "left", v.prev, "sc-prev"), (hd.right() - 12.0, "right", v.next, "sc-next")] {
+                    let br = Rect::from_center_size(pos2(dx, hd.center().y), vec2(24.0, 24.0));
+                    let resp = ui.interact(br, ui.id().with(id), if to.is_some() { Sense::click() } else { Sense::hover() });
+                    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, to.is_some(), if ic == "left" { "Попередня сцена" } else { "Наступна сцена" }));
+                    if resp.hovered() && to.is_some() {
+                        ui.painter().rect_filled(br, CornerRadius::same(8), GHOST_HOVER);
+                    }
+                    icons::paint(ui, Rect::from_center_size(br.center(), vec2(13.0, 13.0)), ic, if to.is_none() { DIM } else if resp.hovered() { TEXT } else { MUTE });
+                    if let (true, Some(t)) = (resp.clicked(), to) {
+                        self.st.row = Some(t);
+                    }
+                }
+                ui.add_space(10.0);
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 8.0;
+                    if plain_button(ui, "Надіслати сцену").clicked() {
+                        let (mut ok, mut bad) = (0, 0);
+                        for line in &v.lines {
+                            let text = match &self.scene_draft {
+                                Some((dr, t)) if *dr == line.row => t.clone(),
+                                _ => line.target.clone(),
+                            };
+                            if text.is_empty() || line.status == RowStatus::Approved {
+                                continue;
+                            }
+                            match self.st.submit(f, line.row, &text) {
+                                Ok(()) => ok += 1,
+                                Err(_) => bad += 1,
+                            }
+                        }
+                        self.scene_draft = None;
+                        self.message = format!("Сцену надіслано: {ok} реплік{}", if bad > 0 { format!(", {bad} не пройшли перевірку") } else { String::new() });
+                    }
+                    if plain_button(ui, "Як у грі").clicked() {
+                        if self.st.game_exe().is_none() {
+                            if let Some(p) = rfd::FileDialog::new().set_title("Оберіть програму гри (Game.exe)").add_filter("Програма", &["exe"]).pick_file() {
+                                self.st.set_game_exe(&p);
+                            }
+                        }
+                        self.message = self.st.play_from(f, r, true).unwrap_or_else(|e| e);
+                    }
+                    if plain_button(ui, "Прибрати тестовий плагін").clicked() {
+                        self.message = self.st.remove_jump_plugin().unwrap_or_else(|e| e);
+                    }
+                });
+                ui.add_space(10.0);
+                ui.painter().hline(ui.available_rect_before_wrap().x_range(), ui.cursor().top(), Stroke::new(1.0_f32, LINE));
+                ui.add_space(12.0);
+                for line in &v.lines {
+                    self.scene_card(ui, f, line);
+                    ui.add_space(10.0);
+                }
+            });
+        });
+    }
+
+    /// Картка репліки: стан, мовець, вид, номер, надсилання; оригінал; поле перекладу (зберігається при виході з поля).
+    fn scene_card(&mut self, ui: &mut egui::Ui, f: usize, line: &state::SceneLine) {
+        let cur = line.current;
+        let frame = egui::Frame::new().fill(if cur { PANEL2 } else { BG }).stroke(Stroke::new(1.0_f32, if cur { accent_ring() } else { LINE })).corner_radius(CornerRadius::same(10)).inner_margin(egui::Margin::same(12));
+        let out = frame.show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.spacing_mut().item_spacing.y = 8.0;
+            let (hd, _) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::hover());
+            paint_state(ui, pos2(hd.left() + 6.0, hd.center().y), line.status, false);
+            let mut x = hd.left() + 20.0;
+            if !line.speaker.is_empty() {
+                let g = ui.painter().layout_no_wrap(line.speaker.clone(), ip(12.5), VIOLET);
+                let w = g.size().x;
+                ui.painter().galley(pos2(x, hd.center().y - g.size().y / 2.0), g, VIOLET);
+                x += w + 8.0;
+            }
+            let kind = self.st.kind_label(f, line.row);
+            let g = ui.painter().layout_no_wrap(format!("{kind}  {}", line.row + 1), ip(11.5), MUTE);
+            ui.painter().galley(pos2(x, hd.center().y - g.size().y / 2.0), g, MUTE);
+            let sr = Rect::from_center_size(pos2(hd.right() - 14.0, hd.center().y), vec2(26.0, 24.0));
+            let sresp = ui.interact(sr, ui.id().with(("scene-send", line.row)), Sense::click());
+            sresp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("Надіслати репліку {}", line.row + 1)));
+            if sresp.hovered() {
+                ui.painter().rect_filled(sr, CornerRadius::same(8), GHOST_HOVER);
+            }
+            icons::paint(ui, Rect::from_center_size(sr.center(), vec2(15.0, 15.0)), "send", if sresp.hovered() { TEXT } else { MUTE });
+            let mut send = sresp.on_hover_text("Надіслати на вичитку").clicked();
+            egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(CornerRadius::same(8)).inner_margin(egui::Margin::symmetric(12, 10)).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.label(source_job_sized(&line.source, &self.st.source_marks(f, line.row), 14.0));
+            });
+            let mut buf = match &self.scene_draft {
+                Some((dr, t)) if *dr == line.row => t.clone(),
+                _ => line.target.clone(),
+            };
+            let te = ui.add(egui::TextEdit::multiline(&mut buf).hint_text("Переклад").desired_rows(2).desired_width(f32::INFINITY).font(ip(14.0)).margin(vec2(12.0, 10.0)));
+            if te.changed() {
+                self.scene_draft = Some((line.row, buf.clone()));
+            }
+            if te.gained_focus() {
+                self.st.row = Some(line.row);
+            }
+            if te.has_focus() && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Enter)) {
+                send = true;
+            }
+            if send {
+                self.message = match self.st.submit(f, line.row, &buf) {
+                    Ok(()) => "Надіслано".into(),
+                    Err(e) => e,
+                };
+                self.scene_draft = None;
+            } else if te.lost_focus() {
+                if let Some((dr, t)) = self.scene_draft.take() {
+                    if dr == line.row {
+                        self.st.edit(f, dr, &t);
+                    } else {
+                        self.scene_draft = Some((dr, t));
+                    }
+                }
+            }
+        });
+        if out.response.interact(Sense::click()).clicked() {
+            self.st.row = Some(line.row);
+        }
     }
 
     /// Вкладки: висота 34, вкладка 33, ширина = текст + 69; вибрана — таблетка кольору теми.

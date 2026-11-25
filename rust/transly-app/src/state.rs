@@ -1564,6 +1564,11 @@ impl AppState {
         self.dirty = true;
     }
 
+    /// Вид тексту рядка (діалог, назва, опис…) словом.
+    pub fn kind_label(&self, f: usize, r: usize) -> &'static str {
+        self.unit(f, r).map_or("", |u| u.kind.label())
+    }
+
     /// Де відбувається рядок (подія, сцена, вид даних): позначка в таблиці.
     pub fn context_of(&self, f: usize, r: usize) -> String {
         self.unit(f, r).map(|u| u.context.clone()).unwrap_or_default()

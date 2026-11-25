@@ -212,13 +212,13 @@ impl App {
                         ui.painter().rect_filled(rect, CornerRadius::same(8), GHOST_HOVER);
                     }
                     let (label, bg, fg, bw) = match k {
-                        1 => ("MAP", Color32::from_rgb(0x1f, 0x3a, 0x2c), OK, 28.0),
+                        1 => ("MAP", Color32::from_rgb(0x23, 0x3a, 0x2e), Color32::from_rgb(0x7f, 0xd0, 0x8a), 22.0),
                         2 => ("Aa", Color32::from_rgb(0x2a, 0x2f, 0x4a), INFO, 22.0),
                         _ => ("{}", Color32::from_rgb(0x3b, 0x35, 0x24), Color32::from_rgb(0xe5, 0xc0, 0x6a), 22.0),
                     };
                     let badge = Rect::from_min_size(pos2(rect.left() + 20.0, rect.center().y - 8.0), vec2(bw, 16.0));
                     ui.painter().rect_filled(badge, CornerRadius::same(R1), bg);
-                    ui.painter().text(badge.center(), Align2::CENTER_CENTER, label, mp(if k == 1 { 9.0 } else { 12.0 }), fg);
+                    ui.painter().text(badge.center(), Align2::CENTER_CENTER, label, mp(12.0), fg);
                     let (total, done) = prog.get(i).copied().unwrap_or((0, 0));
                     let pct = (done * 100).checked_div(total).unwrap_or(0);
                     let bar = Rect::from_min_size(pos2(rect.right() - 8.0 - 26.0, rect.center().y - 2.0), vec2(26.0, 4.0));
@@ -678,7 +678,7 @@ impl App {
                 ui.painter().rect_filled(rect, CornerRadius::same(8), GHOST_HOVER);
             }
             let chip = Rect::from_min_size(pos2(rect.left() + 9.0, rect.center().y - 8.0), vec2(if map.is_some() { 28.0 } else { 20.0 }, 16.0));
-            let (badge, bg, fg, bf) = if map.is_some() { ("MAP", Color32::from_rgb(0x1f, 0x3a, 0x2c), OK, 9.0) } else { ("{}", Color32::from_rgb(0x3b, 0x35, 0x24), Color32::from_rgb(0xe5, 0xc0, 0x6a), 12.0) };
+            let (badge, bg, fg, bf) = if map.is_some() { ("MAP", Color32::from_rgb(0x23, 0x3a, 0x2e), Color32::from_rgb(0x7f, 0xd0, 0x8a), 9.0) } else { ("{}", Color32::from_rgb(0x3b, 0x35, 0x24), Color32::from_rgb(0xe5, 0xc0, 0x6a), 12.0) };
             ui.painter().rect_filled(chip, CornerRadius::same(R1), bg);
             ui.painter().text(chip.center(), Align2::CENTER_CENTER, badge, mp(bf), fg);
             ui.painter().galley(pos2(chip.right() + 5.0, rect.center().y - galley.size().y / 2.0), galley.clone(), if on { Color32::WHITE } else { MUTE });
@@ -1035,7 +1035,7 @@ impl App {
                 }
                 // значок ▶ у плитці
                 let chip = Rect::from_center_size(pos2(rect.left() + 22.0, rect.center().y), vec2(20.0, 16.0));
-                ui.painter().rect_filled(chip, CornerRadius::same(R1), Color32::from_rgb(0x37, 0x39, 0x3d));
+                ui.painter().rect_filled(chip, CornerRadius::same(R1), over_color(BG, Color32::WHITE, 0.07));
                 ui.painter().add(egui::Shape::convex_polygon(vec![pos2(chip.center().x - 3.0, chip.center().y - 4.0), pos2(chip.center().x - 3.0, chip.center().y + 4.0), pos2(chip.center().x + 4.0, chip.center().y)], MUTE, Stroke::NONE));
                 // частка перекладеного: лише для рядків, що видно
                 let (mut pc, mut full) = (0usize, false);
@@ -1259,10 +1259,12 @@ impl App {
                 x += w + 8.0;
                 let tag = if v.current && v.approved { Some(("вичитано", OK)) } else if v.current { Some(("у рядку", accent_text())) } else if v.approved { Some(("вичитано", OK)) } else { None };
                 if let Some((label, color)) = tag {
-                    let g = ui.painter().layout_no_wrap(label.to_string(), ip(11.5), color);
-                    let pill = Rect::from_min_size(pos2(x, row.top() + 24.0 - 10.0), vec2(g.size().x + 14.0, 20.0));
-                    ui.painter().rect(pill, CornerRadius::same(7), over_color(BG, color, 0.12), Stroke::new(1.0_f32, over_color(BG, color, 0.55)), egui::StrokeKind::Inside);
-                    ui.painter().galley(pos2(pill.left() + 7.0, pill.center().y - g.size().y / 2.0), g, color);
+                    // як `.tg.k` у вебі: нейтральна таблетка, кільце й текст кольору теми (у «вичитано» — зелені)
+                    let ink = if color == OK { OK } else { accent_text() };
+                    let g = ui.painter().layout_no_wrap(label.to_string(), ip(12.0), ink);
+                    let pill = Rect::from_min_size(pos2(x, row.top() + 24.0 - 11.0), vec2(g.size().x + 16.0, 22.0));
+                    ui.painter().rect(pill, CornerRadius::same(5), Color32::from_rgb(0x34, 0x36, 0x3b), Stroke::new(1.0_f32, if color == OK { over_color(BG, OK, 0.55) } else { accent_ring() }), egui::StrokeKind::Inside);
+                    ui.painter().galley(pos2(pill.left() + 8.0, pill.center().y - g.size().y / 2.0), g, ink);
                 }
                 ui.painter().text(pos2(row.left() + 46.0, row.top() + 48.0), Align2::LEFT_CENTER, &v.text, ip(13.5), TEXT);
                 // кнопки справа: кошик, галочка, «−», «+» (28 px, рамка)

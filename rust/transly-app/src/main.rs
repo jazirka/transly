@@ -1163,7 +1163,7 @@ impl App {
                     for (row, msg, is_bad) in issues.iter().take(500) {
                         let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
                         if resp.hovered() {
-                            ui.painter().rect_filled(rect, CornerRadius::ZERO, Color32::from_rgb(0x30, 0x32, 0x3a));
+                            ui.painter().rect_filled(rect, CornerRadius::ZERO, GHOST_HOVER);
                         }
                         ui.painter().circle_filled(pos2(rect.left() + 16.0, rect.center().y), 4.0, if *is_bad { BAD } else { WARN });
                         ui.painter().text(pos2(rect.left() + 30.0, rect.center().y), Align2::LEFT_CENTER, format!("{}", row + 1), FontId::monospace(11.0), MUTE);

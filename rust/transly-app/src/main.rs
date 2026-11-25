@@ -27,6 +27,7 @@ struct App {
     term_en: String,
     term_uk: String,
     itab: usize,
+    import_win: Option<(u8, String)>,
     build_win: Option<state::BuildChoice>,
     fill_win: Option<Vec<(transly_core::autofill::Proposal, bool)>>,
     find_win: Option<(String, String, bool, bool)>,
@@ -75,7 +76,7 @@ fn source_job(text: &str, marks: &[(usize, usize, usize)]) -> egui::text::Layout
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
     }
 }
 
@@ -155,6 +156,7 @@ impl App {
         self.find_window(ctx);
         self.fill_window(ctx);
         self.build_window(ctx);
+        self.import_window(ctx);
         if let Some(msg) = self.st.finish_sync() {
             self.message = msg;
         }
@@ -221,6 +223,10 @@ impl App {
                         ui.close_menu();
                     }
                     ui.separator();
+                    if ui.add_enabled(self.st.is_open(), egui::Button::new("Імпорт пам’яті й глосарія…")).clicked() {
+                        self.import_win = Some((0, String::new()));
+                        ui.close_menu();
+                    }
                     if ui.add_enabled(self.st.is_open(), egui::Button::new("Налаштування проєкту…")).clicked() {
                         self.act_settings();
                         ui.close_menu();
@@ -827,6 +833,42 @@ impl App {
             self.build_win = None;
         } else {
             self.build_win = Some(c);
+        }
+    }
+
+    fn import_window(&mut self, ctx: &egui::Context) {
+        let Some((mut kind, mut text)) = self.import_win.take() else { return };
+        let mut open = true;
+        let (mut go, mut close) = (false, false);
+        egui::Window::new("Імпорт").open(&mut open).collapsible(false).default_width(520.0).show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut kind, 0, "Пам’ять перекладів");
+                ui.selectable_value(&mut kind, 1, "Глосарій із таблиці");
+            });
+            ui.add_space(6.0);
+            ui.label(RichText::new(if kind == 0 { "Рядки «оригінал, табуляція, переклад». Пари потраплять у підказки вкладки «Пам’ять»." } else { "CSV, TSV чи HTML-таблиця (підходить експорт Google Sheets): колонка «Оригінал» і «Переклад» (можна кілька), «Опис», «Розділ»." }).size(11.5).color(MUTE));
+            if plain_button(ui, "Завантажити з файлу…").clicked() {
+                if let Some(p) = rfd::FileDialog::new().add_filter("Текст і таблиці", &["txt", "tsv", "csv", "html", "htm"]).pick_file() {
+                    text = std::fs::read_to_string(p).unwrap_or_default();
+                }
+            }
+            ui.add(egui::TextEdit::multiline(&mut text).desired_rows(10).desired_width(f32::INFINITY));
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                if ui.add_enabled(!text.trim().is_empty(), egui::Button::new(RichText::new("Імпортувати").color(Color32::WHITE)).fill(ACCENT).min_size(vec2(0.0, 26.0))).clicked() {
+                    go = true;
+                }
+                if plain_button(ui, "Закрити").clicked() {
+                    close = true;
+                }
+            });
+        });
+        if go {
+            self.message = if kind == 0 { self.st.import_memory(&text) } else { self.st.import_terms_table(&text) };
+            text.clear();
+        }
+        if !close && open {
+            self.import_win = Some((kind, text));
         }
     }
 

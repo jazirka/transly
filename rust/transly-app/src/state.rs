@@ -412,6 +412,11 @@ impl AppState {
                 }
             }
         }
+        for m in self.project.as_ref().map(|p| p.memory.as_slice()).unwrap_or_default() {
+            if let (Some(sv), Some(tv)) = (m.get("s").and_then(|v| v.as_str()), m.get("t").and_then(|v| v.as_str())) {
+                idx.add(TmEntry { s: sv.into(), t: tv.into(), src: "Імпорт".into() });
+            }
+        }
         idx.find(&self.source_of(f, r), &FindOpts { min: Some(60.0), limit: Some(6), exclude: None })
     }
 
@@ -776,6 +781,47 @@ impl AppState {
         changed
     }
 
+    /// Імпорт пам'яті перекладів: рядки «оригінал, табуляція, переклад».
+    pub fn import_memory(&mut self, text: &str) -> String {
+        let Some(p) = self.project.as_mut() else { return "Проєкт не відкрито".into() };
+        let (mut added, mut rejected) = (0usize, 0usize);
+        for line in text.lines() {
+            if line.trim().is_empty() {
+                continue;
+            }
+            let mut it = line.split('\t');
+            let (sv, tv) = (it.next().unwrap_or("").trim(), it.next().unwrap_or("").trim());
+            if sv.is_empty() || tv.is_empty() {
+                rejected += 1;
+                continue;
+            }
+            let have = p.memory.iter().any(|m| m.get("s").and_then(|v| v.as_str()) == Some(sv) && m.get("t").and_then(|v| v.as_str()) == Some(tv));
+            if !have {
+                p.memory.push(serde_json::json!({ "s": sv, "t": tv, "mt": now_ms() }));
+                added += 1;
+            }
+        }
+        self.rev += 1;
+        self.dirty = true;
+        format!("Імпортовано пар: {added}{}", if rejected > 0 { format!(", пропущено рядків без табуляції: {rejected}") } else { String::new() })
+    }
+
+    /// Імпорт глосарія з таблиці (CSV/TSV чи HTML): нові терміни додаються, наявні з іншим перекладом не змінюються.
+    pub fn import_terms_table(&mut self, text: &str) -> String {
+        let rows = if text.trim_start().starts_with('<') { transly_core::termtable::parse_html_table(text) } else { transly_core::termtable::parse_delimited(text) };
+        let table = transly_core::termtable::terms_from_table(&rows, now_ms(), false);
+        if table.terms.is_empty() {
+            return "У таблиці не знайдено термінів: потрібна колонка «Оригінал» і хоча б одна «Переклад»".into();
+        }
+        let Some(p) = self.project.as_mut() else { return "Проєкт не відкрито".into() };
+        let brought: Vec<transly_core::glossaries::BroughtTerm> = table.terms.iter().map(|t| transly_core::glossaries::BroughtTerm { en: t.en.clone(), uk: t.uk.clone(), alt: t.alt.clone(), note: t.note.clone() }).collect();
+        let plan = transly_core::glossaries::plan_glossary_import(&p.terms, &brought);
+        let added = transly_core::glossaries::apply_glossary_import(p, &plan, now_ms());
+        self.rev += 1;
+        self.dirty = true;
+        format!("Додано термінів: {added}, уже є: {}, з іншим перекладом (не змінено): {}, пропущено рядків: {}", plan.same.len(), plan.differ.len(), table.skipped)
+    }
+
     pub fn key_of(&self, f: usize, r: usize) -> String {
         self.unit(f, r).map_or(String::new(), |u| u.key.clone())
     }
@@ -1123,6 +1169,27 @@ menu.quit=Quit game
         s.bulk_approve(None);
         assert_eq!(s.build_preview(&only_appr).unwrap().0, 1);
         assert!(s.build_with(&only_appr).unwrap().contains("рядків у грі 1"));
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn memory_and_term_tables_import() {
+        let base = std::env::temp_dir().join(format!("transly-app-import-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = game(&base);
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        let src = s.source_of(0, 0);
+        let m = s.import_memory(&format!("{src}\tЗбережений переклад\nбез табуляції\n\n{src}\tЗбережений переклад"));
+        assert!(m.starts_with("Імпортовано пар: 1"), "{m}");
+        assert!(m.contains("пропущено рядків без табуляції: 1"), "{m}");
+        assert!(s.tm_matches(0, 0).iter().any(|x| x.t == "Збережений переклад"), "пам'ять працює в підказках");
+        let t = s.import_terms_table("Оригінал;Переклад;Опис\nsword;меч;зброя\nshield;щит;\n");
+        assert!(t.starts_with("Додано термінів: 2"), "{t}");
+        assert_eq!(s.terms().len(), 2);
+        let again = s.import_terms_table("Оригінал;Переклад\nsword;клинок\n");
+        assert!(again.contains("з іншим перекладом (не змінено): 1"), "{again}");
+        assert!(s.import_terms_table("Оригінал;Опис\nx;y\n").starts_with("У таблиці не знайдено"));
         let _ = std::fs::remove_dir_all(&base);
     }
 

@@ -21,7 +21,7 @@ use transly_core::workflow::{edit, reconcile, submit, Stage, SubmitOptions, Subm
 use crate::plugins::PluginHost;
 use transly_core::filesync::{FilesReport, FilesState};
 use transly_platform::github::{github_sync, GithubSettings, HttpApi};
-use transly_platform::{apply_data, list_json, read_text, register_picked, restore_data, OutFile, Picked, Roots};
+use transly_platform::{apply_data, apply_jump, launch, register_picked_exe, restore_jump, list_json, read_text, register_picked, restore_data, OutFile, Picked, Roots};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RowStatus {
@@ -871,6 +871,40 @@ impl AppState {
         })
     }
 
+    /// Програма гри, обрана перекладачем (зберігається в проєкті).
+    pub fn game_exe(&self) -> Option<String> {
+        self.project.as_ref()?.settings.get("gameExe")?.as_str().filter(|e| !e.is_empty()).map(String::from)
+    }
+
+    /// Запам'ятовує програму гри (після вибору в діалозі): дозволяє її теку платформі.
+    pub fn set_game_exe(&mut self, exe: &Path) {
+        register_picked_exe(&self.roots, &self.picked, exe);
+        if let Some(p) = self.project.as_mut() {
+            p.settings.insert("gameExe".into(), serde_json::json!(exe.to_string_lossy()));
+            self.dirty = true;
+        }
+    }
+
+    /// Запускає гру з обраного місця: збирає переклад (з чернетками), кладе в гру тестовий плагін старту зі сцени й запускає програму.
+    pub fn play_from(&mut self, f: usize, r: usize, from_line: bool) -> Result<String, String> {
+        let exe = self.game_exe().ok_or("Спершу оберіть програму гри")?;
+        let dir = self.dir.clone().ok_or("Проєкт не відкрито")?;
+        let key = self.unit(f, r).map(|u| u.key.clone()).ok_or("Немає рядка")?;
+        let file = self.views[f].name.clone();
+        let target = transly_core::jump::jump_target(&file, &key, &self.game, from_line, 0).ok_or("З цього рядка гру запустити не можна: він не в сцені")?;
+        let built = self.build_with(&self.build_defaults())?;
+        apply_jump(&self.roots, &dir.to_string_lossy(), &transly_core::jump::jump_plugin(&target))?;
+        launch(&self.roots, &exe)?;
+        Ok(format!("Гру запущено зі сцени. {built}"))
+    }
+
+    /// Прибирає тестовий плагін зі старту з гри.
+    pub fn remove_jump_plugin(&mut self) -> Result<String, String> {
+        let dir = self.dir.as_ref().ok_or("Проєкт не відкрито")?;
+        let changed = restore_jump(&self.roots, &dir.to_string_lossy())?;
+        Ok(if changed { "Тестовий плагін прибрано з гри".into() } else { "Тестового плагіна в грі не було".into() })
+    }
+
     pub fn key_of(&self, f: usize, r: usize) -> String {
         self.unit(f, r).map_or(String::new(), |u| u.key.clone())
     }
@@ -1270,6 +1304,48 @@ menu.quit=Quit game
         assert!(v.prev.is_none());
         let next = v.next.expect("є наступна сцена");
         assert_eq!(s.source_of(f, next), "Second scene");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn play_from_a_scene_builds_installs_the_plugin_and_launches() {
+        let base = std::env::temp_dir().join(format!("transly-app-play-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let game_dir = base.join("MyGame");
+        let data = game_dir.join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        std::fs::create_dir_all(game_dir.join("js").join("plugins")).unwrap();
+        std::fs::write(game_dir.join("js").join("plugins.js"), "var $plugins =\n[\n];\n").unwrap();
+        std::fs::write(data.join("System.json"), r#"{"gameTitle":"G"}"#).unwrap();
+        let cmd = |code: i64, p: &str| format!(r#"{{"code":{code},"indent":0,"parameters":[{p}]}}"#);
+        let list = [cmd(101, r#""",0,0,2,"Анна""#), cmd(401, r#""Hello""#), cmd(0, "")].join(",");
+        std::fs::write(data.join("Map001.json"), format!(r#"{{"displayName":"T","events":[null,{{"id":1,"name":"EV1","x":3,"y":4,"pages":[{{"conditions":{{}},"list":[{list}],"trigger":0}}]}}]}}"#)).unwrap();
+        let marker = base.join("started.txt");
+        let exe = game_dir.join("Game.cmd");
+        std::fs::write(&exe, format!("@echo ok> \"{}\"\r\n", marker.display())).unwrap();
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        let f = s.file_names().iter().position(|n| n == "Map001.json").unwrap();
+        let r = (0..s.row_count(f)).find(|r| s.source_of(f, *r) == "Hello").unwrap();
+        assert!(s.play_from(f, r, true).unwrap_err().contains("програму гри"));
+        s.set_game_exe(&exe);
+        s.edit(f, r, "Привіт");
+        let msg = s.play_from(f, r, true).unwrap();
+        assert!(msg.contains("запущено"), "{msg}");
+        let plugin = std::fs::read_to_string(game_dir.join("js").join("plugins").join("TranslyJump.js")).unwrap();
+        assert!(plugin.contains("\"mapId\":1") && plugin.contains("\"eventIndex\":1"));
+        assert!(std::fs::read_to_string(game_dir.join("js").join("plugins.js")).unwrap().contains("TranslyJump"));
+        assert!(std::fs::read_to_string(data.join("Map001.json")).unwrap().contains("Привіт"), "переклад зібрано в гру");
+        for _ in 0..50 {
+            if marker.exists() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        assert!(marker.exists(), "програму гри запущено");
+        assert!(s.remove_jump_plugin().unwrap().contains("прибрано"));
+        assert!(!game_dir.join("js").join("plugins").join("TranslyJump.js").exists());
         let _ = std::fs::remove_dir_all(&base);
     }
 

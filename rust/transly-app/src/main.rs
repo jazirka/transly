@@ -1080,6 +1080,19 @@ impl App {
             }
             ui.label(RichText::new(&v.title).color(TEXT));
         });
+        ui.horizontal(|ui| {
+            if plain_button(ui, "Запустити гру звідси").clicked() {
+                if self.st.game_exe().is_none() {
+                    if let Some(p) = rfd::FileDialog::new().set_title("Оберіть програму гри (Game.exe)").add_filter("Програма", &["exe"]).pick_file() {
+                        self.st.set_game_exe(&p);
+                    }
+                }
+                self.message = self.st.play_from(f, r, true).unwrap_or_else(|e| e);
+            }
+            if plain_button(ui, "Прибрати тестовий плагін").clicked() {
+                self.message = self.st.remove_jump_plugin().unwrap_or_else(|e| e);
+            }
+        });
         ui.add_space(4.0);
         for l in &v.lines {
             let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 46.0), Sense::click());

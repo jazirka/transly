@@ -1832,20 +1832,64 @@ impl App {
     fn editor(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().frame(egui::Frame::new().fill(BG)).show(ctx, |ui| {
             ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+            self.st.sync_tabs();
             let Some(f) = self.st.file else {
-                ui.centered_and_justified(|ui| ui.label(RichText::new("Відкрийте папку гри: кнопка «Відкрити гру…»").color(MUTE)));
+                ui.centered_and_justified(|ui| ui.label(RichText::new(if self.st.is_open() { "Усі вкладки закрито: виберіть файл зі списку ліворуч" } else { "Відкрийте папку гри: кнопка «Відкрити гру…»" }).color(MUTE)));
                 return;
             };
             let name = self.st.file_names().get(f).cloned().unwrap_or_default();
-            // вкладка
+            // вкладки відкритих файлів: назва, скільки рядків ще без перекладу, закрити
             let (tabs, _) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::hover());
             ui.painter().rect_filled(tabs, CornerRadius::ZERO, PANEL);
             ui.painter().hline(tabs.x_range(), tabs.bottom(), Stroke::new(1.0_f32, LINE));
-            let tw = (name.chars().count() as f32 * 7.0 + 40.0).min(400.0);
-            let tab = Rect::from_min_size(pos2(tabs.left() + 4.0, tabs.top()), vec2(tw, 33.0));
-            ui.painter().rect_filled(tab, CornerRadius::ZERO, Color32::from_rgb(0x25, 0x28, 0x2c));
-            ui.painter().hline(tab.x_range(), tab.bottom(), Stroke::new(2.0_f32, ACCENT));
-            ui.painter().text(tab.left_center() + vec2(12.0, 0.0), Align2::LEFT_CENTER, &name, FontId::proportional(12.5), TEXT);
+            let progress = self.st.file_progress();
+            let names = self.st.file_names();
+            let mut x = tabs.left() + 4.0;
+            let (mut pick, mut close): (Option<usize>, Option<usize>) = (None, None);
+            for t in self.st.tabs.clone() {
+                let Some(tn) = names.get(t) else { continue };
+                let left = progress.get(t).map_or(0, |p| p.0.saturating_sub(p.1));
+                let galley = ui.painter().layout_no_wrap(tn.clone(), FontId::proportional(12.5), TEXT);
+                let badge = if left > 0 { Some(ui.painter().layout_no_wrap(left.to_string(), FontId::proportional(11.0), WARN)) } else { None };
+                let tw = (galley.size().x + 44.0 + badge.as_ref().map_or(0.0, |b| b.size().x + 8.0)).min(320.0);
+                let rect = Rect::from_min_size(pos2(x, tabs.top()), vec2(tw, 33.0));
+                let resp = ui.interact(rect, ui.id().with(("tab", t)), Sense::click());
+                resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, t == f, format!("Вкладка {tn}")));
+                let on = t == f;
+                ui.painter().rect_filled(rect, CornerRadius::ZERO, if on { Color32::from_rgb(0x25, 0x28, 0x2c) } else if resp.hovered() { TREE_HOVER } else { PANEL });
+                if on {
+                    ui.painter().hline(rect.x_range(), rect.bottom(), Stroke::new(2.0_f32, ACCENT));
+                }
+                let mut tx = rect.left() + 12.0;
+                ui.painter().with_clip_rect(rect.shrink2(vec2(2.0, 0.0))).galley(pos2(tx, rect.center().y - galley.size().y / 2.0), galley.clone(), TEXT);
+                tx += galley.size().x + 8.0;
+                if let Some(b) = badge {
+                    let bw = b.size().x;
+                    ui.painter().galley(pos2(tx, rect.center().y - b.size().y / 2.0), b, WARN);
+                    tx += bw;
+                }
+                let _ = tx;
+                let cx = Rect::from_center_size(pos2(rect.right() - 14.0, rect.center().y), vec2(16.0, 16.0));
+                let cr = ui.interact(cx, ui.id().with(("tabx", t)), Sense::click());
+                ui.painter().text(cx.center(), Align2::CENTER_CENTER, "x", FontId::proportional(12.0), if cr.hovered() { TEXT } else { MUTE });
+                if cr.clicked() {
+                    close = Some(t);
+                } else if resp.clicked() {
+                    pick = Some(t);
+                }
+                x += tw + 2.0;
+            }
+            if let Some(t) = pick {
+                if self.st.file != Some(t) {
+                    self.st.file = Some(t);
+                    self.st.row = None;
+                    self.draft_for = None;
+                }
+            }
+            if let Some(t) = close {
+                self.st.close_tab(t);
+                self.draft_for = None;
+            }
             // хлібні крихти
             let (cr, _) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::hover());
             ui.painter().hline(cr.x_range(), cr.bottom(), Stroke::new(1.0_f32, LINE));

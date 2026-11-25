@@ -164,12 +164,14 @@ pub struct AppState {
     pub dir: Option<PathBuf>,
     pub file: Option<usize>,
     pub row: Option<usize>,
+    /// Відкриті вкладки-файли (номери), у порядку відкриття.
+    pub tabs: Vec<usize>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None }
+        AppState { last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![] }
     }
 }
 
@@ -292,6 +294,7 @@ impl AppState {
         self.project = Some(project);
         self.dir = Some(dir.to_path_buf());
         self.file = if n > 0 { Some(0) } else { None };
+        self.tabs = self.file.into_iter().collect();
         self.row = None;
         self.dirty = false;
         self.rev += 1;
@@ -1518,6 +1521,26 @@ impl AppState {
         self.unit(f, r).map(|u| u.context.clone()).unwrap_or_default()
     }
 
+    /// Вкладки відкритих файлів: поточний файл завжди серед них.
+    pub fn sync_tabs(&mut self) {
+        self.tabs.retain(|f| *f < self.views.len());
+        if let Some(f) = self.file {
+            if !self.tabs.contains(&f) {
+                self.tabs.push(f);
+            }
+        }
+    }
+
+    /// Закриває вкладку; якщо вона була поточною, відкривається сусідня.
+    pub fn close_tab(&mut self, f: usize) {
+        let Some(at) = self.tabs.iter().position(|t| *t == f) else { return };
+        self.tabs.remove(at);
+        if self.file == Some(f) {
+            self.file = self.tabs.get(at).or_else(|| at.checked_sub(1).and_then(|i| self.tabs.get(i))).copied();
+            self.row = None;
+        }
+    }
+
     pub fn key_of(&self, f: usize, r: usize) -> String {
         self.unit(f, r).map_or(String::new(), |u| u.key.clone())
     }
@@ -2311,6 +2334,25 @@ menu.quit=Quit game
         assert_eq!(w, "gold\nhp\nmp");
         s.set_qa_keep("any", "");
         assert_eq!(s.qa_keep(), ("any".to_string(), String::new()));
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn file_tabs_open_and_close() {
+        let base = std::env::temp_dir().join(format!("transly-app-tabs-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = game(&base);
+        std::fs::write(data.join("Items.json"), r#"[null,{"id":1,"name":"Potion","description":"Heals","note":""}]"#).unwrap();
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        assert_eq!(s.tabs.len(), 1);
+        s.file = Some(1);
+        s.sync_tabs();
+        assert_eq!(s.tabs, vec![0, 1]);
+        s.close_tab(1);
+        assert_eq!((s.tabs.clone(), s.file), (vec![0], Some(0)));
+        s.close_tab(0);
+        assert_eq!(s.file, None);
         let _ = std::fs::remove_dir_all(&base);
     }
 

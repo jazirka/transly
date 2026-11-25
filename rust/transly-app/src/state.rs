@@ -1484,6 +1484,35 @@ impl AppState {
         transly_core::journal::undo_report(&r)
     }
 
+    /// Апостроф проєкту й слова, які дозволено лишати латинкою: (апостроф, слова по одному в рядку).
+    pub fn qa_keep(&self) -> (String, String) {
+        let Some(p) = self.project.as_ref() else { return ("any".into(), String::new()) };
+        let r = transly_core::qaconfig::qa_of(p.settings.get("qa"));
+        let mut words: Vec<String> = r.keep.into_iter().collect();
+        words.sort();
+        (r.apostrophe, transly_core::qaconfig::keep_to_text(&words))
+    }
+
+    pub fn set_qa_keep(&mut self, apostrophe: &str, words: &str) {
+        let Some(p) = self.project.as_mut() else { return };
+        let mut q: serde_json::Map<String, serde_json::Value> = p.settings.get("qa").and_then(|v| v.as_object()).cloned().unwrap_or_default();
+        let list = transly_core::qaconfig::keep_from_text(words);
+        if list.is_empty() {
+            q.shift_remove("keep");
+        } else {
+            q.insert("keep".into(), serde_json::json!(list));
+        }
+        if apostrophe == "any" || !transly_core::qaconfig::APOSTROPHES.contains(&apostrophe) {
+            q.shift_remove("apostrophe");
+        } else {
+            q.insert("apostrophe".into(), serde_json::json!(apostrophe));
+        }
+        p.settings.insert("qa".into(), serde_json::Value::Object(q));
+        p.settings_at = Some(now_ms());
+        self.rev += 1;
+        self.dirty = true;
+    }
+
     pub fn key_of(&self, f: usize, r: usize) -> String {
         self.unit(f, r).map_or(String::new(), |u| u.key.clone())
     }
@@ -2260,6 +2289,23 @@ menu.quit=Quit game
         assert!(!first.when.is_empty() && !first.sample.is_empty());
         let msg = s.undo_batch(&first.id);
         assert!(msg.starts_with("Скасовано"), "{msg}");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn qa_keep_words_and_apostrophe_roundtrip() {
+        let base = std::env::temp_dir().join(format!("transly-app-keep-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = game(&base);
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        assert_eq!(s.qa_keep(), ("any".to_string(), String::new()));
+        s.set_qa_keep("ʼ", "HP, mp\nGold");
+        let (a, w) = s.qa_keep();
+        assert_eq!(a, "ʼ");
+        assert_eq!(w, "gold\nhp\nmp");
+        s.set_qa_keep("any", "");
+        assert_eq!(s.qa_keep(), ("any".to_string(), String::new()));
         let _ = std::fs::remove_dir_all(&base);
     }
 

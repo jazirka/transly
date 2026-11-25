@@ -41,6 +41,7 @@ struct App {
     term_en: String,
     term_uk: String,
     itab: usize,
+    keep_edit: Option<(String, String)>,
     activity_win: bool,
     tsync_win: Option<TermSyncWin>,
     wrap_win: Option<(transly_core::wrapconfig::WrapSettings, String, bool)>,
@@ -100,7 +101,7 @@ fn source_job(text: &str, marks: &[(usize, usize, usize)]) -> egui::text::Layout
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
     }
 }
 
@@ -1179,8 +1180,19 @@ impl App {
         let mut open = true;
         let mut set: Option<(String, &'static str)> = None;
         let mut fix: Option<String> = None;
+        let (mut apo, mut words) = self.keep_edit.take().unwrap_or_else(|| self.st.qa_keep());
+        let before = (apo.clone(), words.clone());
         egui::Window::new("Правила QA").open(&mut open).collapsible(false).default_width(620.0).default_height(440.0).show(ctx, |ui| {
             ui.label(RichText::new("Правила про форму перекладу: літери чужого алфавіту, приховані знаки, пробіли тощо. Кількість — у поточному файлі.").size(11.5).color(MUTE));
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                ui.label("Апостроф");
+                for (v, label) in [("any", "будь-який правильний"), ("’", "лише ’"), ("ʼ", "лише ʼ"), ("'", "лише '")] {
+                    ui.selectable_value(&mut apo, v.to_string(), label);
+                }
+            });
+            ui.label(RichText::new("Латинські слова, які дозволено лишати в українському тексті (по слову в рядку):").size(11.5).color(MUTE));
+            ui.add(egui::TextEdit::multiline(&mut words).desired_rows(2).desired_width(f32::INFINITY));
             ui.add_space(6.0);
             egui::ScrollArea::vertical().show(ui, |ui| {
                 for (id, title, explain, level, rows, fixable) in self.st.qa_rules_view(f) {
@@ -1213,6 +1225,10 @@ impl App {
             let n = self.st.fix_qa_rule(&id);
             self.message = format!("Виправлено рядків: {n}");
         }
+        if (apo.clone(), words.clone()) != before {
+            self.st.set_qa_keep(&apo, &words);
+        }
+        self.keep_edit = if open { Some((apo, words)) } else { None };
         self.qar_win = open;
     }
 

@@ -41,6 +41,7 @@ struct App {
     term_en: String,
     term_uk: String,
     itab: usize,
+    tree_closed: std::collections::HashSet<usize>,
     scene_mode: bool,
     keep_edit: Option<(String, String)>,
     activity_win: bool,
@@ -102,7 +103,7 @@ fn source_job(text: &str, marks: &[(usize, usize, usize)]) -> egui::text::Layout
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
     }
 }
 
@@ -500,20 +501,48 @@ impl App {
     fn statusbar(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::bottom("status").exact_height(24.0).frame(egui::Frame::new().fill(PANEL).inner_margin(egui::Margin::symmetric(10, 0)).stroke(Stroke::new(1.0_f32, LINE))).show(ctx, |ui| {
             ui.horizontal_centered(|ui| {
+                ui.spacing_mut().item_spacing.x = 16.0;
+                let small = |t: String, c: Color32| RichText::new(t).size(11.5).color(c);
                 if self.st.is_open() {
-                    let p = self.st.progress();
-                    ui.label(RichText::new(format!("Рядків: {}", p.total)).size(11.5).color(MUTE));
-                    ui.label(RichText::new(format!("чернеток: {}", p.draft)).size(11.5).color(MUTE));
-                    ui.label(RichText::new(format!("надіслано: {}", p.sent)).size(11.5).color(MUTE));
-                    ui.label(RichText::new(format!("вичитано: {}", p.approved)).size(11.5).color(OK));
+                    // збереження
+                    let (dot, text) = if self.st.dirty {
+                        (WARN, "Є незбережені зміни".to_string())
+                    } else if let Some(ms) = self.st.saved_ms {
+                        let t = chrono::DateTime::from_timestamp_millis(ms).map(|d| d.with_timezone(&chrono::Local).format("%H:%M:%S").to_string()).unwrap_or_default();
+                        (OK, format!("Збережено о {t}"))
+                    } else {
+                        (OK, "Проєкт відкрито".to_string())
+                    };
+                    let (r, _) = ui.allocate_exact_size(vec2(8.0, 8.0), Sense::hover());
+                    ui.painter().circle_filled(r.center(), 3.5, dot);
+                    ui.add_space(-12.0);
+                    ui.label(small(text, if dot == OK { OK } else { WARN }));
+                    if let Some(f) = self.st.file {
+                        let bad = self.st.file_issues(f).iter().filter(|i| i.2).count();
+                        if bad > 0 {
+                            ui.label(small(format!("{bad} проблем QA"), BAD));
+                        }
+                        if let Some(r) = self.st.row {
+                            ui.label(small(format!("Рядок {} з {}", r + 1, self.st.row_count(f)), MUTE));
+                        }
+                    }
                     if self.st.current_branch() != "main" {
-                        ui.label(RichText::new(format!("гілка: {}", self.st.current_branch())).size(11.5).color(VIOLET));
+                        ui.label(small(format!("гілка: {}", self.st.current_branch()), VIOLET));
                     }
                 } else {
-                    ui.label(RichText::new("Гру не відкрито").size(11.5).color(MUTE));
+                    ui.label(small("Гру не відкрито".into(), MUTE));
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(RichText::new(&self.message).size(11.5).color(MUTE));
+                    if self.st.is_open() {
+                        let p = self.st.progress();
+                        ui.label(small(format!("Проєкт: {} / {} вичитано · {} чекає вичитування", p.approved, p.total, p.sent), MUTE));
+                        if let Some(f) = self.st.file {
+                            let n = self.st.row_count(f);
+                            let c = self.st.filter_counts(f);
+                            ui.label(small(format!("Файл: {} / {} вичитано · {} чекає", c[4], n, c[3]), MUTE));
+                        }
+                    }
+                    ui.label(small(self.message.clone(), MUTE));
                 });
             });
         });
@@ -1529,36 +1558,83 @@ impl App {
     fn tree(&mut self, ctx: &egui::Context) {
         egui::SidePanel::left("tree").exact_width(250.0).resizable(false).frame(egui::Frame::new().fill(PANEL).stroke(Stroke::new(1.0_f32, LINE))).show(ctx, |ui| {
             let (h, _) = ui.allocate_exact_size(vec2(ui.available_width(), 28.0), Sense::hover());
-            ui.painter().text(h.left_center() + vec2(10.0, 0.0), Align2::LEFT_CENTER, "ФАЙЛИ", FontId::proportional(11.0), MUTE);
+            ui.painter().text(h.left_center() + vec2(10.0, 0.0), Align2::LEFT_CENTER, "ФАЙЛИ ГРИ", FontId::proportional(11.0), MUTE);
             ui.painter().hline(h.x_range(), h.bottom(), Stroke::new(1.0_f32, LINE));
             let prog = self.st.file_progress();
             let names = self.st.file_names();
+            // теки, як у старому застосунку: дані гри, мапи, текстові файли
+            let kind = |n: &str| -> usize {
+                let b = n.rsplit('/').next().unwrap_or(n);
+                if !b.to_lowercase().ends_with(".json") {
+                    2
+                } else if b.starts_with("Map") && b[3..].trim_end_matches(".json").chars().all(|c| c.is_ascii_digit()) && b.len() > 8 {
+                    1
+                } else {
+                    0
+                }
+            };
+            let folders = [("data", 0usize), ("maps", 1), ("Тексти", 2)];
             egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
                 ui.spacing_mut().item_spacing.y = 0.0;
-                for (i, name) in names.iter().enumerate() {
-                    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::click());
-                    let cur = self.st.file == Some(i);
-                    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, cur, name.clone()));
-                    if cur {
-                        ui.painter().rect_filled(rect, CornerRadius::ZERO, SEL);
-                    } else if resp.hovered() {
-                        ui.painter().rect_filled(rect, CornerRadius::ZERO, TREE_HOVER);
+                for (title, k) in folders {
+                    let members: Vec<usize> = (0..names.len()).filter(|i| kind(&names[*i]) == k).collect();
+                    if members.is_empty() {
+                        continue;
                     }
-                    let badge = Rect::from_min_size(pos2(rect.left() + 10.0, rect.center().y - 8.0), vec2(16.0, 16.0));
-                    ui.painter().rect_filled(badge, CornerRadius::same(R1), Color32::from_rgb(0x3b, 0x35, 0x24));
-                    ui.painter().text(badge.center(), Align2::CENTER_CENTER, "J", FontId::monospace(8.5), Color32::from_rgb(0xe5, 0xc0, 0x6a));
-                    let (total, done) = prog.get(i).copied().unwrap_or((0, 0));
-                    let pct = (done * 100).checked_div(total).unwrap_or(0);
-                    let right = rect.right() - 10.0;
-                    ui.painter().text(pos2(right, rect.center().y), Align2::RIGHT_CENTER, format!("{pct}%"), FontId::monospace(11.0), if pct == 100 { OK } else { MUTE });
-                    let bar = Rect::from_min_size(pos2(right - 62.0, rect.center().y - 2.0), vec2(26.0, 4.0));
-                    ui.painter().rect_filled(bar, CornerRadius::same(R1), Color32::from_rgb(0x3d, 0x40, 0x45));
-                    ui.painter().rect_filled(Rect::from_min_size(bar.min, vec2(bar.width() * pct as f32 / 100.0, 4.0)), CornerRadius::same(R1), if pct == 100 { OK } else { INFO });
-                    let clip = Rect::from_min_max(pos2(badge.right() + 6.0, rect.top()), pos2(bar.left() - 6.0, rect.bottom()));
-                    ui.painter().with_clip_rect(clip).text(pos2(clip.left(), rect.center().y), Align2::LEFT_CENTER, name, FontId::proportional(12.5), TEXT);
-                    if resp.clicked() {
-                        self.st.file = Some(i);
-                        self.st.row = None;
+                    let open = !self.tree_closed.contains(&k);
+                    let (hr, hresp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
+                    if hresp.hovered() {
+                        ui.painter().rect_filled(hr, CornerRadius::ZERO, TREE_HOVER);
+                    }
+                    hresp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("Тека {title}")));
+                    let c = pos2(hr.left() + 14.0, hr.center().y);
+                    let tri = if open { vec![pos2(c.x - 4.0, c.y - 2.0), pos2(c.x + 4.0, c.y - 2.0), pos2(c.x, c.y + 3.0)] } else { vec![pos2(c.x - 2.0, c.y - 4.0), pos2(c.x + 3.0, c.y), pos2(c.x - 2.0, c.y + 4.0)] };
+                    ui.painter().add(egui::Shape::convex_polygon(tri, MUTE, Stroke::NONE));
+                    ui.painter().text(pos2(hr.left() + 26.0, hr.center().y), Align2::LEFT_CENTER, title, FontId::proportional(12.5), TEXT);
+                    ui.painter().text(pos2(hr.right() - 10.0, hr.center().y), Align2::RIGHT_CENTER, members.len().to_string(), FontId::monospace(10.5), DIM);
+                    if hresp.clicked() {
+                        if open {
+                            self.tree_closed.insert(k);
+                        } else {
+                            self.tree_closed.remove(&k);
+                        }
+                    }
+                    if !open {
+                        continue;
+                    }
+                    for i in members {
+                        let name = &names[i];
+                        let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::click());
+                        let cur = self.st.file == Some(i);
+                        resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, cur, name.clone()));
+                        if cur {
+                            ui.painter().rect_filled(rect, CornerRadius::ZERO, SEL);
+                        } else if resp.hovered() {
+                            ui.painter().rect_filled(rect, CornerRadius::ZERO, TREE_HOVER);
+                        }
+                        // значок формату: {} дані, MAP мапа, Aa текст
+                        let (label, bg, fg) = match k {
+                            1 => ("MAP", Color32::from_rgb(0x1f, 0x3a, 0x2c), OK),
+                            2 => ("Aa", Color32::from_rgb(0x2a, 0x2f, 0x4a), INFO),
+                            _ => ("{}", Color32::from_rgb(0x3b, 0x35, 0x24), Color32::from_rgb(0xe5, 0xc0, 0x6a)),
+                        };
+                        let bw = if k == 1 { 26.0 } else { 18.0 };
+                        let badge = Rect::from_min_size(pos2(rect.left() + 22.0, rect.center().y - 8.0), vec2(bw, 16.0));
+                        ui.painter().rect_filled(badge, CornerRadius::same(R1), bg);
+                        ui.painter().text(badge.center(), Align2::CENTER_CENTER, label, FontId::monospace(8.5), fg);
+                        let (total, done) = prog.get(i).copied().unwrap_or((0, 0));
+                        let pct = (done * 100).checked_div(total).unwrap_or(0);
+                        let right = rect.right() - 10.0;
+                        ui.painter().text(pos2(right, rect.center().y), Align2::RIGHT_CENTER, format!("{pct}%"), FontId::monospace(11.0), if pct == 100 { OK } else { MUTE });
+                        let bar = Rect::from_min_size(pos2(right - 62.0, rect.center().y - 2.0), vec2(26.0, 4.0));
+                        ui.painter().rect_filled(bar, CornerRadius::same(R1), Color32::from_rgb(0x3d, 0x40, 0x45));
+                        ui.painter().rect_filled(Rect::from_min_size(bar.min, vec2(bar.width() * pct as f32 / 100.0, 4.0)), CornerRadius::same(R1), if pct == 100 { OK } else { INFO });
+                        let clip = Rect::from_min_max(pos2(badge.right() + 6.0, rect.top()), pos2(bar.left() - 6.0, rect.bottom()));
+                        ui.painter().with_clip_rect(clip).text(pos2(clip.left(), rect.center().y), Align2::LEFT_CENTER, name, FontId::proportional(12.5), TEXT);
+                        if resp.clicked() {
+                            self.st.file = Some(i);
+                            self.st.row = None;
+                        }
                     }
                 }
             });

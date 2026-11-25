@@ -10,6 +10,7 @@ rfd = "0.16"
 transly-core = { path = "../transly-core" }
 transly-platform = { path = "../transly-platform" }
 serde_json = { version = "1", features = ["preserve_order"] }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 indexmap = { version = "2", features = ["serde"] }
 
 [build-dependencies]

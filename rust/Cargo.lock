@@ -5503,6 +5503,7 @@ dependencies = [
 name = "transly-app"
 version = "0.0.1"
 dependencies = [
+ "chrono",
  "eframe",
  "egui_kittest",
  "indexmap",

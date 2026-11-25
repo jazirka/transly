@@ -170,9 +170,49 @@ impl App {
                 ui.painter().rect_filled(r, CornerRadius::same(R2), ACCENT);
                 ui.painter().text(r.center(), Align2::CENTER_CENTER, "T", FontId::monospace(10.0), Color32::WHITE);
                 ui.add_space(4.0);
-                for m in ["Файл", "Правка", "Вигляд", "Інструменти", "Довідка"] {
-                    ui.label(RichText::new(m).color(TEXT));
-                }
+                ui.menu_button("Файл", |ui| {
+                    if ui.button("Відкрити гру…").clicked() {
+                        self.open_dialog();
+                        ui.close_menu();
+                    }
+                    if ui.add_enabled(self.st.is_open(), egui::Button::new("Зберегти проєкт")).clicked() {
+                        self.message = self.st.save_project().map(|p| format!("Збережено: {p}")).unwrap_or_else(|e| e);
+                        ui.close_menu();
+                    }
+                    if ui.add_enabled(self.st.is_open(), egui::Button::new("Злити з іншим проєктом…")).clicked() {
+                        self.act_merge();
+                        ui.close_menu();
+                    }
+                    if ui.add_enabled(self.st.is_open(), egui::Button::new("Повернути оригінали гри")).clicked() {
+                        self.act_restore();
+                        ui.close_menu();
+                    }
+                    ui.separator();
+                    if ui.add_enabled(self.st.is_open(), egui::Button::new("Налаштування проєкту…")).clicked() {
+                        self.act_settings();
+                        ui.close_menu();
+                    }
+                });
+                ui.menu_button("Вигляд", |ui| {
+                    if ui.button(if self.focus { "Режим таблиці" } else { "Режим «Фокус»" }).clicked() {
+                        self.focus = !self.focus;
+                        ui.close_menu();
+                    }
+                    if ui.button(if self.bottom_open { "Сховати нижню панель" } else { "Показати нижню панель" }).clicked() {
+                        self.bottom_open = !self.bottom_open;
+                        ui.close_menu();
+                    }
+                });
+                ui.menu_button("Інструменти", |ui| {
+                    if ui.add_enabled(self.st.is_open(), egui::Button::new(if self.st.syncing() { "Синхронізація триває…" } else { "Синхронізація через GitHub…" })).clicked() {
+                        self.act_sync();
+                        ui.close_menu();
+                    }
+                    if ui.button("Плагіни…").clicked() {
+                        self.act_plugins();
+                        ui.close_menu();
+                    }
+                });
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let name = self.st.project.as_ref().map_or("Transly".to_string(), |p| p.name.clone());
                     ui.label(RichText::new(name).color(TEXT));
@@ -181,17 +221,49 @@ impl App {
         });
     }
 
+    // дії меню
+    fn act_restore(&mut self) {
+            self.message = self.st.restore_originals().unwrap_or_else(|e| e);
+        
+    }
+
+    fn act_merge(&mut self) {
+            if let Some(p) = rfd::FileDialog::new().add_filter("Проєкт Transly", &["json"]).pick_file() {
+                self.message = self.st.merge_file(&p).unwrap_or_else(|e| e);
+            }
+        
+    }
+
+    fn act_sync(&mut self) {
+ self.sync_win = Some((self.st.github_settings(), self.token.clone()));
+    }
+
+    fn act_plugins(&mut self) {
+            self.plugins_win = true;
+        
+    }
+
+    fn act_settings(&mut self) {
+            self.settings = self.st.settings_view();
+        
+    }
+
+    fn open_dialog(&mut self) {
+        if let Some(dir) = rfd::FileDialog::new().set_title("Оберіть папку гри (data)").pick_folder() {
+            self.message = match self.st.open_game(&dir) {
+                Ok(n) => format!("Відкрито: {n} файлів із текстом{}", if self.st.last_note.is_empty() { String::new() } else { format!(". {}", self.st.last_note) }),
+                Err(e) => e,
+            };
+            self.draft_for = None;
+        }
+    
+    }
+
     fn toolbar(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::top("toolbar").exact_height(38.0).frame(egui::Frame::new().fill(PANEL).inner_margin(egui::Margin::symmetric(10, 0)).stroke(Stroke::new(1.0_f32, LINE))).show(ctx, |ui| {
             ui.horizontal_centered(|ui| {
                 if plain_button(ui, "Відкрити гру…").clicked() {
-                    if let Some(dir) = rfd::FileDialog::new().set_title("Оберіть папку гри (data)").pick_folder() {
-                        self.message = match self.st.open_game(&dir) {
-                            Ok(n) => format!("Відкрито: {n} файлів із текстом{}", if self.st.last_note.is_empty() { String::new() } else { format!(". {}", self.st.last_note) }),
-                            Err(e) => e,
-                        };
-                        self.draft_for = None;
-                    }
+                    self.open_dialog();
                 }
                 ui.add(egui::Separator::default().vertical().spacing(4.0));
                 let can = self.st.is_open();
@@ -206,17 +278,6 @@ impl App {
                     }
                     if plain_button(ui, "Зібрати в гру").clicked() {
                         self.message = self.st.build_into_game(true).unwrap_or_else(|e| e);
-                    }
-                    if plain_button(ui, "Повернути оригінали").clicked() {
-                        self.message = self.st.restore_originals().unwrap_or_else(|e| e);
-                    }
-                    if plain_button(ui, "Злити проєкт…").clicked() {
-                        if let Some(p) = rfd::FileDialog::new().add_filter("Проєкт Transly", &["json"]).pick_file() {
-                            self.message = self.st.merge_file(&p).unwrap_or_else(|e| e);
-                        }
-                    }
-                    if plain_button(ui, if self.st.syncing() { "Синхронізація…" } else { "Синхронізувати" }).clicked() {
-                        self.sync_win = Some((self.st.github_settings(), self.token.clone()));
                     }
                     ui.menu_button("Дії", |ui| {
                         let f = self.st.file;
@@ -256,12 +317,6 @@ impl App {
                             ui.close_menu();
                         }
                     });
-                    if plain_button(ui, "Плагіни").clicked() {
-                        self.plugins_win = true;
-                    }
-                    if plain_button(ui, "Налаштування").clicked() {
-                        self.settings = self.st.settings_view();
-                    }
                     if plain_button(ui, if self.focus { "Таблиця" } else { "Фокус" }).clicked() {
                         self.focus = !self.focus;
                     }
@@ -343,7 +398,7 @@ impl App {
             }
             let toggle = Rect::from_min_size(pos2(tabs.right() - 28.0, tabs.top()), vec2(24.0, 30.0));
             let tr = ui.interact(toggle, ui.id().with("btoggle"), Sense::click());
-            ui.painter().text(toggle.center(), Align2::CENTER_CENTER, if self.bottom_open { "▾" } else { "▴" }, FontId::proportional(12.0), MUTE);
+            ui.painter().text(toggle.center(), Align2::CENTER_CENTER, if self.bottom_open { "v" } else { "^" }, FontId::proportional(12.0), MUTE);
             if tr.clicked() {
                 self.bottom_open = !self.bottom_open;
             }
@@ -706,7 +761,7 @@ impl App {
         egui::SidePanel::left("strip").exact_width(40.0).resizable(false).frame(egui::Frame::new().fill(PANEL).stroke(Stroke::new(1.0_f32, LINE))).show(ctx, |ui| {
             ui.add_space(6.0);
             ui.vertical_centered(|ui| {
-                for (i, g) in ["▤", "◈", "✎", "⚑"].iter().enumerate() {
+                for (i, g) in ["Ф", "Г", "П", "К"].iter().enumerate() {
                     let (r, resp) = ui.allocate_exact_size(vec2(30.0, 30.0), Sense::click());
                     let on = i == 0;
                     if on || resp.hovered() {
@@ -846,9 +901,9 @@ impl App {
         label_caps(ui, "Глосарій");
         for (i, t) in self.st.terms().iter().enumerate() {
             ui.horizontal(|ui| {
-                ui.colored_label(TERM_COLORS[i % TERM_COLORS.len()], "▪");
+                ui.colored_label(TERM_COLORS[i % TERM_COLORS.len()], "•");
                 ui.label(RichText::new(&t.en).color(TEXT));
-                ui.label(RichText::new("→").color(DIM));
+                ui.label(RichText::new("-").color(DIM));
                 ui.label(RichText::new(&t.uk).color(TEXT));
             });
         }
@@ -922,7 +977,7 @@ impl App {
                 ui.label(RichText::new(&t.root.who).size(11.0).color(VIOLET));
                 ui.label(RichText::new(&t.root.text).color(TEXT));
                 for re in &t.replies {
-                    ui.label(RichText::new(format!("↳ {}: {}", re.who, re.text)).color(MUTE));
+                    ui.label(RichText::new(format!("> {}: {}", re.who, re.text)).color(MUTE));
                 }
             });
         }
@@ -989,8 +1044,8 @@ impl App {
                 resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, sel, format!("{src} — {tgt}")));
                 paint_dot(ui, pos2(rect.left() + 14.0, rect.top() + 14.0), st);
                 let clip = Rect::from_min_max(pos2(rect.left() + 26.0, rect.top()), pos2(rect.right() - 8.0, rect.bottom()));
-                ui.painter().with_clip_rect(clip).text(pos2(clip.left(), rect.top() + 14.0), Align2::LEFT_CENTER, src.replace('\n', " ↵ "), FontId::proportional(12.5), SRC_TEXT);
-                let t = if tgt.is_empty() { "—".to_string() } else { tgt.replace('\n', " ↵ ") };
+                ui.painter().with_clip_rect(clip).text(pos2(clip.left(), rect.top() + 14.0), Align2::LEFT_CENTER, src.replace('\n', " / "), FontId::proportional(12.5), SRC_TEXT);
+                let t = if tgt.is_empty() { "—".to_string() } else { tgt.replace('\n', " / ") };
                 ui.painter().with_clip_rect(clip).text(pos2(clip.left(), rect.top() + 30.0), Align2::LEFT_CENTER, t, FontId::proportional(12.0), MUTE);
                 if resp.clicked() {
                     self.st.row = Some(r);
@@ -1040,13 +1095,13 @@ impl App {
                 x += cols[1];
                 ui.painter().with_clip_rect(cell(x, cols[2])).text(pos2(x + 8.0, rect.center().y), Align2::LEFT_CENTER, key, FontId::monospace(11.0), MUTE);
                 x += cols[2];
-                ui.painter().with_clip_rect(cell(x, cols[3])).text(pos2(x + 8.0, rect.center().y), Align2::LEFT_CENTER, src.replace('\n', " ↵ "), FontId::proportional(12.5), SRC_TEXT);
+                ui.painter().with_clip_rect(cell(x, cols[3])).text(pos2(x + 8.0, rect.center().y), Align2::LEFT_CENTER, src.replace('\n', " / "), FontId::proportional(12.5), SRC_TEXT);
                 x += cols[3];
                 let tcell = cell(x, cols[4]);
                 if tgt.is_empty() {
                     ui.painter().with_clip_rect(tcell).text(pos2(x + 8.0, rect.center().y), Align2::LEFT_CENTER, "—", FontId::proportional(12.5), DIM);
                 } else {
-                    ui.painter().with_clip_rect(tcell).text(pos2(x + 8.0, rect.center().y), Align2::LEFT_CENTER, tgt.replace('\n', " ↵ "), FontId::proportional(12.5), TEXT);
+                    ui.painter().with_clip_rect(tcell).text(pos2(x + 8.0, rect.center().y), Align2::LEFT_CENTER, tgt.replace('\n', " / "), FontId::proportional(12.5), TEXT);
                 }
                 if sel {
                     ui.painter().rect_stroke(tcell.shrink(1.0), CornerRadius::same(R1), Stroke::new(1.0_f32, ACCENT), StrokeKind::Inside);
@@ -1130,7 +1185,9 @@ mod ui_tests {
         app.st.open_game(&data).unwrap();
         let mut h = harness(app);
         h.run();
-        h.get_by_label("Налаштування").click();
+        h.get_by_label("Файл").click();
+        h.run();
+        h.get_by_label("Налаштування проєкту…").click();
         h.run();
         h.get_by_label("Налаштування проєкту");
         h.get_by_label("Хто перекладає");
@@ -1155,5 +1212,25 @@ mod ui_tests {
         h.run();
         assert_eq!(h.state().st.progress().sent, 1);
         assert_eq!(h.state().message, "Надіслано");
+    }
+
+    /// Знімок вікна в PNG для перевірки вигляду очима: `TRANSLY_SHOTS=<тека> cargo test -p transly-app shots -- --ignored`.
+    #[test]
+    #[ignore]
+    fn shots() {
+        let Some(dir) = std::env::var_os("TRANSLY_SHOTS").map(std::path::PathBuf::from) else { return };
+        std::fs::create_dir_all(&dir).unwrap();
+        let data = game("shots");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.st.add_term("Hero", "Герой");
+        app.st.edit(0, 0, "Герой");
+        app.st.row = Some(0);
+        let mut h = harness(app);
+        h.run();
+        h.render().unwrap().save(dir.join("table.png")).unwrap();
+        h.state_mut().focus = true;
+        h.run();
+        h.render().unwrap().save(dir.join("focus.png")).unwrap();
     }
 }

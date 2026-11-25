@@ -135,7 +135,7 @@ pub struct AppState {
     /// Підсумок перенесення перекладів після оновлення гри (порожній, коли гра не змінилась).
     pub last_note: String,
     qa_cache: std::cell::RefCell<QaCache>,
-    pub game: Vec<GameFile>,
+    pub game_raw: Vec<(String, String)>,
     pub dirty: bool,
     pub filter: Filter,
     pub search: String,
@@ -155,7 +155,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { auto_limit: std::cell::RefCell::new(None), group_filter: None, scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None }
+        AppState { auto_limit: std::cell::RefCell::new(None), group_filter: None, scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None }
     }
 }
 
@@ -173,6 +173,9 @@ fn plugins_dir() -> Option<PathBuf> {
     Some(base.join("Transly").join("plugins"))
 }
 
+/// Файли гри (назва, сирий текст) і рядки, зчитані з теки.
+type LoadedDir = (Vec<(String, String)>, Vec<FileView>);
+
 fn now_ms() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64)
 }
@@ -183,33 +186,41 @@ impl AppState {
     }
 
     /// Відкриває папку гри: читає її файли й будує рядки. Повертає число файлів із текстом.
-    /// Читає теку гри: файли й рядки (вбудовані формати — ядро, решта — обробники плагінів).
-    fn load_dir(&self, dir: &Path) -> Result<(Vec<GameFile>, Vec<FileView>), String> {
+    /// Читає теку гри по одному файлу: у пам'яті лишаються лише рядки й сирий текст файлу (для збірки), а розібраний JSON
+    /// (у кілька разів більший за текст) відкидається одразу. Вбудовані формати читає ядро, решта — обробники плагінів.
+    fn load_dir(&self, dir: &Path) -> Result<LoadedDir, String> {
         register_picked(&self.roots, &self.picked, dir);
         let d = dir.to_string_lossy().to_string();
         let exts: Vec<String> = self.host.reg.extensions();
         let listed = list_json(&self.roots, &d, Some(exts))?;
-        let mut files = Vec::new();
-        for f in listed {
-            let text = read_text(&self.roots, &f.path)?;
-            if f.name.to_lowercase().ends_with(".json") {
-                files.push(GameFile { name: f.name, json: serde_json::from_str(&text).unwrap_or(serde_json::Value::Null), text: None });
-            } else {
-                files.push(GameFile { name: f.name, json: serde_json::Value::Null, text: Some(text) });
-            }
+        let mut raw: Vec<(String, String)> = Vec::new();
+        for f in &listed {
+            raw.push((f.name.clone(), read_text(&self.roots, &f.path)?));
         }
-        // вбудовані формати читає ядро; файли, які бере лише формат плагіна, — його обробник
-        let builtin: Vec<GameFile> = files.iter().filter(|f| transly_core::engine::format_of(&f.name).is_some()).cloned().collect();
-        let mut views = read_game(&builtin, &ExtractOptions::default());
-        for f in files.iter().filter(|f| transly_core::engine::format_of(&f.name).is_none()) {
-            if let Some(h) = self.host.reg.handler_of(&f.name) {
-                let units = h.extract(f, &ExtractOptions::default());
+        // назви мап беруться з MapInfos.json: він невеликий, тримається окремо
+        let infos: Option<GameFile> = raw.iter().find(|(n, _)| n.rsplit('/').next().unwrap_or(n) == "MapInfos.json").map(|(n, t)| GameFile { name: n.clone(), json: serde_json::from_str(t).unwrap_or(serde_json::Value::Null), text: None });
+        let mut views: Vec<FileView> = Vec::new();
+        for (name, text) in &raw {
+            let gf = if name.to_lowercase().ends_with(".json") { GameFile { name: name.clone(), json: serde_json::from_str(text).unwrap_or(serde_json::Value::Null), text: None } } else { GameFile { name: name.clone(), json: serde_json::Value::Null, text: Some(text.clone()) } };
+            if transly_core::engine::format_of(name).is_some() {
+                let batch: Vec<GameFile> = match &infos {
+                    Some(i) if i.name != gf.name => vec![i.clone(), gf],
+                    _ => vec![gf],
+                };
+                views.extend(read_game(&batch, &ExtractOptions::default()).into_iter().filter(|v| &v.name == name));
+            } else if let Some(h) = self.host.reg.handler_of(name) {
+                let units = h.extract(&gf, &ExtractOptions::default());
                 if !units.is_empty() {
-                    views.push(FileView { name: f.name.clone(), units, label: None });
+                    views.push(FileView { name: name.clone(), units, label: None });
                 }
             }
         }
-        Ok((files, views))
+        Ok((raw, views))
+    }
+
+    /// Файли гри для збірки: розбираються з сирого тексту лише коли потрібні й одразу відпускаються.
+    pub fn game_files(&self) -> Vec<GameFile> {
+        self.game_raw.iter().map(|(n, t)| if n.to_lowercase().ends_with(".json") { GameFile { name: n.clone(), json: serde_json::from_str(t).unwrap_or(serde_json::Value::Null), text: None } } else { GameFile { name: n.clone(), json: serde_json::Value::Null, text: Some(t.clone()) } }).collect()
     }
 
     pub fn open_game(&mut self, dir: &Path) -> Result<usize, String> {
@@ -259,10 +270,10 @@ impl AppState {
                 self.last_note = ingest_note(&plan.report);
             }
         }
-        let snap: indexmap::IndexMap<String, Vec<Unit>> = views.iter().map(|v| (v.name.clone(), v.units.clone())).collect();
-        project.snapshot = serde_json::to_value(&snap).ok();
+        // знімок рядків гри пишеться у файл проєкту лише під час збереження: у пам'яті він удвічі збільшував би проєкт
+        project.snapshot = None;
         let n = views.len();
-        self.game = files;
+        self.game_raw = files;
         self.views = views;
         self.project = Some(project);
         self.dir = Some(dir.to_path_buf());
@@ -945,7 +956,7 @@ impl AppState {
         let dir = self.dir.clone().ok_or("Проєкт не відкрито")?;
         let key = self.unit(f, r).map(|u| u.key.clone()).ok_or("Немає рядка")?;
         let file = self.views[f].name.clone();
-        let target = transly_core::jump::jump_target(&file, &key, &self.game, from_line, 0).ok_or("З цього рядка гру запустити не можна: він не в сцені")?;
+        let target = transly_core::jump::jump_target(&file, &key, &self.game_files(), from_line, 0).ok_or("З цього рядка гру запустити не можна: він не в сцені")?;
         let built = self.build_with(&self.build_defaults())?;
         apply_jump(&self.roots, &dir.to_string_lossy(), &transly_core::jump::jump_plugin(&target))?;
         launch(&self.roots, &exe)?;
@@ -1350,11 +1361,15 @@ impl AppState {
 
     /// Записує `transly-project.json` поруч із текою гри (не всередині неї).
     pub fn save_project(&mut self) -> Result<String, String> {
-        let (Some(p), Some(dir)) = (&self.project, &self.dir) else { return Err("Проєкт не відкрито".into()) };
+        let (Some(p), Some(dir)) = (self.project.as_mut(), &self.dir) else { return Err("Проєкт не відкрито".into()) };
         let path = project_path(dir, &p.name);
+        let snap: indexmap::IndexMap<&str, &[Unit]> = self.views.iter().map(|v| (v.name.as_str(), v.units.as_slice())).collect();
+        p.snapshot = serde_json::to_value(&snap).ok();
+        let text = serialize(p);
+        p.snapshot = None;
         // спершу тимчасовий файл, потім заміна: збій посеред запису не псує проєкт
         let tmp = path.with_extension("json.tmp");
-        std::fs::write(&tmp, serialize(p)).map_err(|e| e.to_string())?;
+        std::fs::write(&tmp, text).map_err(|e| e.to_string())?;
         std::fs::rename(&tmp, &path).map_err(|e| e.to_string())?;
         self.dirty = false;
         Ok(path.to_string_lossy().to_string())
@@ -1368,7 +1383,7 @@ impl AppState {
     fn build_result(&self, c: &BuildChoice) -> Result<transly_core::build::BuildResult, String> {
         let p = self.project.as_ref().ok_or("Проєкт не відкрито")?;
         let opts = BuildOptions { only_approved: c.only_approved, include_drafts: c.include_drafts && !c.only_approved, block_errors: c.block_errors, qa: self.qa_options() };
-        Ok(build(&self.game, &self.views, p, &opts))
+        Ok(build(&self.game_files(), &self.views, p, &opts))
     }
 
     /// Скільки рядків потрапить у збірку з такими параметрами: (у грі, поза збіркою, заблоковано помилками QA). Нічого не пишеться.
@@ -1977,6 +1992,48 @@ menu.quit=Quit game
         assert!(s2.last_note.contains("не вдалося прочитати"), "{}", s2.last_note);
         let kept = std::fs::read_dir(path.parent().unwrap()).unwrap().filter_map(|e| e.ok()).any(|e| e.file_name().to_string_lossy().contains("unreadable-") && std::fs::read_to_string(e.path()).is_ok_and(|t| t == "{ це не json"));
         assert!(kept, "копію нечитного файлу збережено");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    fn rss_mb() -> f64 {
+        let out = std::process::Command::new("powershell").args(["-NoProfile", "-Command", &format!("(Get-Process -Id {}).WorkingSet64", std::process::id())]).output().unwrap();
+        String::from_utf8_lossy(&out.stdout).trim().parse::<f64>().unwrap_or(0.0) / 1048576.0
+    }
+
+    /// Виміряти пам'ять на великому проєкті: `cargo test -p transly-app --release memory_on_a_big_project -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn memory_on_a_big_project() {
+        let base = std::env::temp_dir().join(format!("transly-app-big-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = base.join("MyGame").join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        let cmd = |code: i64, p: &str| format!(r#"{{"code":{code},"indent":0,"parameters":[{p}]}}"#);
+        for m in 1..=30 {
+            let mut events = String::from("null");
+            for e in 1..=120 {
+                let mut l: Vec<String> = Vec::new();
+                for i in 0..30 {
+                    l.push(cmd(101, r#""Face",0,0,2,"Speaker""#));
+                    l.push(cmd(401, &format!("\"Line number {i} of event {e} in map {m}: the traveler walked into the old village and met a friend.\"")));
+                }
+                l.push(cmd(0, ""));
+                events += &format!(r#",{{"id":{e},"name":"EV{e}","x":1,"y":1,"pages":[{{"conditions":{{}},"list":[{}],"trigger":0}}]}}"#, l.join(","));
+            }
+            std::fs::write(data.join(format!("Map{m:03}.json")), format!(r#"{{"displayName":"Map {m}","events":[{events}]}}"#)).unwrap();
+        }
+        println!("до відкриття: {:.0} МБ", rss_mb());
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        let rows: usize = (0..s.file_names().len()).map(|f| s.row_count(f)).sum();
+        println!("рядків {rows}; після відкриття: {:.0} МБ", rss_mb());
+        for f in 0..s.file_names().len() {
+            let _ = s.visible_len(f);
+            let _ = s.progress();
+        }
+        println!("після таблиць: {:.0} МБ", rss_mb());
+        s.save_project().unwrap();
+        println!("після збереження: {:.0} МБ", rss_mb());
         let _ = std::fs::remove_dir_all(&base);
     }
 

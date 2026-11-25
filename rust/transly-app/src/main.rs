@@ -17,7 +17,15 @@ fn main() -> eframe::Result {
     let opts = eframe::NativeOptions { viewport: egui::ViewportBuilder::default().with_inner_size([1360.0, 800.0]).with_min_inner_size([1000.0, 600.0]).with_title("Transly"), ..Default::default() };
     eframe::run_native("Transly", opts, Box::new(|cc| {
         theme::apply(&cc.egui_ctx);
-        Ok(Box::new(App::default()))
+        let mut app = App::default();
+        // `transly-app <тека гри>`: відкрити гру одразу
+        if let Some(dir) = std::env::args_os().nth(1).map(std::path::PathBuf::from).filter(|d| d.is_dir()) {
+            app.message = match app.st.open_game(&dir) {
+                Ok(n) => format!("Відкрито: {n} файлів із текстом"),
+                Err(e) => e,
+            };
+        }
+        Ok(Box::new(app))
     }))
 }
 

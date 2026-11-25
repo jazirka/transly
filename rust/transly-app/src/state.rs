@@ -88,6 +88,7 @@ struct Visible {
 type QaCache = ((usize, u64), Vec<(usize, String, bool)>);
 
 pub struct AppState {
+    undo: transly_core::undostack::UndoStack,
     pub host: PluginHost,
     pub sync_state: FilesState,
     sync_rx: Option<std::sync::mpsc::Receiver<Result<FilesReport, String>>>,
@@ -114,7 +115,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None }
+        AppState { undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None }
     }
 }
 
@@ -607,7 +608,8 @@ impl AppState {
         };
         let n = changes.len();
         let p = self.project.as_mut().ok_or("Проєкт не відкрито")?;
-        commit_rows(&mut p.files, &changes, "replace", &who, now_ms(), None, &mut rand);
+        let id = commit_rows(&mut p.files, &changes, "replace", &who, now_ms(), None, &mut rand);
+        self.undo.record(&id);
         self.rev += 1;
         self.dirty = true;
         Ok(n)
@@ -624,6 +626,88 @@ impl AppState {
             }
             Err(e) => e,
         }
+    }
+
+    fn seeded_rand() -> impl FnMut() -> u32 {
+        let mut seed = (now_ms() as u32) | 1;
+        move || {
+            seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+            seed >> 8
+        }
+    }
+
+    /// Надсилає всі чернетки (файлу `only` чи всього проєкту) однією дією журналу; рядки з помилкою QA лишаються.
+    pub fn bulk_send(&mut self, only: Option<usize>) -> String {
+        self.bulk(only, false)
+    }
+
+    /// Затверджує всі надіслані рядки (вичитка) однією дією журналу.
+    pub fn bulk_approve(&mut self, only: Option<usize>) -> String {
+        self.bulk(only, true)
+    }
+
+    fn bulk(&mut self, only: Option<usize>, approve: bool) -> String {
+        let Some(p) = self.project.as_ref() else { return "Проєкт не відкрито".into() };
+        let opts = SubmitOptions { qa: self.qa_options(), block_errors: self.settings_view().is_none_or(|v| v.block_errors) };
+        let now = now_ms();
+        let (mut changes, mut blocked) = (Vec::new(), 0usize);
+        for (fi, v) in self.views.iter().enumerate() {
+            if only.is_some_and(|o| o != fi) {
+                continue;
+            }
+            let Some(ents) = p.files.get(&v.name) else { continue };
+            for u in &v.units {
+                let Some(e) = ents.get(&u.key) else { continue };
+                let st = row_state(Some(e));
+                if (approve && st != RowState::Sent) || (!approve && st != RowState::Draft) {
+                    continue;
+                }
+                let res = if approve { transly_core::workflow::approve_entry(Some(e), u, now, &opts) } else { submit(Some(e), u, Stage::Translate, now, &opts) };
+                match res {
+                    SubmitResult::Ok(next) => changes.push(transly_core::journal::RowChange { file: v.name.clone(), key: u.key.clone(), text: next.target.clone(), next, what: None }),
+                    SubmitResult::Err(_) => blocked += 1,
+                }
+            }
+        }
+        if changes.is_empty() {
+            return if blocked > 0 { format!("Нічого не {}: {blocked} з помилками QA", if approve { "вичитано" } else { "надіслано" }) } else { "Немає рядків для цієї дії".into() };
+        }
+        let n = changes.len();
+        let who = self.who();
+        let p = self.project.as_mut().expect("проєкт відкрито");
+        let id = commit_rows(&mut p.files, &changes, if approve { "approve" } else { "send" }, &who, now, None, &mut Self::seeded_rand());
+        self.undo.record(&id);
+        self.rev += 1;
+        self.dirty = true;
+        format!("{}: {n}{}", if approve { "Вичитано" } else { "Надіслано" }, if blocked > 0 { format!(", з помилками QA лишилось {blocked}") } else { String::new() })
+    }
+
+    /// Скасовує найновішу масову дію цього сеансу (далі — попередні; після перезапуску лінія береться з журналу).
+    pub fn undo_last(&mut self) -> String {
+        let who = self.who();
+        let Some(p) = self.project.as_mut() else { return "Проєкт не відкрито".into() };
+        if !self.undo.used {
+            let ids: Vec<String> = transly_core::journal::journal_batches(&self.views, &p.files, 50).into_iter().map(|b| b.id).collect();
+            self.undo.seed(&ids);
+        }
+        let Some(id) = self.undo.take_undo() else { return "Немає дій для скасування".into() };
+        let r = transly_core::journal::undo_journal(&mut p.files, &id, &who, now_ms(), &mut Self::seeded_rand());
+        self.undo.undone(&id, &r.batch);
+        self.rev += 1;
+        self.dirty = true;
+        transly_core::journal::undo_report(&r)
+    }
+
+    /// Повторює скасоване.
+    pub fn redo_last(&mut self) -> String {
+        let who = self.who();
+        let Some(p) = self.project.as_mut() else { return "Проєкт не відкрито".into() };
+        let Some(id) = self.undo.take_redo() else { return "Немає що повторювати".into() };
+        let r = transly_core::journal::undo_journal(&mut p.files, &id, &who, now_ms(), &mut Self::seeded_rand());
+        self.undo.redone(&id, &r.batch);
+        self.rev += 1;
+        self.dirty = true;
+        transly_core::journal::undo_report(&r)
     }
 
     pub fn key_of(&self, f: usize, r: usize) -> String {
@@ -861,6 +945,34 @@ menu.quit=Quit game
         assert!(s.import_plugin_glossary("acme.qa", "g").contains("Додано термінів: 1"));
         assert_eq!(s.terms().len(), 1);
         assert!(s.import_plugin_glossary("acme.qa", "g").contains("Додано термінів: 0"), "вдруге нічого нового");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn bulk_send_approve_and_undo() {
+        let base = std::env::temp_dir().join(format!("transly-app-bulk-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = base.join("MyGame").join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        std::fs::write(data.join("Actors.json"), r#"[null,{"id":1,"name":"One","nickname":"","profile":"","note":""},{"id":2,"name":"Two","nickname":"","profile":"","note":""}]"#).unwrap();
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        s.edit(0, 0, "Один");
+        s.edit(0, 1, "Два");
+        assert_eq!(s.progress().draft, 2);
+        let m = s.bulk_send(None);
+        assert!(m.starts_with("Надіслано: 2"), "{m}");
+        assert_eq!(s.progress().sent, 2);
+        assert_eq!(s.bulk_send(None), "Немає рядків для цієї дії");
+        let m = s.bulk_approve(Some(0));
+        assert!(m.starts_with("Вичитано: 2"), "{m}");
+        assert_eq!(s.progress().approved, 2);
+        // скасування вичитки, потім надсилання
+        assert!(s.undo_last().starts_with("Скасовано"), "перше скасування");
+        assert_eq!(s.progress().sent, 2);
+        assert!(s.redo_last().starts_with("Повторено"));
+        assert_eq!(s.progress().approved, 2);
+        assert_eq!(s.redo_last(), "Немає що повторювати");
         let _ = std::fs::remove_dir_all(&base);
     }
 

@@ -27,6 +27,7 @@ struct App {
     term_en: String,
     term_uk: String,
     itab: usize,
+    find_win: Option<(String, String, bool, bool)>,
     plugins_win: bool,
     sync_win: Option<(transly_platform::github::GithubSettings, String)>,
     settings: Option<state::SettingsView>,
@@ -72,7 +73,7 @@ fn source_job(text: &str, marks: &[(usize, usize, usize)]) -> egui::text::Layout
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
     }
 }
 
@@ -140,6 +141,7 @@ impl eframe::App for App {
         self.settings_window(ctx);
         self.sync_window(ctx);
         self.plugins_window(ctx);
+        self.find_window(ctx);
         if let Some(msg) = self.st.finish_sync() {
             self.message = msg;
         }
@@ -208,6 +210,40 @@ impl App {
                     if plain_button(ui, if self.st.syncing() { "Синхронізація…" } else { "Синхронізувати" }).clicked() {
                         self.sync_win = Some((self.st.github_settings(), self.token.clone()));
                     }
+                    ui.menu_button("Дії", |ui| {
+                        let f = self.st.file;
+                        if ui.button("Надіслати чернетки файлу").clicked() {
+                            self.message = self.st.bulk_send(f);
+                            ui.close_menu();
+                        }
+                        if ui.button("Надіслати всі чернетки проєкту").clicked() {
+                            self.message = self.st.bulk_send(None);
+                            ui.close_menu();
+                        }
+                        if ui.button("Вичитати надіслані файлу").clicked() {
+                            self.message = self.st.bulk_approve(f);
+                            ui.close_menu();
+                        }
+                        if ui.button("Вичитати всі надіслані").clicked() {
+                            self.message = self.st.bulk_approve(None);
+                            ui.close_menu();
+                        }
+                        ui.separator();
+                        if ui.button("Скасувати останню дію").clicked() {
+                            self.message = self.st.undo_last();
+                            self.draft_for = None;
+                            ui.close_menu();
+                        }
+                        if ui.button("Повторити скасоване").clicked() {
+                            self.message = self.st.redo_last();
+                            self.draft_for = None;
+                            ui.close_menu();
+                        }
+                        if ui.button("Пошук і заміна…").clicked() {
+                            self.find_win = Some((String::new(), String::new(), false, false));
+                            ui.close_menu();
+                        }
+                    });
                     if plain_button(ui, "Плагіни").clicked() {
                         self.plugins_win = true;
                     }
@@ -552,6 +588,54 @@ impl App {
         }
         if !open {
             self.plugins_win = false;
+        }
+    }
+
+    fn find_window(&mut self, ctx: &egui::Context) {
+        let Some((mut find, mut repl, mut case, mut word)) = self.find_win.clone() else { return };
+        let mut open = true;
+        let (mut apply, mut close) = (false, false);
+        let step = transly_core::commands::ReplaceStep { find: find.clone(), replace: repl.clone(), whole_word: word, case_sensitive: case };
+        let count = self.st.run_replace(std::slice::from_ref(&step), false).unwrap_or(0);
+        egui::Window::new("Пошук і заміна в перекладах").open(&mut open).collapsible(false).resizable(false).default_width(420.0).show(ctx, |ui| {
+            egui::Grid::new("find_grid").num_columns(2).spacing([14.0, 10.0]).show(ui, |ui| {
+                ui.label("Знайти");
+                ui.text_edit_singleline(&mut find);
+                ui.end_row();
+                ui.label("Замінити на");
+                ui.text_edit_singleline(&mut repl);
+                ui.end_row();
+                ui.label("Враховувати регістр");
+                ui.checkbox(&mut case, "");
+                ui.end_row();
+                ui.label("Лише ціле слово");
+                ui.checkbox(&mut word, "");
+                ui.end_row();
+            });
+            ui.add_space(6.0);
+            ui.label(RichText::new(if find.is_empty() { "Введіть, що шукати".to_string() } else { format!("Буде змінено рядків: {count}") }).color(MUTE));
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                if ui.add_enabled(count > 0, egui::Button::new(RichText::new("Замінити все").color(Color32::WHITE)).fill(ACCENT).min_size(vec2(0.0, 26.0))).clicked() {
+                    apply = true;
+                }
+                if plain_button(ui, "Закрити").clicked() {
+                    close = true;
+                }
+            });
+        });
+        if apply {
+            let step = transly_core::commands::ReplaceStep { find: find.clone(), replace: repl.clone(), whole_word: word, case_sensitive: case };
+            self.message = match self.st.run_replace(&[step], true) {
+                Ok(n) => format!("Замінено в рядках: {n}"),
+                Err(e) => e,
+            };
+            self.draft_for = None;
+        }
+        if close || !open {
+            self.find_win = None;
+        } else {
+            self.find_win = Some((find, repl, case, word));
         }
     }
 

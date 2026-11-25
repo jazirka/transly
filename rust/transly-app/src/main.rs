@@ -1886,6 +1886,10 @@ mod ui_tests {
         assert_eq!(h.state().st.target_of(f, row), "У залі тихо.");
         assert!(h.state().scene_draft.is_none());
         assert_eq!(h.state().st.progress().sent, 1);
+        assert_eq!(h.state().st.map_title(f).as_deref(), Some("Зал"));
+        h.get_by_label("Вичитати сцену").click();
+        h.run();
+        assert_eq!(h.state().st.progress().approved, 1, "«Вичитати сцену» затверджує надіслані репліки");
     }
 
     #[test]

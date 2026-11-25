@@ -129,11 +129,13 @@ impl App {
             }
         };
         let folders = [("data", 0usize), ("maps", 1), ("Тексти", 2)];
+        let has_data = (0..names.len()).any(|i| kind(&names[i]) == 0);
         egui::ScrollArea::vertical().id_salt("treescroll").auto_shrink([false; 2]).show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
             ui.add_space(4.0);
-            let inset = 6.0;
             for (title, k) in folders {
+                // як у старому: мапи лежать усередині data
+                let inset = if k == 1 && has_data { 20.0 } else { 6.0 };
                 let members: Vec<usize> = (0..names.len()).filter(|i| kind(&names[*i]) == k).collect();
                 if members.is_empty() {
                     continue;
@@ -199,7 +201,17 @@ impl App {
                         rect.right() - 8.0
                     };
                     let clip = Rect::from_min_max(pos2(badge.right() + 6.0, rect.top()), pos2(name_right, rect.bottom()));
-                    ui.painter().with_clip_rect(clip).text(pos2(clip.left(), rect.center().y), Align2::LEFT_CENTER, stem, ip(12.5), TEXT);
+                    let painter = ui.painter().with_clip_rect(clip);
+                    match self.st.map_title(i) {
+                        Some(t) => {
+                            let tw = ui.painter().layout_no_wrap(t.clone(), ip(12.5), TEXT).size().x;
+                            painter.text(pos2(clip.left(), rect.center().y), Align2::LEFT_CENTER, t, ip(12.5), TEXT);
+                            painter.text(pos2(clip.left() + tw + 8.0, rect.center().y), Align2::LEFT_CENTER, &stem, ip(12.0), MUTE);
+                        }
+                        None => {
+                            painter.text(pos2(clip.left(), rect.center().y), Align2::LEFT_CENTER, &stem, ip(12.5), TEXT);
+                        }
+                    }
                     if resp.clicked() {
                         self.st.file = Some(i);
                         self.st.row = None;
@@ -477,6 +489,16 @@ impl App {
                         self.scene_draft = None;
                         self.message = format!("Сцену надіслано: {ok} реплік{}", if bad > 0 { format!(", {bad} не пройшли перевірку") } else { String::new() });
                     }
+                    if plain_button(ui, "Вичитати сцену").clicked() {
+                        let (mut ok, mut bad) = (0, 0);
+                        for line in v.lines.iter().filter(|x| x.status == RowStatus::Sent) {
+                            match self.st.approve_row(f, line.row) {
+                                Ok(()) => ok += 1,
+                                Err(_) => bad += 1,
+                            }
+                        }
+                        self.message = format!("Сцену вичитано: {ok} реплік{}", if bad > 0 { format!(", {bad} не пройшли перевірку") } else { String::new() });
+                    }
                     if plain_button(ui, "Як у грі").clicked() {
                         if self.st.game_exe().is_none() {
                             if let Some(p) = rfd::FileDialog::new().set_title("Оберіть програму гри (Game.exe)").add_filter("Програма", &["exe"]).pick_file() {
@@ -576,10 +598,11 @@ impl App {
         let (mut pick, mut close): (Option<usize>, Option<usize>) = (None, None);
         for t in self.st.tabs.clone() {
             let Some(tn) = names.get(t) else { continue };
-            let stem = tn.trim_end_matches(".json").to_string();
+            let map = self.st.map_title(t);
+            let stem = map.clone().unwrap_or_else(|| tn.trim_end_matches(".json").to_string());
             let galley = ui.painter().layout_no_wrap(stem, ip(12.5), TEXT);
             let on = t == f;
-            let tw = galley.size().x + 69.0;
+            let tw = galley.size().x + 69.0 + if map.is_some() { 8.0 } else { 0.0 };
             let rect = Rect::from_min_size(pos2(x, tabs.top()), vec2(tw, 33.0));
             let resp = ui.interact(rect, ui.id().with(("tab", t)), Sense::click());
             resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, format!("Вкладка {tn}")));
@@ -589,9 +612,10 @@ impl App {
             } else if resp.hovered() {
                 ui.painter().rect_filled(rect, CornerRadius::same(8), GHOST_HOVER);
             }
-            let chip = Rect::from_min_size(pos2(rect.left() + 9.0, rect.center().y - 8.0), vec2(20.0, 16.0));
-            ui.painter().rect_filled(chip, CornerRadius::same(R1), Color32::from_rgb(0x3b, 0x35, 0x24));
-            ui.painter().text(chip.center(), Align2::CENTER_CENTER, "{}", mp(12.0), Color32::from_rgb(0xe5, 0xc0, 0x6a));
+            let chip = Rect::from_min_size(pos2(rect.left() + 9.0, rect.center().y - 8.0), vec2(if map.is_some() { 28.0 } else { 20.0 }, 16.0));
+            let (badge, bg, fg, bf) = if map.is_some() { ("MAP", Color32::from_rgb(0x1f, 0x3a, 0x2c), OK, 9.0) } else { ("{}", Color32::from_rgb(0x3b, 0x35, 0x24), Color32::from_rgb(0xe5, 0xc0, 0x6a), 12.0) };
+            ui.painter().rect_filled(chip, CornerRadius::same(R1), bg);
+            ui.painter().text(chip.center(), Align2::CENTER_CENTER, badge, mp(bf), fg);
             ui.painter().galley(pos2(chip.right() + 5.0, rect.center().y - galley.size().y / 2.0), galley.clone(), if on { Color32::WHITE } else { MUTE });
             let cx = Rect::from_center_size(pos2(rect.right() - 17.0, rect.center().y), vec2(24.0, 24.0));
             let cr = ui.interact(cx, ui.id().with(("tabx", t)), Sense::click());

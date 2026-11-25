@@ -419,6 +419,32 @@ impl AppState {
         }
     }
 
+    /// Вичитує (затверджує) надісланий рядок.
+    pub fn approve_row(&mut self, f: usize, r: usize) -> Result<(), String> {
+        let Some(u) = self.unit(f, r).cloned() else { return Err("Немає рядка".into()) };
+        let name = self.views[f].name.clone();
+        let block = self.settings_view().is_none_or(|v| v.block_errors);
+        let opts = SubmitOptions { qa: self.qa_options(), block_errors: block };
+        match transly_core::workflow::approve_entry(self.entry(f, r), &u, now_ms(), &opts) {
+            SubmitResult::Ok(e) => {
+                let e = record_change(self.entry(f, r), &e, "вичитано", &e.target.clone(), &self.who(), now_ms(), None);
+                self.put(f, name, u.key, e);
+                Ok(())
+            }
+            SubmitResult::Err(m) => Err(m),
+        }
+    }
+
+    /// Назва мапи («Зал») для файлів `MapNNN`: оригінал рядка `displayName`.
+    pub fn map_title(&self, f: usize) -> Option<String> {
+        let v = self.views.get(f)?;
+        if !v.name.rsplit('/').next()?.starts_with("Map") {
+            return None;
+        }
+        let u = v.units.iter().find(|u| u.key == "displayName")?;
+        (!u.source.is_empty()).then(|| u.source.clone())
+    }
+
     fn status_of(&self, f: usize, r: usize) -> RowStatus {
         self.row_view(f, r).2
     }

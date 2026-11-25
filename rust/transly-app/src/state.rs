@@ -219,8 +219,20 @@ impl AppState {
         let name = if name.is_empty() { "Новий проєкт".to_string() } else { name };
         // проєкт, збережений раніше, підхоплюється; рядки, чий оригінал змінився, повертаються в чернетки
         let path = project_path(dir, &name);
+        let mut unreadable = String::new();
         let mut project = match std::fs::read_to_string(&path) {
-            Ok(t) => deserialize(&t, Some(now_ms())).unwrap_or_else(|_| empty_project(&name, "en", "uk")),
+            Ok(t) => match deserialize(&t, Some(now_ms())) {
+                Ok(p) => p,
+                Err(e) => {
+                    // нечитний файл ніколи не перезаписується мовчки: копія лишається поруч, а проєкт починається порожнім
+                    let keep = path.with_extension(format!("unreadable-{}.json", now_ms()));
+                    unreadable = match std::fs::copy(&path, &keep) {
+                        Ok(_) => format!("Збережений проєкт не вдалося прочитати ({e}). Його копію збережено: {}", keep.display()),
+                        Err(c) => return Err(format!("Збережений проєкт не вдалося прочитати ({e}), а копію зробити не вдалося ({c}). Нічого не змінено")),
+                    };
+                    empty_project(&name, "en", "uk")
+                }
+            },
             Err(_) => empty_project(&name, "en", "uk"),
         };
         for v in &views {
@@ -229,7 +241,7 @@ impl AppState {
             }
         }
         // гра могла оновитися: переклади зіставляються з новими рядками за текстом оригіналу (ключі зсуваються)
-        self.last_note = String::new();
+        self.last_note = unreadable;
         *self.scene_cache.borrow_mut() = (usize::MAX, None);
         *self.auto_limit.borrow_mut() = None;
         let old_snap: Option<indexmap::IndexMap<String, Vec<Unit>>> = project.snapshot.as_ref().and_then(|v| serde_json::from_value(v.clone()).ok());
@@ -1946,6 +1958,25 @@ menu.quit=Quit game
         assert_eq!(s.target_of(0, 0), "Мій", "без вибору лишається мій");
         s.merge_branch_with("b", &|_| Some(transly_core::branches::Decision::Theirs)).unwrap();
         assert_eq!(s.target_of(0, 0), "Їхній");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn an_unreadable_project_is_kept_not_overwritten() {
+        let base = std::env::temp_dir().join(format!("transly-app-unreadable-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = game(&base);
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        s.edit(0, 0, "Переклад");
+        s.save_project().unwrap();
+        let path = project_path(&data, &name_from_folder(&data.to_string_lossy()));
+        std::fs::write(&path, "{ це не json").unwrap();
+        let mut s2 = AppState::default();
+        s2.open_game(&data).unwrap();
+        assert!(s2.last_note.contains("не вдалося прочитати"), "{}", s2.last_note);
+        let kept = std::fs::read_dir(path.parent().unwrap()).unwrap().filter_map(|e| e.ok()).any(|e| e.file_name().to_string_lossy().contains("unreadable-") && std::fs::read_to_string(e.path()).is_ok_and(|t| t == "{ це не json"));
+        assert!(kept, "копію нечитного файлу збережено");
         let _ = std::fs::remove_dir_all(&base);
     }
 

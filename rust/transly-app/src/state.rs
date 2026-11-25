@@ -290,7 +290,8 @@ impl AppState {
         // (інакше файли з однаковою назвою з `data1`, резервних тек тощо рахувались би двічі); решта файлів — за відносним шляхом
         // шляхи з платформи мають префікс `\\?\`: для порівняння його знімаємо
         let norm = |t: &str| t.replace('\\', "/").trim_start_matches("//?/").to_string();
-        let root_n = norm(&d);
+        // платформа віддає канонічні шляхи (довгі імена, `\?\`): корінь теж канонічний, інакше на Windows із короткими іменами (RUNNER~1) префікс не знімався б
+        let root_n = norm(&std::fs::canonicalize(dir).map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|_| d.clone()));
         let rel = |path: &str| -> String {
             let p = norm(path);
             p.strip_prefix(root_n.as_str()).unwrap_or(&p).trim_start_matches('/').to_string()

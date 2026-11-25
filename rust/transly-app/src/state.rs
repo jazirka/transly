@@ -1513,6 +1513,11 @@ impl AppState {
         self.dirty = true;
     }
 
+    /// Де відбувається рядок (подія, сцена, вид даних): позначка в таблиці.
+    pub fn context_of(&self, f: usize, r: usize) -> String {
+        self.unit(f, r).map(|u| u.context.clone()).unwrap_or_default()
+    }
+
     pub fn key_of(&self, f: usize, r: usize) -> String {
         self.unit(f, r).map_or(String::new(), |u| u.key.clone())
     }

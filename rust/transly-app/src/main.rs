@@ -1865,22 +1865,29 @@ impl App {
             self.compact_list(ui, f);
             return;
         }
-        // колонки: №, стан, ключ, оригінал, переклад
-        let fixed = [34.0_f32, 22.0, 150.0];
-        let flex = ((w - fixed.iter().sum::<f32>() - 12.0) / 2.0).max(120.0);
-        let cols = [fixed[0], fixed[1], fixed[2], flex, flex];
+        // колонки, як у старому застосунку: №, стан, ключ, мовець, оригінал, переклад, позначки, довжина
+        let wide = w > 1000.0;
+        let fixed = [34.0_f32, 30.0, 96.0, 104.0];
+        let tail = [if wide { 128.0_f32 } else { 0.0 }, 68.0];
+        let flex = ((w - fixed.iter().sum::<f32>() - tail.iter().sum::<f32>() - 12.0) / 2.0).max(120.0);
+        let cols = [fixed[0], fixed[1], fixed[2], fixed[3], flex, flex, tail[0], tail[1]];
+        let titles = ["№", "", "Ключ", "Мовець", "Оригінал", "Переклад", if wide { "Позначки" } else { "" }, "Довж."];
         let (hdr, _) = ui.allocate_exact_size(vec2(w, 26.0), Sense::hover());
         ui.painter().rect_filled(hdr, CornerRadius::ZERO, PANEL);
         ui.painter().hline(hdr.x_range(), hdr.bottom(), Stroke::new(1.0_f32, LINE));
         let mut x = hdr.left();
-        for (title, cw) in ["№", "", "Ключ", "Оригінал", "Переклад"].iter().zip(cols) {
-            ui.painter().text(pos2(x + 8.0, hdr.center().y), Align2::LEFT_CENTER, title, FontId::proportional(11.0), MUTE);
-            x += cw;
-            ui.painter().vline(x, hdr.y_range(), Stroke::new(1.0_f32, Color32::from_rgb(0x33, 0x35, 0x3a)));
+        for (title, cw) in titles.iter().zip(cols) {
+            if cw > 0.0 {
+                ui.painter().text(pos2(x + 8.0, hdr.center().y), Align2::LEFT_CENTER, title, FontId::proportional(11.0), MUTE);
+                x += cw;
+                ui.painter().vline(x, hdr.y_range(), Stroke::new(1.0_f32, Color32::from_rgb(0x33, 0x35, 0x3a)));
+            }
         }
         let total = self.st.visible_len(f);
-        let row_h = 30.0;
-        egui::ScrollArea::vertical().auto_shrink([false; 2]).show_rows(ui, row_h, total, |ui, range| {
+        let row_h = 46.0;
+        let bad_rows: std::collections::HashSet<usize> = self.st.file_issues(f).into_iter().map(|i| i.0).collect();
+        let list_h = (ui.available_height() - 26.0).max(60.0);
+        egui::ScrollArea::vertical().auto_shrink([false; 2]).max_height(list_h).show_rows(ui, row_h, total, |ui, range| {
             ui.spacing_mut().item_spacing.y = 0.0;
             for i in range {
                 let Some(r) = self.st.visible_at(f, i) else { continue };
@@ -1891,31 +1898,103 @@ impl App {
                 ui.painter().hline(rect.x_range(), rect.bottom(), Stroke::new(1.0_f32, LINE_SOFT));
                 let (src, tgt, st) = self.st.row_view(f, r);
                 resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, sel, format!("{src} — {tgt}")));
-                let key = self.st.key_of(f, r);
+                let key = short_key(&self.st.key_of(f, r));
+                let who = self.st.speaker_of_row(f, r);
                 let mut x = rect.left();
                 let cell = |x: f32, cw: f32| Rect::from_min_size(pos2(x, rect.top()), vec2(cw, row_h));
                 ui.painter().text(pos2(x + cols[0] - 6.0, rect.center().y), Align2::RIGHT_CENTER, format!("{}", r + 1), FontId::monospace(11.0), DIM);
                 x += cols[0];
-                paint_dot(ui, pos2(x + cols[1] / 2.0, rect.center().y), st);
+                paint_state(ui, pos2(x + cols[1] / 2.0, rect.center().y), st, bad_rows.contains(&r));
                 x += cols[1];
                 ui.painter().with_clip_rect(cell(x, cols[2])).text(pos2(x + 8.0, rect.center().y), Align2::LEFT_CENTER, key, FontId::monospace(11.0), MUTE);
                 x += cols[2];
-                ui.painter().with_clip_rect(cell(x, cols[3])).text(pos2(x + 8.0, rect.center().y), Align2::LEFT_CENTER, src.replace('\n', " / "), FontId::proportional(12.5), SRC_TEXT);
+                ui.painter().with_clip_rect(cell(x, cols[3])).text(pos2(x + 8.0, rect.center().y), Align2::LEFT_CENTER, who, FontId::proportional(12.0), VIOLET);
                 x += cols[3];
-                let tcell = cell(x, cols[4]);
+                let wrapped = |ui: &egui::Ui, text: &str, color: Color32, size: f32, cw: f32| ui.painter().layout(text.replace('\n', " ").to_string(), FontId::proportional(size), color, cw - 16.0);
+                let g = wrapped(ui, &src, SRC_TEXT, 12.5, cols[4]);
+                let gy = rect.center().y - g.size().y / 2.0;
+                ui.painter().with_clip_rect(cell(x, cols[4])).galley(pos2(x + 8.0, gy.max(rect.top() + 3.0)), g, SRC_TEXT);
+                x += cols[4];
+                let tcell = cell(x, cols[5]);
                 if tgt.is_empty() {
-                    ui.painter().with_clip_rect(tcell).text(pos2(x + 8.0, rect.center().y), Align2::LEFT_CENTER, "—", FontId::proportional(12.5), DIM);
+                    ui.painter().with_clip_rect(tcell).text(pos2(x + 8.0, rect.center().y), Align2::LEFT_CENTER, "не перекладено", FontId::proportional(12.5), DIM);
                 } else {
-                    ui.painter().with_clip_rect(tcell).text(pos2(x + 8.0, rect.center().y), Align2::LEFT_CENTER, tgt.replace('\n', " / "), FontId::proportional(12.5), TEXT);
+                    let g = wrapped(ui, &tgt, TEXT, 12.5, cols[5]);
+                    let gy = rect.center().y - g.size().y / 2.0;
+                    ui.painter().with_clip_rect(tcell).galley(pos2(x + 8.0, gy.max(rect.top() + 3.0)), g, TEXT);
                 }
                 if sel {
                     ui.painter().rect_stroke(tcell.shrink(1.0), CornerRadius::same(R1), Stroke::new(1.0_f32, ACCENT), StrokeKind::Inside);
+                }
+                x += cols[5];
+                if wide {
+                    let ctx = self.st.context_of(f, r);
+                    if !ctx.is_empty() {
+                        let g = ui.painter().layout_no_wrap(ctx, FontId::proportional(11.5), TEXT);
+                        let cw = (g.size().x + 22.0).min(cols[6] - 12.0);
+                        let chip = Rect::from_min_size(pos2(x + 6.0, rect.top() + 6.0), vec2(cw, 20.0));
+                        ui.painter().rect_filled(chip, CornerRadius::same(10), BTN);
+                        ui.painter().circle_filled(pos2(chip.left() + 8.0, chip.center().y), 3.0, ACCENT);
+                        ui.painter().with_clip_rect(chip.shrink2(vec2(4.0, 0.0))).galley(pos2(chip.left() + 15.0, chip.center().y - g.size().y / 2.0), g, TEXT);
+                    }
+                    x += cols[6];
+                }
+                if !tgt.is_empty() {
+                    let (t, o) = (tgt.chars().count(), src.chars().count());
+                    let dev = if o == 0 { 0.0 } else { (t as f64 / o as f64 - 1.0).abs() };
+                    let col = if dev > 0.4 { BAD } else if dev > 0.15 { WARN } else { TEXT };
+                    ui.painter().text(pos2(x + cols[7] - 8.0, rect.center().y), Align2::RIGHT_CENTER, format!("{t}/{o}"), FontId::monospace(11.0), col);
                 }
                 if resp.clicked() {
                     self.st.row = Some(r);
                 }
             }
         });
+        // умовні позначки внизу таблиці
+        let (leg, _) = ui.allocate_exact_size(vec2(w, 24.0), Sense::hover());
+        ui.painter().hline(leg.x_range(), leg.top(), Stroke::new(1.0_f32, LINE));
+        let mut lx = leg.left() + 14.0;
+        for (st, bad, label) in [(RowStatus::Untranslated, false, "без перекладу"), (RowStatus::Draft, false, "чернетка"), (RowStatus::Sent, false, "чекає вичитування"), (RowStatus::Approved, false, "вичитано"), (RowStatus::Untranslated, true, "є проблема QA")] {
+            paint_state(ui, pos2(lx, leg.center().y), st, bad);
+            let g = ui.painter().layout_no_wrap(label.to_string(), FontId::proportional(11.5), MUTE);
+            let wd = g.size().x;
+            ui.painter().galley(pos2(lx + 12.0, leg.center().y - g.size().y / 2.0), g, MUTE);
+            lx += wd + 36.0;
+        }
+    }
+}
+
+/// Позначка стану рядка, як у старому застосунку: ✓ вичитано, ● чернетка / чекає вичитування, ○ без перекладу, ▲ проблема QA.
+fn paint_state(ui: &egui::Ui, c: egui::Pos2, s: RowStatus, bad: bool) {
+    let p = ui.painter();
+    if bad {
+        let tri = vec![pos2(c.x, c.y - 5.5), pos2(c.x + 5.5, c.y + 4.5), pos2(c.x - 5.5, c.y + 4.5)];
+        p.add(egui::Shape::convex_polygon(tri, BAD, Stroke::NONE));
+        return;
+    }
+    match s {
+        RowStatus::Approved => {
+            p.circle_filled(c, 6.0, OK);
+            p.line_segment([pos2(c.x - 3.0, c.y), pos2(c.x - 1.0, c.y + 2.5)], Stroke::new(1.6_f32, BG));
+            p.line_segment([pos2(c.x - 1.0, c.y + 2.5), pos2(c.x + 3.0, c.y - 2.5)], Stroke::new(1.6_f32, BG));
+        }
+        RowStatus::Sent => {
+            p.circle_filled(c, 5.0, INFO);
+        }
+        RowStatus::Draft => {
+            p.circle_filled(c, 5.0, WARN);
+        }
+        RowStatus::Untranslated => {
+            p.circle_stroke(c, 4.5, Stroke::new(1.3_f32, DIM));
+        }
+    }
+}
+
+/// Ключ коротко: без шляху до сторінки події (`events[3].pages[0].list[12]` → `list[12]`).
+fn short_key(key: &str) -> String {
+    match key.rfind("].pages[") {
+        Some(i) => key[i + 2..].split_once("].").map_or(key.to_string(), |(_, rest)| rest.to_string()),
+        None => key.to_string(),
     }
 }
 
@@ -2050,7 +2129,8 @@ mod ui_tests {
     #[test]
     #[ignore]
     fn shots() {
-        let Some(dir) = std::env::var_os("TRANSLY_SHOTS").map(std::path::PathBuf::from) else { return };
+        let Some(dir_out) = std::env::var_os("TRANSLY_SHOTS").map(std::path::PathBuf::from) else { return };
+        let dir = dir_out.clone();
         std::fs::create_dir_all(&dir).unwrap();
         let data = game("shots");
         let mut app = App::default();
@@ -2065,6 +2145,19 @@ mod ui_tests {
         h.run();
         h.render().unwrap().save(dir.join("focus.png")).unwrap();
         h.state_mut().focus = false;
+        {
+            let cmd = |code: i64, p: &str| format!(r#"{{"code":{code},"indent":0,"parameters":[{p}]}}"#);
+            let l = [cmd(101, r#""",0,0,2,"Оповідач""#), cmd(401, r#""The hall is silent. Dust drifts through a single shaft of light, and something shifts in the dark beyond the pillars.""#), cmd(101, r#""",0,0,2,"Марина""#), cmd(401, r#""Hello? Is someone there?""#), cmd(0, "")].join(",");
+            let dir = h.state().st.dir.clone().unwrap();
+            std::fs::write(dir.join("Map001.json"), format!(r#"{{"displayName":"Зал","events":[null,{{"id":1,"name":"Зал вартових","x":1,"y":1,"pages":[{{"conditions":{{}},"list":[{l}],"trigger":0}}]}}]}}"#)).unwrap();
+            h.state_mut().st.open_game(&dir).unwrap();
+            h.state_mut().st.file = h.state().st.file_names().iter().position(|n| n == "Map001.json");
+            let fi = h.state().st.file.unwrap();
+            h.state_mut().st.edit(fi, 0, "У залі тихо. Пил кружляє в єдиному промені світла, і щось ворухнулось у темряві за колонами.");
+            h.state_mut().st.row = Some(0);
+        }
+        h.run();
+        h.render().unwrap().save(dir_out.join("map.png")).unwrap();
         h.state_mut().itab = 2;
         h.state_mut().qar_win = true;
         h.state_mut().wrap_win = Some((h.state().st.wrap_settings(), "Мандрівник дістався перекладацького містечка наприкінці осені, і там на нього чекав старий друг.".into(), false));

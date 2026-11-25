@@ -27,6 +27,7 @@ struct App {
     term_en: String,
     term_uk: String,
     itab: usize,
+    br_win: Option<String>,
     groups_win: Option<String>,
     ref_win: Option<String>,
     spk_win: Option<Vec<(transly_core::speakers::SpeakerCandidate, String)>>,
@@ -79,7 +80,7 @@ fn source_job(text: &str, marks: &[(usize, usize, usize)]) -> egui::text::Layout
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), itab: 0, br_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: true, focus: false, comment: String::new(), token: String::new() }
     }
 }
 
@@ -163,6 +164,7 @@ impl App {
         self.speakers_window(ctx);
         self.reference_window(ctx);
         self.groups_window(ctx);
+        self.branches_window(ctx);
         if let Some(msg) = self.st.finish_sync() {
             self.message = msg;
         }
@@ -255,6 +257,10 @@ impl App {
                 ui.menu_button("Інструменти", |ui| {
                     if ui.add_enabled(self.st.is_open(), egui::Button::new(if self.st.syncing() { "Синхронізація триває…" } else { "Синхронізація через GitHub…" })).clicked() {
                         self.act_sync();
+                        ui.close_menu();
+                    }
+                    if ui.add_enabled(self.st.is_open(), egui::Button::new("Гілки перекладу…")).clicked() {
+                        self.br_win = Some(String::new());
                         ui.close_menu();
                     }
                     if ui.add_enabled(self.st.is_open(), egui::Button::new("Групи рядків…")).clicked() {
@@ -413,6 +419,9 @@ impl App {
                     ui.label(RichText::new(format!("чернеток: {}", p.draft)).size(11.5).color(MUTE));
                     ui.label(RichText::new(format!("надіслано: {}", p.sent)).size(11.5).color(MUTE));
                     ui.label(RichText::new(format!("вичитано: {}", p.approved)).size(11.5).color(OK));
+                    if self.st.current_branch() != "main" {
+                        ui.label(RichText::new(format!("гілка: {}", self.st.current_branch())).size(11.5).color(VIOLET));
+                    }
                 } else {
                     ui.label(RichText::new("Гру не відкрито").size(11.5).color(MUTE));
                 }
@@ -1048,6 +1057,57 @@ impl App {
         }
         if open {
             self.groups_win = Some(name);
+        }
+    }
+
+    fn branches_window(&mut self, ctx: &egui::Context) {
+        let Some(mut name) = self.br_win.take() else { return };
+        let mut open = true;
+        let mut act: Option<(String, u8)> = None; // 0 перемкнути, 1 злити, 2 видалити
+        let mut create = false;
+        egui::Window::new("Гілки перекладу").open(&mut open).collapsible(false).default_width(480.0).show(ctx, |ui| {
+            ui.label(RichText::new("Гілка — окрема версія перекладу (наприклад, інший стиль). Злиття бере нові й змінені рядки, конфлікти лишає як є; його можна скасувати.").size(11.5).color(MUTE));
+            ui.add_space(6.0);
+            for (n, rows, cur) in self.st.branches_view() {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(if cur { format!("{n}  (поточна)") } else { n.clone() }).color(TEXT));
+                    ui.label(RichText::new(format!("рядків: {rows}")).size(11.0).color(MUTE));
+                    if !cur {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.small_button("Видалити").clicked() {
+                                act = Some((n.clone(), 2));
+                            }
+                            if ui.small_button("Злити сюди").clicked() {
+                                act = Some((n.clone(), 1));
+                            }
+                            if ui.small_button("Перемкнутись").clicked() {
+                                act = Some((n.clone(), 0));
+                            }
+                        });
+                    }
+                });
+            }
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                ui.add(egui::TextEdit::singleline(&mut name).hint_text("Назва нової гілки").desired_width(220.0));
+                if ui.add_enabled(!name.trim().is_empty(), egui::Button::new(RichText::new("Створити з поточної").color(Color32::WHITE)).fill(ACCENT).min_size(vec2(0.0, 26.0))).clicked() {
+                    create = true;
+                }
+            });
+        });
+        if let Some((n, k)) = act {
+            self.message = match k {
+                0 => self.st.switch_branch(&n).map(|_| format!("Гілка «{n}»")).unwrap_or_else(|e| e),
+                1 => self.st.merge_branch(&n).unwrap_or_else(|e| e),
+                _ => self.st.delete_branch(&n).map(|_| format!("Гілку «{n}» видалено")).unwrap_or_else(|e| e),
+            };
+        }
+        if create {
+            self.message = self.st.create_branch(&name).map(|_| format!("Гілка «{}»", name.trim())).unwrap_or_else(|e| e);
+            name.clear();
+        }
+        if open {
+            self.br_win = Some(name);
         }
     }
 

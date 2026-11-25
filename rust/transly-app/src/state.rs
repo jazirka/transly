@@ -1105,6 +1105,62 @@ impl AppState {
         n
     }
 
+    /// Гілки перекладу: (назва, рядків, поточна).
+    pub fn branches_view(&self) -> Vec<(String, usize, bool)> {
+        let Some(p) = self.project.as_ref() else { return vec![] };
+        let cur = transly_core::branches::branch_of(p);
+        transly_core::branches::branch_names(p).into_iter().map(|n| (transly_core::branches::rows_in(p, &n), n)).map(|(c, n)| { let is = n == cur; (n, c, is) }).collect()
+    }
+
+    pub fn current_branch(&self) -> String {
+        self.project.as_ref().map(transly_core::branches::branch_of).unwrap_or_default()
+    }
+
+    fn set_project_branch(&mut self, r: Result<SavedProject, String>) -> Result<(), String> {
+        let np = r?;
+        self.project = Some(np);
+        self.rev += 1;
+        self.dirty = true;
+        Ok(())
+    }
+
+    pub fn create_branch(&mut self, name: &str) -> Result<(), String> {
+        let p = self.project.as_ref().ok_or("Проєкт не відкрито")?;
+        let r = transly_core::branches::create_branch(p, name, now_ms());
+        self.set_project_branch(r)
+    }
+
+    pub fn switch_branch(&mut self, name: &str) -> Result<(), String> {
+        let p = self.project.as_ref().ok_or("Проєкт не відкрито")?;
+        let r = transly_core::branches::switch_branch(p, name);
+        self.set_project_branch(r)
+    }
+
+    pub fn delete_branch(&mut self, name: &str) -> Result<(), String> {
+        let p = self.project.as_ref().ok_or("Проєкт не відкрито")?;
+        let r = transly_core::branches::delete_branch(p, name, now_ms());
+        self.set_project_branch(r)
+    }
+
+    /// Зливає гілку в поточну: нові й змінені рядки беруться, конфлікти й вичитані лишаються. Одна дія журналу з «Скасувати».
+    pub fn merge_branch(&mut self, source: &str) -> Result<String, String> {
+        let p = self.project.as_ref().ok_or("Проєкт не відкрито")?;
+        let rows = transly_core::branches::diff_branches(p, source)?;
+        let conflicts = rows.iter().filter(|r| r.kind == transly_core::branches::DiffKind::Conflict).count();
+        let plan = transly_core::branches::plan_merge(p, &rows, &transly_core::branches::default_decision, now_ms());
+        let n = plan.changes.len();
+        let who = self.who();
+        let mut rand = Self::seeded_rand();
+        let p = self.project.as_mut().ok_or("Проєкт не відкрито")?;
+        if n > 0 {
+            let id = commit_rows(&mut p.files, &plan.changes, &plan.kind, &who, now_ms(), None, &mut rand);
+            self.undo.record(&id);
+            self.rev += 1;
+            self.dirty = true;
+        }
+        Ok(format!("Злито рядків: {n}; конфліктів лишилось (поточна гілка збережена): {conflicts}"))
+    }
+
     pub fn key_of(&self, f: usize, r: usize) -> String {
         self.unit(f, r).map_or(String::new(), |u| u.key.clone())
     }
@@ -1624,6 +1680,32 @@ menu.quit=Quit game
         assert!(s.auto_groups(false) == 0, "без сцен автогруп за сценами нема");
         s.delete_group(&id);
         assert!(s.groups_view().is_empty());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn branches_switch_and_merge() {
+        let base = std::env::temp_dir().join(format!("transly-app-branch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = game(&base);
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        s.edit(0, 0, "Основа");
+        assert_eq!(s.current_branch(), "main");
+        s.create_branch("варіант").unwrap();
+        assert_eq!(s.current_branch(), "варіант");
+        s.edit(0, 1, "Тільки тут");
+        assert!(s.create_branch("варіант").is_err());
+        s.switch_branch("main").unwrap();
+        assert_eq!(s.target_of(0, 1), "");
+        let msg = s.merge_branch("варіант").unwrap();
+        assert!(msg.starts_with("Злито рядків: 1"), "{msg}");
+        assert_eq!(s.target_of(0, 1), "Тільки тут");
+        assert!(!s.undo_last().is_empty());
+        assert_eq!(s.target_of(0, 1), "");
+        assert!(s.delete_branch("main").is_err());
+        s.delete_branch("варіант").unwrap();
+        assert_eq!(s.branches_view().len(), 1);
         let _ = std::fs::remove_dir_all(&base);
     }
 

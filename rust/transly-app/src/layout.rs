@@ -9,7 +9,7 @@ const CARD_R: u8 = 12;
 /// Виділення (біле 15 % на тлі картки) і рамка картки (біле 16 %) суцільними кольорами: без прозорості, щоб рендер у тестах і у вікні збігався.
 const SEL_GRAY: Color32 = Color32::from_rgb(64, 64, 67);
 const CARD_LINE: Color32 = Color32::from_rgb(66, 67, 70);
-const ROW_H: f32 = 34.0;
+const ROW_H: f32 = 36.0;
 
 /// Картка оболонки з відступами зліва й справа (проміжок між картками 6).
 pub(crate) fn card_lr(left: i8, right: i8) -> egui::Frame {
@@ -671,8 +671,9 @@ impl App {
             let resp = ui.interact(rect, ui.id().with(("tab", t)), Sense::click());
             resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, format!("Вкладка {tn}")));
             if on {
-                ui.painter().rect_filled(rect, CornerRadius::same(8), over_color(PANEL, accent(), 0.30));
-                ui.painter().rect_stroke(rect, CornerRadius::same(8), Stroke::new(1.0_f32, over_color(PANEL, accent(), 0.70)), StrokeKind::Inside);
+                let top = CornerRadius { nw: 8, ne: 8, sw: 0, se: 0 };
+                ui.painter().rect_filled(rect, top, over_color(PANEL, accent(), 0.30));
+                ui.painter().rect_stroke(rect, top, Stroke::new(1.0_f32, over_color(PANEL, accent(), 0.70)), StrokeKind::Inside);
             } else if resp.hovered() {
                 ui.painter().rect_filled(rect, CornerRadius::same(8), GHOST_HOVER);
             }

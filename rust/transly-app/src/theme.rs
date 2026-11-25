@@ -11,8 +11,8 @@ pub const LINE: Color32 = Color32::from_rgb(0x39, 0x3b, 0x40);
 pub const LINE_SOFT: Color32 = Color32::from_rgb(0x2a, 0x2c, 0x30);
 pub const TEXT: Color32 = Color32::from_rgb(0xdf, 0xe1, 0xe5);
 pub const SRC_TEXT: Color32 = Color32::from_rgb(0xc8, 0xcc, 0xd3);
-pub const MUTE: Color32 = Color32::from_rgb(0x86, 0x8a, 0x91);
-pub const DIM: Color32 = Color32::from_rgb(0x5f, 0x63, 0x69);
+pub const MUTE: Color32 = Color32::from_rgb(0xa9, 0xae, 0xb6);
+pub const DIM: Color32 = Color32::from_rgb(0x8f, 0x95, 0x9d);
 pub const OK: Color32 = Color32::from_rgb(0x5f, 0xb8, 0x65);
 pub const WARN: Color32 = Color32::from_rgb(0xe5, 0xa0, 0x4b);
 pub const BAD: Color32 = Color32::from_rgb(0xf7, 0x54, 0x64);
@@ -23,7 +23,7 @@ pub const BTN_HOVER: Color32 = Color32::from_rgb(0x3d, 0x40, 0x46);
 pub const GHOST_HOVER: Color32 = Color32::from_rgb(0x39, 0x3b, 0x40);
 pub const ZEBRA: Color32 = Color32::from_rgb(0x20, 0x22, 0x25);
 pub const ROW_HOVER: Color32 = Color32::from_rgb(0x26, 0x28, 0x2c);
-pub const TRACK: Color32 = Color32::from_rgb(0x3a, 0x3d, 0x42);
+pub const TRACK: Color32 = Color32::from_rgb(0x3d, 0x40, 0x45);
 pub const FILTERS_BG: Color32 = Color32::from_rgb(0x22, 0x24, 0x27);
 pub const TREE_HOVER: Color32 = Color32::from_rgb(0x34, 0x36, 0x3a);
 pub const INPUT_BG: Color32 = Color32::from_rgb(0x17, 0x18, 0x1a);
@@ -104,6 +104,11 @@ pub fn sel_use() -> Color32 {
 /// Вибраний рядок у вікні, де зараз не працюєш: нейтральний сірий.
 pub fn sel_soft() -> Color32 {
     over(BG, Color32::WHITE, 0.15)
+}
+
+/// Біле з прозорістю `a` поверх тла оболонки (стани наведення й вибору: `--hv` і `--on-bg` у вебі).
+pub fn over_ground(a: f32) -> Color32 {
+    over(GROUND, Color32::WHITE, a)
 }
 
 /// Тло оболонки між картками: трохи світліше за картки.

@@ -123,7 +123,8 @@ impl Default for UpdUi {
     }
 }
 
-const TERM_COLORS: [Color32; 4] = [VIOLET, INFO, OK, WARN];
+/// Кольори ниток рядка (`--s0…--s5` у вебі).
+pub(crate) const TERM_COLORS: [Color32; 6] = [VIOLET, INFO, OK, WARN, Color32::from_rgb(0xee, 0x7a, 0xa8), Color32::from_rgb(0x4c, 0xc9, 0xc0)];
 
 fn source_job_sized(text: &str, marks: &[(usize, usize, usize)], size: f32) -> egui::text::LayoutJob {
     use egui::text::{LayoutJob, TextFormat};
@@ -284,27 +285,25 @@ fn fmt_n(n: usize) -> String {
 
 /// Таблетка верхньої панелі: аватар з літерами проєкту чи піктограма, назва, стрілка; рамка — для головної дії.
 fn pill(ui: &mut egui::Ui, avatar: Option<&str>, icon: Option<&str>, text: &str, caret: bool, border: bool) -> egui::Response {
-    let galley = ui.painter().layout_no_wrap(text.to_string(), FontId::proportional(12.5), TEXT);
-    let lead = if avatar.is_some() { 31.0 } else if icon.is_some() { 27.0 } else { 10.0 };
-    let w = lead + galley.size().x + if caret { 26.0 } else { 12.0 };
-    let (rect, resp) = ui.allocate_exact_size(vec2(w, 29.0), Sense::click());
+    // розміри з комп'ютерних стилів веба: кнопка 28, заокруглення 8, шрифт 13; аватар 26 (відступ 4, проміжок 8); піктограма 16 (відступ 6 чи 12 у «збірки», проміжок 8 чи 7)
+    let galley = ui.painter().layout_no_wrap(text.to_string(), FontId::proportional(13.0), if border { Color32::from_rgb(0xc7, 0xca, 0xd1) } else { TEXT });
+    let (pad_l, lead, pad_r) = if avatar.is_some() { (4.0, 26.0 + 8.0, 6.0) } else if icon.is_some() { if border { (12.0, 16.0 + 7.0, 10.0) } else { (6.0, 16.0 + 8.0, 6.0) } } else { (10.0, 0.0, 6.0) };
+    let w = pad_l + lead + galley.size().x + if caret { 8.0 + 10.0 } else { 0.0 } + pad_r;
+    let (rect, resp) = ui.allocate_exact_size(vec2(w, 28.0), Sense::click());
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, text));
-    if border {
-        ui.painter().rect_filled(rect, CornerRadius::same(9), BTN);
-        ui.painter().rect_stroke(rect, CornerRadius::same(9), Stroke::new(1.0_f32, LINE), StrokeKind::Inside);
-    } else if resp.hovered() {
-        ui.painter().rect_filled(rect, CornerRadius::same(9), GHOST_HOVER);
+    if border || resp.hovered() {
+        ui.painter().rect_filled(rect, CornerRadius::same(8), over_ground(0.07));
     }
     if let Some(letters) = avatar {
-        let c = pos2(rect.left() + 17.0, rect.center().y);
-        ui.painter().circle_filled(c, 10.0, accent_solid());
-        ui.painter().text(c, Align2::CENTER_CENTER, letters, FontId::proportional(8.5), Color32::WHITE);
+        let c = pos2(rect.left() + pad_l + 13.0, rect.center().y);
+        ui.painter().circle_filled(c, 13.0, accent_solid());
+        ui.painter().text(c, Align2::CENTER_CENTER, letters, FontId::monospace(11.5), Color32::WHITE);
     } else if let Some(ic) = icon {
-        icons::paint(ui, Rect::from_center_size(pos2(rect.left() + 15.0, rect.center().y), vec2(15.0, 15.0)), ic, MUTE);
+        icons::paint(ui, Rect::from_center_size(pos2(rect.left() + pad_l + 8.0, rect.center().y), vec2(16.0, 16.0)), ic, MUTE);
     }
-    ui.painter().galley(pos2(rect.left() + lead, rect.center().y - galley.size().y / 2.0), galley.clone(), TEXT);
+    ui.painter().galley(pos2(rect.left() + pad_l + lead, rect.center().y - galley.size().y / 2.0), galley.clone(), TEXT);
     if caret {
-        icons::paint(ui, Rect::from_center_size(pos2(rect.left() + lead + galley.size().x + 12.0, rect.center().y), vec2(11.0, 11.0)), "caret", MUTE);
+        icons::paint(ui, Rect::from_center_size(pos2(rect.left() + pad_l + lead + galley.size().x + 8.0 + 5.0, rect.center().y), vec2(10.0, 10.0)), "caret", MUTE);
     }
     resp
 }
@@ -362,7 +361,8 @@ impl App {
         // підсвічення від значка проєкту (відтінок теми) на всьому тлі: еліпс 520×90 від верху вікна, згасає до нуля, як `.ide` у вебі
         glow(&ctx.layer_painter(egui::LayerId::background()), pos2(105.0, 0.0), vec2(520.0, 90.0), accent(), 0.16);
         self.hotkeys(ctx);
-        let hue = transly_core::theme::theme_hue(self.st.project.as_ref().map_or("Transly", |p| p.name.as_str()), self.st.project.as_ref().and_then(|p| p.settings.get("hue")));
+        let title = self.st.project.as_ref().map_or("Transly".to_string(), transly_core::projname::project_title);
+        let hue = transly_core::theme::theme_hue(&title, self.st.project.as_ref().and_then(|p| p.settings.get("hue")));
         if theme::set_hue(hue) {
             theme::apply_style(ctx);
         }
@@ -496,7 +496,7 @@ impl App {
                     ui.menu_button("Інструменти", |ui| self.menu_tools(ui));
                 });
                 // проєкт
-                let name = self.st.project.as_ref().map_or("Transly".to_string(), |p| p.name.clone());
+                let name = self.st.project.as_ref().map_or("Transly".to_string(), transly_core::projname::project_title);
                 let letters = self.st.project.as_ref().map_or("T".to_string(), transly_core::projname::icon_letters);
                 let resp = pill(ui, Some(&letters), None, &name, true, false);
                 pop(ui, &resp, "projpop", |ui| {
@@ -521,7 +521,7 @@ impl App {
                 ui.add_space(2.0);
                 // режим: Таблиця, Редагування, Сцена
                 ui.add_enabled_ui(can, |ui| {
-                    egui::Frame::new().fill(over_color(GROUND, accent(), 0.10)).corner_radius(CornerRadius::same(8)).inner_margin(egui::Margin::same(2)).show(ui, |ui| {
+                    egui::Frame::new().fill(over_ground(0.05)).corner_radius(CornerRadius::same(8)).inner_margin(egui::Margin::same(2)).show(ui, |ui| {
                         ui.spacing_mut().item_spacing.x = 2.0;
                         let modes = [("table", "Таблиця: усі рядки файлу", !self.focus && !self.scene_mode), ("edit", "Редагування: один рядок", self.focus && !self.scene_mode), ("scene", "Сцена: репліки подій поспіль", self.scene_mode)];
                         for (i, (ic, tip, on)) in modes.into_iter().enumerate() {
@@ -1028,7 +1028,7 @@ impl App {
     }
 
     fn statusbar(&mut self, ctx: &egui::Context) {
-        egui::TopBottomPanel::bottom("status").exact_height(22.0).show_separator_line(false).frame(egui::Frame::new().fill(Color32::TRANSPARENT).inner_margin(egui::Margin::symmetric(10, 0))).show(ctx, |ui| {
+        egui::TopBottomPanel::bottom("status").exact_height(24.0).show_separator_line(false).frame(egui::Frame::new().fill(Color32::TRANSPARENT).inner_margin(egui::Margin::symmetric(10, 0))).show(ctx, |ui| {
             ui.horizontal_centered(|ui| {
                 ui.spacing_mut().item_spacing.x = 14.0;
                 let small = |t: String, c: Color32| RichText::new(t).size(11.0).color(c);

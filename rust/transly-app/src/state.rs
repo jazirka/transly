@@ -448,6 +448,11 @@ impl AppState {
             },
             Err(_) => empty_project(&name, "en", "uk"),
         };
+        // назва теки гри — те, як зветься проєкт, поки перекладач не дасть свою (як `noteFolderName` у вебі)
+        if !name.is_empty() && project.settings.get("folderName").and_then(|v| v.as_str()) != Some(name.as_str()) {
+            project.settings.insert("folderName".into(), serde_json::json!(name));
+            project.settings_at = Some(now_ms());
+        }
         // команди плагінів із текстом: у проєкті вже обрані, а при першому відкритті (про них ще не питали) беруться схожі на текст для гравця,
         // як у старому застосунку (без цього тексти GabText тощо не потрапили б у таблицю)
         let mut auto: Option<Vec<String>> = None;

@@ -53,12 +53,14 @@ pub fn paint(ui: &egui::Ui, rect: Rect, name: &str, color: Color32) {
 
 /// Квадратна кнопка з піктограмою (як `tb-ic` у старому застосунку).
 pub fn button(ui: &mut egui::Ui, name: &str, tip: &str, on: bool, color: Color32) -> egui::Response {
-    let (rect, resp) = ui.allocate_exact_size(Vec2::splat(30.0), Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(Vec2::splat(28.0), Sense::click());
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tip));
-    if on || resp.hovered() {
-        ui.painter().rect_filled(rect, egui::CornerRadius::same(8), crate::theme::GHOST_HOVER);
+    if on {
+        ui.painter().rect_filled(rect, egui::CornerRadius::same(8), crate::theme::over_ground(0.15));
+    } else if resp.hovered() {
+        ui.painter().rect_filled(rect, egui::CornerRadius::same(8), crate::theme::over_ground(0.07));
     }
-    paint(ui, Rect::from_center_size(rect.center(), Vec2::splat(16.0)), name, if on { crate::theme::TEXT } else { color });
+    paint(ui, Rect::from_center_size(rect.center(), Vec2::splat(16.0)), name, if on { Color32::WHITE } else { color });
     resp.on_hover_text(tip)
 }
 

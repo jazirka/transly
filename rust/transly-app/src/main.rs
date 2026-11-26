@@ -336,9 +336,70 @@ fn pop(ui: &egui::Ui, resp: &egui::Response, id: &str, add: impl FnOnce(&mut egu
         ui.memory_mut(|m| m.toggle_popup(pid));
     }
     egui::popup::popup_below_widget(ui, pid, resp, egui::popup::PopupCloseBehavior::CloseOnClick, |ui| {
-        ui.set_min_width(200.0);
+        menu_style(ui);
         add(ui);
     });
+}
+
+/// Вікно-діалог, як `.dlg` у вебі: по центру вікна, тло `#2b2d33`, рамка `#4a4d54` 1 px, радіус 12, тінь, поля 16×12. Далі — звичайні налаштування `egui::Window`.
+pub(crate) fn dlg<'a>(title: impl Into<egui::WidgetText>) -> egui::Window<'a> {
+    egui::Window::new(title).anchor(Align2::CENTER_CENTER, vec2(0.0, 0.0)).frame(
+        egui::Frame::new()
+            .fill(Color32::from_rgb(0x2b, 0x2d, 0x33))
+            .stroke(Stroke::new(1.0_f32, Color32::from_rgb(0x4a, 0x4d, 0x54)))
+            .corner_radius(CornerRadius::same(12))
+            .shadow(egui::epaint::Shadow { offset: [0, 24], blur: 70, spread: 0, color: Color32::from_black_alpha(153) })
+            .inner_margin(egui::Margin::symmetric(16, 12)),
+    )
+}
+
+/// Вигляд випадних меню, як `.mdd`/`.mi` у вебі: ширина від 260, пункти без проміжків, наведення — біле 7 %, без рамок і заливки.
+pub(crate) fn menu_style(ui: &mut egui::Ui) {
+    ui.set_min_width(260.0);
+    let sp = ui.spacing_mut();
+    sp.item_spacing = vec2(0.0, 0.0);
+    sp.button_padding = vec2(12.0, 7.0);
+    sp.interact_size.y = 32.0;
+    let v = ui.visuals_mut();
+    for w in [&mut v.widgets.inactive, &mut v.widgets.hovered, &mut v.widgets.active, &mut v.widgets.open] {
+        w.weak_bg_fill = Color32::TRANSPARENT;
+        w.bg_fill = Color32::TRANSPARENT;
+        w.bg_stroke = Stroke::NONE;
+        w.corner_radius = CornerRadius::same(8);
+    }
+    v.widgets.hovered.weak_bg_fill = over_ground(0.07);
+    v.widgets.hovered.bg_fill = over_ground(0.07);
+    v.widgets.open.weak_bg_fill = over_ground(0.07);
+}
+
+/// Розділювач у меню (`.msep`): лінія 1 `#43454a`, поля 5 зверху й знизу, 8 з боків.
+pub(crate) fn menu_sep(ui: &mut egui::Ui) {
+    ui.add_space(5.0);
+    let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 1.0), Sense::hover());
+    ui.painter().hline((r.left() + 8.0)..=(r.right() - 8.0), r.center().y, Stroke::new(1.0_f32, Color32::from_rgb(0x43, 0x45, 0x4a)));
+    ui.add_space(5.0);
+}
+
+/// Пункт меню (`.mi`): висота 32, відступи 12; ліворуч назва, праворуч сполучення клавіш приглушене. «Назва  (Ctrl+K)» розкладається на назву й сполучення.
+pub(crate) fn mi(ui: &mut egui::Ui, label: impl AsRef<str>, enabled: bool) -> egui::Response {
+    let label = label.as_ref();
+    let (name, sc) = match label.rfind("  (") {
+        Some(i) if label.ends_with(')') => (&label[..i], &label[i + 3..label.len() - 1]),
+        _ => (label, ""),
+    };
+    let ng = ui.painter().layout_no_wrap(name.to_string(), ip(12.5), if enabled { TEXT } else { DIM });
+    let sg = ui.painter().layout_no_wrap(sc.to_string(), ip(12.5), MUTE);
+    let w = (24.0 + ng.size().x + if sc.is_empty() { 0.0 } else { 24.0 + sg.size().x }).max(ui.available_width());
+    let (rect, resp) = ui.allocate_exact_size(vec2(w, 32.0), if enabled { Sense::click() } else { Sense::hover() });
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, label));
+    if enabled && resp.hovered() {
+        ui.painter().rect_filled(rect, CornerRadius::same(8), over_ground(0.07));
+    }
+    ui.painter().galley(pos2(rect.left() + 12.0, rect.center().y - ng.size().y / 2.0), ng, if enabled { TEXT } else { DIM });
+    if !sc.is_empty() {
+        ui.painter().galley(pos2(rect.right() - 12.0 - sg.size().x, rect.center().y - sg.size().y / 2.0), sg, MUTE);
+    }
+    resp
 }
 
 fn label_caps(ui: &mut egui::Ui, text: &str) {
@@ -512,6 +573,7 @@ impl App {
                 ui.add_space(2.0);
                 // головне меню
                 egui::menu::menu_custom_button(ui, egui::Button::image(icons::image("menu", MUTE, 16.0)).frame(false).min_size(vec2(28.0, 28.0)), |ui| {
+                    menu_style(ui);
                     ui.menu_button("Файл", |ui| self.menu_file(ui));
                     ui.menu_button("Перехід", |ui| self.menu_goto(ui));
                     ui.menu_button("Вигляд", |ui| self.menu_view(ui));
@@ -522,13 +584,13 @@ impl App {
                 let letters = self.st.project.as_ref().map_or("T".to_string(), transly_core::projname::icon_letters);
                 let resp = pill(ui, Some(&letters), None, &name, true, false);
                 pop(ui, &resp, "projpop", |ui| {
-                    if ui.button("Відкрити гру…").clicked() {
+                    if mi(ui, "Відкрити гру…", true).clicked() {
                         self.open_dialog();
                     }
-                    if ui.add_enabled(can, egui::Button::new("Зберегти")).clicked() {
+                    if mi(ui, "Зберегти", can).clicked() {
                         self.message = self.st.save_project().map(|p| format!("Збережено: {p}")).unwrap_or_else(|e| e);
                     }
-                    if ui.add_enabled(can, egui::Button::new("Налаштування проєкту…")).clicked() {
+                    if mi(ui, "Налаштування проєкту…", can).clicked() {
                         self.act_settings();
                     }
                 });
@@ -605,39 +667,40 @@ impl App {
     }
 
     fn menu_file(&mut self, ui: &mut egui::Ui) {
-            if ui.button("Відкрити гру…").clicked() {
+        menu_style(ui);
+            if mi(ui, "Відкрити гру…", true).clicked() {
                 self.open_dialog();
                 ui.close_menu();
             }
-            if ui.add_enabled(self.st.is_open(), egui::Button::new("Зберегти проєкт")).clicked() {
+            if mi(ui, "Зберегти проєкт", self.st.is_open()).clicked() {
                 self.message = self.st.save_project().map(|p| format!("Збережено: {p}")).unwrap_or_else(|e| e);
                 ui.close_menu();
             }
-            if ui.add_enabled(self.st.is_open(), egui::Button::new("Відкрити проєкт із файлу…")).on_hover_text("Наприклад, файл, збережений зі старого застосунку: переклади й налаштування беруться з нього").clicked() {
+            if mi(ui, "Відкрити проєкт із файлу…", self.st.is_open()).on_hover_text("Наприклад, файл, збережений зі старого застосунку: переклади й налаштування беруться з нього").clicked() {
                 if let Some(p) = rfd::FileDialog::new().add_filter("Проєкт Transly", &["json"]).pick_file() {
                     self.message = self.st.open_project_file(&p).unwrap_or_else(|e| e);
                     self.draft_for = None;
                 }
                 ui.close_menu();
             }
-            if ui.add_enabled(self.st.is_open(), egui::Button::new("Злити з іншим проєктом…")).clicked() {
+            if mi(ui, "Злити з іншим проєктом…", self.st.is_open()).clicked() {
                 self.act_merge();
                 ui.close_menu();
             }
-            if ui.add_enabled(self.st.is_open(), egui::Button::new("Повернути оригінали гри")).clicked() {
+            if mi(ui, "Повернути оригінали гри", self.st.is_open()).clicked() {
                 self.act_restore();
                 ui.close_menu();
             }
-            ui.separator();
-            if ui.add_enabled(self.st.is_open(), egui::Button::new("Імпорт пам’яті й глосарія…")).clicked() {
+            menu_sep(ui);
+            if mi(ui, "Імпорт пам’яті й глосарія…", self.st.is_open()).clicked() {
                 self.import_win = Some((0, String::new()));
                 ui.close_menu();
             }
-            if ui.add_enabled(self.st.is_open(), egui::Button::new("Додати довідкову мову…")).clicked() {
+            if mi(ui, "Додати довідкову мову…", self.st.is_open()).clicked() {
                 self.ref_win = Some(String::new());
                 ui.close_menu();
             }
-            if ui.add_enabled(self.st.is_open(), egui::Button::new("Налаштування проєкту…")).clicked() {
+            if mi(ui, "Налаштування проєкту…", self.st.is_open()).clicked() {
                 self.act_settings();
                 ui.close_menu();
             }
@@ -801,7 +864,7 @@ impl App {
         let mut show: Option<usize> = None;
         let mut no: Option<usize> = None;
         let shown: Vec<&transly_core::mine::ConstructionSuggestion> = list.iter().filter(|x| !self.mine_no.contains(&x.en)).collect();
-        egui::Window::new("Конструкції").open(&mut open).collapsible(false).default_width(560.0).default_height(460.0).show(ctx, |ui| {
+        dlg("Конструкції").open(&mut open).collapsible(false).default_width(560.0).default_height(460.0).show(ctx, |ui| {
             if shown.is_empty() {
                 ui.add_space(8.0);
                 ui.label(RichText::new("Нових конструкцій не знайдено: або їх немає, або всі вже в глосарії.").color(MUTE));
@@ -857,14 +920,15 @@ impl App {
     }
 
     fn menu_goto(&mut self, ui: &mut egui::Ui) {
-        if ui.button("Пошук скрізь…  (Ctrl+K)").clicked() {
+        menu_style(ui);
+        if mi(ui, "Пошук скрізь…  (Ctrl+K)", true).clicked() {
             self.search_win = Some((String::new(), 0));
             ui.close_menu();
         }
-        ui.separator();
+        menu_sep(ui);
         use transly_core::queue::QueueKind;
         for (kind, text) in [(QueueKind::Untranslated, "Наступний рядок без перекладу  (Alt+Shift+↓)"), (QueueKind::Error, "Наступна помилка QA  (F8)"), (QueueKind::Advice, "Наступна порада"), (QueueKind::Unreviewed, "Наступний на вичитку"), (QueueKind::SourceChanged, "Наступний зі зміненим оригіналом")] {
-            if ui.button(text).clicked() {
+            if mi(ui, text, true).clicked() {
                 self.message = self.st.jump_queue(kind, true);
                 self.draft_for = None;
                 self.cell_edit = None;
@@ -874,37 +938,39 @@ impl App {
     }
 
     fn menu_view(&mut self, ui: &mut egui::Ui) {
-            if ui.button(if self.focus { "Режим таблиці" } else { "Режим «Фокус»" }).clicked() {
+        menu_style(ui);
+            if mi(ui, if self.focus { "Режим таблиці" } else { "Режим «Фокус»" }, true).clicked() {
                 self.focus = !self.focus;
                 ui.close_menu();
             }
-            if ui.button(if self.bottom_open { "Сховати нижню панель" } else { "Показати нижню панель" }).clicked() {
+            if mi(ui, if self.bottom_open { "Сховати нижню панель" } else { "Показати нижню панель" }, true).clicked() {
                 self.bottom_open = !self.bottom_open;
                 ui.close_menu();
             }
     }
 
     fn menu_tools(&mut self, ui: &mut egui::Ui) {
-            if ui.add_enabled(self.st.is_open(), egui::Button::new(if self.st.syncing() { "Синхронізація триває…" } else { "Синхронізація через GitHub…" })).clicked() {
+        menu_style(ui);
+            if mi(ui, if self.st.syncing() { "Синхронізація триває…" } else { "Синхронізація через GitHub…" }, self.st.is_open()).clicked() {
                 self.act_sync();
                 ui.close_menu();
             }
-            if ui.add_enabled(self.st.is_open(), egui::Button::new("Конструкції…")).on_hover_text("Звороти на кшталт «take … off», які рядки вже передають одним словом, а в глосарії їх ще немає").clicked() {
+            if mi(ui, "Конструкції…", self.st.is_open()).on_hover_text("Звороти на кшталт «take … off», які рядки вже передають одним словом, а в глосарії їх ще немає").clicked() {
                 self.mine_win = Some(self.st.mine_suggestions());
                 ui.close_menu();
             }
-            if ui.add_enabled(self.st.is_open(), egui::Button::new(if self.st.syncing() { "Синхронізація триває…" } else { "Синхронізація через реле…" })).clicked() {
+            if mi(ui, if self.st.syncing() { "Синхронізація триває…" } else { "Синхронізація через реле…" }, self.st.is_open()).clicked() {
                 self.relay_win = Some(self.st.relay.clone());
                 ui.close_menu();
             }
-            if ui.button("Оновлення…").clicked() {
+            if mi(ui, "Оновлення…", true).clicked() {
                 self.upd.win = true;
                 if self.upd.latest.is_none() {
                     self.upd.token = self.token.clone();
                 }
                 ui.close_menu();
             }
-            if ui.add_enabled(self.st.is_open(), egui::Button::new("Тексти плагінів…")).on_hover_text("Деякі ігри показують текст командами плагінів, а не вікнами повідомлень: позначте, які команди брати").clicked() {
+            if mi(ui, "Тексти плагінів…", self.st.is_open()).on_hover_text("Деякі ігри показують текст командами плагінів, а не вікнами повідомлень: позначте, які команди брати").clicked() {
                 let (names, asked) = self.st.plugin_choice();
                 let mut chosen: std::collections::BTreeSet<String> = names.into_iter().collect();
                 if !asked {
@@ -913,78 +979,79 @@ impl App {
                 self.plug_win = Some(chosen);
                 ui.close_menu();
             }
-            if ui.add_enabled(self.st.is_open(), egui::Button::new("Активність…")).clicked() {
+            if mi(ui, "Активність…", self.st.is_open()).clicked() {
                 self.activity_win = true;
                 ui.close_menu();
             }
-            if ui.add_enabled(self.st.last_term_change.is_some(), egui::Button::new("Оновити за глосарієм…")).clicked() {
+            if mi(ui, "Оновити за глосарієм…", self.st.last_term_change.is_some()).clicked() {
                 self.open_term_sync();
                 ui.close_menu();
             }
-            if ui.add_enabled(self.st.is_open(), egui::Button::new("Перенесення рядків…")).clicked() {
+            if mi(ui, "Перенесення рядків…", self.st.is_open()).clicked() {
                 self.wrap_win = Some((self.st.wrap_settings(), "Мандрівник дістався перекладацького містечка наприкінці осені, і там на нього чекав старий друг, якого він не бачив багато років.".into(), false));
                 ui.close_menu();
             }
-            if ui.add_enabled(self.st.is_open(), egui::Button::new("Правила QA…")).clicked() {
+            if mi(ui, "Правила QA…", self.st.is_open()).clicked() {
                 self.qar_win = true;
                 ui.close_menu();
             }
-            if ui.add_enabled(self.st.is_open(), egui::Button::new("Гілки перекладу…")).clicked() {
+            if mi(ui, "Гілки перекладу…", self.st.is_open()).clicked() {
                 self.br_win = Some(String::new());
                 ui.close_menu();
             }
-            if ui.add_enabled(self.st.is_open(), egui::Button::new("Групи рядків…")).clicked() {
+            if mi(ui, "Групи рядків…", self.st.is_open()).clicked() {
                 self.groups_win = Some(String::new());
                 ui.close_menu();
             }
-            if ui.add_enabled(self.st.is_open(), egui::Button::new("Мовці…")).clicked() {
+            if mi(ui, "Мовці…", self.st.is_open()).clicked() {
                 self.spk_win = Some(self.st.speaker_candidates());
                 ui.close_menu();
             }
-            if ui.button("Плагіни…").clicked() {
+            if mi(ui, "Плагіни…", true).clicked() {
                 self.act_plugins();
                 ui.close_menu();
             }
     }
 
     fn menu_actions(&mut self, ui: &mut egui::Ui) {
+        menu_style(ui);
             let f = self.st.file;
-            if ui.button("Надіслати чернетки файлу").clicked() {
+            if mi(ui, "Надіслати чернетки файлу", true).clicked() {
                 self.message = self.st.bulk_send(f);
                 ui.close_menu();
             }
-            if ui.button("Надіслати всі чернетки проєкту").clicked() {
+            if mi(ui, "Надіслати всі чернетки проєкту", true).clicked() {
                 self.message = self.st.bulk_send(None);
                 ui.close_menu();
             }
-            if ui.button("Вичитати надіслані файлу").clicked() {
+            if mi(ui, "Вичитати надіслані файлу", true).clicked() {
                 self.message = self.st.bulk_approve(f);
                 ui.close_menu();
             }
-            if ui.button("Вичитати всі надіслані").clicked() {
+            if mi(ui, "Вичитати всі надіслані", true).clicked() {
                 self.message = self.st.bulk_approve(None);
                 ui.close_menu();
             }
-            ui.separator();
-            if ui.button("Прибрати тестовий плагін із гри").clicked() {
+            menu_sep(ui);
+            if mi(ui, "Прибрати тестовий плагін із гри", true).clicked() {
                 self.message = self.st.remove_jump_plugin().unwrap_or_else(|e| e);
                 ui.close_menu();
             }
-            if ui.button("Скасувати останню дію").clicked() {
+            if mi(ui, "Скасувати останню дію", true).clicked() {
                 self.message = self.st.undo_last();
                 self.draft_for = None;
                 ui.close_menu();
             }
-            if ui.button("Повторити скасоване").clicked() {
+            if mi(ui, "Повторити скасоване", true).clicked() {
                 self.message = self.st.redo_last();
                 self.draft_for = None;
                 ui.close_menu();
             }
-            if ui.button("Автозаповнення…").clicked() {
+            if mi(ui, "Автозаповнення…", true).clicked() {
                 self.fill_win = Some(self.st.autofill_proposals(500).into_iter().map(|p| (p, true)).collect());
                 ui.close_menu();
             }
-            if ui.button("Пошук і заміна…").clicked() {
+            if mi(ui, "Пошук і заміна…", true).clicked() {
                 self.find_win = Some((String::new(), String::new(), false, false));
                 ui.close_menu();
             }
@@ -1208,7 +1275,7 @@ impl App {
         let Some(mut v) = self.settings.clone() else { return };
         let mut open = true;
         let (mut save, mut cancel) = (false, false);
-        egui::Window::new("Налаштування проєкту").open(&mut open).collapsible(false).resizable(false).default_width(420.0).show(ctx, |ui| {
+        dlg("Налаштування проєкту").open(&mut open).collapsible(false).resizable(false).default_width(420.0).show(ctx, |ui| {
             egui::Grid::new("settings_grid").num_columns(2).spacing([14.0, 10.0]).show(ui, |ui| {
                 ui.label("Назва проєкту");
                 ui.text_edit_singleline(&mut v.name);
@@ -1263,7 +1330,7 @@ impl App {
         let Some((mut cfg, mut token)) = self.sync_win.clone() else { return };
         let mut open = true;
         let (mut go, mut cancel) = (false, false);
-        egui::Window::new("Синхронізація через GitHub").open(&mut open).collapsible(false).resizable(false).default_width(440.0).show(ctx, |ui| {
+        dlg("Синхронізація через GitHub").open(&mut open).collapsible(false).resizable(false).default_width(440.0).show(ctx, |ui| {
             egui::Grid::new("sync_grid").num_columns(2).spacing([14.0, 10.0]).show(ui, |ui| {
                 ui.label("Репозиторій (власник/назва)");
                 ui.text_edit_singleline(&mut cfg.repo);
@@ -1326,7 +1393,7 @@ impl App {
         let Some(mut cfg) = self.relay_win.clone() else { return };
         let mut open = true;
         let (mut go, mut save) = (false, false);
-        egui::Window::new("Синхронізація через реле").open(&mut open).collapsible(false).resizable(false).default_width(460.0).show(ctx, |ui| {
+        dlg("Синхронізація через реле").open(&mut open).collapsible(false).resizable(false).default_width(460.0).show(ctx, |ui| {
             egui::Grid::new("relay_grid").num_columns(2).spacing([14.0, 10.0]).show(ui, |ui| {
                 ui.label("Адреса сервера");
                 ui.add(egui::TextEdit::singleline(&mut cfg.url).hint_text("https://…").desired_width(280.0));
@@ -1465,7 +1532,7 @@ impl App {
         let (mut check, mut install) = (false, false);
         let busy = self.upd.rx.is_some();
         let can_install = self.upd.latest.as_ref().is_some_and(|l| l.newer && l.asset.is_some()) && !busy;
-        egui::Window::new("Оновлення").open(&mut open).collapsible(false).resizable(false).default_width(440.0).show(ctx, |ui| {
+        dlg("Оновлення").open(&mut open).collapsible(false).resizable(false).default_width(440.0).show(ctx, |ui| {
             let id = transly_platform::selfupdate::build_id();
             ui.label(RichText::new(format!("Версія збірки: {}", if id == "dev" { "локальна".to_string() } else { id.chars().take(7).collect() })).color(MUTE));
             ui.add_space(6.0);
@@ -1519,7 +1586,7 @@ impl App {
         let keep: Vec<String> = saved.iter().filter(|n| !known.contains(n.as_str())).cloned().collect();
         let mut open = true;
         let (mut apply, mut cancel) = (false, false);
-        egui::Window::new("Тексти плагінів").open(&mut open).collapsible(false).default_width(520.0).default_height(440.0).show(ctx, |ui| {
+        dlg("Тексти плагінів").open(&mut open).collapsible(false).default_width(520.0).default_height(440.0).show(ctx, |ui| {
             ui.label(RichText::new("Деякі ігри показують текст не у вікнах повідомлень, а командами плагінів (спливаючі репліки, пункти меню). Позначте команди, чий текст треба перекладати. Що саме в них, видно з прикладів.").color(MUTE));
             ui.add_space(6.0);
             if cands.is_empty() {
@@ -1582,7 +1649,7 @@ impl App {
         let mut action: Option<(String, u8)> = None; // 0 вимкнути/увімкнути, 1 видалити
         let mut run: Option<Vec<transly_core::commands::ReplaceStep>> = None;
         let mut gloss: Option<(String, String)> = None;
-        egui::Window::new("Плагіни").open(&mut open).collapsible(false).default_width(560.0).show(ctx, |ui| {
+        dlg("Плагіни").open(&mut open).collapsible(false).default_width(560.0).show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if primary_button(ui, "Встановити з теки…").clicked() {
                     if let Some(p) = rfd::FileDialog::new().set_title("Тека плагіна (з transly-plugin.json)").pick_folder() {
@@ -1694,7 +1761,7 @@ impl App {
         let (mut apply, mut close) = (false, false);
         let step = transly_core::commands::ReplaceStep { find: find.clone(), replace: repl.clone(), whole_word: word, case_sensitive: case };
         let count = self.st.run_replace(std::slice::from_ref(&step), false).unwrap_or(0);
-        egui::Window::new("Пошук і заміна в перекладах").open(&mut open).collapsible(false).resizable(false).default_width(420.0).show(ctx, |ui| {
+        dlg("Пошук і заміна в перекладах").open(&mut open).collapsible(false).resizable(false).default_width(420.0).show(ctx, |ui| {
             egui::Grid::new("find_grid").num_columns(2).spacing([14.0, 10.0]).show(ui, |ui| {
                 ui.label("Знайти");
                 ui.text_edit_singleline(&mut find);
@@ -1740,7 +1807,7 @@ impl App {
         let Some(mut list) = self.fill_win.take() else { return };
         let mut open = true;
         let (mut apply, mut close) = (false, false);
-        egui::Window::new("Автозаповнення").open(&mut open).collapsible(false).default_width(640.0).default_height(460.0).show(ctx, |ui| {
+        dlg("Автозаповнення").open(&mut open).collapsible(false).default_width(640.0).default_height(460.0).show(ctx, |ui| {
             if list.is_empty() {
                 ui.label(RichText::new("Немає чого заповнювати: усі короткі рядки або вже перекладені, або мають невідомі слова.").color(MUTE));
             } else {
@@ -1791,7 +1858,7 @@ impl App {
         let mut open = true;
         let (mut go, mut close) = (false, false);
         let preview = self.st.build_preview(&c);
-        egui::Window::new("Збірка в гру").open(&mut open).collapsible(false).resizable(false).default_width(420.0).show(ctx, |ui| {
+        dlg("Збірка в гру").open(&mut open).collapsible(false).resizable(false).default_width(420.0).show(ctx, |ui| {
             ui.checkbox(&mut c.only_approved, "Лише вичитані рядки");
             ui.add_enabled(!c.only_approved, egui::Checkbox::new(&mut c.include_drafts, "Додати чернетки (щоб перевірити переклад у грі)"));
             ui.checkbox(&mut c.block_errors, "Рядки з помилкою QA лишати мовою оригіналу");
@@ -1830,7 +1897,7 @@ impl App {
         let Some((mut kind, mut text)) = self.import_win.take() else { return };
         let mut open = true;
         let (mut go, mut close) = (false, false);
-        egui::Window::new("Імпорт").open(&mut open).collapsible(false).default_width(520.0).show(ctx, |ui| {
+        dlg("Імпорт").open(&mut open).collapsible(false).default_width(520.0).show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut kind, 0, "Пам’ять перекладів");
                 ui.selectable_value(&mut kind, 1, "Глосарій із таблиці");
@@ -1866,7 +1933,7 @@ impl App {
         let Some(mut list) = self.spk_win.take() else { return };
         let mut open = true;
         let (mut save, mut close) = (false, false);
-        egui::Window::new("Мовці").open(&mut open).collapsible(false).default_width(640.0).default_height(460.0).show(ctx, |ui| {
+        dlg("Мовці").open(&mut open).collapsible(false).default_width(640.0).default_height(460.0).show(ctx, |ui| {
             if list.is_empty() {
                 ui.label(RichText::new("У рядках гри нема що визначати: усі діалоги вже мають мовця.").color(MUTE));
             } else {
@@ -1915,7 +1982,7 @@ impl App {
         let Some(mut lang) = self.ref_win.take() else { return };
         let mut open = true;
         let (mut go, mut close) = (false, false);
-        egui::Window::new("Довідкова мова").open(&mut open).collapsible(false).resizable(false).default_width(440.0).show(ctx, |ui| {
+        dlg("Довідкова мова").open(&mut open).collapsible(false).resizable(false).default_width(440.0).show(ctx, |ui| {
             ui.label(RichText::new("Оберіть папку тієї самої гри іншою мовою (наприклад, офіційна російська чи польська версія): її тексти з'являться в інспекторі як довідка.").size(11.5).color(MUTE));
             ui.add_space(6.0);
             ui.horizontal(|ui| {
@@ -1950,7 +2017,7 @@ impl App {
         let mut act: Option<(String, u8)> = None; // 0 рядок, 1 сцена, 2 файл, 3 показати, 4 видалити
         let mut create = false;
         let mut auto: Option<bool> = None;
-        egui::Window::new("Групи рядків").open(&mut open).collapsible(false).default_width(560.0).show(ctx, |ui| {
+        dlg("Групи рядків").open(&mut open).collapsible(false).default_width(560.0).show(ctx, |ui| {
             ui.label(RichText::new("Група — набір рядків, який зручно перекладати разом (персонаж, квест, мапа). Додайте вибраний рядок, його сцену чи файл.").size(11.5).color(MUTE));
             ui.add_space(6.0);
             for g in self.st.groups_view() {
@@ -2028,7 +2095,7 @@ impl App {
         let mut open = true;
         let mut act: Option<(String, u8)> = None; // 0 перемкнути, 1 злити, 2 видалити
         let mut create = false;
-        egui::Window::new("Гілки перекладу").open(&mut open).collapsible(false).default_width(480.0).show(ctx, |ui| {
+        dlg("Гілки перекладу").open(&mut open).collapsible(false).default_width(480.0).show(ctx, |ui| {
             ui.label(RichText::new("Гілка — окрема версія перекладу (наприклад, інший стиль). Злиття бере нові й змінені рядки, конфлікти лишає як є; його можна скасувати.").size(11.5).color(MUTE));
             ui.add_space(6.0);
             for (n, rows, cur) in self.st.branches_view() {
@@ -2098,7 +2165,7 @@ impl App {
         let mut fix: Option<String> = None;
         let (mut apo, mut words) = self.keep_edit.take().unwrap_or_else(|| self.st.qa_keep());
         let before = (apo.clone(), words.clone());
-        egui::Window::new("Правила QA").open(&mut open).collapsible(false).default_width(620.0).default_height(440.0).show(ctx, |ui| {
+        dlg("Правила QA").open(&mut open).collapsible(false).default_width(620.0).default_height(440.0).show(ctx, |ui| {
             ui.label(RichText::new("Правила про форму перекладу: літери чужого алфавіту, приховані знаки, пробіли тощо. Кількість — у поточному файлі.").size(11.5).color(MUTE));
             ui.add_space(6.0);
             ui.horizontal(|ui| {
@@ -2153,7 +2220,7 @@ impl App {
         let Some((mut w, mut sample, mut face)) = self.wrap_win.take() else { return };
         let before = w.clone();
         let mut open = true;
-        egui::Window::new("Перенесення рядків").open(&mut open).collapsible(false).default_width(560.0).show(ctx, |ui| {
+        dlg("Перенесення рядків").open(&mut open).collapsible(false).default_width(560.0).show(ctx, |ui| {
             ui.label(RichText::new("Вікно повідомлення в грі не переносить рядки саме. Тут обираєте, хто це робить і як. Довжина перекладу ніколи не обмежується, це лише рекомендації. Ширину задає «Налаштування проєкту → Довжина рядка».").size(11.5).color(MUTE));
             ui.add_space(6.0);
             label_caps(ui, "Коли переносити");
@@ -2201,7 +2268,7 @@ impl App {
         let Some((src, rows, mut dec)) = self.merge_win.take() else { return };
         let mut open = true;
         let (mut go, mut close) = (false, false);
-        egui::Window::new(format!("Злиття гілки «{src}»")).open(&mut open).collapsible(false).default_width(680.0).default_height(460.0).show(ctx, |ui| {
+        dlg(format!("Злиття гілки «{src}»")).open(&mut open).collapsible(false).default_width(680.0).default_height(460.0).show(ctx, |ui| {
             ui.label(RichText::new("Нові й змінені рядки беруться. У конфліктах змінили обидві гілки: оберіть, чий переклад лишити (без вибору лишається ваш).").size(11.5).color(MUTE));
             egui::ScrollArea::vertical().max_height(340.0).show(ui, |ui| {
                 for r in rows.iter().filter(|r| r.kind == DiffKind::Conflict && !r.locked) {
@@ -2244,7 +2311,7 @@ impl App {
         let Some((from, mut to)) = self.rename_win.take() else { return };
         let mut open = true;
         let (mut go, mut close) = (false, false);
-        egui::Window::new("Назва гілки").open(&mut open).collapsible(false).resizable(false).show(ctx, |ui| {
+        dlg("Назва гілки").open(&mut open).collapsible(false).resizable(false).show(ctx, |ui| {
             ui.add(egui::TextEdit::singleline(&mut to).desired_width(260.0));
             ui.horizontal(|ui| {
                 if primary_button(ui, "Перейменувати").clicked() {
@@ -2278,7 +2345,7 @@ impl App {
         let Some((change, mut rows)) = self.tsync_win.take() else { return };
         let mut open = true;
         let (mut go, mut close) = (false, false);
-        egui::Window::new(format!("Оновити за глосарієм: {} → {}", change.old.join(", "), change.next)).open(&mut open).collapsible(false).default_width(720.0).default_height(480.0).show(ctx, |ui| {
+        dlg(format!("Оновити за глосарієм: {} → {}", change.old.join(", "), change.next)).open(&mut open).collapsible(false).default_width(720.0).default_height(480.0).show(ctx, |ui| {
             ui.label(RichText::new("Рядки зі старою формою терміна. Позначені лише впевнені заміни, де в оригіналі є цей термін; решту перевірте самі. Статус рядків не змінюється, дію можна скасувати.").size(11.5).color(MUTE));
             let n = rows.iter().filter(|r| r.1).count();
             ui.horizontal(|ui| {
@@ -2342,7 +2409,7 @@ impl App {
         }
         let mut open = true;
         let mut undo: Option<String> = None;
-        egui::Window::new("Активність").open(&mut open).collapsible(false).default_width(640.0).default_height(460.0).show(ctx, |ui| {
+        dlg("Активність").open(&mut open).collapsible(false).default_width(640.0).default_height(460.0).show(ctx, |ui| {
             ui.label(RichText::new("Масові дії (надсилання, вичитка, автозаповнення, заміни, злиття) можна скасувати, поки рядки не змінено, і потім повторити.").size(11.5).color(MUTE));
             ui.add_space(6.0);
             let items = self.st.activity();
@@ -2384,7 +2451,7 @@ impl App {
             return;
         }
         let mut open = true;
-        egui::Window::new("Гарячі клавіші").open(&mut open).collapsible(false).resizable(false).show(ctx, |ui| {
+        dlg("Гарячі клавіші").open(&mut open).collapsible(false).resizable(false).show(ctx, |ui| {
             egui::Grid::new("keys").num_columns(2).spacing([24.0, 6.0]).show(ui, |ui| {
                 for (k, what) in [("Ctrl+Enter", "надіслати рядок і перейти до наступного"), ("Ctrl+S", "зберегти проєкт"), ("F2", "режим «Редагування»"), ("↑ / ↓", "попередній / наступний рядок (поки не набираєте текст)")] {
                     ui.label(RichText::new(k).monospace().color(TEXT));
@@ -3237,6 +3304,46 @@ mod ui_tests {
         shot(&mut h, "08b-right-activity-filled");
         h.state_mut().right_secs = [[false, false, true]; 2];
         shot(&mut h, "09b-right-comments-filled");
+        // меню: головне (гамбургер), вкладене «Файл» і «Дії» — клік по координатах
+        let click_at = |h: &mut Harness<'static, App>, x: f32, y: f32| {
+            let p = pos2(x, y);
+            for pressed in [true, false] {
+                h.input_mut().events.push(egui::Event::PointerMoved(p));
+                h.input_mut().events.push(egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE });
+            }
+            h.run();
+            h.run();
+        };
+        h.state_mut().focus = false;
+        h.run();
+        click_at(&mut h, 50.0, 20.0);
+        shot(&mut h, "13-menu-main");
+        click_at(&mut h, 80.0, 62.0);
+        shot(&mut h, "14-menu-file");
+        press(&mut h, egui::Modifiers::NONE, egui::Key::Escape);
+        h.run();
+        press(&mut h, egui::Modifiers::NONE, egui::Key::Escape);
+        h.run();
+        click_at(&mut h, 1304.0, 20.0);
+        shot(&mut h, "15-menu-actions");
+        press(&mut h, egui::Modifiers::NONE, egui::Key::Escape);
+        h.run();
+        press(&mut h, egui::Modifiers::NONE, egui::Key::Escape);
+        h.run();
+        // діалоги: налаштування проєкту, збірка, автозаповнення, гарячі клавіші
+        h.state_mut().act_settings();
+        shot(&mut h, "16-dlg-settings");
+        h.state_mut().settings = None;
+        h.state_mut().build_win = Some(h.state().st.build_defaults());
+        shot(&mut h, "17-dlg-build");
+        h.state_mut().build_win = None;
+        let fill = h.state().st.autofill_proposals(500).into_iter().map(|p| (p, true)).collect();
+        h.state_mut().fill_win = Some(fill);
+        shot(&mut h, "18-dlg-autofill");
+        h.state_mut().fill_win = None;
+        h.state_mut().keys_win = true;
+        shot(&mut h, "19-dlg-keys");
+        h.state_mut().keys_win = false;
         // глосарій у лівій панелі (таблиця, значок «Пов’язане») і з відкритою формою
         h.state_mut().focus = false;
         h.run();

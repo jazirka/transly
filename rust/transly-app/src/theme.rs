@@ -146,7 +146,13 @@ thread_local! {
 /// На початку кадру: з'ясовує, чи можна малювати ваги 500/600 (інакше `ipw` повертає звичайний шрифт, а не панікує).
 pub fn sync_weights(ctx: &egui::Context) {
     let ok = ctx.fonts(|f| f.families().contains(&FontFamily::Name("InterSemiBold".into())));
-    WEIGHTS.with(|w| w.set(ok));
+    let was = WEIGHTS.with(|w| w.replace(ok));
+    if ok && !was {
+        // заголовок діалогу — 15 px середньої ваги (`.dlg-h h2`)
+        ctx.style_mut(|s| {
+            s.text_styles.insert(TextStyle::Heading, FontId::new(15.0, FontFamily::Name("InterMedium".into())));
+        });
+    }
 }
 
 pub fn weights_ready() -> bool {
@@ -174,6 +180,11 @@ pub fn apply_style(ctx: &egui::Context) {
     for w in [&mut v.widgets.noninteractive, &mut v.widgets.inactive, &mut v.widgets.hovered, &mut v.widgets.active, &mut v.widgets.open] {
         w.corner_radius = r;
     }
+    v.window_stroke = Stroke::new(1.0_f32, Color32::from_rgb(0x43, 0x45, 0x4a));
+    v.window_corner_radius = CornerRadius::same(R3);
+    v.menu_corner_radius = CornerRadius::same(R3);
+    v.popup_shadow = egui::epaint::Shadow { offset: [0, 14], blur: 40, spread: 0, color: Color32::from_black_alpha(140) };
+    v.window_shadow = egui::epaint::Shadow { offset: [0, 24], blur: 70, spread: 0, color: Color32::from_black_alpha(153) };
     v.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, LINE);
     v.widgets.noninteractive.fg_stroke = Stroke::new(1.0_f32, TEXT);
     v.widgets.inactive.bg_fill = BTN;
@@ -191,6 +202,7 @@ pub fn apply_style(ctx: &egui::Context) {
     st.text_styles.insert(TextStyle::Body, FontId::new(12.5, FontFamily::Proportional));
     st.text_styles.insert(TextStyle::Button, FontId::new(12.5, FontFamily::Proportional));
     st.text_styles.insert(TextStyle::Small, FontId::new(11.0, FontFamily::Proportional));
+    st.text_styles.insert(TextStyle::Heading, FontId::new(15.0, FontFamily::Proportional));
     st.text_styles.insert(TextStyle::Monospace, FontId::new(11.0, FontFamily::Monospace));
     ctx.set_style(st);
 }

@@ -26,6 +26,24 @@ const DRAG_MIN: f32 = 6.0;
 /// Біля верхнього й нижнього краю таблиці вона листається сама: чим ближче до краю, тим швидше (зона 48, крок 6 + до 30).
 const DRAG_ZONE: f32 = 48.0;
 
+/// Куди прокрутити таблицю, щоб рядок `p` (місце серед видимих) було видно: `None`, коли його вже видно в вікні висотою `vh` зі зсувом `off`.
+/// Рядок поруч — мінімальний зсув до краю, далекий (більше сторінки) — три рядки від верху.
+pub(crate) fn scroll_to_row(p: usize, off: f32, vh: f32) -> Option<f32> {
+    let (top, bottom) = (p as f32 * ROW_H, (p + 1) as f32 * ROW_H);
+    if top >= off && bottom <= off + vh {
+        return None;
+    }
+    let above = top < off;
+    let far = if above { off - top > vh } else { bottom - (off + vh) > vh };
+    Some(if far {
+        (top - 3.0 * ROW_H).max(0.0)
+    } else if above {
+        top
+    } else {
+        bottom - vh
+    })
+}
+
 /// Куди прокрутити таблицю, поки вказівник біля краю: `dy` — зсув від краю всередину зони (від'ємний — угору).
 pub(crate) fn drag_scroll_step(pointer_y: f32, top: f32, bottom: f32) -> Option<f32> {
     let down = pointer_y - (bottom - DRAG_ZONE);
@@ -372,8 +390,7 @@ impl App {
                         }
                     }
                     if resp.clicked() {
-                        self.st.file = Some(i);
-                        self.st.row = None;
+                        self.st.switch_file(i);
                         self.draft_for = None;
                         self.cell_edit = None;
                     }
@@ -1218,8 +1235,7 @@ impl App {
         }
         if let Some(t) = pick {
             if self.st.file != Some(t) {
-                self.st.file = Some(t);
-                self.st.row = None;
+                self.st.switch_file(t);
                 self.draft_for = None;
                 self.cell_edit = None;
             }
@@ -1417,8 +1433,16 @@ impl App {
             let mut commit: Option<bool> = None; // Some(true) — зберегти й далі, Some(false) — скасувати
             let mut begin: Option<usize> = None;
             let list_h = ui.available_height();
+            // рядок, вибраний не мишею (F8, пошук, сповіщення, стрілки, перехід між файлами), мусить бути видно: таблиця прокручується до нього
+            if self.grid_seen != (f, self.st.row) {
+                self.grid_seen = (f, self.st.row);
+                if let (None, Some(p)) = (&self.drag_sel, self.st.row.and_then(|r| self.st.visible_pos(f, r))) {
+                    let off = egui::scroll_area::State::load(ui.ctx(), ui.id().with(egui::Id::new(("gridscroll", f)))).map_or(0.0, |s| s.offset.y);
+                    self.grid_scroll = scroll_to_row(p, off, list_h).or(self.grid_scroll);
+                }
+            }
             let mut area = egui::ScrollArea::vertical().id_salt(("gridscroll", f)).auto_shrink([false; 2]).max_height(list_h);
-            if let Some(off) = self.drag_scroll.take() {
+            if let Some(off) = self.grid_scroll.take() {
                 area = area.vertical_scroll_offset(off.max(0.0));
             }
             let area_out = area.show_rows(ui, ROW_H, total, |ui, range| {
@@ -1530,7 +1554,7 @@ impl App {
                         self.checked.1 = rows;
                         self.sel_last = Some(at);
                         if let Some(step) = drag_scroll_step(p.y, inner.top(), inner.bottom()) {
-                            self.drag_scroll = Some(area_out.state.offset.y + step);
+                            self.grid_scroll = Some(area_out.state.offset.y + step);
                         }
                     }
                     self.drag_sel = Some(d);

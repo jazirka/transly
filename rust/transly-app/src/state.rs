@@ -190,6 +190,7 @@ pub struct AppState {
     pub rows_filter: Option<RowsFilter>,
     /// Сповіщення: що потребує уваги й що зробили інші; рахується частинами між кадрами, коли дані не змінюються.
     pub inbox: Inbox,
+    row_memo: RowMemo,
     scene_cache: std::cell::RefCell<(usize, Option<transly_core::scene::SceneIndex>)>,
     undo: transly_core::undostack::UndoStack,
     pub host: PluginHost,
@@ -225,7 +226,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { undo_count: 0, db_cache: std::cell::RefCell::new(None), names_cache: std::cell::RefCell::new(None), usage_cache: Default::default(), links_cache: std::cell::RefCell::new(None), relay: RelayCfg::load(), relay_rx: None, speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, rows_filter: None, inbox: Inbox::load(), scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![], saved_ms: None, session_start: now_ms(), session_edits: 0 }
+        AppState { undo_count: 0, db_cache: std::cell::RefCell::new(None), names_cache: std::cell::RefCell::new(None), usage_cache: Default::default(), links_cache: std::cell::RefCell::new(None), relay: RelayCfg::load(), relay_rx: None, speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, rows_filter: None, inbox: Inbox::load(), row_memo: RowMemo::load(), scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![], saved_ms: None, session_start: now_ms(), session_edits: 0 }
     }
 }
 
@@ -327,6 +328,34 @@ impl RowsFilter {
     /// Чи є в наборі хоч один рядок цього файлу.
     pub fn touches(&self, file: &str) -> bool {
         self.rows.iter().any(|(f, _)| f == file)
+    }
+}
+
+/// На якому рядку кожен файл покинули (`rowmemo.ts`): вкладка відкривається там, де зупинився перекладач. Лежить на цьому пристрої (`rowat.json` у теці даних
+/// програми), окремо для кожного проєкту, у файл проєкту не потрапляє.
+#[derive(Default)]
+pub struct RowMemo {
+    by_project: std::collections::HashMap<String, std::collections::HashMap<String, String>>,
+    /// Що було вибрано в попередньому кадрі: змінилось — запам'ятовуємо.
+    last: (Option<usize>, Option<usize>),
+    dirty: Option<std::time::Instant>,
+}
+
+impl RowMemo {
+    fn path() -> Option<PathBuf> {
+        plugins_dir().and_then(|p| p.parent().map(|d| d.join("rowat.json")))
+    }
+
+    fn load() -> RowMemo {
+        let by_project = Self::path().and_then(|p| std::fs::read_to_string(p).ok()).and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+        RowMemo { by_project, ..Default::default() }
+    }
+
+    fn save(&self) {
+        if let Some(p) = Self::path() {
+            let _ = std::fs::create_dir_all(p.parent().unwrap_or(Path::new(".")));
+            let _ = std::fs::write(p, serde_json::to_string(&self.by_project).unwrap_or_default());
+        }
     }
 }
 
@@ -829,6 +858,12 @@ impl AppState {
     pub fn visible_len(&self, f: usize) -> usize {
         self.refresh_visible(f);
         self.vis.borrow().rows.len()
+    }
+
+    /// Де рядок `r` серед видимих рядків файлу (до чого прокручувати таблицю); `None`, коли його фільтр ховає.
+    pub fn visible_pos(&self, f: usize, r: usize) -> Option<usize> {
+        self.refresh_visible(f);
+        self.vis.borrow().rows.binary_search(&r).ok()
     }
 
     pub fn visible_at(&self, f: usize, i: usize) -> Option<usize> {
@@ -1794,6 +1829,36 @@ impl AppState {
         self.file = Some(fi);
         self.row = Some(ri);
         true
+    }
+
+    /// Відкриває файл на тому рядку, де його востаннє покинули (коли такий рядок ще є).
+    pub fn switch_file(&mut self, f: usize) {
+        self.file = Some(f);
+        self.row = self.remembered_row(f);
+    }
+
+    fn remembered_row(&self, f: usize) -> Option<usize> {
+        let v = self.views.get(f)?;
+        let key = self.row_memo.by_project.get(&self.project.as_ref()?.name)?.get(&v.name)?;
+        v.units.iter().position(|u| &u.key == key)
+    }
+
+    /// Запам'ятовує, на якому рядку стоїть відкритий файл, і раз на 2 с, коли це змінилось, записує на диск. Викликається щокадру: коштує порівняння двох чисел.
+    pub fn remember_row(&mut self) {
+        let cur = (self.file, self.row);
+        if cur != self.row_memo.last {
+            self.row_memo.last = cur;
+            if let (Some(f), Some(r), Some(p)) = (cur.0, cur.1, self.project.as_ref()) {
+                if let Some((v, u)) = self.views.get(f).and_then(|v| v.units.get(r).map(|u| (v, u))) {
+                    self.row_memo.by_project.entry(p.name.clone()).or_default().insert(v.name.clone(), u.key.clone());
+                    self.row_memo.dirty.get_or_insert_with(std::time::Instant::now);
+                }
+            }
+        }
+        if self.row_memo.dirty.is_some_and(|t| t.elapsed() >= std::time::Duration::from_secs(2)) {
+            self.row_memo.dirty = None;
+            self.row_memo.save();
+        }
     }
 
     /// Показує набір рядків із сповіщень: відкриває перший з них і лишає в таблицях лише рядки набору (там, де вони є).

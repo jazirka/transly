@@ -51,7 +51,9 @@ struct App {
     /// Виділення рядків таблиці протягуванням по номерах і рядок, від якого тягне Shift; куди прокрутити таблицю, поки вказівник біля краю.
     drag_sel: Option<layout::DragSel>,
     sel_last: Option<usize>,
-    drag_scroll: Option<f32>,
+    grid_scroll: Option<f32>,
+    /// Для якого (файл, рядок) таблицю вже прокручено так, щоб рядок було видно.
+    grid_seen: (usize, Option<usize>),
     keys_win: bool,
     rail: usize,
     run_cfg: usize,
@@ -253,7 +255,7 @@ fn game_job(text: &str, size: f32, actor_name: &dyn Fn(usize) -> Option<String>)
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, drag_scroll: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
     }
 }
 
@@ -668,6 +670,7 @@ impl App {
             theme::apply_style(ctx);
         }
         self.topbar(ctx);
+        self.st.remember_row();
         if let Some(after) = self.st.inbox_step(std::time::Duration::from_millis(6)) {
             if after.is_zero() {
                 ctx.request_repaint();
@@ -1035,8 +1038,7 @@ impl App {
         if let Some(p) = pick.filter(|p| *p < n) {
             let (nf, nr) = (hits.files.len(), hits.rows.len());
             if p < nf {
-                self.st.file = Some(hits.files[p].0);
-                self.st.row = None;
+                self.st.switch_file(hits.files[p].0);
             } else if p < nf + nr {
                 let r = &hits.rows[p - nf];
                 self.st.filter = Filter::All;
@@ -3750,6 +3752,48 @@ mod ui_tests {
         assert_eq!(app.st.bulk_memory(0, &rows), "Збігів від 70% для порожніх вибраних рядків немає");
         app.st.undo_last();
         assert_eq!(app.st.target_of(0, mage), "", "«Скасувати» повертає порожній рядок");
+    }
+
+    /// Таблиця прокручується до вибраного рядка, коли той далеко: F8, пошук, стрілки; рядок, що вже видно, не стрибає. Файл відкривається на рядку, де його покинули.
+    #[test]
+    fn the_table_follows_the_selected_row_and_a_file_reopens_where_it_was_left() {
+        // чистий розрахунок: у вікні 360 (10 рядків по 36) зі зсувом 720 видно рядки 20–29
+        assert_eq!(layout::scroll_to_row(25, 720.0, 360.0), None, "рядок у вікні");
+        assert_eq!(layout::scroll_to_row(30, 720.0, 360.0), Some(31.0 * 36.0 - 360.0), "поруч знизу — рівно до краю");
+        assert_eq!(layout::scroll_to_row(19, 720.0, 360.0), Some(19.0 * 36.0), "поруч зверху — рівно до краю");
+        assert_eq!(layout::scroll_to_row(500, 720.0, 360.0), Some(497.0 * 36.0), "далеко — три рядки від верху");
+        assert_eq!(layout::scroll_to_row(1, 7200.0, 360.0), Some(0.0));
+        // у застосунку: файл на 200 рядків, F8-перехід на 150-й рядок
+        let base = std::env::temp_dir().join(format!("transly-ui-follow-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = base.join("MyGame").join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        let items: Vec<String> = (1..=200).map(|i| format!(r#"{{"id":{i},"name":"Item{i:03}","description":"","note":""}}"#)).collect();
+        std::fs::write(data.join("Items.json"), format!("[null,{}]", items.join(","))).unwrap();
+        std::fs::write(data.join("Actors.json"), r#"[null,{"id":1,"name":"Hero","nickname":"","profile":"Brave","note":""}]"#).unwrap();
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        let items_f = app.st.views.iter().position(|v| v.name.starts_with("Items")).unwrap();
+        let actors_f = app.st.views.iter().position(|v| v.name.starts_with("Actors")).unwrap();
+        app.st.file = Some(items_f);
+        app.st.row = Some(0);
+        let mut h = harness(app);
+        h.run();
+        assert!(h.query_by_label_contains("Item150").is_none(), "далекий рядок поза вікном");
+        h.state_mut().st.row = Some(149);
+        h.run();
+        h.run();
+        h.get_by_label_contains("Item150");
+        // рядок 150 вибрано, пішли в інший файл і повернулись: рядок той самий
+        h.state_mut().st.switch_file(actors_f);
+        h.state_mut().st.remember_row();
+        h.run();
+        assert_eq!(h.state().st.row, None, "в іншого файлу своєї пам’яті ще немає");
+        h.state_mut().st.switch_file(items_f);
+        assert_eq!(h.state().st.row, Some(149), "файл відкрився на рядку, де його покинули");
+        h.run();
+        h.run();
+        h.get_by_label_contains("Item150");
     }
 
     /// Знімок таблиці з виділеними рядками (смуга «вибрано» на шапці): `TRANSLY_SHOTS=<тека> cargo test -p transly-app bulk_shot -- --ignored`.

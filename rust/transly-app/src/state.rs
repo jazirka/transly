@@ -1449,6 +1449,43 @@ impl AppState {
         self.bulk_in(Some(f), Some(rows), approve)
     }
 
+    /// «З пам'яті» на вибраних рядках: у порожні підставляється найближчий збіг із пам'яті перекладів від 70 % (одна дія журналу, її можна скасувати).
+    pub fn bulk_memory(&mut self, f: usize, rows: &std::collections::HashSet<usize>) -> String {
+        self.ensure_tm();
+        let now = now_ms();
+        let mut changes = Vec::new();
+        {
+            let Some(p) = self.project.as_ref() else { return "Проєкт не відкрито".into() };
+            let Some(v) = self.views.get(f) else { return "Немає файлу".into() };
+            let cache = self.tm_cache.borrow();
+            let Some((_, idx)) = cache.as_ref() else { return "Пам'ять перекладів порожня".into() };
+            let ents = p.files.get(&v.name);
+            let mut sorted: Vec<usize> = rows.iter().copied().collect();
+            sorted.sort_unstable();
+            for r in sorted {
+                let Some(u) = v.units.get(r) else { continue };
+                let prev = ents.and_then(|m| m.get(&u.key));
+                if prev.is_some_and(|e| !e.target.is_empty()) {
+                    continue;
+                }
+                let Some(m) = idx.find(&u.source, &FindOpts { min: Some(70.0), limit: Some(1), exclude: None }).into_iter().next() else { continue };
+                let next = edit(prev, u, &m.t, Stage::Translate, now);
+                changes.push(transly_core::journal::RowChange { file: v.name.clone(), key: u.key.clone(), text: m.t.clone(), next, what: Some(format!("підставлено з пам’яті ({}%)", m.score)) });
+            }
+        }
+        if changes.is_empty() {
+            return "Збігів від 70% для порожніх вибраних рядків немає".into();
+        }
+        let n = changes.len();
+        let who = self.who();
+        let p = self.project.as_mut().expect("проєкт відкрито");
+        let id = commit_rows(&mut p.files, &changes, "memory", &who, now, None, &mut Self::seeded_rand());
+        self.note_undo(&id);
+        self.rev += 1;
+        self.dirty = true;
+        format!("Підставлено з пам’яті: {n}")
+    }
+
     fn bulk(&mut self, only: Option<usize>, approve: bool) -> String {
         self.bulk_in(only, None, approve)
     }

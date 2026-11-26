@@ -11,6 +11,34 @@ const SEL_GRAY: Color32 = Color32::from_rgb(64, 64, 67);
 const CARD_LINE: Color32 = Color32::from_rgb(66, 67, 70);
 const ROW_H: f32 = 36.0;
 
+/// Виділення рядків таблиці протягуванням по стовпці номерів (`dragselect.ts`): опорний рядок (місце серед видимих), що було виділено до початку
+/// (з Ctrl чи Shift — лишається) і чи рух уже перевищив поріг клацання.
+#[derive(Clone, Debug)]
+pub(crate) struct DragSel {
+    anchor: usize,
+    base: std::collections::HashSet<usize>,
+    start_y: f32,
+    moved: bool,
+}
+
+/// Менший рух — ще клацання (перемикач рядка), як у вебі (4 px) і в egui (6 px, щоб клацання не збігалось з протягуванням).
+const DRAG_MIN: f32 = 6.0;
+/// Біля верхнього й нижнього краю таблиці вона листається сама: чим ближче до краю, тим швидше (зона 48, крок 6 + до 30).
+const DRAG_ZONE: f32 = 48.0;
+
+/// Куди прокрутити таблицю, поки вказівник біля краю: `dy` — зсув від краю всередину зони (від'ємний — угору).
+pub(crate) fn drag_scroll_step(pointer_y: f32, top: f32, bottom: f32) -> Option<f32> {
+    let down = pointer_y - (bottom - DRAG_ZONE);
+    let up = (top + DRAG_ZONE) - pointer_y;
+    if down > 0.0 {
+        Some(6.0 + 30.0 * (down / DRAG_ZONE).min(1.0))
+    } else if up > 0.0 {
+        Some(-(6.0 + 30.0 * (up / DRAG_ZONE).min(1.0)))
+    } else {
+        None
+    }
+}
+
 /// Картка оболонки з відступами зліва й справа (проміжок між картками 6).
 pub(crate) fn card_lr(left: i8, right: i8) -> egui::Frame {
     egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, CARD_LINE)).corner_radius(CornerRadius::same(CARD_R)).outer_margin(egui::Margin { left, right, top: 0, bottom: 6 }).inner_margin(egui::Margin::ZERO)
@@ -1312,6 +1340,8 @@ impl App {
             }
             if self.checked.0 != f {
                 self.checked = (f, Default::default());
+                self.drag_sel = None;
+                self.sel_last = None;
             }
             let total = self.st.visible_len(f);
             {
@@ -1329,27 +1359,53 @@ impl App {
                 }
             }
             if !self.checked.1.is_empty() {
-                let (bar, _) = ui.allocate_exact_size(vec2(w, 34.0), Sense::hover());
-                ui.painter().rect_filled(bar, CornerRadius::ZERO, over_color(PANEL, accent(), 0.16));
-                ui.painter().text(pos2(bar.left() + 12.0, bar.center().y), Align2::LEFT_CENTER, format!("Вибрано {}", self.checked.1.len()), ip(12.5), TEXT);
-                let mut bx = bar.left() + 110.0;
+                // як `.bulk-in`: накладка на шапку праворуч від номерів (місце таблиці не змінюється, тож протягування по номерах не «пливе»), висота 26,
+                // м'який акцент, лінія знизу, текст кольору акценту; кнопки 24, проміжок 8, «✕» праворуч
+                let bar = Rect::from_min_max(pos2(hdr.left() + num_w, hdr.top()), hdr.right_bottom());
+                let bar_ui = ui.painter().with_clip_rect(bar);
+                bar_ui.rect_filled(bar, CornerRadius::ZERO, over_color(PANEL, accent(), 0.16));
+                bar_ui.hline(bar.x_range(), bar.bottom() - 0.5, Stroke::new(1.0_f32, accent_ring()));
+                let shown = self.checked.1.len();
+                let n = bar_ui.layout_no_wrap(shown.to_string(), ipw(12.5, 600), accent_text());
+                let t = bar_ui.layout_no_wrap(" вибрано".to_string(), ip(12.5), accent_text());
+                let mut bx = bar.left() + 10.0;
+                bar_ui.galley(pos2(bx, bar.center().y - n.size().y / 2.0), n.clone(), accent_text());
+                bx += n.size().x;
+                bar_ui.galley(pos2(bx, bar.center().y - t.size().y / 2.0), t.clone(), accent_text());
+                bx += t.size().x + 8.0;
                 let mut act: Option<u8> = None;
-                for (i, label) in ["Надіслати", "Вичитати", "Зняти вибір"].iter().enumerate() {
+                for (i, label) in ["Надіслати", "Вичитати", "З пам’яті"].iter().enumerate() {
                     let g = ui.painter().layout_no_wrap(label.to_string(), ip(12.0), TEXT);
-                    let r = Rect::from_min_size(pos2(bx, bar.top() + 5.0), vec2(g.size().x + 20.0, 24.0));
+                    let r = Rect::from_min_size(pos2(bx, bar.center().y - 12.0), vec2(g.size().x + 20.0, 24.0));
                     let resp = ui.interact(r, ui.id().with(("bulk", i)), Sense::click());
                     resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("{label} вибрані")));
+                    resp.clone().on_hover_text(["Надіслати вибрані переклади", "Вичитати вибрані переклади (рядки, що ще не надіслано, надсилаються й вичитуються разом)", "Підставити збіг із пам’яті перекладів (від 70%) у порожні вибрані рядки"][i]);
                     ui.painter().rect_filled(r, CornerRadius::same(8), if resp.hovered() { BTN_HOVER } else { BTN });
                     ui.painter().galley(pos2(r.left() + 10.0, r.center().y - g.size().y / 2.0), g.clone(), TEXT);
                     if resp.clicked() {
                         act = Some(i as u8);
                     }
-                    bx += r.width() + 6.0;
+                    bx += r.width() + 8.0;
+                }
+                let x = Rect::from_min_size(pos2(bar.right() - 10.0 - 24.0, bar.center().y - 12.0), vec2(24.0, 24.0));
+                let xr = ui.interact(x, ui.id().with("bulk-clear"), Sense::click());
+                xr.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Скасувати вибір"));
+                if xr.hovered() {
+                    ui.painter().rect_filled(x, CornerRadius::same(8), over_color(PANEL, Color32::WHITE, 0.07));
+                }
+                icons::paint(ui, Rect::from_center_size(x.center(), vec2(12.0, 12.0)), "close", accent_text());
+                if xr.on_hover_text("Скасувати вибір").clicked() {
+                    act = Some(3);
                 }
                 match act {
                     Some(0) | Some(1) => {
                         let rows = self.checked.1.clone();
                         self.message = self.st.bulk_rows(f, &rows, act == Some(1));
+                        self.checked.1.clear();
+                    }
+                    Some(2) => {
+                        let rows = self.checked.1.clone();
+                        self.message = self.st.bulk_memory(f, &rows);
                         self.checked.1.clear();
                     }
                     Some(_) => self.checked.1.clear(),
@@ -1361,7 +1417,11 @@ impl App {
             let mut commit: Option<bool> = None; // Some(true) — зберегти й далі, Some(false) — скасувати
             let mut begin: Option<usize> = None;
             let list_h = ui.available_height();
-            egui::ScrollArea::vertical().id_salt(("gridscroll", f)).auto_shrink([false; 2]).max_height(list_h).show_rows(ui, ROW_H, total, |ui, range| {
+            let mut area = egui::ScrollArea::vertical().id_salt(("gridscroll", f)).auto_shrink([false; 2]).max_height(list_h);
+            if let Some(off) = self.drag_scroll.take() {
+                area = area.vertical_scroll_offset(off.max(0.0));
+            }
+            let area_out = area.show_rows(ui, ROW_H, total, |ui, range| {
                 ui.spacing_mut().item_spacing.y = 0.0;
                 for i in range {
                     let Some(r) = self.st.visible_at(f, i) else { continue };
@@ -1386,7 +1446,8 @@ impl App {
                     // номер і стан
                     let ck_c = pos2(rect.left() + xs[0] + num_w / 2.0, rect.top() + 13.0);
                     let is_checked = self.checked.1.contains(&r);
-                    let ck_resp = (resp.hovered() || sel || is_checked || !self.checked.1.is_empty()).then(|| ui.interact(Rect::from_center_size(ck_c, vec2(22.0, 22.0)), ui.id().with(("rowck", r)), Sense::click()));
+                    // вся клітинка номера — і прапорець, і початок протягування (клацання без руху перемикає рядок)
+                    let ck_resp = (resp.hovered() || sel || is_checked || !self.checked.1.is_empty()).then(|| ui.interact(col(0, num_w), ui.id().with(("rowck", r)), Sense::click()));
                     match &ck_resp {
                         Some(cr) => {
                             cr.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, is_checked, format!("Вибрати рядок {}", r + 1)));
@@ -1397,8 +1458,19 @@ impl App {
                         }
                     }
                     let ck_clicked = ck_resp.as_ref().is_some_and(|c| c.clicked());
-                    if ck_clicked && !self.checked.1.remove(&r) {
-                        self.checked.1.insert(r);
+                    if ck_resp.as_ref().is_some_and(|c| c.hovered()) && self.drag_sel.is_none() {
+                        let (pressed, mods, pos) = ui.input(|i| (i.pointer.primary_pressed(), i.modifiers, i.pointer.latest_pos()));
+                        if pressed {
+                            let keep = mods.ctrl || mods.command || mods.shift;
+                            let anchor = if mods.shift { self.sel_last.unwrap_or(i) } else { i };
+                            self.drag_sel = Some(DragSel { anchor, base: if keep { self.checked.1.clone() } else { Default::default() }, start_y: pos.map_or(0.0, |p| p.y), moved: false });
+                        }
+                    }
+                    if ck_clicked {
+                        if !self.checked.1.remove(&r) {
+                            self.checked.1.insert(r);
+                        }
+                        self.sel_last = Some(i);
                     }
                     paint_state(ui, pos2(rect.left() + xs[1] + st_w / 2.0, rect.top() + 17.0), st, bad_rows.contains(&r));
                     ui.painter().with_clip_rect(col(2, key_w)).text(pos2(rect.left() + xs[2] + 8.0, rect.top() + 20.0), Align2::LEFT_CENTER, short_key(&self.st.key_of(f, r)), mp(12.0), MUTE);
@@ -1445,6 +1517,26 @@ impl App {
                     }
                 }
             });
+            // протягування по номерах: рядки від опорного до того, що під вказівником, виділено (разом із тим, що було, коли тримали Ctrl чи Shift); біля краю таблиця листається сама
+            if let Some(mut d) = self.drag_sel.take() {
+                let (down, pos) = ui.input(|i| (i.pointer.primary_down(), i.pointer.latest_pos()));
+                if let (true, Some(p)) = (down, pos) {
+                    d.moved |= (p.y - d.start_y).abs() >= DRAG_MIN;
+                    if d.moved && total > 0 {
+                        let inner = area_out.inner_rect;
+                        let at = (((p.y - inner.top() + area_out.state.offset.y) / ROW_H).floor().max(0.0) as usize).min(total - 1);
+                        let mut rows = d.base.clone();
+                        rows.extend((d.anchor.min(at)..=d.anchor.max(at)).filter_map(|k| self.st.visible_at(f, k)));
+                        self.checked.1 = rows;
+                        self.sel_last = Some(at);
+                        if let Some(step) = drag_scroll_step(p.y, inner.top(), inner.bottom()) {
+                            self.drag_scroll = Some(area_out.state.offset.y + step);
+                        }
+                    }
+                    self.drag_sel = Some(d);
+                    ui.ctx().request_repaint();
+                }
+            }
             if let Some(r) = begin {
                 self.st.row = Some(r);
                 self.draft = self.st.target_of(f, r);

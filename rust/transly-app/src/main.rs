@@ -48,6 +48,10 @@ struct App {
     gl_del: Option<String>,
     gl_mem_asked: bool,
     rows_scroll_to: Option<bool>,
+    /// Виділення рядків таблиці протягуванням по номерах і рядок, від якого тягне Shift; куди прокрутити таблицю, поки вказівник біля краю.
+    drag_sel: Option<layout::DragSel>,
+    sel_last: Option<usize>,
+    drag_scroll: Option<f32>,
     keys_win: bool,
     rail: usize,
     run_cfg: usize,
@@ -249,7 +253,7 @@ fn game_job(text: &str, size: f32, actor_name: &dyn Fn(usize) -> Option<String>)
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, drag_scroll: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
     }
 }
 
@@ -3654,6 +3658,114 @@ mod ui_tests {
             assert_eq!(h.state().gl_show, idx, "{label}");
         }
         assert!(h.state().gl_mem_asked, "після «Пам’ять» лічильник пам’яті показується");
+    }
+
+    /// Протягування по стовпці номерів виділяє рядки від того, де натиснули, до того, що під вказівником; Ctrl додає до наявного; рух менший за поріг — лише клацання.
+    #[test]
+    fn dragging_over_the_number_column_selects_rows() {
+        let data = game("dragsel");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.st.row = Some(0);
+        let mut h = harness(app);
+        h.run();
+        let mid = |h: &Harness<'static, App>, name: &str| {
+            let b = h.get_by_label_contains(name).bounding_box().unwrap();
+            (b.x0 as f32, ((b.y0 + b.y1) / 2.0) as f32)
+        };
+        let (x0, y_hero) = mid(&h, "Hero");
+        let (_, y_mage) = mid(&h, "Mage");
+        let (_, y_wise) = mid(&h, "Wise");
+        let x = x0 + 17.0;
+        let drag = |h: &mut Harness<'static, App>, from: f32, to: f32, mods: egui::Modifiers| {
+            h.input_mut().modifiers = mods;
+            h.input_mut().events.push(egui::Event::PointerMoved(pos2(x, from)));
+            h.step();
+            h.input_mut().events.push(egui::Event::PointerButton { pos: pos2(x, from), button: egui::PointerButton::Primary, pressed: true, modifiers: mods });
+            h.step();
+            // кадри тесту йдуть по чверті секунди, а клацання в egui — це натиск і відпускання за < 0,8 с: для малого руху проміжних кадрів немає
+            let steps = if (to - from).abs() < 6.0 { 0 } else { 4 };
+            for k in 1..=steps {
+                h.input_mut().events.push(egui::Event::PointerMoved(pos2(x, from + (to - from) * k as f32 / steps as f32)));
+                h.step();
+            }
+            h.input_mut().events.push(egui::Event::PointerButton { pos: pos2(x, to), button: egui::PointerButton::Primary, pressed: false, modifiers: mods });
+            h.step();
+            h.step();
+            h.input_mut().modifiers = egui::Modifiers::NONE;
+        };
+        // від першого рядка до третього: 0, 1, 2 (4 рядки в файлі); смуга вибору лягає на шапку й таблицю не зсуває
+        drag(&mut h, y_hero, y_mage, egui::Modifiers::NONE);
+        let (_, y_after) = mid(&h, "Hero");
+        assert_eq!(y_after, y_hero, "смуга «вибрано» не зсуває рядки");
+        h.get_by_label("Скасувати вибір");
+        h.get_by_label("З пам’яті вибрані");
+        let mut got: Vec<usize> = h.state().checked.1.iter().copied().collect();
+        got.sort();
+        assert_eq!(got, [0, 1, 2], "{:?}", h.state().checked);
+        // нове протягування без Ctrl замінює виділене, з Ctrl — додає
+        drag(&mut h, y_wise, y_wise - 1.0, egui::Modifiers::NONE);
+        let mut got: Vec<usize> = h.state().checked.1.iter().copied().collect();
+        got.sort();
+        assert_eq!(got, [0, 1, 2, 3], "рух менший за поріг — клацання: лише перемикає рядок, не замінює виділене: {:?}", h.state().checked);
+        h.state_mut().checked.1.clear();
+        drag(&mut h, y_hero, y_mage, egui::Modifiers::NONE);
+        drag(&mut h, y_wise, y_wise + 20.0, egui::Modifiers::CTRL);
+        let mut got: Vec<usize> = h.state().checked.1.iter().copied().collect();
+        got.sort();
+        assert_eq!(got, [0, 1, 2, 3], "з Ctrl додається до виділеного: {:?}", h.state().checked);
+        assert!(h.state().drag_sel.is_none(), "відпустили — протягування скінчилось");
+    }
+
+    /// Біля верхнього й нижнього краю таблиці вона листається сама, тим швидше, чим ближче вказівник до краю (як у вебі: зона 48, крок 6 + до 30).
+    #[test]
+    fn the_table_scrolls_by_itself_near_its_edges_while_dragging() {
+        let step = |y: f32| layout::drag_scroll_step(y, 100.0, 500.0);
+        assert_eq!(step(300.0), None, "посередині таблиця стоїть");
+        assert_eq!(step(452.0), None, "на межі зони ще стоїть");
+        assert_eq!(step(476.0), Some(21.0), "половина зони — 6 + 15");
+        assert_eq!(step(500.0), Some(36.0), "край — найшвидше");
+        assert_eq!(step(560.0), Some(36.0), "за краєм швидкість не росте");
+        assert_eq!(step(124.0), Some(-21.0));
+        assert_eq!(step(100.0), Some(-36.0));
+    }
+
+    /// «З пам’яті» на вибраних рядках: порожній рядок отримує найближчий збіг (від 70 %) із пам’яті перекладів, переведений рядок не чіпається; дію можна скасувати.
+    #[test]
+    fn the_bulk_memory_button_fills_empty_selected_rows_from_the_memory() {
+        let data = game("bulkmem");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.st.import_memory("Mage\tМаг\nWise\tМудрий");
+        let mage = app.st.views[0].units.iter().position(|u| u.source == "Mage").unwrap();
+        let wise = app.st.views[0].units.iter().position(|u| u.source == "Wise").unwrap();
+        let hero = app.st.views[0].units.iter().position(|u| u.source == "Hero").unwrap();
+        app.st.edit(0, wise, "Мудрець");
+        let rows: std::collections::HashSet<usize> = [mage, wise, hero].into_iter().collect();
+        let msg = app.st.bulk_memory(0, &rows);
+        assert_eq!(msg, "Підставлено з пам’яті: 1", "{msg}");
+        assert_eq!(app.st.target_of(0, mage), "Маг");
+        assert_eq!(app.st.target_of(0, wise), "Мудрець", "переклад уже був — не чіпаємо");
+        assert_eq!(app.st.target_of(0, hero), "", "збігу в пам’яті немає");
+        assert_eq!(app.st.bulk_memory(0, &rows), "Збігів від 70% для порожніх вибраних рядків немає");
+        app.st.undo_last();
+        assert_eq!(app.st.target_of(0, mage), "", "«Скасувати» повертає порожній рядок");
+    }
+
+    /// Знімок таблиці з виділеними рядками (смуга «вибрано» на шапці): `TRANSLY_SHOTS=<тека> cargo test -p transly-app bulk_shot -- --ignored`.
+    #[test]
+    #[ignore]
+    fn bulk_shot() {
+        let Some(dir) = std::env::var_os("TRANSLY_SHOTS").map(std::path::PathBuf::from) else { return };
+        std::fs::create_dir_all(&dir).unwrap();
+        let data = game("bulkshot");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.st.row = Some(0);
+        app.checked = (0, [0usize, 1].into_iter().collect());
+        let mut h = harness(app);
+        h.run();
+        h.render().unwrap().save(dir.join("23-bulk-bar.png")).unwrap();
     }
 
     /// Знімок відкритого списку сповіщень: `TRANSLY_SHOTS=<тека> cargo test -p transly-app bell_shot -- --ignored`.

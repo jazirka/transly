@@ -130,7 +130,6 @@ enum UpdMsg {
 struct UpdUi {
     win: bool,
     repo: String,
-    token: String,
     status: String,
     latest: Option<transly_platform::selfupdate::Latest>,
     rx: Option<std::sync::mpsc::Receiver<UpdMsg>>,
@@ -141,7 +140,7 @@ struct UpdUi {
 
 impl Default for UpdUi {
     fn default() -> Self {
-        UpdUi { win: false, repo: "jazirka/transly".into(), token: String::new(), status: String::new(), latest: None, rx: None, auto_done: false, silent: false }
+        UpdUi { win: false, repo: transly_platform::selfupdate::update_repo().into(), status: String::new(), latest: None, rx: None, auto_done: false, silent: false }
     }
 }
 
@@ -1117,9 +1116,6 @@ impl App {
             }
             if mi(ui, "Оновлення…", true).clicked() {
                 self.upd.win = true;
-                if self.upd.latest.is_none() {
-                    self.upd.token = self.token.clone();
-                }
                 ui.close_menu();
             }
             if mi(ui, "Тексти плагінів…", self.st.is_open()).on_hover_text("Деякі ігри показують текст командами плагінів, а не вікнами повідомлень: позначте, які команди брати").clicked() {
@@ -1319,6 +1315,18 @@ impl App {
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.spacing_mut().item_spacing.x = 14.0;
+                    // знайдено нову збірку — одна кнопка: завантажити, підмінити файл і запустити знову
+                    if self.upd.latest.as_ref().is_some_and(|l| l.newer && l.asset.is_some()) {
+                        let busy = self.upd.rx.is_some();
+                        let g = ui.painter().layout_no_wrap(if busy { "Оновлюю…".to_string() } else { "Є нова версія · Оновити".to_string() }, ip(11.5), Color32::WHITE);
+                        let (r, resp) = ui.allocate_exact_size(vec2(g.size().x + 20.0, 20.0), Sense::click());
+                        ui.painter().rect_filled(r, CornerRadius::same(8), if busy { over_color(BG, accent(), 0.5) } else if resp.hovered() { accent_hover() } else { accent_solid() });
+                        ui.painter().galley(pos2(r.left() + 10.0, r.center().y - g.size().y / 2.0), g, Color32::WHITE);
+                        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, !busy, "Оновити застосунок"));
+                        if resp.on_hover_text("Завантажити нову збірку, замінити файл і запустити застосунок знову (проєкт буде збережено)").clicked() && !busy {
+                            self.update_download();
+                        }
+                    }
                     if self.st.is_open() {
                         let mins = ((now as i64 - self.st.session_start) / 60000).max(0);
                         ui.label(small(format!("Сесія: {} рядків змінено · {mins} хв", self.st.session_edits), MUTE));
@@ -1604,10 +1612,10 @@ impl App {
             return;
         }
         self.upd.status = "Перевіряю…".into();
-        let (repo, token) = (self.upd.repo.clone(), self.upd.token.clone());
+        let repo = self.upd.repo.clone();
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
-            let _ = tx.send(UpdMsg::Checked(transly_platform::selfupdate::check_latest(&repo, &token)));
+            let _ = tx.send(UpdMsg::Checked(transly_platform::selfupdate::check_latest(&repo, "")));
         });
         self.upd.rx = Some(rx);
     }
@@ -1618,11 +1626,10 @@ impl App {
             return;
         }
         self.upd.status = "Завантажую оновлення…".into();
-        let token = self.upd.token.clone();
         let dir = std::env::temp_dir().join("transly-native-update");
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
-            let _ = tx.send(UpdMsg::Downloaded(transly_platform::selfupdate::download_new(&asset, &token, &dir)));
+            let _ = tx.send(UpdMsg::Downloaded(transly_platform::selfupdate::download_new(&asset, "", &dir)));
         });
         self.upd.rx = Some(rx);
     }
@@ -1642,7 +1649,7 @@ impl App {
                 let newer = l.newer;
                 self.upd.status = if newer { "Є нова версія.".into() } else { "У вас остання версія.".into() };
                 if newer && self.upd.silent {
-                    self.message = "Є нова версія: відкрийте «Інструменти → Оновлення…»".into();
+                    self.message = "Є нова версія: натисніть «Оновити» праворуч внизу".into();
                 } else if !self.upd.silent {
                     self.message = self.upd.status.clone();
                 }
@@ -1688,14 +1695,6 @@ impl App {
             let id = transly_platform::selfupdate::build_id();
             ui.label(RichText::new(format!("Версія збірки: {}", if id == "dev" { "локальна".to_string() } else { id.chars().take(7).collect() })).color(MUTE));
             ui.add_space(6.0);
-            egui::Grid::new("upd_grid").num_columns(2).spacing([14.0, 10.0]).show(ui, |ui| {
-                ui.label("Репозиторій зі збірками");
-                ui.add(egui::TextEdit::singleline(&mut self.upd.repo).desired_width(240.0));
-                ui.end_row();
-                ui.label("Токен (лише для приватного)");
-                ui.add(egui::TextEdit::singleline(&mut self.upd.token).password(true).desired_width(240.0));
-                ui.end_row();
-            });
             if let Some(l) = &self.upd.latest {
                 ui.add_space(6.0);
                 let when = chrono::DateTime::parse_from_rfc3339(&l.release.published).map(|d| d.with_timezone(&chrono::Local).format("%d.%m.%Y %H:%M").to_string()).unwrap_or_default();
@@ -1710,11 +1709,11 @@ impl App {
             }
             ui.add_space(8.0);
             ui.horizontal(|ui| {
+                if can_install && ui.add(egui::Button::new(RichText::new("Оновити й перезапустити").color(Color32::WHITE)).fill(accent_solid())).clicked() {
+                    install = true;
+                }
                 if ui.add_enabled(!busy, egui::Button::new("Перевірити зараз")).clicked() {
                     check = true;
-                }
-                if ui.add_enabled(can_install, egui::Button::new(RichText::new("Завантажити й встановити").color(Color32::WHITE)).fill(accent_solid())).clicked() {
-                    install = true;
                 }
             });
         });
@@ -2940,6 +2939,23 @@ mod ui_tests {
         assert_eq!(h.state_mut().st.start_relay_sync().unwrap_err(), "Адреса сервера має починатися з https:// (для власної мережі можна http://)");
         h.state_mut().st.relay.url = "https://relay.example".into();
         assert!(h.state().st.relay.configured());
+    }
+
+    /// Знайшли нову збірку — у рядку стану з'являється одна кнопка «Оновити» (без токена й репозиторію).
+    #[test]
+    fn a_newer_build_shows_one_update_button_in_the_status_bar() {
+        use transly_core::update::{ReleaseAsset, ReleaseInfo};
+        let mut app = App::default();
+        let release = ReleaseInfo { sha: "abcdef1".into(), published: "2026-11-26T10:00:00Z".into(), assets: vec![ReleaseAsset { name: "Transly-native.exe".into(), url: "https://api.github.com/x".into(), size: 1.0, digest: None }] };
+        app.upd.latest = Some(transly_platform::selfupdate::Latest { asset: Some(("Transly-native.exe".into(), "https://api.github.com/x".into(), 1)), release, newer: true });
+        let mut h = harness(app);
+        h.run();
+        h.get_by_label("Оновити застосунок");
+        // у вікні «Оновлення» немає ні поля репозиторію, ні токена
+        h.state_mut().upd.win = true;
+        h.run();
+        assert!(h.query_by_label("Токен (лише для приватного)").is_none() && h.query_by_label("Репозиторій зі збірками").is_none());
+        h.get_by_label("Оновити й перезапустити");
     }
 
     #[test]

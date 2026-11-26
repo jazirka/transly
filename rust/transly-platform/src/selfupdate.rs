@@ -30,7 +30,12 @@ fn pick_native(release: &ReleaseInfo) -> Option<(String, String, u64)> {
     by(&|n| n.ends_with(".exe") && n.contains("native")).or_else(|| by(&|n| n.ends_with(".exe"))).map(|a| (a.name.clone(), a.url.clone(), a.size as u64))
 }
 
-/// Питає GitHub про реліз `rust-latest`. Токен потрібен лише для приватного репозиторію (порожній — без нього).
+/// Репозиторій зі збірками: CI вшиває своє (`TRANSLY_UPDATE_REPO`), інакше — основний. Репозиторій публічний, тож токен для оновлень не потрібен.
+pub fn update_repo() -> &'static str {
+    option_env!("TRANSLY_UPDATE_REPO").filter(|s| !s.is_empty()).unwrap_or("jazirka/transly")
+}
+
+/// Питає GitHub про реліз `rust-latest`. Токен потрібен лише для приватного репозиторію (порожній — без нього; застосунок його більше не передає).
 pub fn check_latest(repo: &str, token: &str) -> Result<Latest, String> {
     let repo = repo.trim();
     let ok = repo.split('/').count() == 2 && repo.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '.' | '-' | '_'));
@@ -44,8 +49,8 @@ pub fn check_latest(repo: &str, token: &str) -> Result<Latest, String> {
     }
     let json: serde_json::Value = match req.call() {
         Ok(r) => r.into_json().map_err(|_| "GitHub надіслав незрозумілу відповідь".to_string())?,
-        Err(ureq::Error::Status(401, _)) => return Err("Токен недійсний або прострочений".into()),
-        Err(ureq::Error::Status(404, _)) => return Err("Релізу нативної збірки ще немає, або токен не має доступу до цього репозиторію".into()),
+        Err(ureq::Error::Status(401 | 403, _)) => return Err("GitHub не віддав реліз (забагато запитів або репозиторій закритий): спробуйте за кілька хвилин".into()),
+        Err(ureq::Error::Status(404, _)) => return Err("Релізу нативної збірки ще немає".into()),
         Err(ureq::Error::Status(c, _)) => return Err(format!("GitHub: помилка {c}")),
         Err(_) => return Err("Немає з’єднання з GitHub".into()),
     };

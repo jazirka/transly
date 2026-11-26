@@ -358,7 +358,8 @@ fn pill(ui: &mut egui::Ui, avatar: Option<&str>, icon: Option<&str>, text: &str,
     if let Some(letters) = avatar {
         let c = pos2(rect.left() + pad_l + 13.0, rect.center().y);
         theme::set_glow_x(c.x + 60.0); // як `--gx` у вебі: середина аватара + 60
-        ui.painter().circle_filled(c, 13.0, accent_solid());
+        // піктограма проєкту — закруглений квадрат 26×26 (радіус 8, як кнопки), а не коло
+        ui.painter().rect_filled(Rect::from_center_size(c, vec2(26.0, 26.0)), CornerRadius::same(8), accent_solid());
         ui.painter().text(c, Align2::CENTER_CENTER, letters, FontId::monospace(11.5), Color32::WHITE);
     } else if let Some(ic) = icon {
         icons::paint(ui, Rect::from_center_size(pos2(rect.left() + pad_l + 8.0, rect.center().y), vec2(16.0, 16.0)), ic, MUTE);
@@ -707,12 +708,7 @@ impl App {
             ui.horizontal_centered(|ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
                 let can = self.st.is_open();
-                // логотип
-                let (r, _) = ui.allocate_exact_size(vec2(21.0, 21.0), Sense::hover());
-                ui.painter().circle_filled(r.center(), 10.5, accent_solid());
-                ui.painter().text(r.center(), Align2::CENTER_CENTER, "T", FontId::proportional(11.0), Color32::WHITE);
-                ui.add_space(2.0);
-                // головне меню
+                // головне меню (логотипа більше немає: перше в рядку; місце меню ще обирається, див. макети верхньої панелі)
                 egui::menu::menu_custom_button(ui, egui::Button::image(icons::image("menu", MUTE, 16.0)).frame(false).min_size(vec2(28.0, 28.0)), |ui| {
                     menu_style(ui);
                     ui.menu_button("Файл", |ui| self.menu_file(ui));

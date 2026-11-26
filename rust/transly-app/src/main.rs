@@ -12,6 +12,7 @@ mod links_dialog;
 mod plugins;
 mod state;
 mod theme;
+mod winchrome;
 
 use eframe::egui::{self, pos2, vec2, Align2, Color32, CornerRadius, FontId, Rect, RichText, Sense, Stroke, StrokeKind};
 use state::{AppState, Filter, RowStatus};
@@ -21,7 +22,7 @@ use theme::*;
 type TermSyncWin = (transly_core::termsync::TermChange, Vec<(transly_core::termsync::TermProposal, bool, Vec<i64>)>);
 
 fn main() -> eframe::Result {
-    let opts = eframe::NativeOptions { viewport: egui::ViewportBuilder::default().with_inner_size([1360.0, 800.0]).with_min_inner_size([1000.0, 600.0]).with_title("Transly"), ..Default::default() };
+    let opts = eframe::NativeOptions { viewport: egui::ViewportBuilder::default().with_inner_size([1360.0, 800.0]).with_min_inner_size([1000.0, 600.0]).with_title("Transly").with_decorations(!winchrome::own_chrome_chosen()), ..Default::default() };
     eframe::run_native("Transly", opts, Box::new(|cc| {
         theme::apply(&cc.egui_ctx);
         let mut app = App::default();
@@ -75,6 +76,8 @@ struct App {
     build_win: Option<state::BuildChoice>,
     fill_win: Option<Vec<(transly_core::autofill::Proposal, bool)>>,
     links_win: Option<links_dialog::LinksWin>,
+    /// Власний заголовок вікна (кнопки в застосунку) чи системний.
+    chrome_own: bool,
     find_win: Option<(String, String, bool, bool)>,
     plugins_win: bool,
     sync_win: Option<(transly_platform::github::GithubSettings, String)>,
@@ -257,7 +260,7 @@ fn game_job(text: &str, size: f32, actor_name: &dyn Fn(usize) -> Option<String>)
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, links_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, links_win: None, chrome_own: winchrome::own_chrome_chosen(), find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
     }
 }
 
@@ -673,6 +676,9 @@ impl App {
             theme::apply_style(ctx);
         }
         self.topbar(ctx);
+        if self.chrome_own {
+            self.window_edges(ctx);
+        }
         self.st.remember_row();
         if let Some(after) = self.st.inbox_step(std::time::Duration::from_millis(6)) {
             if after.is_zero() {
@@ -797,6 +803,18 @@ impl App {
     /// Розміри — з розмірів старого застосунку в пунктах (знімок у пікселях ÷ 1,25).
     fn topbar(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::top("topbar").exact_height(40.0).show_separator_line(false).frame(egui::Frame::new().fill(Color32::TRANSPARENT).inner_margin(egui::Margin::symmetric(6, 0))).show(ctx, |ui| {
+            // власний заголовок: смуга перетягування й три кнопки справа; решта панелі не заходить на місце кнопок
+            if self.chrome_own {
+                self.window_controls(ctx, ui);
+            }
+            let mut inner;
+            let ui: &mut egui::Ui = if self.chrome_own {
+                let r = ui.max_rect();
+                inner = ui.new_child(egui::UiBuilder::new().max_rect(Rect::from_min_max(r.min, pos2(r.right() - winchrome::WCTL_W, r.bottom()))).layout(*ui.layout()));
+                &mut inner
+            } else {
+                ui
+            };
             // поля 6 з обох боків: кнопка ≡ стоїть на одній лінії з кнопками лівої смужки (x 6…34), а крайня права — з правою смужкою
             ui.horizontal_centered(|ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
@@ -1191,6 +1209,12 @@ impl App {
             }
             if mi(ui, if self.bottom_open { "Сховати нижню панель" } else { "Показати нижню панель" }, true).clicked() {
                 self.bottom_open = !self.bottom_open;
+                ui.close_menu();
+            }
+            menu_sep(ui);
+            if mi(ui, if self.chrome_own { "Системний заголовок вікна" } else { "Власний заголовок вікна" }, true).on_hover_text("Смуга з кнопками «Згорнути», «Розгорнути» і «Закрити»: своя в застосунку чи системна від Windows").clicked() {
+                let ctx = ui.ctx().clone();
+                self.toggle_chrome(&ctx);
                 ui.close_menu();
             }
     }
@@ -3873,6 +3897,109 @@ mod ui_tests {
         let mut h = harness(app);
         h.run();
         h.render().unwrap().save(dir.join("24-links-dialog.png")).unwrap();
+    }
+
+    /// Команди вікна, які застосунок надіслав за останній кадр.
+    fn window_commands(h: &Harness<'static, App>) -> Vec<egui::ViewportCommand> {
+        h.output().viewport_output.get(&egui::ViewportId::ROOT).map(|v| v.commands.clone()).unwrap_or_default()
+    }
+
+    /// Власний заголовок вікна: три кнопки на правому краю (36/36/40 × 28, проміжок 2, по центру панелі заввишки 40), решта панелі не заходить на них;
+    /// кнопки шлють команди вікна, у розгорнутому вікні друга стає «Відновити розмір»; порожнє місце панелі тягне вікно, подвійний клік розгортає.
+    #[test]
+    fn the_window_has_its_own_minimize_maximize_and_close_buttons() {
+        let mut h = harness(App::default());
+        h.run();
+        let rect = |h: &Harness<'static, App>, label: &str| {
+            let b = h.get_by_label(label).bounding_box().unwrap();
+            (b.x0 as f32, b.y0 as f32, b.x1 as f32, b.y1 as f32)
+        };
+        let (close, max, min) = (rect(&h, "Закрити вікно"), rect(&h, "Розгорнути вікно"), rect(&h, "Згорнути вікно"));
+        assert_eq!(close, (1320.0, 6.0, 1360.0, 34.0), "закрити 40×28 до самого краю");
+        assert_eq!(max, (1282.0, 6.0, 1318.0, 34.0), "розгорнути 36×28, проміжок 2");
+        assert_eq!(min, (1244.0, 6.0, 1280.0, 34.0));
+        // решта панелі закінчується до кнопок: найправіша кнопка «Гарячі клавіші» не далі за 1360 − 128
+        let keys = rect(&h, "Гарячі клавіші");
+        assert!(keys.2 <= 1360.0 - winchrome::WCTL_W + 0.5, "{keys:?}");
+        // кнопки шлють команди вікна
+        h.get_by_label("Згорнути вікно").click();
+        h.step();
+        assert!(window_commands(&h).contains(&egui::ViewportCommand::Minimized(true)), "{:?}", window_commands(&h));
+        h.get_by_label("Розгорнути вікно").click();
+        h.step();
+        assert!(window_commands(&h).contains(&egui::ViewportCommand::Maximized(true)));
+        h.get_by_label("Закрити вікно").click();
+        h.step();
+        assert!(window_commands(&h).contains(&egui::ViewportCommand::Close));
+        // у розгорнутому вікні — «Відновити розмір»
+        h.input_mut().viewports.entry(egui::ViewportId::ROOT).or_default().maximized = Some(true);
+        h.run();
+        h.get_by_label("Відновити розмір вікна").click();
+        h.step();
+        assert!(window_commands(&h).contains(&egui::ViewportCommand::Maximized(false)));
+        h.input_mut().viewports.entry(egui::ViewportId::ROOT).or_default().maximized = Some(false);
+        h.run();
+        // тягнемо порожнє місце верхньої панелі: вікно починає рух; подвійний клік розгортає
+        let p = pos2(1000.0, 20.0);
+        h.input_mut().events.push(egui::Event::PointerMoved(p));
+        h.step();
+        h.input_mut().events.push(egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE });
+        h.step();
+        h.input_mut().events.push(egui::Event::PointerMoved(pos2(1030.0, 30.0)));
+        h.step();
+        assert!(window_commands(&h).contains(&egui::ViewportCommand::StartDrag), "{:?}", window_commands(&h));
+        h.input_mut().events.push(egui::Event::PointerButton { pos: pos2(1030.0, 30.0), button: egui::PointerButton::Primary, pressed: false, modifiers: egui::Modifiers::NONE });
+        h.step();
+        // системний заголовок: кнопок і смуги немає, команда повертає системну рамку
+        h.state_mut().chrome_own = true;
+        let ctx = h.ctx.clone();
+        h.state_mut().toggle_chrome(&ctx);
+        h.step();
+        assert!(window_commands(&h).contains(&egui::ViewportCommand::Decorations(true)), "{:?}", window_commands(&h));
+        h.run();
+        assert!(h.query_by_label("Закрити вікно").is_none());
+        h.state_mut().toggle_chrome(&ctx);
+        h.step();
+        assert!(window_commands(&h).contains(&egui::ViewportCommand::Decorations(false)), "{:?}", window_commands(&h));
+        h.run();
+        h.get_by_label("Закрити вікно");
+    }
+
+    /// Краї вікна без системної рамки: на межі 5 px — сторона, у кутах 12 px — кут; всередині нічого.
+    #[test]
+    fn the_window_edges_pick_the_direction_to_resize() {
+        use egui::ResizeDirection as D;
+        let win = Rect::from_min_size(pos2(0.0, 0.0), vec2(1000.0, 600.0));
+        let at = |x: f32, y: f32| winchrome::edge_at(win, pos2(x, y));
+        assert_eq!(at(500.0, 300.0), None);
+        assert_eq!(at(500.0, 2.0), Some(D::North));
+        assert_eq!(at(500.0, 598.0), Some(D::South));
+        assert_eq!(at(2.0, 300.0), Some(D::West));
+        assert_eq!(at(998.0, 300.0), Some(D::East));
+        assert_eq!(at(2.0, 2.0), Some(D::NorthWest));
+        assert_eq!(at(998.0, 2.0), Some(D::NorthEast));
+        assert_eq!(at(2.0, 598.0), Some(D::SouthWest));
+        assert_eq!(at(998.0, 598.0), Some(D::SouthEast));
+        assert_eq!(at(2.0, 8.0), Some(D::NorthWest), "поруч із кутом на боковому краї — теж кут");
+        assert_eq!(at(8.0, 2.0), Some(D::NorthWest));
+        assert_eq!(at(7.0, 300.0), None, "далі за 5 px від краю вже не край");
+    }
+
+    /// Знімок верхньої панелі з власними кнопками вікна: `TRANSLY_SHOTS=<тека> cargo test -p transly-app window_shot -- --ignored`.
+    #[test]
+    #[ignore]
+    fn window_shot() {
+        let Some(dir) = std::env::var_os("TRANSLY_SHOTS").map(std::path::PathBuf::from) else { return };
+        std::fs::create_dir_all(&dir).unwrap();
+        let data = game("winshot");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.st.row = Some(0);
+        let mut h = harness(app);
+        h.run();
+        h.get_by_label("Розгорнути вікно").hover();
+        h.run();
+        h.render().unwrap().save(dir.join("25-window-controls.png")).unwrap();
     }
 
     /// Знімок таблиці з виділеними рядками (смуга «вибрано» на шапці): `TRANSLY_SHOTS=<тека> cargo test -p transly-app bulk_shot -- --ignored`.

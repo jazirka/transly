@@ -235,6 +235,11 @@ fn project_path(dir: &Path, name: &str) -> PathBuf {
     dir.parent().unwrap_or(dir).join(format!("{name}.transly.json"))
 }
 
+/// Файл у теці даних програми (`%LOCALAPPDATA%/Transly`); у тестах її немає.
+pub(crate) fn local_file(name: &str) -> Option<PathBuf> {
+    plugins_dir().and_then(|p| p.parent().map(|d| d.join(name)))
+}
+
 /// Тека установлених плагінів у теці даних користувача.
 fn plugins_dir() -> Option<PathBuf> {
     if cfg!(test) {

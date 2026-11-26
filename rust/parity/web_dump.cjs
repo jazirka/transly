@@ -48,6 +48,12 @@ const SEL = JSON.parse(process.env.SEL);
     }
   }
   if (process.env.MODE === 'scene') { await page.locator('#tree-list .node:has-text("Town")').click(); await sleep(300); await page.locator('[data-m="scene"]').click(); await sleep(600); }
+  // PANE=files|rows|centre|right — клік у вікно перед знімком, щоб увімкнути відповідне «робоче вікно» (html[data-pane])
+  if (process.env.PANE) {
+    const clickAt = { files: '#tree', rows: '#lp-rows', centre: '#main', right: '.fs' }[process.env.PANE];
+    const box = await page.locator(clickAt).first().boundingBox(); await page.mouse.click(box.x + box.width / 2, box.y + box.height - 40); await sleep(300);
+    console.log('data-pane =', await page.evaluate(() => document.documentElement.dataset.pane));
+  }
   const res = await page.evaluate(sel => {
     const P = ['overflow-y','scrollbar-gutter','box-sizing','margin-right','font-family','font-size','font-weight','line-height','color','background-color','background-image','border-top-width','border-top-color','border-bottom-width','border-bottom-color','border-radius','padding','margin','gap','height','width','opacity','letter-spacing','text-transform'];
     const out = {};

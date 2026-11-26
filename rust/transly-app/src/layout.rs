@@ -102,6 +102,27 @@ pub(crate) fn empty_note(ui: &mut egui::Ui, text: &str) {
     ui.painter().text(pos2(area.center().x, (area.top() + 6.0 + area.bottom() - 12.0) / 2.0), Align2::CENTER_CENTER, text, ip(14.0), MUTE);
 }
 
+/// Ширина смужки режимів: відступ 3 + кнопка 28 + відступ 3 до полотна.
+const MODE_RAIL_W: f32 = 34.0;
+
+/// Верх першої кнопки смужки від верху вікна: центр кнопки (28) на рівні тексту заголовка картки (центр 58): 40 + 4 + 14.
+const RAIL_TOP: f32 = 4.0;
+
+/// Кнопка смужки (`.strip button`, `#stabs button`, режими): 28×28, радіус 8, значок 17; активна — заливка й кільце 1 px (`theme::rail_colors`), білий значок;
+/// наведення — біле 7 %. Однакова для лівої, правої смужки й смужки режимів.
+pub(crate) fn rail_button(ui: &mut egui::Ui, r: Rect, id: egui::Id, ic: &str, on: bool, lit: bool, enabled: bool) -> egui::Response {
+    let resp = ui.interact(r, id, if enabled { Sense::click() } else { Sense::hover() });
+    if on {
+        let (fill, ring) = theme::rail_colors(r.center(), lit);
+        ui.painter().rect_filled(r, CornerRadius::same(8), fill);
+        ui.painter().rect_stroke(r, CornerRadius::same(8), Stroke::new(1.0_f32, ring), StrokeKind::Inside);
+    } else if enabled && resp.hovered() {
+        ui.painter().rect_filled(r, CornerRadius::same(8), theme::over_ground_at(r.center(), 0.07));
+    }
+    icons::paint(ui, Rect::from_center_size(r.center(), vec2(17.0, 17.0)), ic, if on { Color32::WHITE } else if enabled { MUTE } else { DIM });
+    resp
+}
+
 /// Прапорець 14×14 (як у старому): рамка, при відміченні заливка кольору теми й пташка.
 fn paint_check(ui: &egui::Ui, c: egui::Pos2, on: bool, hover: bool) {
     let r = Rect::from_center_size(c, vec2(14.0, 14.0));
@@ -143,6 +164,27 @@ impl App {
         }
     }
 
+    // ------------------------------------------------------------------ смужка режимів
+    /// Смужка режимів «Таблиця / Редагування / Сцена» біля основного полотна, без рамки: кнопки одна під одною від верхнього лівого кута полотна,
+    /// перша — на рівні тексту рядка вкладок файлів. Перемикач перейшов сюди з верхньої панелі.
+    pub(crate) fn mode_rail(&mut self, ctx: &egui::Context) {
+        let can = self.st.is_open();
+        egui::SidePanel::left("moderail").exact_width(MODE_RAIL_W).resizable(false).show_separator_line(false).frame(egui::Frame::new().fill(Color32::TRANSPARENT)).show(ctx, |ui| {
+            let x = ui.max_rect().left() + 3.0;
+            let modes = [("table", "Таблиця: усі рядки файлу", !self.focus && !self.scene_mode), ("edit", "Редагування: один рядок", self.focus && !self.scene_mode), ("scene", "Сцена: репліки подій поспіль", self.scene_mode)];
+            for (i, (ic, tip, on)) in modes.into_iter().enumerate() {
+                let r = Rect::from_min_size(pos2(x, ui.max_rect().top() + RAIL_TOP + i as f32 * 34.0), vec2(28.0, 28.0));
+                let resp = rail_button(ui, r, ui.id().with(("moderail", i)), ic, on && can, self.lit(Pane::Centre), can);
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, can, tip));
+                if resp.on_hover_text(tip).clicked() {
+                    self.focus = i == 1;
+                    self.scene_mode = i == 2;
+                    self.pane = Pane::Centre;
+                }
+            }
+        });
+    }
+
     // ------------------------------------------------------------------ смужка значків
     pub(crate) fn strip(&mut self, ctx: &egui::Context) {
         let edit = self.focus && !self.scene_mode;
@@ -154,7 +196,7 @@ impl App {
             } else {
                 vec![vec![(0, "files", "Файли гри")], vec![(3, "book", "Пов’язане: слова, конструкції, однакові рядки")]]
             };
-            let mut y = ui.max_rect().top() + 8.0;
+            let mut y = ui.max_rect().top() + RAIL_TOP;
             let x = ui.max_rect().left() + 6.0;
             for (gi, g) in groups.iter().enumerate() {
                 if gi > 0 {
@@ -163,17 +205,9 @@ impl App {
                 }
                 for (idx, ic, tip) in g {
                     let r = Rect::from_min_size(pos2(x, y), vec2(28.0, 28.0));
-                    let resp = ui.interact(r, ui.id().with(("strip", *idx)), Sense::click());
                     let on = *idx == self.rail || (!edit && !self.scene_mode && *idx == 0 && self.rail != 3);
-                    let (fill, ring) = self.chosen(pane_of_rail(*idx));
+                    let resp = rail_button(ui, r, ui.id().with(("strip", *idx)), ic, on, self.lit(pane_of_rail(*idx)), true);
                     resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, format!("Панель: {tip}")));
-                    if on {
-                        ui.painter().rect_filled(r, CornerRadius::same(8), fill);
-                        ui.painter().rect_stroke(r, CornerRadius::same(8), Stroke::new(1.0_f32, ring), StrokeKind::Inside);
-                    } else if resp.hovered() {
-                        ui.painter().rect_filled(r, CornerRadius::same(8), GHOST_HOVER);
-                    }
-                    icons::paint(ui, Rect::from_center_size(r.center(), vec2(17.0, 17.0)), ic, if on { Color32::WHITE } else { MUTE });
                     if resp.on_hover_text(*tip).clicked() {
                         self.rail = *idx;
                         self.pane = pane_of_rail(*idx);
@@ -234,13 +268,11 @@ impl App {
                 if hresp.hovered() {
                     ui.painter().rect_filled(hr, CornerRadius::same(8), GHOST_HOVER);
                 }
-                icons::paint(ui, Rect::from_center_size(pos2(hr.left() + 10.0, hr.center().y), vec2(11.0, 11.0)), "caret", MUTE);
-                // стрілка вправо, коли згорнуто: поверх малюємо повернуту — достатньо двох станів значка
-                if !open {
-                    ui.painter().rect_filled(Rect::from_center_size(pos2(hr.left() + 10.0, hr.center().y), vec2(12.0, 12.0)), CornerRadius::ZERO, if hresp.hovered() { GHOST_HOVER } else { BG });
-                    icons::paint(ui, Rect::from_center_size(pos2(hr.left() + 10.0, hr.center().y), vec2(11.0, 11.0)), "right", MUTE);
-                }
-                ui.painter().text(pos2(hr.left() + 26.0, hr.center().y), Align2::LEFT_CENTER, title, ip(12.5), TEXT);
+                // шеврон 8×8 (`.node .chev`): колір приглушений, при наведенні — текст; згорнута тека — повернутий на −90°
+                let chev_c = if hresp.hovered() { TEXT } else { MUTE };
+                icons::paint_rot(ui, Rect::from_center_size(pos2(hr.left() + 10.0, hr.center().y), vec2(8.0, 8.0)), "chev", chev_c, if open { 0.0 } else { -std::f32::consts::FRAC_PI_2 });
+                // назва папки — в одній колонці з бейджами файлів (x = лівий край бейджа)
+                ui.painter().text(pos2(hr.left() + 20.0, hr.center().y), Align2::LEFT_CENTER, title, ip(12.5), TEXT);
                 if hresp.clicked() {
                     if open {
                         self.tree_closed.insert(k);
@@ -322,18 +354,10 @@ impl App {
             let rx = full.right() - 34.0;
             let tips = [("history", "Активність у рядку: хто, коли й що змінював"), ("link", "Пов’язане: терміни, пам’ять, однакові рядки"), ("cmt", "Обговорення рядка")];
             for (i, (ic, tip)) in tips.iter().enumerate() {
-                let r = Rect::from_min_size(pos2(rx, full.top() + 8.0 + i as f32 * 34.0), vec2(28.0, 28.0));
-                let resp = ui.interact(r, ui.id().with(("rrail", i)), Sense::click());
-                resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, self.right_secs[mi][i], format!("Права панель: {tip}")));
+                let r = Rect::from_min_size(pos2(rx, full.top() + RAIL_TOP + i as f32 * 34.0), vec2(28.0, 28.0));
                 let on = self.right_secs[mi][i];
-                if on {
-                    let (fill, ring) = self.chosen(Pane::Right);
-                    ui.painter().rect_filled(r, CornerRadius::same(8), fill);
-                    ui.painter().rect_stroke(r, CornerRadius::same(8), Stroke::new(1.0_f32, ring), StrokeKind::Inside);
-                } else if resp.hovered() {
-                    ui.painter().rect_filled(r, CornerRadius::same(8), GHOST_HOVER);
-                }
-                icons::paint(ui, Rect::from_center_size(r.center(), vec2(17.0, 17.0)), ic, if on { TEXT } else { MUTE });
+                let resp = rail_button(ui, r, ui.id().with(("rrail", i)), ic, on, self.lit(Pane::Right), true);
+                resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, format!("Права панель: {tip}")));
                 if resp.on_hover_text(*tip).clicked() {
                     self.right_secs[mi][i] = !self.right_secs[mi][i];
                 }
@@ -935,7 +959,7 @@ impl App {
 
     // ------------------------------------------------------------------ центр
     pub(crate) fn editor(&mut self, ctx: &egui::Context) {
-        egui::CentralPanel::default().frame(card_lr(6, 0)).show(ctx, |ui| {
+        egui::CentralPanel::default().frame(card_lr(0, 0)).show(ctx, |ui| {
             ctx.data_mut(|d| d.insert_temp(egui::Id::new("pane-centre"), ui.max_rect()));
             ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
             self.st.sync_tabs();
@@ -1111,7 +1135,7 @@ impl App {
     pub(crate) fn tabs_bar(&mut self, ui: &mut egui::Ui, f: usize) {
         let (tabs, _) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::hover());
         ui.painter().rect_filled(tabs, card_top(), PANEL);
-        ui.painter().hline(tabs.x_range(), tabs.bottom(), Stroke::new(1.0_f32, LINE));
+        ui.painter().hline(tabs.x_range(), tabs.bottom() - 0.5, Stroke::new(1.0_f32, LINE));
         let names = self.st.file_names();
         let mut x = tabs.left();
         let (mut pick, mut close): (Option<usize>, Option<usize>) = (None, None);
@@ -1240,10 +1264,11 @@ impl App {
 
     /// Таблиця: шапка 26, рядки 34 із зеброю, колонки №, стан, ключ, [мовець], оригінал, переклад, кількість знаків. Переклад правиться в клітинці.
     fn grid(&mut self, ui: &mut egui::Ui, f: usize) {
-        egui::Frame::new().inner_margin(egui::Margin { left: 6, right: 6, top: 0, bottom: 6 }).show(ui, |ui| {
+        egui::Frame::new().inner_margin(egui::Margin { left: 0, right: 0, top: 0, bottom: 6 }).show(ui, |ui| {
             let w = ui.available_width();
             let who = self.st.file_has_speakers(f);
-            let (num_w, st_w, key_w, who_w, len_w) = (34.0_f32, 22.0_f32, 110.0_f32, if who { 120.0 } else { 0.0 }, 78.0_f32);
+            // таблиця зсунута до лівого краю полотна; 12 px звільнених полів (було по 6 з боків) — в останню колонку «К-сть зн.»: ширини клітинок з інтерактивною частиною не змінились
+            let (num_w, st_w, key_w, who_w, len_w) = (34.0_f32, 22.0_f32, 110.0_f32, if who { 120.0 } else { 0.0 }, 78.0_f32 + 12.0);
             let flex = w - num_w - st_w - key_w - who_w - len_w;
             let (src_w, tr_w) = (flex * 0.474, flex * 0.526);
             let xs = {

@@ -1,0 +1,15 @@
+{
+ "strip": "#strip",
+ "strip_btn": "#strip button[data-lp=files]",
+ "strip_btn2": "#strip button[data-lp=glossary]",
+ "strip_on": "#strip button.on",
+ "stab_on": "#stabs button.on",
+ "stab_off": "#stabs button:not(.on)",
+ "seg": "#seg",
+ "seg_btn": "#seg button",
+ "seg_on": "#seg button.on",
+ "lp_title": "#lp-title",
+ "tabs": ".tabs",
+ "tab_on": ".tab.on",
+ "mainh": "#main"
+}

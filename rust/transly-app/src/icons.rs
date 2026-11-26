@@ -45,6 +45,15 @@ fn body(name: &str) -> (&'static str, bool) {
 
 /// SVG піктограми білим кольором (колір дає `tint`).
 fn svg(name: &str) -> Vec<u8> {
+    // стрілки з веба мають власні полотна й товщину штриха: caret — 10×10 (штрих 1,6), chev дерева — 8×8 (штрих 1,5); на 16-піксельному полотні вони тонші й тьмяні
+    let own = match name {
+        "caret" => Some((10, "1.6", "M2 3.6L5 6.6l3-3")),
+        "chev" => Some((8, "1.5", "M1.5 2.5L4 5.2l2.5-2.7")),
+        _ => None,
+    };
+    if let Some((vb, sw, d)) = own {
+        return format!("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 {vb} {vb}' width='64' height='64' fill='none' stroke='white' stroke-width='{sw}' stroke-linecap='round' stroke-linejoin='round'><path d='{d}'/></svg>").into_bytes();
+    }
     let (b, fill) = body(name);
     let style = if fill { "fill='white' stroke='none'" } else { "fill='none' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'" };
     format!("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' width='64' height='64' {style}>{b}</svg>").into_bytes()
@@ -53,6 +62,11 @@ fn svg(name: &str) -> Vec<u8> {
 /// Малює піктограму в прямокутнику.
 pub fn paint(ui: &egui::Ui, rect: Rect, name: &str, color: Color32) {
     egui::Image::from_bytes(format!("bytes://icon-{name}.svg"), svg(name)).tint(color).paint_at(ui, rect);
+}
+
+/// Те саме, повернуте на `angle` радіан навколо центру (згорнута тека: шеврон −90°).
+pub fn paint_rot(ui: &egui::Ui, rect: Rect, name: &str, color: Color32, angle: f32) {
+    egui::Image::from_bytes(format!("bytes://icon-{name}.svg"), svg(name)).tint(color).rotate(angle, Vec2::splat(0.5)).paint_at(ui, rect);
 }
 
 /// Квадратна кнопка з піктограмою (як `tb-ic` у старому застосунку).

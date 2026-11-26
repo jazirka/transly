@@ -617,6 +617,7 @@ impl App {
         } else {
             self.left_panel(ctx);
         }
+        self.mode_rail(ctx);
         self.right_panel(ctx);
         self.editor(ctx);
     }
@@ -726,20 +727,7 @@ impl App {
                         self.br_win = Some(String::new());
                     }
                 }
-                ui.add_space(2.0);
-                // режим: Таблиця, Редагування, Сцена
-                ui.add_enabled_ui(can, |ui| {
-                    egui::Frame::new().fill(over_ground_at(ui.cursor().min + vec2(50.0, 16.0), 0.05)).corner_radius(CornerRadius::same(8)).inner_margin(egui::Margin::same(2)).show(ui, |ui| {
-                        ui.spacing_mut().item_spacing.x = 2.0;
-                        let modes = [("table", "Таблиця: усі рядки файлу", !self.focus && !self.scene_mode), ("edit", "Редагування: один рядок", self.focus && !self.scene_mode), ("scene", "Сцена: репліки подій поспіль", self.scene_mode)];
-                        for (i, (ic, tip, on)) in modes.into_iter().enumerate() {
-                            if icons::button(ui, ic, tip, on, MUTE).clicked() {
-                                self.focus = i == 1;
-                                self.scene_mode = i == 2;
-                            }
-                        }
-                    });
-                });
+                // перемикач режимів — зліва від полотна (`mode_rail`), у верхній панелі його більше немає
                 ui.add_space(6.0);
                 if can {
                     let p = self.st.progress();
@@ -3238,6 +3226,25 @@ mod ui_tests {
         assert!(!h.state().lit(Pane::Centre), "діалог гасить підсвітку");
         h.state_mut().keys_win = false;
         assert!(h.state().lit(Pane::Centre));
+    }
+
+    /// Усі смужки (ліва, права, режимів) мають першу кнопку на одному рівні з текстом заголовка картки (центр 58): верх 44, розмір 28×28.
+    #[test]
+    fn the_side_rails_start_level_with_the_header_text() {
+        let data = game("rails");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.st.row = Some(0);
+        let mut h = harness(app);
+        h.run();
+        for label in ["Панель: Файли гри", "Таблиця: усі рядки файлу", "Права панель: Активність у рядку: хто, коли й що змінював"] {
+            let r = h.get_by_label(label).bounding_box().unwrap();
+            assert_eq!(((r.y0 + r.y1) / 2.0, r.x1 - r.x0, r.y1 - r.y0), (58.0, 28.0, 28.0), "{label}: {r:?}");
+        }
+        // смужка режимів — між лівою карткою й полотном, без рамки; «Редагування» перемикає режим і вмикає центр
+        h.get_by_label("Редагування: один рядок").click();
+        h.run();
+        assert!(h.state().focus && h.state().pane == Pane::Centre);
     }
 
     /// Числа з веб-версії (computed style `#b-save`, `.saveb`): кнопка надсилання в редакторі 36×36.

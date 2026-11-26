@@ -704,18 +704,21 @@ impl App {
     /// Верхня панель, як у старому застосунку: логотип, меню, проєкт і гілка, режими, прогрес, збірка, запуск.
     /// Розміри — з розмірів старого застосунку в пунктах (знімок у пікселях ÷ 1,25).
     fn topbar(&mut self, ctx: &egui::Context) {
-        egui::TopBottomPanel::top("topbar").exact_height(40.0).show_separator_line(false).frame(egui::Frame::new().fill(Color32::TRANSPARENT).inner_margin(egui::Margin::symmetric(9, 0))).show(ctx, |ui| {
+        egui::TopBottomPanel::top("topbar").exact_height(40.0).show_separator_line(false).frame(egui::Frame::new().fill(Color32::TRANSPARENT).inner_margin(egui::Margin::symmetric(6, 0))).show(ctx, |ui| {
+            // поля 6 з обох боків: кнопка ≡ стоїть на одній лінії з кнопками лівої смужки (x 6…34), а крайня права — з правою смужкою
             ui.horizontal_centered(|ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
                 let can = self.st.is_open();
                 // головне меню (логотипа більше немає: перше в рядку; місце меню ще обирається, див. макети верхньої панелі)
-                egui::menu::menu_custom_button(ui, egui::Button::image(icons::image("menu", MUTE, 16.0)).frame(false).min_size(vec2(28.0, 28.0)), |ui| {
+                let menu_resp = egui::menu::menu_custom_button(ui, egui::Button::image(icons::image("menu", MUTE, 16.0)).frame(false).min_size(vec2(28.0, 28.0)), |ui| {
                     menu_style(ui);
                     ui.menu_button("Файл", |ui| self.menu_file(ui));
                     ui.menu_button("Перехід", |ui| self.menu_goto(ui));
                     ui.menu_button("Вигляд", |ui| self.menu_view(ui));
                     ui.menu_button("Інструменти", |ui| self.menu_tools(ui));
                 });
+                menu_resp.response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Головне меню"));
+                menu_resp.response.on_hover_text("Головне меню");
                 // проєкт
                 // усе зліва від перемикача режимів вміщується в межах до нього: довгі назви проєкту й гілки скорочуються
                 let budget = (layout::seg_x(ctx.screen_rect().width()) - 10.0 - ui.cursor().left()).max(60.0);
@@ -3279,6 +3282,10 @@ mod ui_tests {
             let r = h.get_by_label(label).bounding_box().unwrap();
             assert_eq!(((r.y0 + r.y1) / 2.0, r.x1 - r.x0, r.y1 - r.y0), (58.0, 28.0, 28.0), "{label}: {r:?}");
         }
+        // кнопка ≡ — на одній вертикалі з кнопками лівої смужки (x 6…34, центр 20), центр по висоті 20
+        let menu = h.get_by_label("Головне меню").bounding_box().unwrap();
+        let strip = h.get_by_label("Панель: Файли гри").bounding_box().unwrap();
+        assert_eq!((menu.x0, menu.x1 - menu.x0, (menu.y0 + menu.y1) / 2.0), (strip.x0, 28.0, 20.0), "{menu:?} {strip:?}");
         let sx = layout::seg_x(1360.0) as f64;
         for (i, label) in ["Таблиця: усі рядки файлу", "Редагування: один рядок", "Сцена: репліки подій поспіль"].iter().enumerate() {
             let r = h.get_by_label(label).bounding_box().unwrap();

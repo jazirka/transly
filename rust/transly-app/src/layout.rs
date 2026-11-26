@@ -102,8 +102,24 @@ pub(crate) fn empty_note(ui: &mut egui::Ui, text: &str) {
     ui.painter().text(pos2(area.center().x, (area.top() + 6.0 + area.bottom() - 12.0) / 2.0), Align2::CENTER_CENTER, text, ip(14.0), MUTE);
 }
 
-/// Ширина смужки режимів: відступ 3 + кнопка 28 + відступ 3 до полотна.
-const MODE_RAIL_W: f32 = 34.0;
+/// Ширини бічних колонок (ліва — картка з проміжком, права — картки зі смужкою) за шириною вікна. У повному вікні 306 і 396; у малому вони стискаються
+/// (спершу права до 260, потім ліва до 250), щоб на основному полотні лишалося місце для таблиці. Ширину бере і верхня панель, щоб перемикач режимів
+/// стояв у лівому верхньому куті полотна.
+pub(crate) fn panel_widths(window_w: f32) -> (f32, f32) {
+    let (mut left, mut right) = (306.0_f32, 396.0_f32);
+    let canvas = window_w - 34.0 - left - right - 6.0;
+    let need = (560.0 - canvas).max(0.0);
+    let from_right = need.min(right - 260.0);
+    right -= from_right;
+    left -= (need - from_right).min(left - 250.0);
+    (left, right)
+}
+
+/// Де стоїть перемикач режимів у верхній панелі: прикріплений до лівого верхнього кута полотна (смужка значків 34 + ліва колонка + проміжок 6) з відступом 6.
+/// Решта верхньої панелі підлаштовується під нього.
+pub(crate) fn seg_x(window_w: f32) -> f32 {
+    34.0 + panel_widths(window_w).0 + 6.0 + 6.0
+}
 
 /// Верх першої кнопки смужки від верху вікна: центр кнопки (28) на рівні тексту заголовка картки (центр 58): 40 + 4 + 14.
 const RAIL_TOP: f32 = 4.0;
@@ -137,7 +153,7 @@ fn paint_check(ui: &egui::Ui, c: egui::Pos2, on: bool, hover: bool) {
 
 /// Ліва колонка 306 (картка 300 + проміжок 6): картку малюємо самі, бо рамка панелі egui додає до ширини поля й рамку й обрізає її праворуч.
 fn left_card(ctx: &egui::Context, id: &'static str, add: impl FnOnce(&mut egui::Ui)) {
-    egui::SidePanel::left(id).exact_width(306.0).resizable(false).show_separator_line(false).frame(egui::Frame::new()).show(ctx, |ui| {
+    egui::SidePanel::left(id).exact_width(panel_widths(ctx.screen_rect().width()).0).resizable(false).show_separator_line(false).frame(egui::Frame::new()).show(ctx, |ui| {
         let full = ui.max_rect();
         let rect = Rect::from_min_max(pos2(full.left() + 6.0, full.top()), pos2(full.right(), full.bottom() - 6.0));
         let mut cui = ui.new_child(egui::UiBuilder::new().max_rect(rect));
@@ -162,27 +178,6 @@ impl App {
         } else {
             (SEL_GRAY, SEL_RING_GRAY)
         }
-    }
-
-    // ------------------------------------------------------------------ смужка режимів
-    /// Смужка режимів «Таблиця / Редагування / Сцена» біля основного полотна, без рамки: кнопки одна під одною від верхнього лівого кута полотна,
-    /// перша — на рівні тексту рядка вкладок файлів. Перемикач перейшов сюди з верхньої панелі.
-    pub(crate) fn mode_rail(&mut self, ctx: &egui::Context) {
-        let can = self.st.is_open();
-        egui::SidePanel::left("moderail").exact_width(MODE_RAIL_W).resizable(false).show_separator_line(false).frame(egui::Frame::new().fill(Color32::TRANSPARENT)).show(ctx, |ui| {
-            let x = ui.max_rect().left() + 3.0;
-            let modes = [("table", "Таблиця: усі рядки файлу", !self.focus && !self.scene_mode), ("edit", "Редагування: один рядок", self.focus && !self.scene_mode), ("scene", "Сцена: репліки подій поспіль", self.scene_mode)];
-            for (i, (ic, tip, on)) in modes.into_iter().enumerate() {
-                let r = Rect::from_min_size(pos2(x, ui.max_rect().top() + RAIL_TOP + i as f32 * 34.0), vec2(28.0, 28.0));
-                let resp = rail_button(ui, r, ui.id().with(("moderail", i)), ic, on && can, self.lit(Pane::Centre), can);
-                resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, can, tip));
-                if resp.on_hover_text(tip).clicked() {
-                    self.focus = i == 1;
-                    self.scene_mode = i == 2;
-                    self.pane = Pane::Centre;
-                }
-            }
-        });
     }
 
     // ------------------------------------------------------------------ смужка значків
@@ -348,7 +343,7 @@ impl App {
     pub(crate) fn right_panel(&mut self, ctx: &egui::Context) {
         let edit = self.focus && !self.scene_mode;
         let mi = usize::from(edit);
-        egui::SidePanel::right("rightcol").exact_width(396.0).resizable(false).show_separator_line(false).frame(egui::Frame::new()).show(ctx, |ui| {
+        egui::SidePanel::right("rightcol").exact_width(panel_widths(ctx.screen_rect().width()).1).resizable(false).show_separator_line(false).frame(egui::Frame::new()).show(ctx, |ui| {
             let full = ui.max_rect();
             // смужка значків
             let rx = full.right() - 34.0;
@@ -959,7 +954,7 @@ impl App {
 
     // ------------------------------------------------------------------ центр
     pub(crate) fn editor(&mut self, ctx: &egui::Context) {
-        egui::CentralPanel::default().frame(card_lr(0, 0)).show(ctx, |ui| {
+        egui::CentralPanel::default().frame(card_lr(6, 0)).show(ctx, |ui| {
             ctx.data_mut(|d| d.insert_temp(egui::Id::new("pane-centre"), ui.max_rect()));
             ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
             self.st.sync_tabs();

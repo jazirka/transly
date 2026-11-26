@@ -327,6 +327,23 @@ fn fmt_n(n: usize) -> String {
     out
 }
 
+/// Текст, скорочений з «…» до ширини `max_w` (шрифт верхньої панелі 13), щоб таблетки не виштовхували перемикач режимів.
+fn fit_text(ui: &egui::Ui, text: &str, max_w: f32) -> String {
+    let width = |s: &str| ui.painter().layout_no_wrap(s.to_string(), ip(13.0), TEXT).size().x;
+    if width(text) <= max_w {
+        return text.to_string();
+    }
+    let mut chars: Vec<char> = text.chars().collect();
+    while chars.len() > 1 {
+        chars.pop();
+        let s: String = chars.iter().collect::<String>() + "…";
+        if width(&s) <= max_w {
+            return s;
+        }
+    }
+    "…".to_string()
+}
+
 /// Таблетка верхньої панелі: аватар з літерами проєкту чи піктограма, назва, стрілка; рамка — для головної дії.
 fn pill(ui: &mut egui::Ui, avatar: Option<&str>, icon: Option<&str>, text: &str, caret: bool, border: bool) -> egui::Response {
     // розміри з комп'ютерних стилів веба: кнопка 28, заокруглення 8, шрифт 13; аватар 26 (відступ 4, проміжок 8); піктограма 16 (відступ 6 чи 12 у «збірки», проміжок 8 чи 7)
@@ -617,7 +634,6 @@ impl App {
         } else {
             self.left_panel(ctx);
         }
-        self.mode_rail(ctx);
         self.right_panel(ctx);
         self.editor(ctx);
     }
@@ -705,7 +721,11 @@ impl App {
                     ui.menu_button("Інструменти", |ui| self.menu_tools(ui));
                 });
                 // проєкт
-                let name = self.st.project.as_ref().map_or("Transly".to_string(), transly_core::projname::project_title);
+                // усе зліва від перемикача режимів вміщується в межах до нього: довгі назви проєкту й гілки скорочуються
+                let budget = (layout::seg_x(ctx.screen_rect().width()) - 10.0 - ui.cursor().left()).max(60.0);
+                let (proj_extra, branch_extra) = (62.0, 54.0);
+                let proj_max = if can { ((budget - proj_extra - branch_extra - 4.0) * 0.6).max(30.0) } else { (budget - proj_extra).max(30.0) };
+                let name = fit_text(ui, &self.st.project.as_ref().map_or("Transly".to_string(), transly_core::projname::project_title), proj_max);
                 let letters = self.st.project.as_ref().map_or("T".to_string(), transly_core::projname::icon_letters);
                 let resp = pill(ui, Some(&letters), None, &name, true, false);
                 pop(ui, &resp, "projpop", |ui| {
@@ -721,18 +741,37 @@ impl App {
                 });
                 // гілка
                 if can {
-                    let br = self.st.current_branch();
+                    let br_budget = (layout::seg_x(ctx.screen_rect().width()) - 10.0 - ui.cursor().left() - branch_extra).max(30.0);
+                    let br = fit_text(ui, &self.st.current_branch(), br_budget);
                     let resp = pill(ui, None, Some("branch"), &br, true, false);
                     if resp.clicked() {
                         self.br_win = Some(String::new());
                     }
                 }
-                // перемикач режимів — зліва від полотна (`mode_rail`), у верхній панелі його більше немає
-                ui.add_space(6.0);
+                // перемикач режимів: прикріплений до лівого верхнього кута полотна (x = межа полотна + 6), без рамки; усе інше підлаштовується під нього
+                ui.add_space((layout::seg_x(ctx.screen_rect().width()) - ui.cursor().left()).max(4.0));
+                {
+                    let modes = [("table", "Таблиця: усі рядки файлу", !self.focus && !self.scene_mode), ("edit", "Редагування: один рядок", self.focus && !self.scene_mode), ("scene", "Сцена: репліки подій поспіль", self.scene_mode)];
+                    ui.spacing_mut().item_spacing.x = 6.0;
+                    for (i, (ic, tip, on)) in modes.into_iter().enumerate() {
+                        let (r, _) = ui.allocate_exact_size(vec2(28.0, 28.0), Sense::hover());
+                        let resp = layout::rail_button(ui, r, ui.id().with(("seg", i)), ic, on && can, self.lit(Pane::Centre), can);
+                        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, can, tip));
+                        if resp.on_hover_text(tip).clicked() {
+                            self.focus = i == 1;
+                            self.scene_mode = i == 2;
+                            self.pane = Pane::Centre;
+                        }
+                    }
+                    ui.spacing_mut().item_spacing.x = 4.0;
+                }
+                ui.add_space(10.0);
                 if can {
                     let p = self.st.progress();
                     let pc = |n: usize| (n * 100).checked_div(p.total).unwrap_or(0);
-                    let (r, _) = ui.allocate_exact_size(vec2(120.0, 5.0), Sense::hover());
+                    let sw = ctx.screen_rect().width();
+                    // у вузькому вікні прогрес поступається: спершу текст стискається до відсотка, потім шкала коротшає (перемикач режимів — ніколи)
+                    let (r, _) = ui.allocate_exact_size(vec2(if sw > 1180.0 { 120.0 } else if sw > 1050.0 { 100.0 } else { 70.0 }, 5.0), Sense::hover());
                     ui.painter().rect_filled(r, CornerRadius::same(R1), TRACK);
                     let mut x = r.left();
                     for (n, col) in [(p.approved, OK), (p.sent, INFO), (p.draft, WARN)] {
@@ -742,10 +781,12 @@ impl App {
                     }
                     let done = p.draft + p.sent + p.approved;
                     let full = format!("Перекладено {}% ({} з {}) · надіслано {}% · вичитано {}%", pc(done), fmt_n(done), fmt_n(p.total), pc(p.sent), pc(p.approved));
-                    if ctx.screen_rect().width() > 1180.0 {
+                    if sw > 1180.0 {
                         ui.label(RichText::new(full).monospace().size(10.0).color(MUTE));
-                    } else {
+                    } else if sw > 1050.0 {
                         ui.label(RichText::new(format!("{}%", pc(done))).monospace().size(10.0).color(MUTE)).on_hover_text(full);
+                    } else {
+                        ui.add(egui::Label::new("").sense(Sense::hover())).on_hover_text(full);
                     }
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -3228,20 +3269,30 @@ mod ui_tests {
         assert!(h.state().lit(Pane::Centre));
     }
 
-    /// Усі смужки (ліва, права, режимів) мають першу кнопку на одному рівні з текстом заголовка картки (центр 58): верх 44, розмір 28×28.
+    /// Ліва й права смужки мають першу кнопку на одному рівні з текстом заголовка картки (центр 58, 28×28); перемикач режимів — у верхній панелі,
+    /// прикріплений до лівого верхнього кута полотна (x = межа полотна + 6) і не зсувається довгою назвою проєкту.
     #[test]
-    fn the_side_rails_start_level_with_the_header_text() {
+    fn the_side_rails_start_level_with_the_header_text_and_the_mode_switch_is_pinned_to_the_canvas_corner() {
         let data = game("rails");
         let mut app = App::default();
         app.st.open_game(&data).unwrap();
         app.st.row = Some(0);
         let mut h = harness(app);
         h.run();
-        for label in ["Панель: Файли гри", "Таблиця: усі рядки файлу", "Права панель: Активність у рядку: хто, коли й що змінював"] {
+        for label in ["Панель: Файли гри", "Права панель: Активність у рядку: хто, коли й що змінював"] {
             let r = h.get_by_label(label).bounding_box().unwrap();
             assert_eq!(((r.y0 + r.y1) / 2.0, r.x1 - r.x0, r.y1 - r.y0), (58.0, 28.0, 28.0), "{label}: {r:?}");
         }
-        // смужка режимів — між лівою карткою й полотном, без рамки; «Редагування» перемикає режим і вмикає центр
+        let sx = layout::seg_x(1360.0) as f64;
+        for (i, label) in ["Таблиця: усі рядки файлу", "Редагування: один рядок", "Сцена: репліки подій поспіль"].iter().enumerate() {
+            let r = h.get_by_label(label).bounding_box().unwrap();
+            assert_eq!((r.x0, (r.y0 + r.y1) / 2.0, r.x1 - r.x0), (sx + 34.0 * i as f64, 20.0, 28.0), "{label}: {r:?}");
+        }
+        // довга назва проєкту скорочується й перемикач лишається на місці
+        h.state_mut().st.project.as_mut().unwrap().name = "Дуже-дуже довга назва проєкту, що не вміщується".into();
+        h.state_mut().st.project.as_mut().unwrap().settings.remove("folderName");
+        h.run();
+        assert_eq!(h.get_by_label("Таблиця: усі рядки файлу").bounding_box().unwrap().x0, sx);
         h.get_by_label("Редагування: один рядок").click();
         h.run();
         assert!(h.state().focus && h.state().pane == Pane::Centre);
@@ -3336,6 +3387,27 @@ mod ui_tests {
             assert_eq!(h.state().gl_show, idx, "{label}");
         }
         assert!(h.state().gl_mem_asked, "після «Пам’ять» лічильник пам’яті показується");
+    }
+
+    /// Знімок найменшого вікна (1000×600) з довгою назвою проєкту: перемикач режимів видно й він на місці. `TRANSLY_SHOTS=<тека> cargo test -p transly-app small_window -- --ignored`.
+    #[test]
+    #[ignore]
+    fn small_window_shot() {
+        let Some(dir) = std::env::var_os("TRANSLY_SHOTS").map(std::path::PathBuf::from) else { return };
+        std::fs::create_dir_all(&dir).unwrap();
+        let data = game("small");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.st.project.as_mut().unwrap().name = "Дуже-дуже довга назва проєкту, що не вміщується".into();
+        app.st.project.as_mut().unwrap().settings.remove("folderName");
+        app.st.row = Some(0);
+        let mut h = Harness::builder().with_size(egui::vec2(1000.0, 600.0)).build_state(|ctx, app: &mut App| {
+            theme::apply(ctx);
+            app.frame(ctx);
+        }, app);
+        h.run();
+        h.run();
+        h.render().unwrap().save(dir.join("21-small-window.png")).unwrap();
     }
 
     /// Ширини рядків у egui для порівняння з веб-виміром (`TRANSLY_WIDTHS` — JSON `[[сімейство, розмір, текст], …]`).

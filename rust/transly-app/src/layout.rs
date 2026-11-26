@@ -55,11 +55,11 @@ fn thread_chip(ui: &mut egui::Ui, dot: Color32, en: &str, uk: &str, pending: boo
 
 /// Заголовок картки (`.ph`): великі літери 12 і, за потреби, підпис (назва файлу). Кнопок у ньому немає: ⋮ і «—» зі знімка нічого не робили.
 fn card_head(ui: &mut egui::Ui, title: &str, sub: Option<&str>) {
-    card_head_x(ui, title, sub, TEXT, 10.0);
+    card_head_x(ui, title, sub, TEXT, 10.0, 7.3); // `.lt-f`: пробіл + margin-left 4
 }
 
 /// Те саме з кольором підпису й лівим відступом: у `.ph` (панелі) — 10 і підпис кольору тексту (`.lt-f`), у `.thr>.lbl` (картка «Внески») — 12 і приглушений лічильник.
-fn card_head_x(ui: &mut egui::Ui, title: &str, sub: Option<&str>, sub_col: Color32, pad: f32) {
+fn card_head_x(ui: &mut egui::Ui, title: &str, sub: Option<&str>, sub_col: Color32, pad: f32, gap: f32) {
     let (h, _) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::hover());
     ui.painter().rect_filled(h, card_top(), PANEL);
     ui.painter().hline(h.x_range(), h.bottom(), Stroke::new(1.0_f32, LINE));
@@ -67,7 +67,7 @@ fn card_head_x(ui: &mut egui::Ui, title: &str, sub: Option<&str>, sub_col: Color
     let tw = g.size().x;
     ui.painter().galley(pos2(h.left() + pad, h.center().y - g.size().y / 2.0), g, MUTE);
     if let Some(s) = sub {
-        ui.painter().text(pos2(h.left() + pad + tw + 10.0, h.center().y), Align2::LEFT_CENTER, s, ip(12.0), sub_col);
+        ui.painter().text(pos2(h.left() + pad + tw + gap, h.center().y), Align2::LEFT_CENTER, s, ip(12.0), sub_col);
     }
 }
 
@@ -1439,7 +1439,9 @@ impl App {
                 }
                 let tx = card.left() + 30.0;
                 let top = card.top() + 7.0 + 8.4;
-                paint_state(ui, pos2(card.left() + 13.0, card.top() + 16.0), st, bad_rows.contains(&r));
+                // крапка стану: верхній лівий кут (8; 11) від картки, розмір 10, а «вичитано» — 12
+                let dot_c = if st == RowStatus::Approved && !bad_rows.contains(&r) { pos2(card.left() + 14.0, card.top() + 17.0) } else { pos2(card.left() + 13.0, card.top() + 16.0) };
+                paint_state(ui, dot_c, st, bad_rows.contains(&r));
                 let num = format!("{}", r + 1);
                 let ng = ui.painter().layout_no_wrap(num, ip(12.0), MUTE);
                 let nw = ng.size().x;
@@ -1450,9 +1452,9 @@ impl App {
                 ui.painter().text(pos2(card.right() - 8.0, top), Align2::RIGHT_CENTER, short_key(&self.st.key_of(f, r)), mp(12.0), MUTE);
                 let clip = Rect::from_min_max(pos2(tx, card.top()), pos2(card.right() - 8.0, card.bottom()));
                 let p = ui.painter().with_clip_rect(clip);
-                p.text(pos2(tx, top + 17.5), Align2::LEFT_CENTER, src.replace('\n', " / "), ip(12.5), SRC_TEXT);
+                p.text(pos2(tx, top + 18.15), Align2::LEFT_CENTER, src.replace('\n', " / "), ip(12.5), SRC_TEXT);
                 let (t, c) = if tgt.is_empty() { ("—".to_string(), MUTE) } else { (tgt.replace('\n', " / "), MUTE) };
-                p.text(pos2(tx, top + 35.0), Align2::LEFT_CENTER, t, ip(12.5), c);
+                p.text(pos2(tx, top + 35.65), Align2::LEFT_CENTER, t, ip(12.5), c);
                 if resp.clicked() {
                     self.st.row = Some(r);
                 }
@@ -1580,7 +1582,7 @@ impl App {
         egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, CARD_LINE)).corner_radius(CornerRadius::same(CARD_R)).show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.spacing_mut().item_spacing.y = 0.0;
-            card_head_x(ui, "Внески", Some(&list.len().to_string()), MUTE, 12.0);
+            card_head_x(ui, "Внески", Some(&list.len().to_string()), MUTE, 12.0, 10.0);
             let n = list.len();
             for (i, (v, t)) in list.iter().enumerate() {
                 let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), 66.0), Sense::hover());

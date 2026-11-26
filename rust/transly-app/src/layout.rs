@@ -795,7 +795,7 @@ impl App {
         let sr = Rect::from_center_size(pos2(bar.right() - 26.0, bar.center().y + 0.5), vec2(36.0, 36.0));
         let sresp = ui.interact(sr, ui.id().with("cm-add"), Sense::click());
         let lit = self.lit(Pane::Right);
-        let fill = if lit { if sresp.hovered() { accent_hover() } else { accent_solid() } } else if sresp.hovered() { over_ground(0.22) } else { over_ground(0.15) };
+        let fill = if lit { if sresp.hovered() { accent_hover() } else { accent_solid() } } else if sresp.hovered() { over_color(PANEL, Color32::WHITE, 0.22) } else { over_color(PANEL, Color32::WHITE, 0.15) };
         ui.painter().rect_filled(sr, CornerRadius::same(8), fill);
         if !lit {
             ui.painter().rect_stroke(sr, CornerRadius::same(8), Stroke::new(1.0_f32, SEL_RING_GRAY), StrokeKind::Inside);
@@ -1257,7 +1257,7 @@ impl App {
                 v
             };
             let (hdr, _) = ui.allocate_exact_size(vec2(w, 26.0), Sense::hover());
-            ui.painter().rect_filled(hdr, CornerRadius::same(8), PANEL);
+            ui.painter().rect_filled(hdr, CornerRadius::ZERO, PANEL);
             let (sl, tl) = self.st.project.as_ref().map_or(("EN".to_string(), "UK".to_string()), |p| (p.source_lang.to_uppercase(), p.target_lang.to_uppercase()));
             for (i, title) in [(2usize, "Ключ".to_string()), (3, if who { "Мовець".into() } else { String::new() }), (4, format!("Оригінал · {sl}")), (5, format!("Переклад · {tl}")), (6, "К-сть зн.".to_string())] {
                 if !title.is_empty() {
@@ -1329,11 +1329,11 @@ impl App {
                     resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, sel, format!("{src} — {tgt}")));
                     let body = Rect::from_min_max(rect.min, pos2(rect.right(), rect.bottom() - 1.0));
                     if sel {
-                        ui.painter().rect_filled(body, CornerRadius::same(8), self.chosen(Pane::Centre).0);
+                        ui.painter().rect_filled(body, CornerRadius::ZERO, self.chosen(Pane::Centre).0);
                     } else if resp.hovered() {
-                        ui.painter().rect_filled(body, CornerRadius::same(8), ROW_HOVER);
+                        ui.painter().rect_filled(body, CornerRadius::ZERO, ROW_HOVER);
                     } else if i % 2 == 0 {
-                        ui.painter().rect_filled(body, CornerRadius::same(8), ZEBRA);
+                        ui.painter().rect_filled(body, CornerRadius::ZERO, ZEBRA);
                     }
                     ui.painter().hline(rect.x_range(), rect.bottom() - 1.0, Stroke::new(1.0_f32, LINE_SOFT));
                     for k in [1usize, 2, 4, 5, 6] {
@@ -1367,8 +1367,8 @@ impl App {
                     ui.painter().with_clip_rect(col(4, src_w)).text(pos2(rect.left() + xs[4] + 8.0, mid), Align2::LEFT_CENTER, src.replace('\n', " "), ip(12.5), SRC_TEXT);
                     let tcell = col(5, tr_w);
                     if editing == Some((f, r)) {
-                        ui.painter().rect_filled(tcell, CornerRadius::same(R1), BG);
-                        ui.painter().rect_stroke(tcell, CornerRadius::same(R1), Stroke::new(1.0_f32, accent()), StrokeKind::Inside);
+                        ui.painter().rect_filled(tcell, CornerRadius::ZERO, BG);
+                        ui.painter().rect_stroke(tcell, CornerRadius::ZERO, Stroke::new(1.0_f32, accent()), StrokeKind::Inside);
                         let mut cui = ui.new_child(egui::UiBuilder::new().max_rect(tcell.shrink2(vec2(6.0, 2.0))));
                         // Enter і Tab зберігають і ведуть далі, Shift+Enter — перенесення рядка, Esc — скасувати
                         let (enter, tab, esc) = cui.input_mut(|i| (i.consume_key(egui::Modifiers::NONE, egui::Key::Enter), i.consume_key(egui::Modifiers::NONE, egui::Key::Tab), i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)));
@@ -1387,7 +1387,7 @@ impl App {
                         let (t, c) = if tgt.is_empty() { ("—".to_string(), DIM) } else { (tgt.replace('\n', " "), TEXT) };
                         ui.painter().with_clip_rect(tcell).text(pos2(tcell.left() + 8.0, mid), Align2::LEFT_CENTER, t, ip(12.5), c);
                         if sel {
-                            ui.painter().rect_stroke(tcell, CornerRadius::same(R1), Stroke::new(1.0_f32, accent()), StrokeKind::Inside);
+                            ui.painter().rect_stroke(tcell, CornerRadius::ZERO, Stroke::new(1.0_f32, accent()), StrokeKind::Inside);
                         }
                     }
                     // кількість знаків: переклад / оригінал, відхилення підсвічується
@@ -1880,7 +1880,7 @@ impl App {
                     let sr = Rect::from_center_size(pos2(bar.right() - 26.0, cy), vec2(36.0, 36.0));
                     let sresp = ui.interact(sr, ui.id().with("send"), Sense::click());
                     let lit = self.lit(Pane::Centre);
-                    ui.painter().rect_filled(sr, CornerRadius::same(8), if lit { if sresp.hovered() { accent_hover() } else { accent_solid() } } else if sresp.hovered() { over_ground(0.22) } else { over_ground(0.15) });
+                    ui.painter().rect_filled(sr, CornerRadius::same(8), if lit { if sresp.hovered() { accent_hover() } else { accent_solid() } } else if sresp.hovered() { over_color(PANEL, Color32::WHITE, 0.22) } else { over_color(PANEL, Color32::WHITE, 0.15) });
                     if !lit {
                         ui.painter().rect_stroke(sr, CornerRadius::same(8), Stroke::new(1.0_f32, SEL_RING_GRAY), StrokeKind::Inside);
                     }

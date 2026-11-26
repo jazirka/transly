@@ -60,9 +60,9 @@ pub fn button(ui: &mut egui::Ui, name: &str, tip: &str, on: bool, color: Color32
     let (rect, resp) = ui.allocate_exact_size(Vec2::splat(28.0), Sense::click());
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tip));
     if on {
-        ui.painter().rect_filled(rect, egui::CornerRadius::same(8), crate::theme::over_ground(0.15));
+        ui.painter().rect_filled(rect, egui::CornerRadius::same(8), crate::theme::over_ground_at(rect.center(), 0.15));
     } else if resp.hovered() {
-        ui.painter().rect_filled(rect, egui::CornerRadius::same(8), crate::theme::over_ground(0.07));
+        ui.painter().rect_filled(rect, egui::CornerRadius::same(8), crate::theme::over_ground_at(rect.center(), 0.07));
     }
     paint(ui, Rect::from_center_size(rect.center(), Vec2::splat(16.0)), name, if on { Color32::WHITE } else { color });
     resp.on_hover_text(tip)

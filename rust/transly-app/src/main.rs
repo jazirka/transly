@@ -286,20 +286,30 @@ fn over_color(base: Color32, top: Color32, a: f32) -> Color32 {
 }
 
 /// Горизонтальний градієнт у прямокутнику.
-/// Еліптична підсвітка: центр кольору `c` з прозорістю `a`, до краю еліпса — нуль (нижня половина еліпса від верху вікна).
-fn glow(painter: &egui::Painter, center: egui::Pos2, radii: egui::Vec2, c: Color32, a: f32) {
+/// Підсвічення вікна, як `.ide` у вебі: еліпс `radii` від `center` (верх вікна), прозорість `.16` у центрі, `.075` на 48 % радіуса, нуль на краю.
+/// Вершини непрозорі: колір тла `ground` змішано з `c` у гамма-просторі, як це робить CSS (прозорі вершини різні бекенди змішують по-різному, і світіння
+/// виходило втричі яскравішим). Малювати слід одразу над суцільним тлом.
+fn glow(painter: &egui::Painter, center: egui::Pos2, radii: egui::Vec2, c: Color32, ground: Color32) {
     use egui::epaint::{Mesh, Vertex, WHITE_UV};
-    let mid = Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), (a * 255.0) as u8);
-    let edge = Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), 0);
+    let mix = |a: f32| {
+        let f = |g: u8, t: u8| (g as f32 * (1.0 - a) + t as f32 * a).round() as u8;
+        Color32::from_rgb(f(ground.r(), c.r()), f(ground.g(), c.g()), f(ground.b(), c.b()))
+    };
     let mut mesh = Mesh::default();
-    mesh.vertices.push(Vertex { pos: center, uv: WHITE_UV, color: mid });
-    let n = 48;
-    for i in 0..=n {
-        let t = std::f32::consts::PI * i as f32 / n as f32;
-        mesh.vertices.push(Vertex { pos: pos2(center.x + radii.x * t.cos(), center.y + radii.y * t.sin()), uv: WHITE_UV, color: edge });
+    mesh.vertices.push(Vertex { pos: center, uv: WHITE_UV, color: mix(0.16) });
+    let n = 64usize;
+    // кільця: 48 % радіуса (.075) і край (0); нижня половина еліпса
+    for (scale, alpha) in [(0.48_f32, 0.075_f32), (1.0, 0.0)] {
+        for i in 0..=n {
+            let t = std::f32::consts::PI * i as f32 / n as f32;
+            mesh.vertices.push(Vertex { pos: pos2(center.x + radii.x * scale * t.cos(), center.y + radii.y * scale * t.sin()), uv: WHITE_UV, color: mix(alpha) });
+        }
     }
     for i in 0..n {
-        mesh.indices.extend([0, i as u32 + 1, i as u32 + 2]);
+        let (a0, a1) = (1 + i as u32, 2 + i as u32);
+        mesh.indices.extend([0, a0, a1]);
+        let (b0, b1) = (1 + (n as u32 + 1) + i as u32, 2 + (n as u32 + 1) + i as u32);
+        mesh.indices.extend([a0, b0, b1, a0, b1, a1]);
     }
     painter.add(egui::Shape::mesh(mesh));
 }
@@ -326,7 +336,7 @@ fn pill(ui: &mut egui::Ui, avatar: Option<&str>, icon: Option<&str>, text: &str,
     let (rect, resp) = ui.allocate_exact_size(vec2(w, 28.0), Sense::click());
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, text));
     if border || resp.hovered() {
-        ui.painter().rect_filled(rect, CornerRadius::same(8), over_ground(0.07));
+        ui.painter().rect_filled(rect, CornerRadius::same(8), over_ground_at(rect.center(), 0.07));
     }
     if let Some(letters) = avatar {
         let c = pos2(rect.left() + pad_l + 13.0, rect.center().y);
@@ -401,9 +411,9 @@ pub(crate) fn menu_style(ui: &mut egui::Ui) {
         w.bg_stroke = Stroke::NONE;
         w.corner_radius = CornerRadius::same(8);
     }
-    v.widgets.hovered.weak_bg_fill = over_ground(0.07);
-    v.widgets.hovered.bg_fill = over_ground(0.07);
-    v.widgets.open.weak_bg_fill = over_ground(0.07);
+    v.widgets.hovered.weak_bg_fill = over_color(PANEL, Color32::WHITE, 0.07);
+    v.widgets.hovered.bg_fill = over_color(PANEL, Color32::WHITE, 0.07);
+    v.widgets.open.weak_bg_fill = over_color(PANEL, Color32::WHITE, 0.07);
 }
 
 /// Розділювач у меню (`.msep`): лінія 1 `#43454a`, поля 5 зверху й знизу, 8 з боків.
@@ -427,7 +437,7 @@ pub(crate) fn mi(ui: &mut egui::Ui, label: impl AsRef<str>, enabled: bool) -> eg
     let (rect, resp) = ui.allocate_exact_size(vec2(w, 32.0), if enabled { Sense::click() } else { Sense::hover() });
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, label));
     if enabled && resp.hovered() {
-        ui.painter().rect_filled(rect, CornerRadius::same(8), over_ground(0.07));
+        ui.painter().rect_filled(rect, CornerRadius::same(8), over_color(PANEL, Color32::WHITE, 0.07));
     }
     ui.painter().galley(pos2(rect.left() + 12.0, rect.center().y - ng.size().y / 2.0), ng, if enabled { TEXT } else { DIM });
     if !sc.is_empty() {
@@ -554,8 +564,8 @@ impl App {
         ctx.request_repaint_after(std::time::Duration::from_secs(5));
         // тло оболонки під картками й між ними
         ctx.layer_painter(egui::LayerId::background()).rect_filled(ctx.screen_rect(), CornerRadius::ZERO, GROUND);
-        // підсвічення від значка проєкту (відтінок теми) на всьому тлі: еліпс 520×90 від верху вікна, згасає до нуля, як `.ide` у вебі
-        glow(&ctx.layer_painter(egui::LayerId::background()), pos2(105.0, 0.0), vec2(520.0, 90.0), accent(), 0.16);
+        // підсвічення від значка проєкту (відтінок теми) на всьому тлі: еліпс 520×190 від верху вікна, згасає до нуля, як `.ide` у вебі (merge.css)
+        glow(&ctx.layer_painter(egui::LayerId::background()), pos2(theme::GLOW_CENTER.0, theme::GLOW_CENTER.1), vec2(theme::GLOW_RADII.0, theme::GLOW_RADII.1), accent(), GROUND);
         self.hotkeys(ctx);
         let title = self.st.project.as_ref().map_or("Transly".to_string(), transly_core::projname::project_title);
         let hue = transly_core::theme::theme_hue(&title, self.st.project.as_ref().and_then(|p| p.settings.get("hue")));
@@ -718,7 +728,7 @@ impl App {
                 ui.add_space(2.0);
                 // режим: Таблиця, Редагування, Сцена
                 ui.add_enabled_ui(can, |ui| {
-                    egui::Frame::new().fill(over_ground(0.05)).corner_radius(CornerRadius::same(8)).inner_margin(egui::Margin::same(2)).show(ui, |ui| {
+                    egui::Frame::new().fill(over_ground_at(ui.cursor().min + vec2(50.0, 16.0), 0.05)).corner_radius(CornerRadius::same(8)).inner_margin(egui::Margin::same(2)).show(ui, |ui| {
                         ui.spacing_mut().item_spacing.x = 2.0;
                         let modes = [("table", "Таблиця: усі рядки файлу", !self.focus && !self.scene_mode), ("edit", "Редагування: один рядок", self.focus && !self.scene_mode), ("scene", "Сцена: репліки подій поспіль", self.scene_mode)];
                         for (i, (ic, tip, on)) in modes.into_iter().enumerate() {

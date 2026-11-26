@@ -106,9 +106,31 @@ pub fn sel_soft() -> Color32 {
     over(BG, Color32::WHITE, 0.15)
 }
 
-/// Біле з прозорістю `a` поверх тла оболонки (стани наведення й вибору: `--hv` і `--on-bg` у вебі).
-pub fn over_ground(a: f32) -> Color32 {
-    over(GROUND, Color32::WHITE, a)
+/// Центр і піврадіуси світіння вікна (`.ide` у вебі: еліпс 520×190 від верху вікна, 105 від лівого краю).
+pub const GLOW_CENTER: (f32, f32) = (105.0, 0.0);
+pub const GLOW_RADII: (f32, f32) = (520.0, 190.0);
+
+/// Прозорість світіння в точці `p`: .16 у центрі, .075 на 48 % радіуса, нуль на краю й далі (піксель за пікселем як градієнт CSS).
+pub fn glow_alpha(p: egui::Pos2) -> f32 {
+    let d = (((p.x - GLOW_CENTER.0) / GLOW_RADII.0).powi(2) + ((p.y - GLOW_CENTER.1).max(0.0) / GLOW_RADII.1).powi(2)).sqrt();
+    if d >= 1.0 {
+        0.0
+    } else if d <= 0.48 {
+        0.16 + (0.075 - 0.16) * d / 0.48
+    } else {
+        0.075 * (1.0 - (d - 0.48) / 0.52)
+    }
+}
+
+/// Колір тла оболонки в точці `p` разом зі світінням.
+pub fn ground_at(p: egui::Pos2) -> Color32 {
+    over(GROUND, accent(), glow_alpha(p))
+}
+
+/// Біле `a` поверх тла оболонки в точці `p` (стани наведення й вибору в верхній панелі: `--hv`, `--on-bg` у вебі). Непрозорий колір, пораховано з тлом у цій
+/// точці, щоб над світінням воно було світліше за тло в будь-якому рендерері (прозоре біле різні бекенди змішують по-різному).
+pub fn over_ground_at(p: egui::Pos2, a: f32) -> Color32 {
+    over(ground_at(p), Color32::WHITE, a)
 }
 
 /// Тло оболонки між картками: трохи світліше за картки.
@@ -209,3 +231,24 @@ pub fn apply_style(ctx: &egui::Context) {
 
 /// Виділений пункт списку (суцільний колір: біле 15 % на тлі картки).
 pub const SEL_GRAY_UI: Color32 = Color32::from_rgb(64, 64, 67);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Світіння, як градієнт у вебі (`merge.css`): .16 у центрі, .075 на 48 % радіуса, нуль на краю й поза еліпсом.
+    #[test]
+    fn the_glow_follows_the_css_gradient_stops() {
+        let (cx, cy) = GLOW_CENTER;
+        let (rx, ry) = GLOW_RADII;
+        assert!((glow_alpha(egui::pos2(cx, cy)) - 0.16).abs() < 1e-6);
+        assert!((glow_alpha(egui::pos2(cx + rx * 0.48, cy)) - 0.075).abs() < 1e-5);
+        assert!((glow_alpha(egui::pos2(cx, cy + ry * 0.48)) - 0.075).abs() < 1e-5);
+        assert_eq!(glow_alpha(egui::pos2(cx + rx, cy)), 0.0);
+        assert_eq!(glow_alpha(egui::pos2(cx, cy + ry + 5.0)), 0.0);
+        assert_eq!(ground_at(egui::pos2(900.0, 300.0)), GROUND);
+        // біле поверх світіння світліше за саме світіння
+        let p = egui::pos2(cx, 10.0);
+        assert!(over_ground_at(p, 0.07).g() > ground_at(p).g());
+    }
+}

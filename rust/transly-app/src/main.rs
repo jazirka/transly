@@ -2977,6 +2977,23 @@ mod ui_tests {
         assert_eq!(h.state().message, "Надіслано");
     }
 
+    /// Числа з веб-версії (computed style `#b-save`, `.saveb`): кнопка надсилання в редакторі 36×36.
+    #[test]
+    fn the_send_button_in_the_editor_is_36_by_36_like_the_web_one() {
+        let data = game("sendsize");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.st.row = Some(0);
+        let mut h = harness(app);
+        h.run();
+        h.state_mut().focus = true;
+        h.state_mut().rail = 1;
+        h.state_mut().draft_for = Some((0, 0));
+        h.run();
+        let r = h.get_all_by_label("Надіслати").last().unwrap().bounding_box().unwrap();
+        assert_eq!(((r.x1 - r.x0).round(), (r.y1 - r.y0).round()), (36.0, 36.0), "{r:?}");
+    }
+
     /// Знімок вікна в PNG для перевірки вигляду очима: `TRANSLY_SHOTS=<тека> cargo test -p transly-app shots -- --ignored`.
     #[test]
     #[ignore]

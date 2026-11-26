@@ -17,7 +17,13 @@ const SEL = JSON.parse(process.env.SEL);
   await page.reload(); await sleep(900);
   await page.evaluate(async () => { const root = await navigator.storage.getDirectory(); window.showDirectoryPicker = async () => root.getDirectoryHandle('ParityGame'); });
   await page.locator('button:visible', { hasText: 'Відкрити папку гри' }).last().click(); await sleep(1800);
-  await page.locator('#grid .gr').nth(1).click(); await sleep(300);
+  // MODE: без нього — таблиця (рядок 2 файлу за замовчуванням); edit — «Редагування»; scene — «Сцена» (файл Town)
+  if (process.env.MODE) {
+    await page.locator('#tree-list .node:has-text("Enemies")').click(); await sleep(400);
+    await page.locator('#grid .gr').nth(0).click(); await sleep(300);
+  } else { await page.locator('#grid .gr').nth(1).click(); await sleep(300); }
+  if (process.env.MODE === 'edit') { await page.locator('[data-m="edit"]').click(); await sleep(600); }
+  if (process.env.MODE === 'scene') { await page.locator('#tree-list .node:has-text("Town")').click(); await sleep(300); await page.locator('[data-m="scene"]').click(); await sleep(600); }
   const res = await page.evaluate(sel => {
     const P = ['font-family','font-size','font-weight','line-height','color','background-color','background-image','border-top-width','border-top-color','border-bottom-width','border-bottom-color','border-radius','padding','margin','gap','height','width','opacity','letter-spacing','text-transform'];
     const out = {};
@@ -29,6 +35,13 @@ const SEL = JSON.parse(process.env.SEL);
     }
     return out;
   }, SEL);
+  if (process.env.KIDS) {
+    const kids = await page.evaluate(qs => qs.map(q => { const e = document.querySelector(q); if (!e) return [q, null];
+      return [q, [...e.children].map(k => { const r = k.getBoundingClientRect(), c = getComputedStyle(k);
+        return [k.tagName.toLowerCase() + (k.id ? '#' + k.id : '') + (k.className && typeof k.className === 'string' ? '.' + k.className.trim().split(/\s+/).join('.') : ''),
+          [r.left, r.top, r.width, r.height].map(v => Math.round(v * 10) / 10).join(','), c.fontSize, c.color, c.backgroundColor, c.display, (k.textContent || '').trim().slice(0, 28)].join(' | '); })]; }), JSON.parse(process.env.KIDS));
+    for (const [q, l] of kids) { console.log('==', q); (l || ['-']).forEach(x => console.log('  ', x)); }
+  }
   fs.writeFileSync(OUT, JSON.stringify(res, null, 1)); console.log('written', OUT, Object.values(res).filter(x => x === null).length, 'missing');
   await b.close();
 })();

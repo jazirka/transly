@@ -55,15 +55,27 @@ fn thread_chip(ui: &mut egui::Ui, dot: Color32, en: &str, uk: &str, pending: boo
 
 /// Заголовок картки (`.ph`): великі літери 12 і, за потреби, підпис (назва файлу). Кнопок у ньому немає: ⋮ і «—» зі знімка нічого не робили.
 fn card_head(ui: &mut egui::Ui, title: &str, sub: Option<&str>) {
+    card_head_x(ui, title, sub, TEXT, 10.0);
+}
+
+/// Те саме з кольором підпису й лівим відступом: у `.ph` (панелі) — 10 і підпис кольору тексту (`.lt-f`), у `.thr>.lbl` (картка «Внески») — 12 і приглушений лічильник.
+fn card_head_x(ui: &mut egui::Ui, title: &str, sub: Option<&str>, sub_col: Color32, pad: f32) {
     let (h, _) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::hover());
     ui.painter().rect_filled(h, card_top(), PANEL);
     ui.painter().hline(h.x_range(), h.bottom(), Stroke::new(1.0_f32, LINE));
-    let g = ui.painter().layout_no_wrap(title.to_uppercase(), ip(12.0), MUTE);
+    let g = spaced(ui, title, 12.0, MUTE, 0.06);
     let tw = g.size().x;
-    ui.painter().galley(pos2(h.left() + 10.0, h.center().y - g.size().y / 2.0), g, MUTE);
+    ui.painter().galley(pos2(h.left() + pad, h.center().y - g.size().y / 2.0), g, MUTE);
     if let Some(s) = sub {
-        ui.painter().text(pos2(h.left() + 10.0 + tw + 10.0, h.center().y), Align2::LEFT_CENTER, s, ip(12.0), TEXT);
+        ui.painter().text(pos2(h.left() + pad + tw + 10.0, h.center().y), Align2::LEFT_CENTER, s, ip(12.0), sub_col);
     }
+}
+
+/// Підпис великими літерами з міжлітерним інтервалом `em` (як `text-transform:uppercase; letter-spacing` у вебі).
+pub(crate) fn spaced(ui: &egui::Ui, text: &str, size: f32, color: Color32, em: f32) -> std::sync::Arc<egui::Galley> {
+    let mut job = egui::text::LayoutJob::single_section(text.to_uppercase(), egui::TextFormat { font_id: ip(size), color, extra_letter_spacing: size * em, ..Default::default() });
+    job.wrap.max_width = f32::INFINITY;
+    ui.painter().layout_job(job)
 }
 
 /// Прапорець 14×14 (як у старому): рамка, при відміченні заливка кольору теми й пташка.
@@ -1227,13 +1239,13 @@ impl App {
         if list.is_empty() {
             return;
         }
-        ui.add_space(14.0);
+        ui.add_space(16.0);
         let mut act: Option<(u8, String)> = None;
         // картка, як у старому: заголовок «ВНЕСКИ N» і рядки з аватаром, іменем, датою, позначкою й кнопками
         egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, CARD_LINE)).corner_radius(CornerRadius::same(CARD_R)).show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.spacing_mut().item_spacing.y = 0.0;
-            card_head(ui, "Внески", Some(&list.len().to_string()));
+            card_head_x(ui, "Внески", Some(&list.len().to_string()), MUTE, 12.0);
             let n = list.len();
             for (i, (v, t)) in list.iter().enumerate() {
                 let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), 66.0), Sense::hover());
@@ -1339,18 +1351,17 @@ impl App {
                     ui.painter().vline(cr.left() + gw + 12.0, (cr.center().y - 7.0)..=(cr.center().y + 7.0), Stroke::new(1.0_f32, Color32::from_rgb(0x52, 0x56, 0x5e)));
                     ui.painter().text(pos2(cr.left() + gw + 24.0, cr.center().y), Align2::LEFT_CENTER, kind, ip(12.0), MUTE);
                 }
-                let (label, col) = match st {
-                    RowStatus::Untranslated => ("Без перекладу", MUTE),
-                    RowStatus::Draft => ("Чернетка", WARN),
-                    RowStatus::Sent => ("Чекає вичитування", INFO),
-                    RowStatus::Approved => ("Вичитано", OK),
+                let label = match st {
+                    RowStatus::Untranslated => "Без перекладу",
+                    RowStatus::Draft => "Чернетка",
+                    RowStatus::Sent => "Чекає вичитування",
+                    RowStatus::Approved => "Вичитано",
                 };
                 let lg = ui.painter().layout_no_wrap(label.to_string(), ip(12.0), MUTE);
                 let pr = Rect::from_min_max(pos2(cr.right() - (lg.size().x + 36.0), cr.top()), cr.right_bottom());
                 ui.painter().rect_stroke(pr, CornerRadius::same(12), Stroke::new(1.0_f32, LINE), StrokeKind::Inside);
-                paint_state(ui, pos2(pr.left() + 14.0, pr.center().y), st, false);
-                ui.painter().galley(pos2(pr.left() + 26.0, pr.center().y - lg.size().y / 2.0), lg, col);
-                let _ = col;
+                paint_state(ui, pos2(pr.left() + 15.0, pr.center().y), st, false);
+                ui.painter().galley(pos2(pr.left() + 27.0, pr.center().y - lg.size().y / 2.0), lg, MUTE);
                 ui.add_space(16.0);
                 // оригінал
                 egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(CornerRadius::same(8)).inner_margin(egui::Margin::symmetric(14, 12)).show(ui, |ui| {
@@ -1360,7 +1371,8 @@ impl App {
                 self.pics_ui(ui, f, r);
                 for (lang, text) in self.st.references_of(f, r) {
                     ui.add_space(10.0);
-                    ui.label(RichText::new(format!("ДОВІДКА · {}", lang.to_uppercase())).font(ip(12.0)).color(MUTE));
+                    let g = spaced(ui, &format!("Довідка · {lang}"), 12.0, MUTE, 0.04);
+                    ui.label(egui::WidgetText::Galley(g));
                     ui.add_space(4.0);
                     egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(CornerRadius::same(8)).inner_margin(egui::Margin::symmetric(14, 12)).show(ui, |ui| {
                         ui.set_width(ui.available_width());
@@ -1370,8 +1382,8 @@ impl App {
                 ui.add_space(6.0);
                 // Оригінал · EN ───▶ Переклад · UK
                 let (hr, _) = ui.allocate_exact_size(vec2(ui.available_width(), 17.0), Sense::hover());
-                let lg = ui.painter().layout_no_wrap(format!("Оригінал · {sl}").to_uppercase(), ip(11.5), MUTE);
-                let rg = ui.painter().layout_no_wrap(format!("Переклад · {tl}").to_uppercase(), ip(11.5), MUTE);
+                let lg = spaced(ui, &format!("Оригінал · {sl}"), 12.0, MUTE, 0.04);
+                let rg = spaced(ui, &format!("Переклад · {tl}"), 12.0, MUTE, 0.04);
                 let (lw, rw) = (lg.size().x, rg.size().x);
                 ui.painter().galley(pos2(hr.left(), hr.center().y - lg.size().y / 2.0), lg, MUTE);
                 ui.painter().galley(pos2(hr.right() - rw, hr.center().y - rg.size().y / 2.0), rg, MUTE);
@@ -1383,7 +1395,7 @@ impl App {
                 let frame = egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, CARD_LINE)).corner_radius(CornerRadius::same(CARD_R));
                 let out = frame.show(ui, |ui| {
                     ui.set_width(ui.available_width());
-                    let te = ui.add(egui::TextEdit::multiline(&mut self.draft).desired_rows(5).desired_width(f32::INFINITY).font(ip(15.0)).frame(false).margin(vec2(14.0, 12.0)));
+                    let te = ui.add(egui::TextEdit::multiline(&mut self.draft).desired_rows(4).desired_width(f32::INFINITY).font(ip(15.0)).frame(false).margin(vec2(14.0, 12.0)).min_size(vec2(0.0, 120.0)));
                     let focused = te.has_focus();
                     let (bar, _) = ui.allocate_exact_size(vec2(ui.available_width(), 49.0), Sense::hover());
                     ui.painter().rect_filled(bar, CornerRadius { nw: 0, ne: 0, sw: CARD_R - 1, se: CARD_R - 1 }, PANEL);
@@ -1397,14 +1409,17 @@ impl App {
                     if tresp.on_hover_text("Очистити переклад").clicked() {
                         self.draft.clear();
                     }
-                    // лічильник стовпчиком: довжина перекладу над рискою, оригіналу під нею
+                    // лічильник стовпчиком у рамці 40×35 (`#cnt2`): довжина перекладу (13, колір стану), риска 20×1, оригінал (12)
                     let (n, o) = (self.draft.chars().count(), src.chars().count());
-                    let cx = bar.right() - 64.0;
                     let warn = o > 0 && n as f32 > o as f32 * 1.25;
-                    ui.painter().text(pos2(cx, bar.center().y - 8.0), Align2::CENTER_CENTER, n.to_string(), mp(13.0), if warn { WARN } else if n > 0 { OK } else { TEXT });
-                    ui.painter().hline((cx - 9.0)..=(cx + 9.0), bar.center().y, Stroke::new(1.0_f32, MUTE));
-                    ui.painter().text(pos2(cx, bar.center().y + 8.0), Align2::CENTER_CENTER, o.to_string(), mp(12.0), MUTE);
-                    let sr = Rect::from_center_size(pos2(bar.right() - 28.0, bar.center().y), vec2(36.0, 30.0));
+                    let (ink, over) = if warn { (WARN, true) } else if n > 0 { (OK, false) } else { (DIM, false) };
+                    let cy = bar.center().y + 0.5; // верхня межа панелі займає 1 px
+                    let cb = Rect::from_center_size(pos2(bar.right() - 70.0, cy), vec2(40.0, 35.0));
+                    ui.painter().rect(cb, CornerRadius::same(8), if over { Color32::from_rgb(0x41, 0x38, 0x1f) } else { Color32::TRANSPARENT }, Stroke::new(1.0_f32, LINE), StrokeKind::Inside);
+                    ui.painter().text(pos2(cb.center().x, cb.top() + 9.0), Align2::CENTER_CENTER, n.to_string(), mp(13.0), if n > 0 { ink } else { TEXT });
+                    ui.painter().hline((cb.center().x - 10.0)..=(cb.center().x + 10.0), cb.top() + 18.5, Stroke::new(1.0_f32, ink));
+                    ui.painter().text(pos2(cb.center().x, cb.top() + 28.0), Align2::CENTER_CENTER, o.to_string(), mp(12.0), MUTE);
+                    let sr = Rect::from_center_size(pos2(bar.right() - 26.0, cy), vec2(36.0, 36.0));
                     let sresp = ui.interact(sr, ui.id().with("send"), Sense::click());
                     ui.painter().rect_filled(sr, CornerRadius::same(8), if sresp.hovered() { accent_hover() } else { accent_solid() });
                     icons::paint(ui, Rect::from_center_size(sr.center(), vec2(17.0, 17.0)), "send", Color32::WHITE);
@@ -1432,7 +1447,6 @@ impl App {
                         ui.label(job);
                     });
                 }
-                ui.add_space(8.0);
                 self.contributions_ui(ui, f, r);
                 for i in self.st.issues(f, r, &self.draft) {
                     ui.horizontal_wrapped(|ui| {

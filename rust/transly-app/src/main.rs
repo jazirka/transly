@@ -8,6 +8,7 @@
 mod glossary_panel;
 mod icons;
 mod layout;
+mod links_dialog;
 mod plugins;
 mod state;
 mod theme;
@@ -73,6 +74,7 @@ struct App {
     import_win: Option<(u8, String)>,
     build_win: Option<state::BuildChoice>,
     fill_win: Option<Vec<(transly_core::autofill::Proposal, bool)>>,
+    links_win: Option<links_dialog::LinksWin>,
     find_win: Option<(String, String, bool, bool)>,
     plugins_win: bool,
     sync_win: Option<(transly_platform::github::GithubSettings, String)>,
@@ -255,7 +257,7 @@ fn game_job(text: &str, size: f32, actor_name: &dyn Fn(usize) -> Option<String>)
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, links_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
     }
 }
 
@@ -582,6 +584,7 @@ impl App {
             || self.import_win.is_some()
             || self.build_win.is_some()
             || self.fill_win.is_some()
+            || self.links_win.is_some()
             || self.find_win.is_some()
             || self.sync_win.is_some()
             || self.settings.is_some()
@@ -689,6 +692,7 @@ impl App {
         self.plugins_window(ctx);
         self.find_window(ctx);
         self.fill_window(ctx);
+        self.links_window(ctx);
         self.build_window(ctx);
         self.import_window(ctx);
         self.speakers_window(ctx);
@@ -3794,6 +3798,81 @@ mod ui_tests {
         h.run();
         h.run();
         h.get_by_label_contains("Item150");
+    }
+
+    /// «Поширити переклад…» відкриває діалог «Зв’язані рядки»: рядки групи з галочками, «Оновити вибрані» пише еталон лише в позначені; одна дія журналу.
+    #[test]
+    fn the_links_dialog_spreads_the_reference_to_the_ticked_rows_only() {
+        let base = std::env::temp_dir().join(format!("transly-ui-links-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = base.join("MyGame").join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        let cmd = |code: i64, p: &str| format!(r#"{{"code":{code},"indent":0,"parameters":[{p}]}}"#);
+        let page = |t: &str| format!(r#"{{"conditions":{{}},"list":[{},{},{}],"trigger":0}}"#, cmd(101, r#""",0,0,2"#), cmd(401, &format!("\"{t}\"")), cmd(0, ""));
+        let ev = |id: i64| format!(r#"{{"id":{id},"name":"EV{id}","x":1,"y":1,"pages":[{}]}}"#, page("Welcome to the village, traveler"));
+        std::fs::write(data.join("Map001.json"), format!(r#"{{"displayName":"T","events":[null,{},{},{}]}}"#, ev(1), ev(2), ev(3))).unwrap();
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        let f = app.st.file_names().iter().position(|n| n == "Map001.json").unwrap();
+        let rows: Vec<usize> = (0..app.st.row_count(f)).filter(|r| app.st.source_of(f, *r) == "Welcome to the village, traveler").collect();
+        let mut v = app.st.settings_view().unwrap();
+        v.link_mode = "off".into();
+        app.st.apply_settings(&v);
+        // жоден рядок ще не надіслано — діалог каже, чому його немає
+        app.open_links("Map001.json", &app.st.key_of(f, rows[0]));
+        assert!(app.links_win.is_none());
+        assert_eq!(app.message, "Для цих рядків немає чого поширювати: жоден не надіслано");
+        app.st.submit(f, rows[0], "Ласкаво просимо, мандрівнику").unwrap();
+        app.open_links("Map001.json", &app.st.key_of(f, rows[0]));
+        assert_eq!(app.links_win.as_ref().map(|w| w.sync.items.len()), Some(2));
+        let mut h = harness(app);
+        h.run();
+        let boxes = h.get_all_by_label("Оновити Map001").count();
+        assert_eq!(boxes, 2, "два рядки до оновлення");
+        h.get_by_label_contains("Вибрано 2 з 2");
+        // знімаємо позначку з першого з двох: оновиться лише другий
+        h.get_all_by_label("Оновити Map001").next().unwrap().click();
+        h.run();
+        h.get_by_label_contains("Вибрано 1 з 2");
+        h.get_by_label("Оновити вибрані").click();
+        h.run();
+        assert!(h.state().links_win.is_none(), "діалог закрився");
+        assert_eq!(h.state().message, "Оновлено зв’язані рядки: 1");
+        let filled = rows.iter().filter(|r| h.state().st.target_of(f, **r) == "Ласкаво просимо, мандрівнику").count();
+        assert_eq!(filled, 2, "еталон і один оновлений рядок; третій лишився порожнім");
+        assert!(!h.state_mut().st.undo_last().is_empty());
+        let filled = rows.iter().filter(|r| h.state().st.target_of(f, **r) == "Ласкаво просимо, мандрівнику").count();
+        assert_eq!(filled, 1, "«Скасувати» повертає оновлений рядок");
+    }
+
+    /// Знімок діалогу «Зв’язані рядки»: `TRANSLY_SHOTS=<тека> cargo test -p transly-app links_shot -- --ignored`.
+    #[test]
+    #[ignore]
+    fn links_shot() {
+        let Some(dir) = std::env::var_os("TRANSLY_SHOTS").map(std::path::PathBuf::from) else { return };
+        std::fs::create_dir_all(&dir).unwrap();
+        let base = std::env::temp_dir().join(format!("transly-ui-linksshot-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = base.join("MyGame").join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        let cmd = |code: i64, p: &str| format!(r#"{{"code":{code},"indent":0,"parameters":[{p}]}}"#);
+        let page = |t: &str| format!(r#"{{"conditions":{{}},"list":[{},{},{}],"trigger":0}}"#, cmd(101, r#""",0,0,2"#), cmd(401, &format!("\"{t}\"")), cmd(0, ""));
+        let ev = |id: i64| format!(r#"{{"id":{id},"name":"EV{id}","x":1,"y":1,"pages":[{}]}}"#, page("Welcome to the village, traveler"));
+        std::fs::write(data.join("Map001.json"), format!(r#"{{"displayName":"T","events":[null,{},{},{}]}}"#, ev(1), ev(2), ev(3))).unwrap();
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        let f = app.st.file_names().iter().position(|n| n == "Map001.json").unwrap();
+        let rows: Vec<usize> = (0..app.st.row_count(f)).filter(|r| app.st.source_of(f, *r) == "Welcome to the village, traveler").collect();
+        let mut v = app.st.settings_view().unwrap();
+        v.link_mode = "off".into();
+        app.st.apply_settings(&v);
+        app.st.edit(f, rows[1], "Ласкаво просимо, подорожній");
+        app.st.submit(f, rows[0], "Ласкаво просимо, мандрівнику").unwrap();
+        app.st.row = Some(rows[0]);
+        app.open_links("Map001.json", &app.st.key_of(f, rows[0]));
+        let mut h = harness(app);
+        h.run();
+        h.render().unwrap().save(dir.join("24-links-dialog.png")).unwrap();
     }
 
     /// Знімок таблиці з виділеними рядками (смуга «вибрано» на шапці): `TRANSLY_SHOTS=<тека> cargo test -p transly-app bulk_shot -- --ignored`.

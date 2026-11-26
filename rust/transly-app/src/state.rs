@@ -438,6 +438,32 @@ pub struct UsageCounts {
     pub none: usize,
 }
 
+/// Рядок групи однакових оригіналів у діалозі «Поширити переклад…».
+#[derive(Clone, Debug)]
+pub struct LinkItem {
+    pub file: String,
+    pub key: String,
+    /// Слово про стан: «без перекладу», «інший», «змінено пізніше».
+    pub state: &'static str,
+    /// Змінено пізніше за еталон: за замовчуванням не позначається.
+    pub edited: bool,
+    /// Вичитано: за замовчуванням не позначається, а після заміни стане чернеткою.
+    pub approved: bool,
+    pub target: String,
+}
+
+/// Усе, що показує діалог «Зв’язані рядки»: оригінал групи, еталон (текст і файл, чи його обрав перекладач) і рядки, які можна оновити.
+#[derive(Clone, Debug)]
+pub struct LinkSync {
+    pub file: String,
+    pub key: String,
+    pub text: String,
+    pub reference: String,
+    pub ref_file: String,
+    pub main: bool,
+    pub items: Vec<LinkItem>,
+}
+
 /// Група рядків з однаковим оригіналом (`ctx.links().clusters()` у вебі): текст, скільки рядків, перший рядок (файл, ключ).
 #[derive(Clone, Debug)]
 pub struct LinkGroup {
@@ -2370,6 +2396,54 @@ impl AppState {
             pick.extend(plan.edited.iter().copied());
         }
         let rows: Vec<&transly_core::links::LinkRowView> = pick.iter().map(|&i| &plan.view.rows[i]).collect();
+        let changes = transly_core::links::link_changes(&reference, &rows, now_ms());
+        let n = changes.len();
+        if n == 0 {
+            return 0;
+        }
+        let who = self.who();
+        let mut rand = Self::seeded_rand();
+        let Some(p) = self.project.as_mut() else { return 0 };
+        let id = commit_rows(&mut p.files, &changes, "links", &who, now_ms(), None, &mut rand);
+        self.note_undo(&id);
+        self.rev += 1;
+        self.dirty = true;
+        n
+    }
+
+    /// Що поширить «Поширити переклад…» для групи однакових рядків: еталон і рядки, які можна оновити (порожні, старіші, змінені пізніше).
+    /// `Err` — слово для користувача, чому діалог не потрібен.
+    pub fn link_sync(&self, file: &str, key: &str) -> Result<LinkSync, String> {
+        use transly_core::links::LinkState;
+        let p = self.project.as_ref().ok_or("Проєкт не відкрито")?;
+        let idx = transly_core::links::LinkIndex::new(&self.views);
+        let plan = transly_core::links::plan_link_sync(p, &idx, file, key).ok_or("Для цих рядків немає чого поширювати: жоден не надіслано")?;
+        let rf = plan.view.reference.ok_or("Для цих рядків немає чого поширювати: жоден не надіслано")?;
+        let mut order: Vec<usize> = plan.fills.iter().chain(plan.updates.iter()).chain(plan.edited.iter()).copied().collect();
+        if order.is_empty() {
+            return Err("Зв’язані рядки вже однакові".into());
+        }
+        let word = |s: LinkState| match s {
+            LinkState::Main => "еталон",
+            LinkState::Same => "такий самий",
+            LinkState::Empty => "без перекладу",
+            LinkState::Differs => "інший",
+            LinkState::Edited => "змінено пізніше",
+            LinkState::Unlinked => "відв’язано",
+            LinkState::Draft => "чернетка",
+        };
+        let items: Vec<LinkItem> = order.drain(..).map(|i| &plan.view.rows[i]).map(|r| LinkItem { file: r.file.clone(), key: r.key.clone(), state: word(r.state), edited: r.state == LinkState::Edited, approved: r.status == transly_core::model::Status::Appr, target: r.target.clone() }).collect();
+        Ok(LinkSync { file: file.to_string(), key: key.to_string(), text: plan.view.text.clone(), reference: plan.view.rows[rf].target.clone(), ref_file: plan.view.rows[rf].file.clone(), main: plan.view.main.is_some(), items })
+    }
+
+    /// Записує еталон у позначені рядки групи: чернетки, одна дія журналу зі «Скасувати». Скільки рядків змінено.
+    pub fn apply_link_picks(&mut self, file: &str, key: &str, picked: &std::collections::HashSet<(String, String)>) -> usize {
+        let Some(p) = self.project.as_ref() else { return 0 };
+        let idx = transly_core::links::LinkIndex::new(&self.views);
+        let Some(plan) = transly_core::links::plan_link_sync(p, &idx, file, key) else { return 0 };
+        let Some(rf) = plan.view.reference else { return 0 };
+        let reference = plan.view.rows[rf].target.clone();
+        let rows: Vec<&transly_core::links::LinkRowView> = plan.fills.iter().chain(plan.updates.iter()).chain(plan.edited.iter()).map(|&i| &plan.view.rows[i]).filter(|r| picked.contains(&(r.file.clone(), r.key.clone()))).collect();
         let changes = transly_core::links::link_changes(&reference, &rows, now_ms());
         let n = changes.len();
         if n == 0 {

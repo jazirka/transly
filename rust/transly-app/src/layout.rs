@@ -11,6 +11,32 @@ const SEL_GRAY: Color32 = Color32::from_rgb(64, 64, 67);
 const CARD_LINE: Color32 = Color32::from_rgb(66, 67, 70);
 const ROW_H: f32 = 36.0;
 
+/// Додає в `job` слова порівняння: незмінене звичайним кольором, додане зеленим на тлі, видалене червоним закресленим.
+pub(crate) fn append_diff(job: &mut egui::text::LayoutJob, segs: &[transly_core::textdiff::DiffSeg], font: FontId, line_h: f32) {
+    use transly_core::textdiff::DiffKind;
+    for s in segs {
+        let mut fm = egui::TextFormat {
+            font_id: font.clone(),
+            line_height: Some(line_h),
+            color: match s.t {
+                DiffKind::Same => TEXT,
+                DiffKind::Add => Color32::from_rgb(0xc6, 0xf0, 0xcb),
+                DiffKind::Del => Color32::from_rgb(0xff, 0xb3, 0xbb),
+            },
+            ..Default::default()
+        };
+        match s.t {
+            DiffKind::Add => fm.background = over_color(BG, OK, 0.22),
+            DiffKind::Del => {
+                fm.background = over_color(BG, BAD, 0.20);
+                fm.strikethrough = Stroke::new(1.0_f32, fm.color);
+            }
+            DiffKind::Same => {}
+        }
+        job.append(&s.text, 0.0, fm);
+    }
+}
+
 /// Виділення рядків таблиці протягуванням по стовпці номерів (`dragselect.ts`): опорний рядок (місце серед видимих), що було виділено до початку
 /// (з Ctrl чи Shift — лишається) і чи рух уже перевищив поріг клацання.
 #[derive(Clone, Debug)]
@@ -505,23 +531,7 @@ impl App {
                     } else {
                         // «Порівняти з поточним»: що зникне й що повернеться, якщо відновити цю версію; інакше — зміни від версії до дії
                         let cmp_diff = if cmp_on.contains(&h.index) { Some(transly_core::textdiff::diff_words(&current, &h.rec.text)) } else { None };
-                        for s in cmp_diff.as_ref().unwrap_or(&h.diff) {
-                            use transly_core::textdiff::DiffKind;
-                            let mut fm = plain(match s.t {
-                                DiffKind::Same => TEXT,
-                                DiffKind::Add => Color32::from_rgb(0xc6, 0xf0, 0xcb),
-                                DiffKind::Del => Color32::from_rgb(0xff, 0xb3, 0xbb),
-                            });
-                            match s.t {
-                                DiffKind::Add => fm.background = over_color(BG, OK, 0.22),
-                                DiffKind::Del => {
-                                    fm.background = over_color(BG, BAD, 0.20);
-                                    fm.strikethrough = Stroke::new(1.0_f32, fm.color);
-                                }
-                                DiffKind::Same => {}
-                            }
-                            job.append(&s.text, 0.0, fm);
-                        }
+                        append_diff(&mut job, cmp_diff.as_ref().unwrap_or(&h.diff), ip(15.0), 21.0);
                     }
                     let tg = ui.fonts(|f| f.layout_job(job));
                     let hint_g = cmp_on.contains(&h.index).then(|| ui.painter().layout("Закреслене зникне, підкреслене повернеться, якщо відновити цю версію.".to_string(), ip(12.0), DIM, text_w));

@@ -276,12 +276,12 @@ impl App {
             });
             if let Some((i, spread)) = open {
                 let gr = &groups[i];
-                if self.st.open_ref(&gr.file, &gr.key) {
+                if spread {
+                    let (file, key) = (gr.file.clone(), gr.key.clone());
+                    self.open_links(&file, &key);
+                } else if self.st.open_ref(&gr.file, &gr.key) {
                     self.draft_for = None;
                     self.cell_edit = None;
-                    if spread {
-                        self.message = "Відкрито перший рядок групи: «Заповнити копії» — у «Пов’язаному» справа".into();
-                    }
                 }
             }
             return;

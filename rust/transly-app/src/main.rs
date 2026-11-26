@@ -661,7 +661,11 @@ impl App {
         glow(&ctx.layer_painter(egui::LayerId::background()), pos2(theme::glow_center().0, theme::glow_center().1), vec2(theme::GLOW_RADII.0, theme::GLOW_RADII.1), accent(), GROUND);
         self.hotkeys(ctx);
         let title = self.st.project.as_ref().map_or("Transly".to_string(), transly_core::projname::project_title);
-        let hue = transly_core::theme::theme_hue(&title, self.st.project.as_ref().and_then(|p| p.settings.get("hue")));
+        // поки відкрито налаштування проєкту, колір пробується на всьому застосунку одразу; скасували — повертається збережений
+        let hue = match &self.settings {
+            Some(v) => self.st.settings_preview(v).2,
+            None => transly_core::theme::theme_hue(&title, self.st.project.as_ref().and_then(|p| p.settings.get("hue"))),
+        };
         if theme::set_hue(hue) {
             theme::apply_style(ctx);
         }
@@ -1604,11 +1608,91 @@ impl App {
         let Some(mut v) = self.settings.clone() else { return };
         let mut open = true;
         let (mut save, mut cancel) = (false, false);
+        let (title, letters, hue) = self.st.settings_preview(&v);
+        let auto_letters = self.st.settings_preview(&state::SettingsView { icon_text: String::new(), ..v.clone() }).1;
         dlg("Налаштування проєкту").open(&mut open).collapsible(false).resizable(false).default_width(420.0).show(ctx, |ui| {
+            // «Так проєкт виглядає в шапці й у меню»: картка 12×14 з рамкою, значок 40, назва 15/600
+            let w = ui.available_width();
+            let tg = ui.painter().layout_no_wrap(title.clone(), ipw(15.0, 600), TEXT);
+            let sg = ui.painter().layout_no_wrap("Так проєкт виглядає в шапці й у меню".to_string(), ip(12.0), MUTE);
+            let (card, cresp) = ui.allocate_exact_size(vec2(w, 12.0 + 40.0 + 12.0 + 2.0), Sense::hover());
+            cresp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, format!("Проєкт: {title}")));
+            ui.painter().rect(card, CornerRadius::same(10), BG, Stroke::new(1.0_f32, LINE), StrokeKind::Inside);
+            let av = Rect::from_min_size(pos2(card.left() + 15.0, card.top() + 13.0), vec2(40.0, 40.0));
+            ui.painter().rect_filled(av, CornerRadius::same(8), accent_solid());
+            ui.painter().text(av.center(), Align2::CENTER_CENTER, &letters, mp(if letters.chars().count() > 1 { 14.0 } else { 16.0 }), Color32::WHITE);
+            let tx = av.right() + 12.0;
+            let th = tg.size().y + sg.size().y;
+            let ty = card.center().y - th / 2.0;
+            ui.painter().with_clip_rect(Rect::from_min_max(pos2(tx, card.top()), pos2(card.right() - 14.0, card.bottom()))).galley(pos2(tx, ty), tg.clone(), TEXT);
+            ui.painter().galley(pos2(tx, ty + tg.size().y), sg, MUTE);
+            ui.add_space(4.0);
+            // назва проєкту: звідки береться
+            ui.label(RichText::new("Назва проєкту").font(ipw(13.0, 600)));
+            let sample = |text: &str, none: &str| if text.is_empty() { RichText::new(none).size(12.0).color(DIM) } else { RichText::new(text).size(12.0).color(TEXT) };
+            ui.horizontal(|ui| {
+                ui.add_enabled_ui(!v.folder_name.is_empty(), |ui| ui.radio_value(&mut v.name_from, "folder".to_string(), "З папки гри"));
+                ui.label(sample(&v.folder_name, "папку ще не обрано"));
+            });
+            ui.horizontal(|ui| {
+                ui.add_enabled_ui(!v.game_title.is_empty(), |ui| ui.radio_value(&mut v.name_from, "game".to_string(), "З назви в грі"));
+                ui.label(sample(&v.game_title, "гра не називає себе"));
+            });
+            ui.horizontal(|ui| {
+                ui.radio_value(&mut v.name_from, "custom".to_string(), "Своя назва");
+                let r = ui.add(egui::TextEdit::singleline(&mut v.title).hint_text("наприклад, Покинута хатина").char_limit(80).desired_width(220.0));
+                r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::TextEdit, true, "Назва, написана вручну"));
+                if r.changed() && !v.title.trim().is_empty() {
+                    v.name_from = "custom".into();
+                }
+            });
+            ui.label(RichText::new("Назва лише підпис: переклад, злиття й синхронізація від неї не залежать, тож її можна міняти будь-коли.").size(12.0).color(MUTE));
+            ui.add_space(6.0);
+            // значок і колір
+            ui.label(RichText::new("Значок і колір").font(ipw(13.0, 600)));
+            ui.horizontal(|ui| {
+                ui.label("Літери значка (1–2)");
+                let r = ui.add(egui::TextEdit::singleline(&mut v.icon_text).char_limit(2).desired_width(40.0));
+                r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::TextEdit, true, "Літери значка"));
+            });
+            ui.label(RichText::new(if v.icon_text.trim().is_empty() { format!("Порожньо: перші літери назви ({auto_letters}).") } else { "Свої літери: вони не залежать від назви.".to_string() }).size(12.0).color(MUTE));
+            ui.horizontal(|ui| {
+                ui.label("Колір акценту");
+                let mut h = hue as f32;
+                ui.spacing_mut().slider_width = 260.0;
+                let sl = ui.add(egui::Slider::new(&mut h, 0.0..=359.0).integer().show_value(false));
+                sl.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Slider, true, "Колір акценту"));
+                if sl.changed() {
+                    v.hue = Some(h.round() as u32);
+                }
+            });
+            ui.horizontal(|ui| {
+                let (sw, _) = ui.allocate_exact_size(vec2(16.0, 16.0), Sense::hover());
+                ui.painter().circle_filled(sw.center(), 8.0, accent());
+                ui.label(RichText::new(if v.hue.is_none() { format!("Колір береться з назви проєкту: {hue}°") } else { format!("Обрано вручну: {hue}°") }).size(12.0).color(MUTE));
+                if ui.add_enabled(v.hue.is_some(), egui::Button::new("Як за назвою").min_size(vec2(0.0, 28.0))).clicked() {
+                    v.hue = None;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 8.0;
+                for preset in [185u32, 215, 245, 275, 305, 335] {
+                    let tk = transly_core::theme::theme_tokens(preset);
+                    let c = tk.get("--accent").map_or(accent(), |hx| u32::from_str_radix(hx.trim_start_matches('#'), 16).map_or(accent(), |n| Color32::from_rgb((n >> 16) as u8, (n >> 8) as u8, n as u8)));
+                    let (r, resp) = ui.allocate_exact_size(vec2(26.0, 26.0), Sense::click());
+                    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, preset == hue, format!("Відтінок {preset}°")));
+                    ui.painter().circle_filled(r.center(), 13.0, c);
+                    if preset == hue {
+                        ui.painter().circle_stroke(r.center(), 12.0, Stroke::new(2.0_f32, TEXT));
+                    }
+                    if resp.clicked() {
+                        v.hue = Some(preset);
+                    }
+                }
+            });
+            ui.label(RichText::new("Колір береться з холодної частини кола, щоб його не сплутати зі статусами. Він міняється в усьому застосунку одразу і лишається, коли ви збережете.").size(12.0).color(MUTE));
+            ui.add_space(6.0);
             egui::Grid::new("settings_grid").num_columns(2).spacing([14.0, 10.0]).show(ui, |ui| {
-                ui.label("Назва проєкту");
-                ui.text_edit_singleline(&mut v.name);
-                ui.end_row();
                 ui.label("Мова оригіналу");
                 ui.add(egui::TextEdit::singleline(&mut v.source_lang).desired_width(80.0));
                 ui.end_row();
@@ -1644,6 +1728,11 @@ impl App {
                 }
             });
         });
+        if save && v.name_from == "custom" && v.title.trim().is_empty() {
+            // як у вебі: своя назва обрана, а написати забули
+            self.message = "Напишіть свою назву або виберіть іншу".into();
+            save = false;
+        }
         if save {
             self.st.apply_settings(&v);
             self.settings = None;
@@ -3475,6 +3564,63 @@ mod ui_tests {
         h.get_by_label("Скасувати").click();
         h.run();
         assert!(h.query_by_label("Хто перекладає").is_none());
+    }
+
+    /// Налаштування проєкту — вигляд: звідки назва, свої літери значка, колір акценту (готові відтінки й повзунок); колір пробується одразу, «Скасувати» його повертає,
+    /// «Зберегти» записує назву, літери й колір у проєкт.
+    #[test]
+    fn the_project_settings_set_the_name_icon_and_accent() {
+        let data = game("look");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        let title = |app: &App| transly_core::projname::project_title(app.st.project.as_ref().unwrap());
+        assert_eq!(title(&app), "MyGame", "назва береться з папки гри");
+        let own_hue = transly_core::theme::theme_hue("MyGame", None);
+        let mut h = harness(app);
+        h.state_mut().settings = h.state().st.settings_view();
+        h.run();
+        // картка-перегляд показує те, що буде в шапці
+        h.get_by_label("Проєкт: MyGame");
+        assert_eq!(h.state().st.settings_preview(h.state().settings.as_ref().unwrap()).2, own_hue);
+        // готовий відтінок пробується одразу (тут — у перегляді, кольори застосунку йдуть за ним у `frame`)
+        h.get_by_label("Відтінок 305°").click();
+        h.run();
+        assert_eq!(h.state().settings.as_ref().unwrap().hue, Some(305));
+        assert_eq!(h.state().st.settings_preview(h.state().settings.as_ref().unwrap()).2, 305);
+        // «Скасувати» нічого не записує
+        h.get_by_label("Скасувати").click();
+        h.run();
+        assert!(h.state().settings.is_none());
+        assert!(h.state().st.project.as_ref().unwrap().settings.get("hue").is_none());
+        // своя назва, свої літери й відтінок: «Зберегти» записує їх
+        h.state_mut().settings = h.state().st.settings_view();
+        h.run();
+        h.get_by_label("Відтінок 305°").click();
+        h.run();
+        h.get_by_label("Назва, написана вручну").click();
+        h.get_by_label("Назва, написана вручну").type_text("Покинута хатина");
+        h.run();
+        h.get_by_label("Літери значка").click();
+        h.get_by_label("Літери значка").type_text("пх");
+        h.run();
+        assert_eq!(h.state().settings.as_ref().unwrap().name_from, "custom", "текст у полі обирає «Своя назва»");
+        h.get_by_label("Проєкт: Покинута хатина");
+        h.get_by_label("Зберегти").click();
+        h.run();
+        let st = &h.state().st;
+        assert_eq!(transly_core::projname::project_title(st.project.as_ref().unwrap()), "Покинута хатина");
+        assert_eq!(transly_core::projname::icon_letters(st.project.as_ref().unwrap()), "ПХ");
+        assert_eq!(st.project.as_ref().unwrap().settings.get("hue").and_then(|v| v.as_u64()), Some(305));
+        // «Як за назвою» повертає колір за назвою, а джерело «З папки гри» — назву з папки
+        let mut v = h.state().st.settings_view().unwrap();
+        v.hue = None;
+        v.name_from = "folder".into();
+        v.title.clear();
+        v.icon_text.clear();
+        h.state_mut().st.apply_settings(&v);
+        let p = h.state().st.project.as_ref().unwrap();
+        assert_eq!(transly_core::projname::project_title(p), "MyGame");
+        assert!(["hue", "title", "iconText", "nameFrom"].iter().all(|k| p.settings.get(*k).is_none()), "типове не пишеться: {:?}", p.settings);
     }
 
     #[test]

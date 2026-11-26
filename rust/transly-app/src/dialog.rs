@@ -67,6 +67,8 @@ impl<'a> Dlg<'a> {
         let mut measured = 0.0_f32;
         let resp = egui::Modal::new(egui::Id::new(("dlg", &title))).backdrop_color(Color32::from_black_alpha(128)).frame(frame).show(ctx, |ui| {
             ui.set_min_width(wi);
+            // область діалогу в egui «пам'ятає» розмір попереднього кадру й обмежує по ньому, скільки лишилось місця: даємо їй висоту до 88 % вікна, інакше тіло не росло б
+            ui.set_max_height(max_h);
             ui.spacing_mut().item_spacing.y = 10.0;
             // шапка: відступи 12×16, назва 15 вагою 500, «✕» 30 праворуч, лінія знизу
             let head_h = HEAD_PAD_Y * 2.0 + CLOSE;

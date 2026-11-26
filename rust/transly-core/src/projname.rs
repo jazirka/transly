@@ -75,21 +75,31 @@ pub fn name_source_of(p: &SavedProject) -> NameSource {
     }
 }
 
-/// Назва, що показується для проєкту скрізь.
-pub fn project_title(p: &SavedProject) -> String {
-    let own = setting(p, "title").filter(|s| !s.is_empty());
-    let folder = setting(p, "folderName").filter(|s| !s.is_empty());
-    let game = game_title_of(p.snapshot.as_ref());
-    let from = name_source_of(p);
-    if from == NameSource::Custom {
-        if let Some(o) = own {
-            return o;
-        }
+/// Показувана назва за вибраним джерелом: те саме правило, що в `project_title`, але для значень, яких ще не збережено (чернетка в налаштуваннях проєкту).
+pub fn title_from(from: NameSource, own: &str, folder: &str, game: &str, name: &str) -> String {
+    let (own, folder) = (js::trim(own), js::trim(folder));
+    if from == NameSource::Custom && !own.is_empty() {
+        return own.to_string();
     }
     if from == NameSource::Game && !game.is_empty() {
-        return game;
+        return game.to_string();
     }
-    folder.or(Some(game).filter(|g| !g.is_empty())).or(Some(p.name.clone()).filter(|n| n != DEFAULT_NAME && !n.is_empty())).unwrap_or_else(|| DEFAULT_NAME.to_string())
+    if !folder.is_empty() {
+        return folder.to_string();
+    }
+    if !game.is_empty() {
+        return game.to_string();
+    }
+    if name != DEFAULT_NAME && !name.is_empty() {
+        return name.to_string();
+    }
+    DEFAULT_NAME.to_string()
+}
+
+/// Назва, що показується для проєкту скрізь.
+pub fn project_title(p: &SavedProject) -> String {
+    let game = game_title_of(p.snapshot.as_ref());
+    title_from(name_source_of(p), &setting(p, "title").unwrap_or_default(), &setting(p, "folderName").unwrap_or_default(), &game, &p.name)
 }
 
 /// Слова, що не дають літери значку.

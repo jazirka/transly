@@ -52,6 +52,17 @@ pub struct SettingsView {
     /// Однакові рядки: `ask` (спитати), `auto` (копіювати самі), `off`.
     pub link_mode: String,
     pub line_limit: f64,
+    /// Звідки береться показувана назва: `folder`, `game` чи `custom` (`projname::NameSource`).
+    pub name_from: String,
+    /// Своя назва (вживається, коли `name_from` — `custom`).
+    pub title: String,
+    /// Свої літери значка (порожньо — перші літери назви).
+    pub icon_text: String,
+    /// Колір акценту, вибраний вручну; `None` — за назвою.
+    pub hue: Option<u32>,
+    /// Назва папки гри й назва, якою гра себе називає: лише для показу.
+    pub folder_name: String,
+    pub game_title: String,
 }
 
 #[derive(Default, Debug, PartialEq, Eq)]
@@ -1280,6 +1291,24 @@ impl AppState {
         self.project.as_ref().and_then(|p| p.settings.get("who")).and_then(|v| v.as_str()).filter(|w| !w.is_empty()).unwrap_or("Ви").to_string()
     }
 
+    /// Як виглядав би проєкт із цими (ще не збереженими) налаштуваннями: (назва, літери значка, відтінок акценту). Не чіпає проєкт.
+    pub fn settings_preview(&self, v: &SettingsView) -> (String, String, u32) {
+        use transly_core::projname::{icon_letters, title_from, NameSource};
+        let from = match v.name_from.as_str() {
+            "game" => NameSource::Game,
+            "custom" => NameSource::Custom,
+            _ => NameSource::Folder,
+        };
+        let title = title_from(from, &v.title, &v.folder_name, &v.game_title, &v.name);
+        // літери рахує ядро за легким проєктом без файлів: назва вже вибрана, лишається лише «свої літери»
+        let mut slim = transly_core::project::empty_project(&v.name, &v.source_lang, &v.target_lang);
+        slim.settings.insert("nameFrom".into(), serde_json::json!("custom"));
+        slim.settings.insert("title".into(), serde_json::json!(title));
+        slim.settings.insert("iconText".into(), serde_json::json!(v.icon_text));
+        let hue = transly_core::theme::theme_hue(&title, v.hue.map(|h| serde_json::json!(h)).as_ref());
+        (title, icon_letters(&slim), hue)
+    }
+
     /// Налаштування, які показує вікно.
     pub fn settings_view(&self) -> Option<SettingsView> {
         let p = self.project.as_ref()?;
@@ -1299,6 +1328,12 @@ impl AppState {
             }
             .to_string(),
             line_limit: get("lineLimit").and_then(|v| v.as_f64()).unwrap_or(0.0),
+            name_from: transly_core::projname::name_source_of(p).as_str().to_string(),
+            title: get("title").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            icon_text: get("iconText").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            hue: get("hue").and_then(|v| v.as_f64()).map(|h| h.round().clamp(0.0, 359.0) as u32),
+            folder_name: get("folderName").and_then(|v| v.as_str()).unwrap_or("").trim().to_string(),
+            game_title: transly_core::projname::game_title_of(p.snapshot.as_ref()),
         })
     }
 
@@ -1313,6 +1348,23 @@ impl AppState {
         p.settings.insert("propagate".into(), serde_json::json!(v.link_mode != "off"));
         p.settings.insert("linkMode".into(), serde_json::json!(v.link_mode));
         p.settings.insert("lineLimit".into(), serde_json::json!(v.line_limit));
+        // вигляд: назва (звідки), значок і колір; порожнє й типове не пишеться (як у вебі: `delete st.nameFrom`, `st.title`, `st.iconText`, `st.hue`)
+        if v.name_from == "folder" {
+            p.settings.remove("nameFrom");
+        } else {
+            p.settings.insert("nameFrom".into(), serde_json::json!(v.name_from));
+        }
+        for (key, val) in [("title", v.title.trim().to_string()), ("iconText", v.icon_text.trim().chars().take(2).collect::<String>())] {
+            if val.is_empty() {
+                p.settings.remove(key);
+            } else {
+                p.settings.insert(key.into(), serde_json::json!(val));
+            }
+        }
+        match v.hue {
+            Some(h) => p.settings.insert("hue".into(), serde_json::json!(h)),
+            None => p.settings.remove("hue"),
+        };
         p.settings_at = Some(now_ms());
         self.rev += 1;
         self.dirty = true;

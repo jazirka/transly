@@ -91,7 +91,7 @@ pub(crate) fn who_color(name: &str) -> Color32 {
 }
 
 /// Порожній стан розділу (`.pn-mid`): текст 14 приглушений по центру тіла картки (відступи тіла 6 зверху, 12 знизу).
-fn empty_note(ui: &mut egui::Ui, text: &str) {
+pub(crate) fn empty_note(ui: &mut egui::Ui, text: &str) {
     let area = ui.available_rect_before_wrap();
     ui.allocate_rect(area, Sense::hover());
     ui.painter().text(pos2(area.center().x, (area.top() + 6.0 + area.bottom() - 12.0) / 2.0), Align2::CENTER_CENTER, text, ip(14.0), MUTE);
@@ -118,6 +118,7 @@ fn left_card(ctx: &egui::Context, id: &'static str, add: impl FnOnce(&mut egui::
         card_lr(0, 0).outer_margin(egui::Margin::ZERO).show(&mut cui, |ui| {
             ui.set_min_height(rect.height() - 2.0);
             ui.set_max_height(rect.height() - 2.0);
+            ui.spacing_mut().item_spacing.y = 0.0;
             add(ui);
         });
     });
@@ -129,11 +130,11 @@ impl App {
         let edit = self.focus && !self.scene_mode;
         egui::SidePanel::left("strip").exact_width(34.0).resizable(false).show_separator_line(false).frame(egui::Frame::new().fill(Color32::TRANSPARENT)).show(ctx, |ui| {
             let groups: Vec<Vec<(usize, &str, &str)>> = if self.scene_mode {
-                vec![vec![(0, "files", "Файли гри")], vec![(2, "scene", "Сцени файлу")], vec![(3, "book", "Пов’язане з рядком")]]
+                vec![vec![(0, "files", "Файли гри")], vec![(2, "scene", "Сцени файлу")], vec![(3, "book", "Пов’язане: слова, конструкції, однакові рядки")]]
             } else if edit {
-                vec![vec![(0, "files", "Файли гри")], vec![(1, "rows", "Рядки файлу"), (2, "scene", "Сцени файлу")], vec![(3, "book", "Пов’язане з рядком")]]
+                vec![vec![(0, "files", "Файли гри")], vec![(1, "rows", "Рядки файлу"), (2, "scene", "Сцени файлу")], vec![(3, "book", "Пов’язане: слова, конструкції, однакові рядки")]]
             } else {
-                vec![vec![(0, "files", "Файли гри")], vec![(3, "book", "Пов’язане з рядком")]]
+                vec![vec![(0, "files", "Файли гри")], vec![(3, "book", "Пов’язане: слова, конструкції, однакові рядки")]]
             };
             let mut y = ui.max_rect().top() + 8.0;
             let x = ui.max_rect().left() + 6.0;
@@ -173,7 +174,7 @@ impl App {
             };
             card_head(ui, title, sub);
             if self.rail == 3 {
-                self.related_body(ui, true);
+                self.glossary_panel(ui);
                 return;
             }
             self.tree_body(ui);
@@ -197,7 +198,7 @@ impl App {
         let has_data = (0..names.len()).any(|i| kind(&names[i]) == 0);
         egui::ScrollArea::vertical().id_salt("treescroll").auto_shrink([false; 2]).show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
-            ui.add_space(4.0);
+            ui.add_space(12.0);
             for (title, k) in folders {
                 // як у старому: мапи лежать усередині data
                 let inset = if k == 1 && has_data { 20.0 } else { 6.0 };
@@ -342,7 +343,7 @@ impl App {
                     }
                     match *sec {
                         0 => self.activity_body(ui),
-                        1 => self.related_body(ui, false),
+                        1 => self.related_body(ui),
                         _ => self.comments_body(ui),
                     }
                 });
@@ -688,13 +689,12 @@ impl App {
     }
 
     /// «Пов’язане»: збіги пам’яті, слова глосарія, примітки QA, однакові рядки, довідкові мови.
-    fn related_body(&mut self, ui: &mut egui::Ui, wide: bool) {
+    fn related_body(&mut self, ui: &mut egui::Ui) {
         let (Some(f), Some(r)) = (self.st.file, self.st.row) else {
             empty_note(ui, "Оберіть рядок");
             return;
         };
-        let _ = wide;
-        egui::ScrollArea::vertical().id_salt(("relscroll", wide)).auto_shrink([false; 2]).show(ui, |ui| {
+        egui::ScrollArea::vertical().id_salt("relscroll").auto_shrink([false; 2]).show(ui, |ui| {
             egui::Frame::new().inner_margin(egui::Margin { left: 14, right: 14, top: 6, bottom: 12 }).show(ui, |ui| {
                 ui.spacing_mut().item_spacing.y = 8.0;
                 for i in if self.scene_mode { Vec::new() } else { self.st.issues(f, r, &self.draft) } {
@@ -764,21 +764,6 @@ impl App {
                             }
                         }
                     });
-                }
-                // додавання терміна — лише в лівому вікні «Пов’язане» (у старому воно там)
-                if !wide {
-                    return;
-                }
-                // поля й кнопка в окремих рядках: рядок ширший за картку виштовхував би її рамку
-                let w = (ui.available_width() - ui.spacing().item_spacing.x - 16.0) / 2.0;
-                ui.horizontal(|ui| {
-                    ui.add(egui::TextEdit::singleline(&mut self.term_en).hint_text("слово").desired_width(w));
-                    ui.add(egui::TextEdit::singleline(&mut self.term_uk).hint_text("переклад").desired_width(w));
-                });
-                if plain_button(ui, "Додати термін").clicked() {
-                    self.message = self.st.add_term(&self.term_en, &self.term_uk);
-                    self.term_en.clear();
-                    self.term_uk.clear();
                 }
             });
         });
@@ -1334,7 +1319,7 @@ impl App {
                 }
                 3 => {
                     card_head(ui, "Пов’язане", None);
-                    self.related_body(ui, true);
+                    self.glossary_panel(ui);
                     return;
                 }
                 0 => {
@@ -1358,30 +1343,36 @@ impl App {
     fn scenes_body(&mut self, ui: &mut egui::Ui, f: usize) {
         let list = self.st.scenes_list(f);
         if list.is_empty() {
-            ui.add_space(12.0);
-            ui.vertical_centered(|ui| ui.label(RichText::new("У цьому файлі немає сцен").color(MUTE)));
+            empty_note(ui, "У цьому файлі немає сцен");
             return;
         }
         let cur = self.st.row.and_then(|r| self.st.scene_view(f, r)).map(|v| v.title);
-        // підсумок над списком, як у старому
-        let (hr, _) = ui.allocate_exact_size(vec2(ui.available_width(), 33.0), Sense::hover());
-        ui.painter().text(pos2(hr.left() + 10.0, hr.center().y), Align2::LEFT_CENTER, transly_core::plural::plural(list.len() as i64, ["сцена", "сцени", "сцен"]).split_once(' ').map_or(format!("{} сцен", list.len()), |_| format!("{} {}", list.len(), transly_core::plural::plural_form(list.len() as i64, ["сцена", "сцени", "сцен"]))), ip(12.5), MUTE);
-        ui.painter().hline(hr.x_range(), hr.bottom(), Stroke::new(1.0_f32, LINE));
+        // підсумок над списком (`.fh`: поля 8, висота 33,8 з лінією): «2 сцени · ще 1 рядок поза сценами»
+        let plural_of = |n: usize, forms: [&str; 3]| transly_core::plural::plural(n as i64, forms);
+        let in_scenes: usize = list.iter().map(|x| x.2).sum();
+        let loose = self.st.row_count(f).saturating_sub(in_scenes);
+        let mut sum = plural_of(list.len(), ["сцена", "сцени", "сцен"]);
+        if loose > 0 {
+            sum.push_str(&format!(" · ще {} поза сценами", plural_of(loose, ["рядок", "рядки", "рядків"])));
+        }
+        let (hr, _) = ui.allocate_exact_size(vec2(ui.available_width(), 33.8), Sense::hover());
+        ui.painter().text(pos2(hr.left() + 8.0, hr.top() + 8.0 + 8.4), Align2::LEFT_CENTER, sum, ip(12.0), MUTE);
+        ui.painter().hline(hr.x_range(), hr.bottom() - 0.5, Stroke::new(1.0_f32, LINE));
         egui::ScrollArea::vertical().id_salt("scenelist").auto_shrink([false; 2]).show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
-            ui.add_space(4.0);
+            ui.add_space(6.0);
             for (title, first, n) in list {
-                let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
+                let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
                 let on = cur.as_deref() == Some(title.as_str());
                 resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, format!("Сцена {title}")));
                 if on {
-                    ui.painter().rect_filled(rect.shrink2(vec2(6.0, 0.0)), CornerRadius::same(8), SEL_GRAY);
-                    ui.painter().rect_stroke(rect.shrink2(vec2(6.0, 0.0)), CornerRadius::same(8), Stroke::new(1.0_f32, accent_ring()), StrokeKind::Inside);
+                    ui.painter().rect_filled(rect, CornerRadius::same(8), SEL_GRAY);
+                    ui.painter().rect_stroke(rect, CornerRadius::same(8), Stroke::new(1.0_f32, accent_ring()), StrokeKind::Inside);
                 } else if resp.hovered() {
-                    ui.painter().rect_filled(rect.shrink2(vec2(6.0, 0.0)), CornerRadius::same(8), GHOST_HOVER);
+                    ui.painter().rect_filled(rect, CornerRadius::same(8), GHOST_HOVER);
                 }
-                // значок ▶ у плитці
-                let chip = Rect::from_center_size(pos2(rect.left() + 22.0, rect.center().y), vec2(20.0, 16.0));
+                // значок ▶ 22×16 (mono 12, біле 7 %), назва, кількість рядків, частка, шкала 26×4
+                let chip = Rect::from_min_size(pos2(rect.left() + 8.0, rect.top() + 4.0), vec2(22.0, 16.0));
                 ui.painter().rect_filled(chip, CornerRadius::same(R1), over_color(BG, Color32::WHITE, 0.07));
                 ui.painter().add(egui::Shape::convex_polygon(vec![pos2(chip.center().x - 3.0, chip.center().y - 4.0), pos2(chip.center().x - 3.0, chip.center().y + 4.0), pos2(chip.center().x + 4.0, chip.center().y)], MUTE, Stroke::NONE));
                 // частка перекладеного: лише для рядків, що видно
@@ -1394,12 +1385,13 @@ impl App {
                         full = d == tot;
                     }
                 }
-                let bar = Rect::from_min_size(pos2(rect.right() - 12.0 - 30.0, rect.center().y - 2.0), vec2(30.0, 4.0));
-                ui.painter().rect_filled(bar, CornerRadius::same(2), TRACK);
-                ui.painter().rect_filled(Rect::from_min_size(bar.min, vec2(bar.width() * pc as f32 / 100.0, 4.0)), CornerRadius::same(2), if full { OK } else if on { accent() } else { MUTE });
-                ui.painter().text(pos2(bar.left() - 8.0, rect.center().y), Align2::RIGHT_CENTER, format!("{pc}%"), mp(11.0), if full { OK } else { MUTE });
-                ui.painter().text(pos2(bar.left() - 46.0, rect.center().y), Align2::RIGHT_CENTER, n.to_string(), mp(11.0), DIM);
-                let clip = Rect::from_min_max(pos2(rect.left() + 38.0, rect.top()), pos2(bar.left() - 74.0, rect.bottom()));
+                let bar = Rect::from_min_size(pos2(rect.right() - 8.0 - 26.0, rect.center().y - 2.0), vec2(26.0, 4.0));
+                ui.painter().rect_filled(bar, CornerRadius::same(4), TRACK);
+                ui.painter().rect_filled(Rect::from_min_size(bar.min, vec2(bar.width() * pc as f32 / 100.0, 4.0)), CornerRadius::same(4), if full { OK } else if on { accent() } else { MUTE });
+                ui.painter().text(pos2(bar.left() - 6.0, rect.center().y), Align2::RIGHT_CENTER, format!("{pc}%"), mp(12.0), if full { OK } else { MUTE });
+                let count_right = bar.left() - 6.0 - 32.0 - 12.0;
+                ui.painter().text(pos2(count_right, rect.center().y), Align2::RIGHT_CENTER, n.to_string(), mp(12.0), MUTE);
+                let clip = Rect::from_min_max(pos2(rect.left() + 36.0, rect.top()), pos2(count_right - 14.0, rect.bottom()));
                 ui.painter().with_clip_rect(clip).text(pos2(clip.left(), rect.center().y), Align2::LEFT_CENTER, &title, ip(12.5), TEXT);
                 if resp.clicked() {
                     self.st.row = Some(first);

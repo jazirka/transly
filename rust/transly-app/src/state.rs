@@ -717,23 +717,34 @@ impl AppState {
         self.project.as_ref().map(|p| p.terms.iter().filter_map(|t| serde_json::from_value(t.clone()).ok()).collect()).unwrap_or_default()
     }
 
+    /// Записи глосарія з усіма полями (категорія, примітка, рід, час зміни).
+    pub fn glossary_terms(&self) -> Vec<transly_core::glossary::GlossaryTerm> {
+        self.project.as_ref().map(|p| p.terms.iter().filter_map(|t| serde_json::from_value(t.clone()).ok()).collect()).unwrap_or_default()
+    }
+
     /// Додає чи змінює термін. Повертає повідомлення для рядка стану.
     pub fn add_term(&mut self, en: &str, uk: &str) -> String {
         let prev: Option<Term> = self.terms().into_iter().find(|t| t.en.trim().to_lowercase() == en.trim().to_lowercase());
         if prev.as_ref().is_some_and(|t| t.uk.trim() == uk.trim()) {
             return "Такий термін уже є".into();
         }
-        let Some(p) = self.project.as_mut() else { return "Проєкт не відкрито".into() };
         let form = TermForm { en: en.into(), uk: uk.into(), ..Default::default() };
+        self.save_term_form(&form, prev.as_ref().map(|t| t.en.as_str()))
+    }
+
+    /// Зберігає запис за формою: новий (`was` = None) або зміна наявного (`was` — його первісне слово). Повідомлення для рядка стану.
+    pub fn save_term_form(&mut self, form: &TermForm, was: Option<&str>) -> String {
+        let prev: Option<Term> = was.and_then(|w| self.terms().into_iter().find(|t| t.en.trim().to_lowercase() == w.trim().to_lowercase()));
+        let Some(p) = self.project.as_mut() else { return "Проєкт не відкрито".into() };
         // слово, що вже є в глосарії, редагується (інший переклад замінює старий), а не відхиляється
-        let res = save_term(p, &form, now_ms(), prev.as_ref().map(|t| t.en.as_str()));
+        let res = save_term(p, form, now_ms(), was);
         self.rev += 1;
         self.dirty = true;
         match res {
             Some(SaveResult::Added) => "Термін додано".into(),
             Some(SaveResult::Changed) => {
                 let alt = prev.as_ref().and_then(|t| t.alt.clone()).unwrap_or_default();
-                let next = self.terms().into_iter().find(|t| t.en.trim().to_lowercase() == en.trim().to_lowercase());
+                let next = self.terms().into_iter().find(|t| t.en.trim().to_lowercase() == form.en.trim().to_lowercase());
                 if let (Some(pv), Some(nx)) = (prev, next) {
                     let nalt = nx.alt.clone().unwrap_or_default();
                     self.last_term_change = transly_core::termsync::term_change(
@@ -747,6 +758,15 @@ impl AppState {
             Some(SaveResult::Exists) => "Такий термін уже є".into(),
             None => "Потрібні обидва слова".into(),
         }
+    }
+
+    /// Видаляє запис глосарія (слід лишається, щоб копія з іншого пристрою не повернулась).
+    pub fn remove_glossary_term(&mut self, en: &str) -> String {
+        let Some(p) = self.project.as_mut() else { return "Проєкт не відкрито".into() };
+        let done = transly_core::termedit::remove_term(p, en, now_ms());
+        self.rev += 1;
+        self.dirty = true;
+        if done { "Запис видалено".into() } else { "Такого запису немає".into() }
     }
 
     /// Терміни глосарія в оригіналі рядка: (початок, кінець у UTF-16, номер терміна).
@@ -2380,6 +2400,27 @@ mod tests {
         let reply_id = transly_core::workflow::comment_id(&s.threads(0, 0)[0].replies[0]);
         s.remove_comment(0, 0, &reply_id);
         assert!(s.threads(0, 0)[0].replies.is_empty());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_glossary_entry_is_added_changed_with_its_fields_and_removed() {
+        let base = std::env::temp_dir().join(format!("transly-app-glossary-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = game(&base);
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        let form = TermForm { en: "apple".into(), uk: "яблуко".into(), alt: Some("яблучко; яблуня".into()), kind: Some("Items".into()), note: Some("плід".into()), qa: Some(false), gender: None };
+        assert_eq!(s.save_term_form(&form, None), "Термін додано");
+        let t = s.glossary_terms().into_iter().find(|t| t.en == "apple").unwrap();
+        assert_eq!((t.kind.as_deref(), t.note.as_deref(), t.qa, t.alt.as_ref().map(Vec::len)), (Some("Items"), Some("плід"), Some(false), Some(2)));
+        // той самий запис, інший переклад: зміна, а не відмова
+        let again = TermForm { uk: "яблука".into(), ..form.clone() };
+        assert!(s.save_term_form(&again, Some("apple")).starts_with("Термін змінено"));
+        assert_eq!(s.glossary_terms().iter().filter(|t| t.en == "apple").count(), 1);
+        assert_eq!(s.glossary_terms().iter().find(|t| t.en == "apple").unwrap().uk, "яблука");
+        assert_eq!(s.remove_glossary_term("apple"), "Запис видалено");
+        assert!(s.glossary_terms().iter().all(|t| t.en != "apple"));
         let _ = std::fs::remove_dir_all(&base);
     }
 

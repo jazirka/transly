@@ -5,6 +5,7 @@
 // у випуску без чорного вікна консолі
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod glossary_panel;
 mod icons;
 mod layout;
 mod plugins;
@@ -40,8 +41,11 @@ struct App {
     draft: String,
     draft_for: Option<(usize, usize)>,
     message: String,
-    term_en: String,
-    term_uk: String,
+    /// Глосарій у лівій панелі: пошук, вибраний чип (Усе, Слова, Конструкції, Рядки, Пам’ять, Розбіжності), форма запису, запис, що чекає другого кліку «Видалити».
+    gl_query: String,
+    gl_show: usize,
+    gl_form: Option<glossary_panel::GlForm>,
+    gl_del: Option<String>,
     rows_scroll_to: Option<bool>,
     keys_win: bool,
     rail: usize,
@@ -230,7 +234,7 @@ fn game_job(text: &str, size: f32, actor_name: &dyn Fn(usize) -> Option<String>)
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), reply_to: None, reply_text: String::new(), del_confirm: None, closed_open: false, token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), reply_to: None, reply_text: String::new(), del_confirm: None, closed_open: false, token: String::new() }
     }
 }
 
@@ -3004,6 +3008,33 @@ mod ui_tests {
         }
     }
 
+    /// Ліва панель «Пов’язане» — глосарій: «＋ Додати» відкриває форму, «Скасувати» закриває; чип «Конструкції» лишає лише записи з пропуском.
+    #[test]
+    fn the_glossary_panel_opens_its_form_and_filters_by_kind() {
+        let data = game("glpanel");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.st.add_term("Hero", "Герой");
+        app.st.add_term("take … off", "зняти");
+        let mut h = harness(app);
+        h.state_mut().rail = 3;
+        h.run();
+        assert!(h.state().gl_form.is_none());
+        h.get_by_label("Додати запис").click();
+        h.run();
+        assert!(h.state().gl_form.is_some());
+        h.get_by_label("Скасувати").click();
+        h.run();
+        assert!(h.state().gl_form.is_none());
+        h.get_by_label("Вид записів: Конструкції").click();
+        h.run();
+        assert_eq!(h.state().gl_show, 2);
+        // картка запису: «Змінити» відкриває форму цього запису
+        h.get_by_label("Змінити: take … off").click();
+        h.run();
+        assert_eq!(h.state().gl_form.as_ref().and_then(|f| f.was.as_deref()), Some("take … off"));
+    }
+
     /// Ширини рядків у egui для порівняння з веб-виміром (`TRANSLY_WIDTHS` — JSON `[[сімейство, розмір, текст], …]`).
     #[test]
     #[ignore]
@@ -3193,6 +3224,16 @@ mod ui_tests {
         shot(&mut h, "08b-right-activity-filled");
         h.state_mut().right_secs = [[false, false, true]; 2];
         shot(&mut h, "09b-right-comments-filled");
+        // глосарій у лівій панелі (таблиця, значок «Пов’язане») і з відкритою формою
+        h.state_mut().focus = false;
+        h.run();
+        h.state_mut().rail = 3;
+        shot(&mut h, "11-glossary");
+        h.state_mut().gl_form = Some(glossary_panel::GlForm { qa: true, ..Default::default() });
+        shot(&mut h, "12-glossary-form");
+        h.state_mut().gl_form = None;
+        h.state_mut().focus = true;
+        h.state_mut().rail = 1;
         h.state_mut().right_secs = [[false, true, false]; 2];
         h.state_mut().focus = false;
         h.state_mut().st.file = Some(map);

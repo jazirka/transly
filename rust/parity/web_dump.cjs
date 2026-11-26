@@ -20,11 +20,23 @@ const SEL = JSON.parse(process.env.SEL);
   await page.evaluate(async () => { const root = await navigator.storage.getDirectory(); window.showDirectoryPicker = async () => root.getDirectoryHandle('ParityGame'); });
   await page.locator('button:visible', { hasText: 'Відкрити папку гри' }).last().click(); await sleep(1800);
   // MODE: без нього — таблиця (рядок 2 файлу за замовчуванням); edit — «Редагування»; scene — «Сцена» (файл Town)
-  if (process.env.MODE && process.env.MODE !== 'hist') {
+  if (process.env.MODE && !['hist', 'gloss', 'glossform', 'scenes'].includes(process.env.MODE)) {
     await page.locator('#tree-list .node:has-text("Enemies")').click(); await sleep(400);
     await page.locator('#grid .gr').nth(0).click(); await sleep(300);
   } else { await page.locator('#grid .gr').nth(1).click(); await sleep(300); }
   if (process.env.MODE === 'edit') { await page.locator('[data-m="edit"]').click(); await sleep(600); }
+  // scenes — «Редагування», ліва панель «Сцени» (файл Town)
+  if (process.env.MODE === 'scenes') {
+    await page.locator('#tree-list .node:has-text("Town")').click(); await sleep(300);
+    await page.locator('#grid .gr').nth(0).click(); await sleep(300);
+    await page.locator('[data-m="edit"]').click(); await sleep(500);
+    await page.locator('#strip [data-lp="scenes"]').click(); await sleep(500);
+  }
+  // gloss — ліва панель «Пов’язане» (глосарій); glossform — те саме з відкритою формою «＋ Додати»
+  if (process.env.MODE === 'gloss' || process.env.MODE === 'glossform') {
+    await page.locator('#strip [data-lp="glossary"]').click(); await sleep(500);
+    if (process.env.MODE === 'glossform') { await page.locator('#gl-new').click(); await sleep(400); }
+  }
   // hist — «Редагування» з двома надісланими версіями (щоб у «Активності» були записи й дата-розділювач)
   if (process.env.MODE === 'hist') {
     await page.locator('#grid .gr').nth(1).click(); await sleep(300);

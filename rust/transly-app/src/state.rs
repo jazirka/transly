@@ -191,6 +191,8 @@ pub struct AppState {
     /// Сповіщення: що потребує уваги й що зробили інші; рахується частинами між кадрами, коли дані не змінюються.
     pub inbox: Inbox,
     row_memo: RowMemo,
+    /// Конструкції, які ще не в глосарії: шукаються у фоні (див. `mine_cards`).
+    mine_cache: std::cell::RefCell<MineCache>,
     scene_cache: std::cell::RefCell<(usize, Option<transly_core::scene::SceneIndex>)>,
     undo: transly_core::undostack::UndoStack,
     pub host: PluginHost,
@@ -226,7 +228,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { undo_count: 0, db_cache: std::cell::RefCell::new(None), names_cache: std::cell::RefCell::new(None), usage_cache: Default::default(), links_cache: std::cell::RefCell::new(None), relay: RelayCfg::load(), relay_rx: None, speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, rows_filter: None, inbox: Inbox::load(), row_memo: RowMemo::load(), scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![], saved_ms: None, session_start: now_ms(), session_edits: 0 }
+        AppState { undo_count: 0, db_cache: std::cell::RefCell::new(None), names_cache: std::cell::RefCell::new(None), usage_cache: Default::default(), links_cache: std::cell::RefCell::new(None), relay: RelayCfg::load(), relay_rx: None, speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, rows_filter: None, inbox: Inbox::load(), row_memo: RowMemo::load(), mine_cache: Default::default(), scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![], saved_ms: None, session_start: now_ms(), session_edits: 0 }
     }
 }
 
@@ -363,6 +365,23 @@ impl RowMemo {
         }
     }
 }
+
+/// Пропозиції конструкцій («take … off»), знайдені у фоновому потоці на легкій копії перекладених рядків; шукаються знову, коли змінились терміни,
+/// або (не частіше ніж раз на 10 с) коли змінились рядки, і лише тоді, коли пропозиції хтось просить.
+#[derive(Default)]
+struct MineCache {
+    stamp: u64,
+    rev_seen: u64,
+    started: Option<std::time::Instant>,
+    list: std::sync::Arc<Vec<transly_core::mine::ConstructionSuggestion>>,
+    have: bool,
+    pending: Option<std::sync::mpsc::Receiver<Vec<transly_core::mine::ConstructionSuggestion>>>,
+}
+
+/// Як часто (мс) пропозиції конструкцій шукаються знову, коли змінюються самі рядки.
+const MINE_AGAIN: std::time::Duration = std::time::Duration::from_secs(10);
+/// Скільки перекладених рядків переглядає пошук конструкцій.
+const MINE_ROWS: usize = 20000;
 
 /// Скільки чекати після останньої зміни, перш ніж перераховувати сповіщення (так само, як у вебі): поки перекладач пише, список не смикається й не гальмує.
 const INBOX_QUIET: std::time::Duration = std::time::Duration::from_millis(2500);
@@ -1840,11 +1859,61 @@ impl AppState {
             .collect()
     }
 
-    /// Конструкції («take … off»), які рядки вже передають одним словом, але яких ще немає в глосарії (до 20 000 перекладених рядків).
-    pub fn mine_suggestions(&self) -> Vec<transly_core::mine::ConstructionSuggestion> {
-        let Some(p) = self.project.as_ref() else { return Vec::new() };
+    /// Конструкції («take … off»), які рядки вже передають одним словом, а в глосарії їх ще немає: (список, чи ще шукаються).
+    /// Пошук іде у фоні на копії лише надісланих і вичитаних рядків (до 20 000), тож інтерфейс не завмирає; результат лишається, поки не змінились терміни.
+    pub fn mine_cards(&self) -> (std::sync::Arc<Vec<transly_core::mine::ConstructionSuggestion>>, bool) {
+        use std::hash::{Hash, Hasher};
+        let mut c = self.mine_cache.borrow_mut();
+        if let Some(rx) = c.pending.as_ref() {
+            match rx.try_recv() {
+                Ok(list) => {
+                    c.list = std::sync::Arc::new(list);
+                    c.have = true;
+                    c.pending = None;
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    c.have = true;
+                    c.pending = None;
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+            }
+        }
+        let Some(p) = self.project.as_ref().filter(|_| !self.views.is_empty()) else { return (c.list.clone(), false) };
         let terms: Vec<String> = self.terms().into_iter().map(|t| t.en).collect();
-        transly_core::mine::mine_constructions(&self.views, p, &terms, &mut || {}, 20000, 2500)
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        (&terms, self.views.len()).hash(&mut h);
+        let stamp = h.finish();
+        let stale = !c.have || c.stamp != stamp || (c.rev_seen != self.rev && c.started.is_none_or(|t| t.elapsed() >= MINE_AGAIN));
+        if stale && c.pending.is_none() {
+            let (mut views, mut saved, mut n) = (Vec::new(), transly_core::project::empty_project("", "", ""), 0usize);
+            for v in &self.views {
+                let Some(ents) = p.files.get(&v.name) else { continue };
+                let (mut units, mut slim) = (Vec::new(), indexmap::IndexMap::new());
+                for u in &v.units {
+                    if n >= MINE_ROWS {
+                        break;
+                    }
+                    if let Some(e) = ents.get(&u.key).filter(|e| !e.target.trim().is_empty() && matches!(e.status, transly_core::model::Status::Done | transly_core::model::Status::Appr)) {
+                        units.push(u.clone());
+                        slim.insert(u.key.clone(), e.clone());
+                        n += 1;
+                    }
+                }
+                if !units.is_empty() {
+                    saved.files.insert(v.name.clone(), slim);
+                    views.push(FileView { name: v.name.clone(), units, label: v.label.clone() });
+                }
+            }
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let _ = tx.send(transly_core::mine::mine_constructions(&views, &saved, &terms, &mut || {}, MINE_ROWS, 2500));
+            });
+            c.stamp = stamp;
+            c.rev_seen = self.rev;
+            c.started = Some(std::time::Instant::now());
+            c.pending = Some(rx);
+        }
+        (c.list.clone(), c.pending.is_some() && !c.have)
     }
 
     /// Відкриває перший рядок зі списку посилань (файл за назвою, рядок за ключем).

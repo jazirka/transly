@@ -94,7 +94,7 @@ struct App {
     /// Вікно реле-синхронізації: правка адреси, пароля й періоду.
     relay_win: Option<state::RelayCfg>,
     /// Вікно «Конструкції»: знайдені пропозиції; відкладені («Не зараз») пам'ятаються до кінця сеансу.
-    mine_win: Option<Vec<transly_core::mine::ConstructionSuggestion>>,
+    mine_win: bool,
     mine_no: std::collections::HashSet<String>,
     /// Сповіщення внизу: (текст, коли з'явилось, чи можна скасувати); останнє показане повідомлення й лічильник скасувань.
     toast: Option<(String, std::time::Instant, bool)>,
@@ -260,7 +260,7 @@ fn game_job(text: &str, size: f32, actor_name: &dyn Fn(usize) -> Option<String>)
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, links_win: None, chrome_own: winchrome::own_chrome_chosen(), find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, links_win: None, chrome_own: winchrome::own_chrome_chosen(), find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: false, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
     }
 }
 
@@ -593,7 +593,7 @@ impl App {
             || self.settings.is_some()
             || self.plug_win.is_some()
             || self.relay_win.is_some()
-            || self.mine_win.is_some()
+            || self.mine_win
             || self.search_win.is_some()
     }
 
@@ -1122,7 +1122,13 @@ impl App {
 
     /// «Конструкції»: пропозиції записів у глосарій за вже перекладеними рядками; «Додати», «Показати» (перший рядок), «Не зараз».
     fn mine_window(&mut self, ctx: &egui::Context) {
-        let Some(list) = self.mine_win.clone() else { return };
+        if !self.mine_win {
+            return;
+        }
+        let (list, running) = self.st.mine_cards();
+        if running {
+            ctx.request_repaint_after(std::time::Duration::from_millis(150));
+        }
         let mut open = true;
         let mut add: Option<usize> = None;
         let mut show: Option<usize> = None;
@@ -1131,7 +1137,7 @@ impl App {
         dlg("Конструкції").open(&mut open).collapsible(false).default_width(560.0).default_height(460.0).show(ctx, |ui| {
             if shown.is_empty() {
                 ui.add_space(8.0);
-                ui.label(RichText::new("Нових конструкцій не знайдено: або їх немає, або всі вже в глосарії.").color(MUTE));
+                ui.label(RichText::new(if running { "Шукаю конструкції…" } else { "Нових конструкцій не знайдено: або їх немає, або всі вже в глосарії." }).color(MUTE));
                 return;
             }
             ui.label(RichText::new("Звороти, які ваші рядки вже передають одним словом. Додайте запис у глосарій, і QA стежитиме за цим словом.").color(MUTE));
@@ -1165,21 +1171,17 @@ impl App {
         if let Some(i) = add {
             let x = shown[i].clone();
             self.message = self.st.add_term(&x.en, &x.uk);
-            self.mine_win = Some(self.st.mine_suggestions());
         } else if let Some(i) = show {
             let x = shown[i].clone();
-            if let Some(r) = x.rows.first() {
-                if self.st.open_ref(&r.file, &r.key) {
-                    self.draft_for = None;
-                    self.cell_edit = None;
-                    self.message = format!("«{}»: показано перший із {} рядків", x.en, x.rows.len());
-                }
-            }
+            let rows: Vec<transly_core::groups::RowRef> = x.rows.iter().map(|r| transly_core::groups::RowRef { file: r.file.clone(), key: r.key.clone() }).collect();
+            self.message = self.st.show_rows(&format!("«{}»: так уже перекладено", x.en), &rows);
+            self.draft_for = None;
+            self.cell_edit = None;
         } else if let Some(i) = no {
             self.mine_no.insert(shown[i].en.clone());
         }
         if !open {
-            self.mine_win = None;
+            self.mine_win = false;
         }
     }
 
@@ -1226,7 +1228,7 @@ impl App {
                 ui.close_menu();
             }
             if mi(ui, "Конструкції…", self.st.is_open()).on_hover_text("Звороти на кшталт «take … off», які рядки вже передають одним словом, а в глосарії їх ще немає").clicked() {
-                self.mine_win = Some(self.st.mine_suggestions());
+                self.mine_win = true;
                 ui.close_menu();
             }
             if mi(ui, if self.st.syncing() { "Синхронізація триває…" } else { "Синхронізація через реле…" }, self.st.is_open()).clicked() {
@@ -3081,21 +3083,53 @@ mod ui_tests {
         assert!(app.st.contributions(0, 0).iter().all(|(v, _)| v.text != "Воїн"));
     }
 
-    #[test]
-    fn constructions_are_proposed_and_added_to_the_glossary() {
-        // самі пропозиції перевіряють золоті вектори ядра; тут — вікно: «Додати» пише запис у глосарій, «Не зараз» ховає картку
-        let data = game("mine");
+    /// Рядки з однаковою конструкцією («Take … off» усюди передано одним словом): гра на кілька описів предметів, усі надіслано.
+    fn construction_game(tag: &str) -> App {
+        let base = std::env::temp_dir().join(format!("transly-ui-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = base.join("MyGame").join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        let things = ["ring", "hat", "cloak", "boots", "gloves"];
+        let items: Vec<String> = things.iter().enumerate().map(|(i, t)| format!(r#"{{"id":{},"name":"Thing {}","description":"Take the {t} off","note":""}}"#, i + 1, i + 1)).collect();
+        std::fs::write(data.join("Items.json"), format!("[null,{}]", items.join(","))).unwrap();
         let mut app = App::default();
         app.st.open_game(&data).unwrap();
-        let sug = |en: &str, uk: &str| transly_core::mine::ConstructionSuggestion { en: en.into(), uk: uk.into(), rows: vec![transly_core::mine::MineRef { file: "Actors.json".into(), key: "[1].name".into() }] };
-        app.mine_win = Some(vec![sug("take … off", "зняти"), sug("put … on", "одягти")]);
+        for r in 0..app.st.row_count(0) {
+            let src = app.st.source_of(0, r);
+            if let Some(t) = src.strip_prefix("Take the ").and_then(|x| x.strip_suffix(" off")) {
+                let uk = match t { "ring" => "каблучку", "hat" => "капелюх", "cloak" => "плащ", "boots" => "чоботи", _ => "рукавички" };
+                app.st.submit(0, r, &format!("Зніми {uk}")).unwrap();
+            }
+        }
+        app
+    }
+
+    /// Конструкції шукаються у фоні й пропонуються: у вікні «Конструкції» й у глосарії (чип «Конструкції»); «Додати» пише запис, «Не зараз» ховає картку.
+    #[test]
+    fn constructions_are_found_in_the_background_and_added_to_the_glossary() {
+        let app = construction_game("mine");
+        let list = loop {
+            let (list, running) = app.st.mine_cards();
+            if !running {
+                break list;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        };
+        assert_eq!(list.len(), 1, "{list:?}");
+        assert_eq!(list[0].en, "take … off");
+        assert_eq!(list[0].rows.len(), 5);
+        let mut app = app;
+        app.mine_win = true;
         let mut h = harness(app);
         h.run();
-        h.get_all_by_label("Не зараз").next().unwrap().click();
+        h.get_by_label_contains("так уже перекладено в 5 рядках");
+        h.get_by_label("Не зараз").click();
         h.run();
         assert_eq!(h.state().mine_no.len(), 1);
-        assert_eq!(h.get_all_by_label("Додати").count(), 1, "відкладена картка зникла");
-        h.get_all_by_label("Додати").next().unwrap().click();
+        h.get_by_label_contains("Нових конструкцій не знайдено");
+        h.state_mut().mine_no.clear();
+        h.run();
+        h.get_by_label("Додати").click();
         h.run();
         assert_eq!(h.state().st.terms().len(), 1, "запис додано в глосарій");
     }
@@ -3383,7 +3417,13 @@ mod ui_tests {
         let issues = h.state().st.file_issues(big).len();
         println!("  QA найбільшого файлу: {issues} приміток за {:.0} мс", t.elapsed().as_secs_f32() * 1000.0);
         let t = Instant::now();
-        let mine = h.state().st.mine_suggestions();
+        let mine = loop {
+            let (list, running) = h.state().st.mine_cards();
+            if !running {
+                break list;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        };
         println!("  конструкції: {} пропозицій за {:.1} с", mine.len(), t.elapsed().as_secs_f32());
         let cands = h.state().st.plugin_candidates();
         println!("  команд плагінів з текстом: {:?}", cands.iter().take(6).map(|c| (c.name.clone(), c.with_text, c.likely)).collect::<Vec<_>>());
@@ -3668,6 +3708,39 @@ mod ui_tests {
         h.get_by_label("Змінити: take … off").click();
         h.run();
         assert_eq!(h.state().gl_form.as_ref().and_then(|f| f.was.as_deref()), Some("take … off"));
+    }
+
+    /// Чип «Конструкції» в глосарії: зверху пропозиції зі знайдених у фоні; «Додати» відкриває форму з готовим шаблоном (нічого не пишеться, поки не збережено),
+    /// «Показати 5» лишає в таблиці ці рядки, «Не зараз» ховає картку.
+    #[test]
+    fn the_construction_chip_offers_the_found_constructions() {
+        let app = construction_game("glmine");
+        warm_usage(&app);
+        loop {
+            let (_, running) = app.st.mine_cards();
+            if !running {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        let mut h = harness(app);
+        h.state_mut().rail = 3;
+        h.run();
+        h.get_by_label("Вид записів: Конструкції").click();
+        h.run();
+        h.get_by_label_contains("Показати 5: take … off").click();
+        h.run();
+        assert_eq!(h.state().st.rows_filter.as_ref().map(|r| r.title.as_str()), Some("«take … off»: так уже перекладено"));
+        assert_eq!(h.state().st.visible_len(0), 5);
+        h.get_by_label_contains("Додати: take … off").click();
+        h.run();
+        let f = h.state().gl_form.as_ref().expect("форма відкрита");
+        assert_eq!((f.en.as_str(), f.was.as_deref()), ("take … off", None));
+        assert!(h.state().st.terms().is_empty(), "нічого не записано, поки форму не збережено");
+        h.get_by_label_contains("Не зараз: take … off").click();
+        h.run();
+        assert_eq!(h.state().mine_no.len(), 1);
+        assert!(h.query_by_label_contains("Додати: take … off").is_none(), "картка зникла");
     }
 
     /// Чипи глосарія «Рядки», «Пам’ять», «Розбіжності» відкривають свої списки (не заглушку).

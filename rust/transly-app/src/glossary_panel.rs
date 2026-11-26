@@ -309,7 +309,17 @@ impl App {
             ui.ctx().request_repaint_after(std::time::Duration::from_millis(150));
             return;
         }
-        if found.is_empty() {
+        // чип «Конструкції» без пошуку: зверху пропозиції (знайдені у фоні) — що ваші рядки вже передають одним словом, а в глосарії ще нема
+        let (mine, mine_running) = if self.gl_show == 2 && q.is_empty() { self.st.mine_cards() } else { Default::default() };
+        let sugg: Vec<&transly_core::mine::ConstructionSuggestion> = mine.iter().filter(|x| !self.mine_no.contains(&x.en)).take(20).collect();
+        if mine_running {
+            ui.ctx().request_repaint_after(std::time::Duration::from_millis(150));
+        }
+        if found.is_empty() && sugg.is_empty() {
+            if mine_running {
+                empty_state(ui, "Шукаю конструкції…", "Дивлюсь, які звороти ваші рядки вже передають одним словом.");
+                return;
+            }
             let (t, sub) = if terms.is_empty() {
                 ("Записів ще немає", "Додайте перший запис кнопкою «+ Додати».")
             } else if self.gl_show == 5 {
@@ -322,9 +332,17 @@ impl App {
         }
         let mut edit: Option<String> = None;
         let mut del: Option<String> = None;
+        let mut mine_act: Option<(usize, usize)> = None;
         egui::ScrollArea::vertical().id_salt("gl-list").auto_shrink([false; 2]).show(ui, |ui| {
             egui::Frame::new().inner_margin(egui::Margin { left: 8, right: 8, top: 8, bottom: 8 }).show(ui, |ui| {
                 ui.spacing_mut().item_spacing = vec2(0.0, 6.0);
+                for (i, x) in sugg.iter().enumerate() {
+                    let n = x.rows.len();
+                    let hint = format!("так уже перекладено в {}", transly_core::plural::plural(n as i64, ["рядку", "рядках", "рядках"]));
+                    if let Some(a) = simple_card(ui, ("gl-mine", i), &format!("{} → {}", x.en, x.uk), None, "нова конструкція", &hint, &["Додати", &format!("Показати {n}"), "Не зараз"]) {
+                        mine_act = Some((i, a));
+                    }
+                }
                 for (shown_n, t) in found.iter().take(SHOWN).enumerate() {
                     let note_g = t.note.as_deref().filter(|n| !n.is_empty()).map(|n| ui.painter().layout(n.to_string(), ip(12.0), MUTE, ui.available_width() - 22.0));
                     let note_h = note_g.as_ref().map_or(0.0, |g| 4.0 + g.size().y);
@@ -417,6 +435,22 @@ impl App {
                 }
             });
         });
+        if let Some((i, a)) = mine_act {
+            let x = sugg[i].clone();
+            match a {
+                // форма відкривається з готовим шаблоном; поки не збережено, нічого не пишеться
+                0 => self.gl_form = Some(GlForm { en: x.en.clone(), uk: x.uk.clone(), qa: true, ..Default::default() }),
+                1 => {
+                    let rows: Vec<transly_core::groups::RowRef> = x.rows.iter().map(|r| transly_core::groups::RowRef { file: r.file.clone(), key: r.key.clone() }).collect();
+                    self.message = self.st.show_rows(&format!("«{}»: так уже перекладено", x.en), &rows);
+                    self.draft_for = None;
+                    self.cell_edit = None;
+                }
+                _ => {
+                    self.mine_no.insert(x.en.clone());
+                }
+            }
+        }
         if let Some(en) = edit {
             if let Some(t) = terms.iter().find(|t| t.en == en) {
                 self.gl_query = t.en.clone();

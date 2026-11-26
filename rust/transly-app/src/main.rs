@@ -2643,6 +2643,19 @@ mod ui_tests {
         h.input_mut().events.push(egui::Event::Key { key, physical_key: None, pressed: false, repeat: false, modifiers: mods });
     }
 
+    /// Індекс слів для вживання записів будується у фоновому потоці, а панель глосарія, поки він не готовий, просить перемальовування (`Harness::run`
+    /// тоді вичерпує кроки). Тести з терміном у глосарії чекають на нього наперед: на повільній машині CI потік не встигає за кілька кадрів.
+    fn warm_usage(app: &App) {
+        if let Some(t) = app.st.glossary_terms().first() {
+            for _ in 0..1000 {
+                if app.st.usage_counts(t).is_some() {
+                    return;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        }
+    }
+
     fn harness(app: App) -> Harness<'static, App> {
         Harness::builder().with_size(egui::vec2(1360.0, 800.0)).build_state(|ctx, app: &mut App| {
             theme::apply(ctx);
@@ -3278,6 +3291,7 @@ mod ui_tests {
         app.st.open_game(&data).unwrap();
         app.st.add_term("Hero", "Герой");
         app.st.add_term("take … off", "зняти");
+        warm_usage(&app);
         let mut h = harness(app);
         h.state_mut().rail = 3;
         h.run();
@@ -3304,6 +3318,7 @@ mod ui_tests {
         let mut app = App::default();
         app.st.open_game(&data).unwrap();
         app.st.add_term("Hero", "Герой");
+        warm_usage(&app);
         let mut h = harness(app);
         h.state_mut().rail = 3;
         h.run();

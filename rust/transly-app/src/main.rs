@@ -95,6 +95,11 @@ struct App {
     /// Розділи правої колонки (Активність, Пов’язане, Обговорення) окремо для таблиці й «Редагування».
     right_secs: [[bool; 3]; 2],
     comment: String,
+    /// Гілка, у якій відкрито поле відповіді, і текст відповіді; коментар, що чекає другого кліку «Видалити»; чи розкрито «Розв’язані».
+    reply_to: Option<String>,
+    reply_text: String,
+    del_confirm: Option<String>,
+    closed_open: bool,
     token: String,
 }
 
@@ -126,9 +131,9 @@ impl Default for UpdUi {
 /// Кольори ниток рядка (`--s0…--s5` у вебі).
 pub(crate) const TERM_COLORS: [Color32; 6] = [VIOLET, INFO, OK, WARN, Color32::from_rgb(0xee, 0x7a, 0xa8), Color32::from_rgb(0x4c, 0xc9, 0xc0)];
 
-fn source_job_sized(text: &str, marks: &[(usize, usize, usize)], size: f32) -> egui::text::LayoutJob {
+fn source_job_sized(text: &str, marks: &[(usize, usize, usize)], size: f32, line_height: Option<f32>) -> egui::text::LayoutJob {
     use egui::text::{LayoutJob, TextFormat};
-    let base = TextFormat { font_id: FontId::proportional(size), color: TEXT, ..Default::default() };
+    let base = TextFormat { font_id: FontId::proportional(size), color: TEXT, line_height, ..Default::default() };
     let mut job = LayoutJob::default();
     let (mut buf, mut cur_mark): (String, Option<usize>) = (String::new(), None);
     let mut u16pos = 0;
@@ -225,7 +230,7 @@ fn game_job(text: &str, size: f32, actor_name: &dyn Fn(usize) -> Option<String>)
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), term_en: String::new(), term_uk: String::new(), rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), reply_to: None, reply_text: String::new(), del_confirm: None, closed_open: false, token: String::new() }
     }
 }
 
@@ -2373,27 +2378,6 @@ impl App {
         });
         self.keys_win = open;
     }
-
-    fn tab_comments(&mut self, ui: &mut egui::Ui, f: usize, r: usize) {
-        label_caps(ui, "Обговорення");
-        for t in self.st.threads(f, r) {
-            egui::Frame::new().fill(PANEL2).corner_radius(CornerRadius::same(R2)).inner_margin(egui::Margin::same(8)).show(ui, |ui| {
-                ui.set_width(ui.available_width());
-                ui.label(RichText::new(&t.root.who).size(11.0).color(VIOLET));
-                ui.label(RichText::new(&t.root.text).color(TEXT));
-                for re in &t.replies {
-                    ui.label(RichText::new(format!("> {}: {}", re.who, re.text)).color(MUTE));
-                }
-            });
-        }
-        ui.add(egui::TextEdit::multiline(&mut self.comment).hint_text("Коментар…").desired_rows(3).desired_width(f32::INFINITY));
-        if plain_button(ui, "Додати коментар").clicked() && !self.comment.trim().is_empty() {
-            let text = self.comment.clone();
-            self.st.comment(f, r, &text);
-            self.comment.clear();
-        }
-    }
-
 }
 
 /// Позначка стану рядка, як у старому застосунку: ✓ вичитано, ● чернетка / чекає вичитування, ○ без перекладу, ▲ проблема QA.
@@ -2994,6 +2978,48 @@ mod ui_tests {
         assert_eq!(((r.x1 - r.x0).round(), (r.y1 - r.y0).round()), (36.0, 36.0), "{r:?}");
     }
 
+    /// Кнопка «Коментувати» в полі обговорення — 36×36 (веб `.cm-bar .saveb`); палітра авторів — шість кольорів `colorOf` з `discuss.ts`.
+    #[test]
+    fn the_comment_button_is_36_by_36_and_authors_get_the_web_palette() {
+        let data = game("cmsize");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.st.row = Some(0);
+        app.st.comment(0, 0, "Привіт");
+        let mut h = harness(app);
+        h.run();
+        h.state_mut().focus = true;
+        h.state_mut().rail = 1;
+        h.state_mut().right_secs[1][2] = true;
+        h.state_mut().draft_for = Some((0, 0));
+        h.run();
+        let r = h.get_by_label("Коментувати").bounding_box().unwrap();
+        assert_eq!(((r.x1 - r.x0).round(), (r.y1 - r.y0).round()), (36.0, 36.0), "{r:?}");
+        // значення з веба: colorOf('Ви') = COLORS[hash % 6]; хеш `h = h*31 + код` за модулем 2^32
+        let web = |name: &str| -> usize { let mut hsh: u32 = 0; for u in name.encode_utf16() { hsh = hsh.wrapping_mul(31).wrapping_add(u32::from(u)); } hsh as usize % 6 };
+        let pal = [(0x7a, 0x62, 0xd8), (0x3d, 0x8b, 0xd9), (0x2f, 0x9e, 0x7f), (0xc0, 0x80, 0x3a), (0xc2, 0x5b, 0x8a), (0x6f, 0x7f, 0x8c)];
+        for n in ["Ви", "Хтось", "Artem", "Олена"] {
+            let c = layout::who_color(n);
+            assert_eq!((c.r(), c.g(), c.b()), pal[web(n)], "{n}");
+        }
+    }
+
+    /// Ширини рядків у egui для порівняння з веб-виміром (`TRANSLY_WIDTHS` — JSON `[[сімейство, розмір, текст], …]`).
+    #[test]
+    #[ignore]
+    fn text_widths() {
+        let Ok(cases) = std::env::var("TRANSLY_WIDTHS") else { return };
+        let v: serde_json::Value = serde_json::from_str(&cases).unwrap();
+        let mut h = harness(App::default());
+        h.run();
+        for c in v.as_array().unwrap() {
+            let (fam, size, text) = (c[0].as_str().unwrap(), c[1].as_f64().unwrap() as f32, c[2].as_str().unwrap());
+            let font = if fam == "mono" { mp(size) } else { ip(size) };
+            let w = h.ctx.fonts(|f| f.layout_no_wrap(text.to_string(), font, egui::Color32::WHITE).size().x);
+            println!("W {fam} {size} {text:?} {w:.2}");
+        }
+    }
+
     /// Знімок вікна в PNG для перевірки вигляду очима: `TRANSLY_SHOTS=<тека> cargo test -p transly-app shots -- --ignored`.
     #[test]
     #[ignore]
@@ -3128,7 +3154,7 @@ mod ui_tests {
             theme::apply(ctx);
             app.frame(ctx);
         }, app);
-        let mut shot = |h: &mut Harness<'static, App>, n: &str| {
+        let shot = |h: &mut Harness<'static, App>, n: &str| {
             h.run();
             h.render().unwrap().save(out.join(format!("{n}.png"))).unwrap();
         };
@@ -3152,6 +3178,21 @@ mod ui_tests {
         shot(&mut h, "08-right-activity");
         h.state_mut().right_secs = [[false, false, true]; 2];
         shot(&mut h, "09-right-comments");
+        // той самий рядок із записами історії й гілкою обговорення (щоб видно було самі стрічки, а не порожні стани)
+        {
+            let (f, r) = (h.state().st.file.unwrap_or(0), h.state().st.row.unwrap_or(0));
+            let st = &mut h.state_mut().st;
+            st.edit(f, r, "Селянин, перша версія");
+            let _ = st.submit(f, r, "Селянин, друга версія тексту");
+            st.comment(f, r, "Чи не краще «Селюк»? Тут говорить грубіший персонаж, тож варто перевірити тон.");
+            let root = st.threads(f, r)[0].id.clone();
+            st.reply(f, r, &root, "Перевірив: тон підходить, лишаю як є.");
+            st.comment(f, r, "Друге питання про рід.");
+        }
+        h.state_mut().right_secs = [[true, false, false]; 2];
+        shot(&mut h, "08b-right-activity-filled");
+        h.state_mut().right_secs = [[false, false, true]; 2];
+        shot(&mut h, "09b-right-comments-filled");
         h.state_mut().right_secs = [[false, true, false]; 2];
         h.state_mut().focus = false;
         h.state_mut().st.file = Some(map);

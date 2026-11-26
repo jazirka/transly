@@ -1,0 +1,21 @@
+{
+ "ac_d": ".ac-d",
+ "ac_d_span": ".ac-d span",
+ "ac_i": ".ac-i",
+ "ac_ic": ".ac-ic",
+ "ac_ic_svg": ".ac-ic svg",
+ "ac_m": ".ac-m",
+ "ac_h": ".ac-h",
+ "ac_w": ".ac-w",
+ "ac_w_b": ".ac-w b",
+ "ac_time": ".ac-h time",
+ "ac_b": ".ac-b",
+ "ac_b_btn": ".ac-b button",
+ "ac_t": ".ac-t",
+ "ac_t_ins": ".ac-t ins",
+ "ac_t_del": ".ac-t del",
+ "tagi": ".ac-w .tagi",
+ "ac_i_cur": ".ac-i.cur",
+ "pn_mid": ".pn-mid",
+ "pn_sec_ac_b": ".pn-sec[data-sec=ac] .pn-b"
+}

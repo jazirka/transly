@@ -10,7 +10,7 @@ use transly_core::ingest::{ingest_note, ingest_quiet, plan_ingest};
 use transly_core::journal::{commit_rows, record_change};
 use transly_core::historyview::{history_rows, HistoryRow};
 use transly_core::tm::{FindOpts, TmEntry, TmIndex, TmMatch};
-use transly_core::comments::{threads_of, Thread};
+use transly_core::comments::{delete_comment, reply_to, resolve_thread, threads_of, Thread};
 use transly_core::workflow::add_comment;
 use transly_core::glossary::{prepare_text, term_ranges_in, Term};
 use transly_core::qa::{check, default_qa, Issue, UnitLike};
@@ -819,6 +819,32 @@ impl AppState {
         let Some(u) = self.unit(f, r).cloned() else { return };
         let name = self.views[f].name.clone();
         let next = add_comment(self.entry(f, r), &self.who(), text, now_ms(), None);
+        self.put(f, name, u.key, next);
+    }
+
+    /// Відповідь у гілці `parent` (id кореневого коментаря).
+    pub fn reply(&mut self, f: usize, r: usize, parent: &str, text: &str) {
+        let Some(u) = self.unit(f, r).cloned() else { return };
+        let name = self.views[f].name.clone();
+        let next = reply_to(self.entry(f, r), parent, &self.who(), text, now_ms());
+        self.put(f, name, u.key, next);
+    }
+
+    /// Закрити (`on`) чи відкрити знову гілку з коренем `root`.
+    pub fn resolve(&mut self, f: usize, r: usize, root: &str, on: bool) {
+        let Some(u) = self.unit(f, r).cloned() else { return };
+        let Some(e) = self.entry(f, r).cloned() else { return };
+        let name = self.views[f].name.clone();
+        let next = resolve_thread(&e, root, on, &self.who(), now_ms());
+        self.put(f, name, u.key, next);
+    }
+
+    /// Видалити коментар (запис лишається з позначкою, щоб видалення дійшло до інших пристроїв).
+    pub fn remove_comment(&mut self, f: usize, r: usize, id: &str) {
+        let Some(u) = self.unit(f, r).cloned() else { return };
+        let Some(e) = self.entry(f, r).cloned() else { return };
+        let name = self.views[f].name.clone();
+        let next = delete_comment(&e, id, now_ms());
         self.put(f, name, u.key, next);
     }
 
@@ -2332,6 +2358,28 @@ mod tests {
         assert!(!s.history(0, 0).is_empty());
         s.comment(0, 0, "Перевірити рід");
         assert_eq!(s.threads(0, 0).len(), 1);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_thread_gets_a_reply_closes_reopens_and_a_comment_can_be_removed() {
+        let base = std::env::temp_dir().join(format!("transly-app-thread-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = game(&base);
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        s.comment(0, 0, "Питання");
+        let root = s.threads(0, 0)[0].id.clone();
+        s.reply(0, 0, &root, "Відповідь");
+        let t = &s.threads(0, 0)[0];
+        assert_eq!((t.replies.len(), t.resolved), (1, false));
+        s.resolve(0, 0, &root, true);
+        assert!(s.threads(0, 0)[0].resolved);
+        s.resolve(0, 0, &root, false);
+        assert!(!s.threads(0, 0)[0].resolved);
+        let reply_id = transly_core::workflow::comment_id(&s.threads(0, 0)[0].replies[0]);
+        s.remove_comment(0, 0, &reply_id);
+        assert!(s.threads(0, 0)[0].replies.is_empty());
         let _ = std::fs::remove_dir_all(&base);
     }
 

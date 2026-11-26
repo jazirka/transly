@@ -14,18 +14,30 @@ const SEL = JSON.parse(process.env.SEL);
     for (const [n, t] of Object.entries(files)) { const w = await (await data.getFileHandle(n, { create: true })).createWritable(); await w.write(t); await w.close(); }
     await new Promise((res, rej) => { const o = indexedDB.open('transly', 3); o.onsuccess = () => { const tx = o.result.transaction(['projects'], 'readwrite'); tx.objectStore('projects').put(proj, 'default'); tx.oncomplete = () => res(); }; o.onerror = () => rej(o.error); });
   }, { files, proj });
+  // LS='{"transly.rtab":"act,rel,cm"}' — значення localStorage перед перезавантаженням (напр. усі три вкладки правої панелі)
+  if (process.env.LS) await page.evaluate(o => { for (const [k, v] of Object.entries(o)) localStorage.setItem(k, v); }, JSON.parse(process.env.LS));
   await page.reload(); await sleep(900);
   await page.evaluate(async () => { const root = await navigator.storage.getDirectory(); window.showDirectoryPicker = async () => root.getDirectoryHandle('ParityGame'); });
   await page.locator('button:visible', { hasText: 'Відкрити папку гри' }).last().click(); await sleep(1800);
   // MODE: без нього — таблиця (рядок 2 файлу за замовчуванням); edit — «Редагування»; scene — «Сцена» (файл Town)
-  if (process.env.MODE) {
+  if (process.env.MODE && process.env.MODE !== 'hist') {
     await page.locator('#tree-list .node:has-text("Enemies")').click(); await sleep(400);
     await page.locator('#grid .gr').nth(0).click(); await sleep(300);
   } else { await page.locator('#grid .gr').nth(1).click(); await sleep(300); }
   if (process.env.MODE === 'edit') { await page.locator('[data-m="edit"]').click(); await sleep(600); }
+  // hist — «Редагування» з двома надісланими версіями (щоб у «Активності» були записи й дата-розділювач)
+  if (process.env.MODE === 'hist') {
+    await page.locator('#grid .gr').nth(1).click(); await sleep(300);
+    await page.locator('[data-m="edit"]').click(); await sleep(600);
+    // надсилання переходить до наступного рядка — після кожного повертаємось на той самий у списку рядків
+    for (const t of ['Селянин, перша версія', 'Селянин, друга версія тексту']) {
+      await page.locator('#i-tr').fill(t); await page.locator('#b-save').click(); await sleep(500);
+      await page.locator('#slist .si').nth(1).click(); await sleep(400);
+    }
+  }
   if (process.env.MODE === 'scene') { await page.locator('#tree-list .node:has-text("Town")').click(); await sleep(300); await page.locator('[data-m="scene"]').click(); await sleep(600); }
   const res = await page.evaluate(sel => {
-    const P = ['font-family','font-size','font-weight','line-height','color','background-color','background-image','border-top-width','border-top-color','border-bottom-width','border-bottom-color','border-radius','padding','margin','gap','height','width','opacity','letter-spacing','text-transform'];
+    const P = ['overflow-y','scrollbar-gutter','box-sizing','margin-right','font-family','font-size','font-weight','line-height','color','background-color','background-image','border-top-width','border-top-color','border-bottom-width','border-bottom-color','border-radius','padding','margin','gap','height','width','opacity','letter-spacing','text-transform'];
     const out = {};
     for (const [name, q] of Object.entries(sel)) {
       const e = document.querySelector(q); if (!e) { out[name] = null; continue; }

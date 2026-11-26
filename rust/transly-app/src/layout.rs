@@ -78,6 +78,25 @@ pub(crate) fn spaced(ui: &egui::Ui, text: &str, size: f32, color: Color32, em: f
     ui.painter().layout_job(job)
 }
 
+/// Колір аватара автора, як у вебі (`colorOf` у `discuss.ts`): шість кольорів за хешем імені (код першого UTF-16-знака кожного символу).
+pub(crate) fn who_color(name: &str) -> Color32 {
+    const C: [(u8, u8, u8); 6] = [(0x7a, 0x62, 0xd8), (0x3d, 0x8b, 0xd9), (0x2f, 0x9e, 0x7f), (0xc0, 0x80, 0x3a), (0xc2, 0x5b, 0x8a), (0x6f, 0x7f, 0x8c)];
+    let mut h: u32 = 0;
+    for ch in name.chars() {
+        let unit = ch.encode_utf16(&mut [0u16; 2])[0];
+        h = h.wrapping_mul(31).wrapping_add(u32::from(unit));
+    }
+    let (r, g, b) = C[h as usize % C.len()];
+    Color32::from_rgb(r, g, b)
+}
+
+/// Порожній стан розділу (`.pn-mid`): текст 14 приглушений по центру тіла картки (відступи тіла 6 зверху, 12 знизу).
+fn empty_note(ui: &mut egui::Ui, text: &str) {
+    let area = ui.available_rect_before_wrap();
+    ui.allocate_rect(area, Sense::hover());
+    ui.painter().text(pos2(area.center().x, (area.top() + 6.0 + area.bottom() - 12.0) / 2.0), Align2::CENTER_CENTER, text, ip(14.0), MUTE);
+}
+
 /// Прапорець 14×14 (як у старому): рамка, при відміченні заливка кольору теми й пташка.
 fn paint_check(ui: &egui::Ui, c: egui::Pos2, on: bool, hover: bool) {
     let r = Rect::from_center_size(c, vec2(14.0, 14.0));
@@ -225,7 +244,7 @@ impl App {
                     }
                     let (label, bg, fg, bw) = match k {
                         1 => ("MAP", Color32::from_rgb(0x23, 0x3a, 0x2e), Color32::from_rgb(0x7f, 0xd0, 0x8a), 22.0),
-                        2 => ("Aa", Color32::from_rgb(0x2a, 0x2f, 0x4a), INFO, 22.0),
+                        2 => ("Aa", Color32::from_rgb(0x35, 0x29, 0x4a), VIOLET, 22.0),
                         _ => ("{}", Color32::from_rgb(0x3b, 0x35, 0x24), Color32::from_rgb(0xe5, 0xc0, 0x6a), 22.0),
                     };
                     let badge = Rect::from_min_size(pos2(rect.left() + 20.0, rect.center().y - 8.0), vec2(bw, 16.0));
@@ -312,12 +331,13 @@ impl App {
                     ui.set_min_height(each - 2.0);
                     ui.set_max_height(each - 2.0);
                     let title = ["Активність", "Пов’язане", "Обговорення"][*sec];
+                    ui.spacing_mut().item_spacing.y = 0.0; // після заголовка одразу тіло (у вебі проміжків між ними немає)
                     let (h, _) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::hover());
                     ui.painter().rect_filled(h, card_top(), PANEL);
                     ui.painter().hline(h.x_range(), h.bottom(), Stroke::new(1.0_f32, LINE));
-                    let g = ui.painter().layout_no_wrap(title.to_uppercase(), FontId::proportional(11.0 * 0.936), MUTE);
+                    let g = spaced(ui, title, 11.0, MUTE, 0.04);
                     ui.painter().galley(pos2(h.left() + 14.0, h.center().y - g.size().y / 2.0), g, MUTE);
-                    if ui.rect_contains_pointer(h) && mini_icon(ui, pos2(h.right() - 17.0, h.center().y), "minus", &format!("sec-x{sec}")).on_hover_text("Сховати розділ").clicked() {
+                    if ui.rect_contains_pointer(h) && mini_icon(ui, pos2(h.right() - 20.0, h.center().y), "minus", &format!("sec-x{sec}")).on_hover_text("Сховати розділ").clicked() {
                         self.right_secs[mi][*sec] = false;
                     }
                     match *sec {
@@ -330,50 +350,347 @@ impl App {
         });
     }
 
+    /// Стрічка активності рядка, як у вебі (`.ac-*`): записи під заголовком дня, у кожного кругла піктограма 28, «хто що» й час праворуч, під ними текст
+    /// (прибране закреслене, додане підсвічене); при наведенні замість часу — кнопки «відновити» й «було до цього».
     fn activity_body(&mut self, ui: &mut egui::Ui) {
         let (Some(f), Some(r)) = (self.st.file, self.st.row) else {
-            ui.add_space(24.0);
-            ui.vertical_centered(|ui| ui.label(RichText::new("Оберіть рядок").color(MUTE)));
+            empty_note(ui, "Оберіть рядок");
             return;
         };
         let hist = self.st.history(f, r);
         if hist.is_empty() {
-            ui.add_space(ui.available_height() * 0.35);
-            ui.vertical_centered(|ui| ui.label(RichText::new("Брак активності").color(MUTE)));
+            empty_note(ui, "Брак активності");
             return;
         }
+        let now = state::now_ms();
+        let off = |t: i64| chrono::TimeZone::timestamp_millis_opt(&chrono::Local, t).single().map_or(0, |d| i64::from(chrono::Offset::fix(d.offset()).local_minus_utc()) / 60);
+        let mut restore: Option<String> = None;
         egui::ScrollArea::vertical().id_salt("actscroll").auto_shrink([false; 2]).show(ui, |ui| {
-            egui::Frame::new().inner_margin(egui::Margin::symmetric(14, 8)).show(ui, |ui| {
-                for h in hist {
-                    ui.label(RichText::new(format!("{} · {}", h.rec.who, h.rec.what)).size(10.5).color(MUTE));
-                    ui.label(RichText::new(&h.rec.text).color(TEXT));
-                    if h.can_restore && ui.small_button("Повернути цю версію").clicked() {
-                        self.draft = h.rec.text.clone();
+            egui::Frame::new().inner_margin(egui::Margin { left: 14, right: 14, top: 6, bottom: 12 }).show(ui, |ui| {
+                ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+                let w = ui.available_width();
+                let mut day = String::new();
+                for (i, h) in hist.iter().enumerate() {
+                    let label = transly_core::historyview::day_label(h.rec.at, now, &off);
+                    if label != day {
+                        // розділювач дня: підпис 12 по центру, по боках лінії (поле зверху 16, перший — 2; знизу 8)
+                        ui.add_space(if i == 0 { 2.0 } else { 16.0 });
+                        let (sr, _) = ui.allocate_exact_size(vec2(w, 17.0), Sense::hover());
+                        let g = ui.painter().layout_no_wrap(label.clone(), ip(12.0), DIM);
+                        let (tw, cx, cy) = (g.size().x, sr.center().x, sr.center().y);
+                        ui.painter().hline(sr.left()..=(cx - tw / 2.0 - 10.0), cy, Stroke::new(1.0_f32, LINE));
+                        ui.painter().hline((cx + tw / 2.0 + 10.0)..=sr.right(), cy, Stroke::new(1.0_f32, LINE));
+                        ui.painter().galley(pos2(cx - tw / 2.0, cy - g.size().y / 2.0), g, DIM);
+                        ui.add_space(8.0);
+                        day = label;
                     }
-                    ui.add_space(6.0);
+                    // текст запису: зміни від версії до дії (або сам текст), 15 з висотою рядка 21
+                    let text_w = w - 38.0;
+                    let mut job = egui::text::LayoutJob::default();
+                    job.wrap.max_width = text_w;
+                    let plain = |color: Color32| egui::TextFormat { font_id: ip(15.0), color, line_height: Some(21.0), ..Default::default() };
+                    if h.rec.text.is_empty() {
+                        job.append("текст не змінювався", 0.0, egui::TextFormat { color: DIM, font_id: ip(12.5), line_height: Some(21.0), ..Default::default() });
+                    } else if h.before.is_empty() {
+                        job.append(&h.rec.text, 0.0, plain(TEXT));
+                    } else {
+                        for s in &h.diff {
+                            use transly_core::textdiff::DiffKind;
+                            let mut fm = plain(match s.t {
+                                DiffKind::Same => TEXT,
+                                DiffKind::Add => Color32::from_rgb(0xc6, 0xf0, 0xcb),
+                                DiffKind::Del => Color32::from_rgb(0xff, 0xb3, 0xbb),
+                            });
+                            match s.t {
+                                DiffKind::Add => fm.background = over_color(BG, OK, 0.22),
+                                DiffKind::Del => {
+                                    fm.background = over_color(BG, BAD, 0.20);
+                                    fm.strikethrough = Stroke::new(1.0_f32, fm.color);
+                                }
+                                DiffKind::Same => {}
+                            }
+                            job.append(&s.text, 0.0, fm);
+                        }
+                    }
+                    let tg = ui.fonts(|f| f.layout_job(job));
+                    let head_h = 17.5;
+                    let body_h = (head_h + 3.0 + tg.size().y).max(28.0);
+                    let (row, resp) = ui.allocate_exact_size(vec2(w, 8.0 + body_h + 8.0), Sense::hover());
+                    let top = row.top() + 8.0;
+                    // піктограма-коло 28 (біле 8 %), колір за видом дії
+                    let kind = transly_core::historyview::activity_kind(&h.rec.what);
+                    use transly_core::historyview::ActivityKind as K;
+                    let (name, tint) = match kind {
+                        K::Send => ("send", accent()),
+                        K::Approve => ("check", accent()),
+                        K::Restore | K::Back => ("restore", MUTE),
+                        K::Edit => ("pencil", MUTE),
+                    };
+                    let c = pos2(row.left() + 14.0, top + 14.0);
+                    ui.painter().circle_filled(c, 14.0, Color32::from_white_alpha(20));
+                    icons::paint(ui, Rect::from_center_size(c, vec2(14.0, 14.0)), name, tint);
+                    // «хто» (насичений) і «що» (приглушений), тег поточної версії
+                    let x0 = row.left() + 38.0;
+                    let who = if h.rec.who.is_empty() { "Хтось" } else { h.rec.who.as_str() };
+                    let mut hj = egui::text::LayoutJob::default();
+                    hj.wrap.max_width = f32::INFINITY;
+                    let hf = |color: Color32| egui::TextFormat { font_id: ip(13.0), color, line_height: Some(17.5), ..Default::default() };
+                    hj.append(who, 0.0, hf(TEXT));
+                    hj.append(&format!(" {}{}", h.rec.what, if h.is_current { " зараз у полі" } else { "" }), 0.0, hf(MUTE));
+                    let hg = ui.fonts(|f| f.layout_job(hj));
+                    ui.painter().galley(pos2(x0, top), hg, MUTE);
+                    if resp.hovered() {
+                        // кнопки 22×22 (r6) на місці часу: відновити цю версію, повернути те, що було до неї
+                        let mut rx = row.right();
+                        let mut tools: Vec<(&str, &str, String)> = Vec::new();
+                        if h.can_restore {
+                            tools.push(("restore", "Відновити цю версію: замінити переклад цим текстом", h.rec.text.clone()));
+                        }
+                        if h.can_restore_before {
+                            tools.push(("before", "Було до цього: повернути текст, що був перед цією дією", h.before.clone()));
+                        }
+                        for (n, tip, text) in tools.into_iter().rev() {
+                            let b = Rect::from_min_size(pos2(rx - 22.0, top - 2.0), vec2(22.0, 22.0));
+                            rx -= 24.0;
+                            let br = ui.interact(b, ui.id().with(("hist-tool", i, n)), Sense::click());
+                            if br.hovered() {
+                                ui.painter().rect_filled(b, CornerRadius::same(6), GHOST_HOVER);
+                            }
+                            icons::paint(ui, Rect::from_center_size(b.center(), vec2(14.0, 14.0)), n, if br.hovered() { TEXT } else { MUTE });
+                            if br.on_hover_text(tip).clicked() {
+                                restore = Some(text);
+                            }
+                        }
+                    } else if h.rec.at != 0 {
+                        let when = chrono::DateTime::from_timestamp_millis(h.rec.at).map(|d| d.with_timezone(&chrono::Local).format("%H:%M").to_string()).unwrap_or_default();
+                        let g = ui.painter().layout_no_wrap(when, ip(13.0), DIM);
+                        let gw = g.size().x;
+                        ui.painter().galley(pos2(row.right() - gw, top), g, DIM);
+                    }
+                    ui.painter().galley(pos2(x0, top + head_h + 3.0), tg, TEXT);
                 }
             });
         });
+        if let Some(t) = restore {
+            self.draft = t;
+        }
     }
 
+    /// Обговорення (`.cm-*`): гілки списком із аватаром, відповідями й діями; знизу, поза прокруткою, поле нового коментаря (текст 64 + панель 49).
     fn comments_body(&mut self, ui: &mut egui::Ui) {
         let (Some(f), Some(r)) = (self.st.file, self.st.row) else {
-            ui.add_space(24.0);
-            ui.vertical_centered(|ui| ui.label(RichText::new("Оберіть рядок").color(MUTE)));
+            empty_note(ui, "Оберіть рядок");
             return;
         };
+        let full = ui.available_rect_before_wrap();
+        ui.allocate_rect(full, Sense::hover());
+        let dock_h = 114.0_f32.min(full.height());
+        let list = Rect::from_min_max(full.min, pos2(full.right(), full.bottom() - dock_h));
+        let dock = Rect::from_min_max(pos2(full.left(), full.bottom() - dock_h), full.max);
+        let mut lui = ui.new_child(egui::UiBuilder::new().max_rect(list));
+        lui.set_clip_rect(list);
+        self.comment_threads(&mut lui, f, r);
+        self.comment_dock(ui, dock, f, r);
+    }
+
+    /// Одне повідомлення: аватар 28, «ім'я дата», текст 13,5 (рядок 19,6). `nested` — відповідь (зсув 14, ліва лінія 2).
+    fn comment_line(&self, ui: &mut egui::Ui, c: &transly_core::model::Comment, nested: bool, hover_acts: Option<&mut Option<String>>) {
+        let id = transly_core::workflow::comment_id(c);
+        let w = ui.available_width();
+        let inset = if nested { 14.0 + 2.0 + 12.0 } else { 0.0 };
+        let text_w = w - inset - 38.0;
+        let who = if c.who.is_empty() { "Хтось" } else { c.who.as_str() };
+        let when = chrono::DateTime::from_timestamp_millis(c.at).map(|d| d.with_timezone(&chrono::Local).format("%d.%m, %H:%M").to_string()).unwrap_or_default();
+        let mut job = egui::text::LayoutJob::default();
+        job.wrap.max_width = text_w;
+        job.append(&c.text, 0.0, egui::TextFormat { font_id: ip(13.5), color: TEXT, line_height: Some(19.6), ..Default::default() });
+        let tg = ui.fonts(|f| f.layout_job(job));
+        let mine = c.who == self.st.who();
+        let acts_h = if mine && hover_acts.is_some() { 2.0 + 18.0 } else { 0.0 };
+        let h = (17.5 + 3.0 + tg.size().y + acts_h).max(28.0);
+        let (row, resp) = ui.allocate_exact_size(vec2(w, h), Sense::hover());
+        if nested {
+            ui.painter().rect_filled(Rect::from_min_size(pos2(row.left() + 14.0, row.top()), vec2(2.0, row.height())), CornerRadius::ZERO, LINE);
+        }
+        let x = row.left() + inset;
+        let ac = pos2(x + 14.0, row.top() + 14.0);
+        ui.painter().circle_filled(ac, 14.0, who_color(who));
+        ui.painter().text(ac, Align2::CENTER_CENTER, who.chars().next().map(|ch| ch.to_uppercase().to_string()).unwrap_or_else(|| "?".into()), ip(12.0), Color32::from_rgb(0x11, 0x11, 0x11));
+        let g = ui.painter().layout_no_wrap(who.to_string(), ip(13.0), TEXT);
+        let gw = g.size().x;
+        ui.painter().galley(pos2(x + 38.0, row.top()), g, TEXT);
+        ui.painter().text(pos2(x + 38.0 + gw + 8.0, row.top() + 1.5), Align2::LEFT_TOP, when, ip(11.5), MUTE);
+        ui.painter().galley(pos2(x + 38.0, row.top() + 17.5 + 3.0), tg.clone(), TEXT);
+        if let Some(out) = hover_acts {
+            if mine && resp.hovered() {
+                let confirm = self.del_confirm.as_deref() == Some(id.as_str());
+                let label = if confirm { "Справді видалити?" } else { "Видалити" };
+                let g = ui.painter().layout_no_wrap(label.to_string(), ip(12.0), if confirm { BAD } else { MUTE });
+                let r = Rect::from_min_size(pos2(x + 38.0, row.top() + 17.5 + 3.0 + tg.size().y + 2.0), vec2(g.size().x, 18.0));
+                let br = ui.interact(r, ui.id().with(("cm-del", &id)), Sense::click());
+                ui.painter().galley(pos2(r.left(), r.center().y - g.size().y / 2.0), g, if confirm { BAD } else if br.hovered() { TEXT } else { MUTE });
+                if br.clicked() {
+                    *out = Some(id);
+                }
+            }
+        }
+    }
+
+    fn comment_threads(&mut self, ui: &mut egui::Ui, f: usize, r: usize) {
+        let threads = self.st.threads(f, r);
+        if threads.is_empty() {
+            empty_note(ui, "Брак коментарів");
+            return;
+        }
+        enum Act {
+            Reply(String),
+            Resolve(String, bool),
+            Delete(String),
+            Send(String),
+            Cancel,
+        }
+        let mut act: Option<Act> = None;
+        let (open, closed): (Vec<_>, Vec<_>) = threads.iter().partition(|t| !t.resolved);
         egui::ScrollArea::vertical().id_salt("cmtscroll").auto_shrink([false; 2]).show(ui, |ui| {
-            egui::Frame::new().inner_margin(egui::Margin::symmetric(14, 8)).show(ui, |ui| {
-                self.tab_comments(ui, f, r);
-            });
+            ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+            let total = threads.len();
+            let mut n = 0;
+            let mut shown = |ui: &mut egui::Ui, t: &transly_core::comments::Thread, this: &mut Self, act: &mut Option<Act>, dim: bool| {
+                n += 1;
+                let last = n == total;
+                let fr = egui::Frame::new().inner_margin(egui::Margin { left: 14, right: 14, top: 12, bottom: 12 }).show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.spacing_mut().item_spacing = vec2(0.0, 10.0);
+                    if dim {
+                        ui.multiply_opacity(0.7);
+                    }
+                    let mut del: Option<String> = None;
+                    this.comment_line(ui, &t.root, false, Some(&mut del));
+                    for re in &t.replies {
+                        this.comment_line(ui, re, true, Some(&mut del));
+                    }
+                    if let Some(id) = del {
+                        if this.del_confirm.as_deref() == Some(id.as_str()) {
+                            *act = Some(Act::Delete(id));
+                        } else {
+                            this.del_confirm = Some(id);
+                        }
+                    }
+                    // нижній рядок: «Відповісти» і «✓ Розв'язати» (таблетки), у закритої — позначка й «Відкрити знову»
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing = vec2(8.0, 0.0);
+                        ui.add_space(38.0);
+                        let pill = |ui: &mut egui::Ui, label: &str, color: Color32| -> egui::Response {
+                            let g = ui.painter().layout_no_wrap(label.to_string(), ip(12.0), color);
+                            let (rect, resp) = ui.allocate_exact_size(vec2(g.size().x + 16.0, 22.0), Sense::click());
+                            ui.painter().rect_stroke(rect, CornerRadius::same(11), Stroke::new(1.0_f32, if resp.hovered() { accent() } else { LINE }), StrokeKind::Inside);
+                            ui.painter().galley(pos2(rect.left() + 8.0, rect.center().y - g.size().y / 2.0), g, color);
+                            resp
+                        };
+                        if t.resolved {
+                            let by = t.by.as_ref().map(|b| b.who.clone()).unwrap_or_default();
+                            ui.label(RichText::new(format!("розв’язано · {by}")).size(12.0).color(OK));
+                            if pill(ui, "Відкрити знову", MUTE).clicked() {
+                                *act = Some(Act::Resolve(t.id.clone(), false));
+                            }
+                        } else {
+                            if this.reply_to.as_deref() != Some(t.id.as_str()) && pill(ui, "Відповісти", MUTE).clicked() {
+                                *act = Some(Act::Reply(t.id.clone()));
+                            }
+                            if pill(ui, "✓ Розв’язати", OK).on_hover_text("Закрити обговорення: воно сховається в «Розв’язані»").clicked() {
+                                *act = Some(Act::Resolve(t.id.clone(), true));
+                            }
+                        }
+                    });
+                    if this.reply_to.as_deref() == Some(t.id.as_str()) {
+                        ui.add(egui::TextEdit::multiline(&mut this.reply_text).hint_text("Відповісти…").desired_rows(2).desired_width(f32::INFINITY).font(ip(12.5)));
+                        ui.horizontal(|ui| {
+                            if ui.button("Надіслати").clicked() || ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Enter)) {
+                                *act = Some(Act::Send(t.id.clone()));
+                            }
+                            if ui.button("Скасувати").clicked() {
+                                *act = Some(Act::Cancel);
+                            }
+                            ui.label(RichText::new("Ctrl+Enter").size(12.0).color(MUTE));
+                        });
+                    }
+                });
+                if !last {
+                    ui.painter().hline(fr.response.rect.x_range(), fr.response.rect.bottom() - 0.5, Stroke::new(1.0_f32, LINE));
+                }
+            };
+            for t in &open {
+                shown(ui, t, self, &mut act, false);
+            }
+            if !closed.is_empty() {
+                let (hr, hresp) = ui.allocate_exact_size(vec2(ui.available_width(), 30.0), Sense::click());
+                let caret = if self.closed_open { "▾" } else { "▸" };
+                ui.painter().text(pos2(hr.left() + 14.0, hr.center().y), Align2::LEFT_CENTER, format!("{caret} Розв’язані · {}", closed.len()), ip(12.0), if hresp.hovered() { TEXT } else { MUTE });
+                if hresp.clicked() {
+                    self.closed_open = !self.closed_open;
+                }
+                if self.closed_open {
+                    for t in &closed {
+                        shown(ui, t, self, &mut act, true);
+                    }
+                }
+            }
         });
+        match act {
+            Some(Act::Reply(id)) => {
+                self.reply_to = Some(id);
+                self.reply_text.clear();
+            }
+            Some(Act::Cancel) => self.reply_to = None,
+            Some(Act::Send(id)) => {
+                let text = self.reply_text.trim().to_string();
+                if !text.is_empty() {
+                    self.st.reply(f, r, &id, &text);
+                }
+                self.reply_to = None;
+                self.reply_text.clear();
+            }
+            Some(Act::Resolve(id, on)) => self.st.resolve(f, r, &id, on),
+            Some(Act::Delete(id)) => {
+                self.st.remove_comment(f, r, &id);
+                self.del_confirm = None;
+            }
+            None => {}
+        }
+    }
+
+    /// Поле нового коментаря, прибите до низу картки: рамка зверху, текст 64, панель 49 з підказкою й кнопкою 36×36.
+    fn comment_dock(&mut self, ui: &mut egui::Ui, dock: Rect, f: usize, r: usize) {
+        ui.painter().hline(dock.x_range(), dock.top(), Stroke::new(1.0_f32, LINE));
+        let ta = Rect::from_min_size(pos2(dock.left(), dock.top() + 1.0), vec2(dock.width(), (dock.height() - 1.0 - 49.0).max(0.0)));
+        let bar = Rect::from_min_max(pos2(dock.left(), ta.bottom()), dock.max);
+        ui.painter().rect_filled(bar, CornerRadius { nw: 0, ne: 0, sw: CARD_R - 1, se: CARD_R - 1 }, PANEL);
+        ui.painter().hline(bar.x_range(), bar.top(), Stroke::new(1.0_f32, LINE));
+        let mut tui = ui.new_child(egui::UiBuilder::new().max_rect(ta));
+        tui.set_clip_rect(ta);
+        let te = egui::ScrollArea::vertical().id_salt("cmin").max_height(ta.height()).show(&mut tui, |ui| {
+            ui.add(egui::TextEdit::multiline(&mut self.comment).hint_text("Написати про цей рядок…").desired_rows(2).desired_width(ta.width()).font(ip(12.5)).frame(false).margin(vec2(14.0, 12.0)).min_size(vec2(ta.width(), ta.height())))
+        });
+        let focused = te.inner.has_focus();
+        ui.painter().text(pos2(bar.left() + 14.0, bar.center().y + 0.5), Align2::LEFT_CENTER, "Ctrl+Enter", ip(12.0), MUTE);
+        let sr = Rect::from_center_size(pos2(bar.right() - 26.0, bar.center().y + 0.5), vec2(36.0, 36.0));
+        let sresp = ui.interact(sr, ui.id().with("cm-add"), Sense::click());
+        let fill = if focused { if sresp.hovered() { accent_hover() } else { accent_solid() } } else if sresp.hovered() { over_ground(0.22) } else { over_ground(0.15) };
+        ui.painter().rect_filled(sr, CornerRadius::same(8), fill);
+        icons::paint(ui, Rect::from_center_size(sr.center(), vec2(17.0, 17.0)), "send", Color32::WHITE);
+        sresp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Коментувати"));
+        let send = sresp.on_hover_text("Коментувати (Ctrl+Enter)").clicked() || (focused && ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Enter)));
+        if send && !self.comment.trim().is_empty() {
+            let text = self.comment.trim().to_string();
+            self.st.comment(f, r, &text);
+            self.comment.clear();
+        }
     }
 
     /// «Пов’язане»: збіги пам’яті, слова глосарія, примітки QA, однакові рядки, довідкові мови.
     fn related_body(&mut self, ui: &mut egui::Ui, wide: bool) {
         let (Some(f), Some(r)) = (self.st.file, self.st.row) else {
-            ui.add_space(24.0);
-            ui.vertical_centered(|ui| ui.label(RichText::new("Оберіть рядок").color(MUTE)));
+            empty_note(ui, "Оберіть рядок");
             return;
         };
         let _ = wide;
@@ -388,24 +705,42 @@ impl App {
                     });
                 }
                 for m in self.st.tm_matches(f, r) {
+                    // `.thc.mem`: сітка «стовпчик 12 + 1fr», проміжки 12/6, поля 7×10, рамка 1, радіус 8; крапка 9 кольору `#7d828b` по центру першого блока,
+                    // підказка й кнопка вирівняні по тексту (відступ 24)
                     egui::Frame::new().fill(PANEL2).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(CornerRadius::same(8)).inner_margin(egui::Margin::symmetric(10, 7)).show(ui, |ui| {
-                        ui.set_width(ui.available_width());
-                        ui.spacing_mut().item_spacing.y = 5.0;
-                        ui.horizontal(|ui| {
-                            ui.spacing_mut().item_spacing.x = 9.0;
-                            let (d, _) = ui.allocate_exact_size(vec2(10.0, 14.0), Sense::hover());
-                            ui.painter().circle_filled(d.center(), 5.0, MUTE);
-                            ui.label(RichText::new(&m.t).font(mp(13.0)).color(TEXT));
-                            egui::Frame::new().fill(Color32::from_rgb(0x34, 0x36, 0x3b)).stroke(Stroke::new(1.0_f32, accent_ring())).corner_radius(CornerRadius::same(5)).inner_margin(egui::Margin::symmetric(8, 3)).show(ui, |ui| ui.label(RichText::new(format!("пам’ять {}%", m.score)).font(mp(12.0)).color(accent_text())));
+                        ui.set_width(ui.available_width() - 6.0); // у вебі `.thc{margin-right:6px}`
+                        ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+                        let left = ui.cursor().left();
+                        let block = ui.horizontal_top(|ui| {
+                            ui.add_space(24.0);
+                            ui.vertical(|ui| {
+                                ui.spacing_mut().item_spacing = vec2(8.0, 2.0);
+                                ui.horizontal(|ui| {
+                                    let g = ui.painter().layout_no_wrap(m.t.clone(), mp(13.0), TEXT);
+                                    let (tr, _) = ui.allocate_exact_size(vec2(g.size().x, 22.0), Sense::hover());
+                                    ui.painter().galley(pos2(tr.left(), tr.center().y - g.size().y / 2.0), g, TEXT);
+                                    ui.add_space(8.0 - ui.spacing().item_spacing.x);
+                                    let g = ui.painter().layout_no_wrap(format!("пам’ять {}%", m.score), mp(12.0), accent_text());
+                                    let (pr, _) = ui.allocate_exact_size(vec2(g.size().x + 16.0, 22.0), Sense::hover());
+                                    ui.painter().rect(pr, CornerRadius::same(5), Color32::from_rgb(0x34, 0x36, 0x3b), Stroke::new(1.0_f32, accent_ring()), StrokeKind::Inside);
+                                    ui.painter().galley(pos2(pr.left() + 8.0, pr.center().y - g.size().y / 2.0), g, accent_text());
+                                });
+                                ui.label(RichText::new(format!("«{}» · {}", m.s, m.src.trim_end_matches(".json"))).font(mp(10.5)).color(MUTE));
+                            });
                         });
-                        ui.label(RichText::new(format!("«{}» · {}", m.s, m.src.trim_end_matches(".json"))).font(mp(10.5)).color(MUTE));
-                        if ui.add(egui::Button::new(RichText::new("Підставити").font(mp(10.5)).color(TEXT)).fill(Color32::TRANSPARENT).stroke(Stroke::new(1.0_f32, Color32::from_rgb(0x4a, 0x4d, 0x54))).corner_radius(CornerRadius::same(8)).min_size(vec2(84.0, 28.0))).clicked() {
-                            self.draft = m.t.clone();
-                            self.draft_for = Some((f, r));
-                            if self.cell_edit.is_none() {
-                                self.st.edit(f, r, &m.t);
+                        let c = pos2(left + 4.5, block.response.rect.center().y);
+                        ui.painter().circle_filled(c, 4.5, Color32::from_rgb(0x7d, 0x82, 0x8b));
+                        ui.add_space(12.0);
+                        ui.horizontal(|ui| {
+                            ui.add_space(24.0);
+                            if ui.add(egui::Button::new(RichText::new("Підставити").font(mp(10.5)).color(TEXT)).fill(Color32::TRANSPARENT).stroke(Stroke::new(1.0_f32, Color32::from_rgb(0x4a, 0x4d, 0x54))).corner_radius(CornerRadius::same(8)).min_size(vec2(89.0, 28.0))).clicked() {
+                                self.draft = m.t.clone();
+                                self.draft_for = Some((f, r));
+                                if self.cell_edit.is_none() {
+                                    self.st.edit(f, r, &m.t);
+                                }
                             }
-                        }
+                        });
                     });
                 }
                 self.strands_ui(ui, f, r);
@@ -627,7 +962,7 @@ impl App {
             let mut send = sresp.on_hover_text("Надіслати на вичитку").clicked();
             egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(CornerRadius::same(8)).inner_margin(egui::Margin::symmetric(12, 10)).show(ui, |ui| {
                 ui.set_width(ui.available_width());
-                ui.label(source_job_sized(&line.source, &self.st.source_marks(f, line.row), 14.0));
+                ui.label(source_job_sized(&line.source, &self.st.source_marks(f, line.row), 14.0, None));
             });
             let mut buf = match &self.scene_draft {
                 Some((dr, t)) if *dr == line.row => t.clone(),
@@ -1254,10 +1589,10 @@ impl App {
                 }
                 // аватар: колір від імені
                 let who = if v.who.is_empty() { "Хтось".to_string() } else { v.who.clone() };
-                let col = [VIOLET, INFO, OK, WARN][who.bytes().fold(0usize, |a, b| a.wrapping_mul(31).wrapping_add(b as usize)) % 4];
+                let col = who_color(&who);
                 let c = pos2(row.left() + 26.0, row.top() + 24.0);
                 ui.painter().circle_filled(c, 12.0, col);
-                ui.painter().text(c, Align2::CENTER_CENTER, who.chars().next().map(|ch| ch.to_uppercase().to_string()).unwrap_or_default(), ip(11.5), BG);
+                ui.painter().text(c, Align2::CENTER_CENTER, who.chars().next().map(|ch| ch.to_uppercase().to_string()).unwrap_or_default(), ip(12.0), BG);
                 // ім'я, дата, позначка
                 let mut x = row.left() + 46.0;
                 let g = ui.painter().layout_no_wrap(who.clone(), ip(12.5), TEXT);
@@ -1366,7 +1701,7 @@ impl App {
                 // оригінал
                 egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(CornerRadius::same(8)).inner_margin(egui::Margin::symmetric(14, 12)).show(ui, |ui| {
                     ui.set_width(ui.available_width());
-                    ui.label(source_job_sized(&self.st.source_of(f, r), &self.st.source_marks(f, r), 15.0 * 0.936));
+                    ui.label(source_job_sized(&self.st.source_of(f, r), &self.st.source_marks(f, r), 15.0, Some(22.5)));
                 });
                 self.pics_ui(ui, f, r);
                 for (lang, text) in self.st.references_of(f, r) {
@@ -1395,7 +1730,12 @@ impl App {
                 let frame = egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, CARD_LINE)).corner_radius(CornerRadius::same(CARD_R));
                 let out = frame.show(ui, |ui| {
                     ui.set_width(ui.available_width());
-                    let te = ui.add(egui::TextEdit::multiline(&mut self.draft).desired_rows(4).desired_width(f32::INFINITY).font(ip(15.0)).frame(false).margin(vec2(14.0, 12.0)).min_size(vec2(0.0, 120.0)));
+                    let mut lay = |ui: &egui::Ui, text: &str, wrap: f32| {
+                        let mut job = egui::text::LayoutJob::simple(text.to_owned(), ip(15.0), TEXT, wrap);
+                        job.sections.iter_mut().for_each(|s| s.format.line_height = Some(22.5));
+                        ui.fonts(|f| f.layout_job(job))
+                    };
+                    let te = ui.add(egui::TextEdit::multiline(&mut self.draft).desired_rows(4).desired_width(f32::INFINITY).font(ip(15.0)).layouter(&mut lay).frame(false).margin(vec2(14.0, 12.0)).min_size(vec2(0.0, 120.0)));
                     let focused = te.has_focus();
                     let (bar, _) = ui.allocate_exact_size(vec2(ui.available_width(), 49.0), Sense::hover());
                     ui.painter().rect_filled(bar, CornerRadius { nw: 0, ne: 0, sw: CARD_R - 1, se: CARD_R - 1 }, PANEL);

@@ -102,6 +102,9 @@ struct App {
     comment: String,
     /// Робоче вікно: остання панель, куди клацнули (спершу центр).
     pane: Pane,
+    /// Чи відкрита ліва колонка (клік по активній кнопці смужки ховає її) і ширини колонок цього кадру (ліва, права).
+    left_open: bool,
+    panel_w: (f32, f32),
     /// Останній ввід — клавіша Tab (а не клік): тоді навколо віджета з фокусом малюється кільце, як `:focus-visible` у вебі.
     kb_nav: bool,
     /// Віджет, що мав фокус у попередньому кадрі (щоб помітити зміну фокусу).
@@ -246,7 +249,7 @@ fn game_job(text: &str, size: f32, actor_name: &dyn Fn(usize) -> Option<String>)
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
     }
 }
 
@@ -559,6 +562,10 @@ impl App {
     /// Один кадр інтерфейсу (окремо від `eframe`, щоб його можна було ганяти в тестах).
     fn frame(&mut self, ctx: &egui::Context) {
         theme::sync_weights(ctx);
+        // ширини колонок цього кадру: закрита колонка не займає місця, і полотно розтягується
+        let right_open = self.right_secs[usize::from(self.focus && !self.scene_mode)].iter().any(|b| *b);
+        self.panel_w = layout::panel_widths(ctx.screen_rect().width(), self.left_open, right_open);
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new("panel-w"), self.panel_w));
         self.focus_ring(ctx);
         // робоче вікно: куди клацнули в попередньому кадрі (прямокутники панелей запам'ятовують самі панелі)
         if let Some(p) = ctx.input(|i| if i.pointer.any_pressed() { i.pointer.interact_pos() } else { None }) {
@@ -628,11 +635,13 @@ impl App {
             self.rail = [0, 1, 2][mode as usize];
         }
         self.strip(ctx);
-        if self.focus || self.scene_mode {
-            // «Редагування» й «Сцена»: рядки чи сцени ліворуч, редактор посередині
-            self.rows_panel(ctx);
-        } else {
-            self.left_panel(ctx);
+        if self.left_open {
+            if self.focus || self.scene_mode {
+                // «Редагування» й «Сцена»: рядки чи сцени ліворуч, редактор посередині
+                self.rows_panel(ctx);
+            } else {
+                self.left_panel(ctx);
+            }
         }
         self.right_panel(ctx);
         self.editor(ctx);
@@ -720,7 +729,7 @@ impl App {
                 menu_resp.response.on_hover_text("Головне меню");
                 // проєкт
                 // усе зліва від перемикача режимів вміщується в межах до нього: довгі назви проєкту й гілки скорочуються
-                let budget = (layout::seg_x(ctx.screen_rect().width()) - 10.0 - ui.cursor().left()).max(60.0);
+                let budget = (layout::seg_x_at(self.panel_w.0) - 10.0 - ui.cursor().left()).max(60.0);
                 let (proj_extra, branch_extra) = (62.0, 54.0);
                 let proj_max = if can { ((budget - proj_extra - branch_extra - 4.0) * 0.6).max(30.0) } else { (budget - proj_extra).max(30.0) };
                 let name = fit_text(ui, &self.st.project.as_ref().map_or("Transly".to_string(), transly_core::projname::project_title), proj_max);
@@ -739,7 +748,7 @@ impl App {
                 });
                 // гілка
                 if can {
-                    let br_budget = (layout::seg_x(ctx.screen_rect().width()) - 10.0 - ui.cursor().left() - branch_extra).max(30.0);
+                    let br_budget = (layout::seg_x_at(self.panel_w.0) - 10.0 - ui.cursor().left() - branch_extra).max(30.0);
                     let br = fit_text(ui, &self.st.current_branch(), br_budget);
                     let resp = pill(ui, None, Some("branch"), &br, true, false);
                     if resp.clicked() {
@@ -747,7 +756,7 @@ impl App {
                     }
                 }
                 // перемикач режимів: прикріплений до лівого верхнього кута полотна (x = межа полотна + 6), без рамки; усе інше підлаштовується під нього
-                ui.add_space((layout::seg_x(ctx.screen_rect().width()) - ui.cursor().left()).max(4.0));
+                ui.add_space((layout::seg_x_at(self.panel_w.0) - ui.cursor().left()).max(4.0));
                 {
                     let modes = [("table", "Таблиця: усі рядки файлу", !self.focus && !self.scene_mode), ("edit", "Редагування: один рядок", self.focus && !self.scene_mode), ("scene", "Сцена: репліки подій поспіль", self.scene_mode)];
                     ui.spacing_mut().item_spacing.x = 6.0;
@@ -3260,6 +3269,38 @@ mod ui_tests {
         assert_eq!((h.state().rail, h.state().pane), (0, Pane::Files));
     }
 
+    /// Закрита колонка не лишає порожнього місця: полотно розтягується. Права — коли всі її розділи вимкнено, ліва — клік по активній кнопці смужки.
+    #[test]
+    fn closing_a_side_column_gives_its_room_to_the_canvas() {
+        let data = game("closecols");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.st.row = Some(0);
+        let mut h = harness(app);
+        h.run();
+        h.run();
+        let centre = |h: &Harness<'static, App>| h.ctx.data(|d| d.get_temp::<Rect>(egui::Id::new("pane-centre"))).unwrap().width();
+        let w0 = centre(&h);
+        h.state_mut().right_secs = [[false; 3]; 2];
+        h.run();
+        h.run();
+        let w1 = centre(&h);
+        assert!(w1 >= w0 + 350.0, "права колонка закрита: {w0} → {w1}");
+        h.get_by_label("Панель: Файли гри").click();
+        h.run();
+        h.run();
+        let w2 = centre(&h);
+        assert!(!h.state().left_open && w2 >= w1 + 300.0, "ліва колонка закрита: {w1} → {w2}");
+        // перемикач режимів лишається в куті полотна, що з'їхало ліворуч
+        let sx = h.get_by_label("Таблиця: усі рядки файлу").bounding_box().unwrap().x0;
+        assert_eq!(sx as f32, layout::seg_x_at(0.0));
+        // клік по кнопці смужки знову відкриває ліву колонку
+        h.get_by_label("Панель: Файли гри").click();
+        h.run();
+        h.run();
+        assert!(h.state().left_open && centre(&h) < w2);
+    }
+
     /// Tab вмикає клавіатурне кільце фокусу, клік вимикає; відкритий діалог гасить підсвітку вікон.
     #[test]
     fn tab_turns_the_keyboard_ring_on_and_a_dialog_puts_the_lights_out() {
@@ -3644,6 +3685,12 @@ mod ui_tests {
         h.run();
         press(&mut h, egui::Modifiers::NONE, egui::Key::Escape);
         h.run();
+        // обидві бічні колонки закрито: полотно займає все місце
+        h.state_mut().right_secs = [[false; 3]; 2];
+        h.state_mut().left_open = false;
+        shot(&mut h, "22-columns-closed");
+        h.state_mut().right_secs = [[false, true, false]; 2];
+        h.state_mut().left_open = true;
         // клавіатурне кільце фокусу: кілька Tab у таблиці
         for _ in 0..4 {
             press(&mut h, egui::Modifiers::NONE, egui::Key::Tab);

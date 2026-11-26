@@ -105,20 +105,29 @@ pub(crate) fn empty_note(ui: &mut egui::Ui, text: &str) {
 /// Ширини бічних колонок (ліва — картка з проміжком, права — картки зі смужкою) за шириною вікна. У повному вікні 306 і 396; у малому вони стискаються
 /// (спершу права до 260, потім ліва до 250), щоб на основному полотні лишалося місце для таблиці. Ширину бере і верхня панель, щоб перемикач режимів
 /// стояв у лівому верхньому куті полотна.
-pub(crate) fn panel_widths(window_w: f32) -> (f32, f32) {
-    let (mut left, mut right) = (306.0_f32, 396.0_f32);
+pub(crate) fn panel_widths(window_w: f32, left_open: bool, right_open: bool) -> (f32, f32) {
+    // закрита колонка не займає місця: ліва зникає зовсім (лишається смужка значків), права — лише смужка зі значками (40)
+    let (mut left, mut right) = (if left_open { 306.0_f32 } else { 0.0 }, if right_open { 396.0_f32 } else { 40.0 });
     let canvas = window_w - 34.0 - left - right - 6.0;
     let need = (560.0 - canvas).max(0.0);
-    let from_right = need.min(right - 260.0);
+    let from_right = if right_open { need.min(right - 260.0) } else { 0.0 };
     right -= from_right;
-    left -= (need - from_right).min(left - 250.0);
+    if left_open {
+        left -= (need - from_right).min(left - 250.0);
+    }
     (left, right)
 }
 
-/// Де стоїть перемикач режимів у верхній панелі: прикріплений до лівого верхнього кута полотна (смужка значків 34 + ліва колонка + проміжок 6) з відступом 6.
-/// Решта верхньої панелі підлаштовується під нього.
+/// Де стоїть перемикач режимів: смужка значків 34 + ширина лівої колонки + проміжок 6 + відступ 6 (лівий верхній кут полотна). Коли ліву колонку закрито,
+/// кут полотна з'їжджає ліворуч, але перемикач не лівіше за найвужчу ліву колонку (250): там мають вміститися меню, проєкт і гілка.
+pub(crate) fn seg_x_at(left_w: f32) -> f32 {
+    34.0 + left_w.max(250.0) + 6.0 + 6.0
+}
+
+/// Те саме для повного вікна з відкритими колонками (для тестів).
+#[cfg(test)]
 pub(crate) fn seg_x(window_w: f32) -> f32 {
-    34.0 + panel_widths(window_w).0 + 6.0 + 6.0
+    seg_x_at(panel_widths(window_w, true, true).0)
 }
 
 /// Верх першої кнопки смужки від верху вікна: центр кнопки (28) на рівні тексту заголовка картки (центр 58): 40 + 4 + 14.
@@ -153,7 +162,7 @@ fn paint_check(ui: &egui::Ui, c: egui::Pos2, on: bool, hover: bool) {
 
 /// Ліва колонка 306 (картка 300 + проміжок 6): картку малюємо самі, бо рамка панелі egui додає до ширини поля й рамку й обрізає її праворуч.
 fn left_card(ctx: &egui::Context, id: &'static str, add: impl FnOnce(&mut egui::Ui)) {
-    egui::SidePanel::left(id).exact_width(panel_widths(ctx.screen_rect().width()).0).resizable(false).show_separator_line(false).frame(egui::Frame::new()).show(ctx, |ui| {
+    egui::SidePanel::left(id).exact_width(ctx.data(|d| d.get_temp::<(f32, f32)>(egui::Id::new("panel-w"))).unwrap_or((306.0, 396.0)).0).resizable(false).show_separator_line(false).frame(egui::Frame::new()).show(ctx, |ui| {
         let full = ui.max_rect();
         let rect = Rect::from_min_max(pos2(full.left() + 6.0, full.top()), pos2(full.right(), full.bottom() - 6.0));
         let mut cui = ui.new_child(egui::UiBuilder::new().max_rect(rect));
@@ -200,12 +209,19 @@ impl App {
                 }
                 for (idx, ic, tip) in g {
                     let r = Rect::from_min_size(pos2(x, y), vec2(28.0, 28.0));
-                    let on = *idx == self.rail || (!edit && !self.scene_mode && *idx == 0 && self.rail != 3);
+                    let on = self.left_open && (*idx == self.rail || (!edit && !self.scene_mode && *idx == 0 && self.rail != 3));
                     let resp = rail_button(ui, r, ui.id().with(("strip", *idx)), ic, on, self.lit(pane_of_rail(*idx)), true);
                     resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, format!("Панель: {tip}")));
                     if resp.on_hover_text(*tip).clicked() {
-                        self.rail = *idx;
-                        self.pane = pane_of_rail(*idx);
+                        if on {
+                            // клік по активній кнопці ховає ліву колонку, і полотно розтягується (як у вебі)
+                            self.left_open = false;
+                            self.pane = Pane::Centre;
+                        } else {
+                            self.left_open = true;
+                            self.rail = *idx;
+                            self.pane = pane_of_rail(*idx);
+                        }
                     }
                     y += 34.0;
                 }
@@ -343,7 +359,7 @@ impl App {
     pub(crate) fn right_panel(&mut self, ctx: &egui::Context) {
         let edit = self.focus && !self.scene_mode;
         let mi = usize::from(edit);
-        egui::SidePanel::right("rightcol").exact_width(panel_widths(ctx.screen_rect().width()).1).resizable(false).show_separator_line(false).frame(egui::Frame::new()).show(ctx, |ui| {
+        egui::SidePanel::right("rightcol").exact_width(ctx.data(|d| d.get_temp::<(f32, f32)>(egui::Id::new("panel-w"))).unwrap_or((306.0, 396.0)).1).resizable(false).show_separator_line(false).frame(egui::Frame::new()).show(ctx, |ui| {
             let full = ui.max_rect();
             // смужка значків
             let rx = full.right() - 34.0;

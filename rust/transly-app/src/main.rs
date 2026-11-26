@@ -102,6 +102,10 @@ struct App {
     comment: String,
     /// Робоче вікно: остання панель, куди клацнули (спершу центр).
     pane: Pane,
+    /// Останній ввід — клавіша Tab (а не клік): тоді навколо віджета з фокусом малюється кільце, як `:focus-visible` у вебі.
+    kb_nav: bool,
+    /// Віджет, що мав фокус у попередньому кадрі (щоб помітити зміну фокусу).
+    last_focus: Option<egui::Id>,
     /// Гілка, у якій відкрито поле відповіді, і текст відповіді; коментар, що чекає другого кліку «Видалити»; чи розкрито «Розв’язані».
     reply_to: Option<String>,
     reply_text: String,
@@ -243,7 +247,7 @@ fn game_job(text: &str, size: f32, actor_name: &dyn Fn(usize) -> Option<String>)
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
     }
 }
 
@@ -457,9 +461,77 @@ impl eframe::App for App {
 }
 
 impl App {
+    /// Відкрито діалог: у вебі тоді жодне вікно не світиться («діалог не змінює робоче вікно, але гасить підсвітку»).
+    pub(crate) fn any_dialog(&self) -> bool {
+        self.keys_win
+            || self.activity_win
+            || self.qar_win
+            || self.plugins_win
+            || self.upd.win
+            || self.tsync_win.is_some()
+            || self.wrap_win.is_some()
+            || self.br_win.is_some()
+            || self.merge_win.is_some()
+            || self.rename_win.is_some()
+            || self.groups_win.is_some()
+            || self.ref_win.is_some()
+            || self.spk_win.is_some()
+            || self.import_win.is_some()
+            || self.build_win.is_some()
+            || self.fill_win.is_some()
+            || self.find_win.is_some()
+            || self.sync_win.is_some()
+            || self.settings.is_some()
+            || self.plug_win.is_some()
+            || self.relay_win.is_some()
+            || self.mine_win.is_some()
+            || self.search_win.is_some()
+    }
+
+    /// Вікно «світиться» (вибране в ньому кольору теми): воно робоче й ніякого діалогу відкрито немає.
+    pub(crate) fn lit(&self, pane: Pane) -> bool {
+        self.pane == pane && !self.any_dialog()
+    }
+
+    /// Клавіатурний фокус: кільце кольору теми 2 px навколо віджета, на який перейшли клавішею Tab (`:focus-visible`), і «робоче вікно» за місцем фокусу.
+    fn focus_ring(&mut self, ctx: &egui::Context) {
+        let tab = ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Key { key: egui::Key::Tab, pressed: true, .. })));
+        if ctx.input(|i| i.pointer.any_pressed()) {
+            self.kb_nav = false;
+        } else if tab {
+            self.kb_nav = true;
+        }
+        let focused = ctx.memory(|m| m.focused());
+        let Some(id) = focused else {
+            self.last_focus = None;
+            return;
+        };
+        let Some(resp) = ctx.read_response(id) else { return };
+        // робоче вікно: фокус перейшов у панель
+        if self.last_focus != Some(id) {
+            self.last_focus = Some(id);
+            if self.kb_nav {
+                let rect_of = |name: &str| ctx.data(|d| d.get_temp::<Rect>(egui::Id::new(name)));
+                let c = resp.rect.center();
+                if rect_of("pane-left").is_some_and(|r| r.contains(c)) {
+                    self.pane = pane_of_rail(self.rail);
+                } else if rect_of("pane-right").is_some_and(|r| r.contains(c)) {
+                    self.pane = Pane::Right;
+                } else if rect_of("pane-centre").is_some_and(|r| r.contains(c)) {
+                    self.pane = Pane::Centre;
+                }
+            }
+        }
+        // кільце — лише від клавіатури (клік його не вмикає), як `:focus-visible`
+        if self.kb_nav {
+            ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("focus-ring"))).rect_stroke(resp.rect.expand(1.0), CornerRadius::same(8), Stroke::new(2.0_f32, accent()), egui::StrokeKind::Outside);
+        }
+    }
+
     /// Один кадр інтерфейсу (окремо від `eframe`, щоб його можна було ганяти в тестах).
     fn frame(&mut self, ctx: &egui::Context) {
         theme::sync_weights(ctx);
+        self.focus_ring(ctx);
         // робоче вікно: куди клацнули в попередньому кадрі (прямокутники панелей запам'ятовують самі панелі)
         if let Some(p) = ctx.input(|i| if i.pointer.any_pressed() { i.pointer.interact_pos() } else { None }) {
             let rect_of = |name: &str| ctx.data(|d| d.get_temp::<Rect>(egui::Id::new(name)));
@@ -3120,6 +3192,30 @@ mod ui_tests {
         assert_eq!((h.state().rail, h.state().pane), (0, Pane::Files));
     }
 
+    /// Tab вмикає клавіатурне кільце фокусу, клік вимикає; відкритий діалог гасить підсвітку вікон.
+    #[test]
+    fn tab_turns_the_keyboard_ring_on_and_a_dialog_puts_the_lights_out() {
+        let data = game("kbring");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        let mut h = harness(app);
+        h.run();
+        assert!(!h.state().kb_nav);
+        press(&mut h, egui::Modifiers::NONE, egui::Key::Tab);
+        h.run();
+        assert!(h.state().kb_nav, "Tab вмикає кільце");
+        let p = pos2(650.0, 600.0);
+        h.input_mut().events.push(egui::Event::PointerMoved(p));
+        h.input_mut().events.push(egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE });
+        h.run();
+        assert!(!h.state().kb_nav, "клік вимикає кільце");
+        assert!(h.state().lit(Pane::Centre));
+        h.state_mut().keys_win = true;
+        assert!(!h.state().lit(Pane::Centre), "діалог гасить підсвітку");
+        h.state_mut().keys_win = false;
+        assert!(h.state().lit(Pane::Centre));
+    }
+
     /// Числа з веб-версії (computed style `#b-save`, `.saveb`): кнопка надсилання в редакторі 36×36.
     #[test]
     fn the_send_button_in_the_editor_is_36_by_36_like_the_web_one() {
@@ -3423,6 +3519,16 @@ mod ui_tests {
         press(&mut h, egui::Modifiers::NONE, egui::Key::Escape);
         h.run();
         press(&mut h, egui::Modifiers::NONE, egui::Key::Escape);
+        h.run();
+        // клавіатурне кільце фокусу: кілька Tab у таблиці
+        for _ in 0..4 {
+            press(&mut h, egui::Modifiers::NONE, egui::Key::Tab);
+            h.run();
+        }
+        shot(&mut h, "20-focus-ring");
+        let p = pos2(650.0, 700.0);
+        h.input_mut().events.push(egui::Event::PointerMoved(p));
+        h.input_mut().events.push(egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE });
         h.run();
         // діалоги: налаштування проєкту, збірка, автозаповнення, гарячі клавіші
         h.state_mut().act_settings();

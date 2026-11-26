@@ -136,7 +136,7 @@ const SEL_RING_GRAY: Color32 = Color32::from_rgb(89, 89, 92);
 impl App {
     /// Заливка й кільце вибраного елемента: у робочому вікні — колір теми (`--use`, `--use-ring`), в інших — сірі (`states.css`).
     pub(crate) fn chosen(&self, pane: Pane) -> (Color32, Color32) {
-        if self.pane == pane {
+        if self.lit(pane) {
             (sel_use(), accent_ring())
         } else {
             (SEL_GRAY, SEL_RING_GRAY)
@@ -794,7 +794,7 @@ impl App {
         ui.painter().text(pos2(bar.left() + 14.0, bar.center().y + 0.5), Align2::LEFT_CENTER, "Ctrl+Enter", ip(12.0), MUTE);
         let sr = Rect::from_center_size(pos2(bar.right() - 26.0, bar.center().y + 0.5), vec2(36.0, 36.0));
         let sresp = ui.interact(sr, ui.id().with("cm-add"), Sense::click());
-        let lit = self.pane == Pane::Right;
+        let lit = self.lit(Pane::Right);
         let fill = if lit { if sresp.hovered() { accent_hover() } else { accent_solid() } } else if sresp.hovered() { over_ground(0.22) } else { over_ground(0.15) };
         ui.painter().rect_filled(sr, CornerRadius::same(8), fill);
         if !lit {
@@ -1879,7 +1879,7 @@ impl App {
                     ui.painter().text(pos2(cb.center().x, cb.top() + 28.0), Align2::CENTER_CENTER, o.to_string(), mp(12.0), MUTE);
                     let sr = Rect::from_center_size(pos2(bar.right() - 26.0, cy), vec2(36.0, 36.0));
                     let sresp = ui.interact(sr, ui.id().with("send"), Sense::click());
-                    let lit = self.pane == Pane::Centre;
+                    let lit = self.lit(Pane::Centre);
                     ui.painter().rect_filled(sr, CornerRadius::same(8), if lit { if sresp.hovered() { accent_hover() } else { accent_solid() } } else if sresp.hovered() { over_ground(0.22) } else { over_ground(0.15) });
                     if !lit {
                         ui.painter().rect_stroke(sr, CornerRadius::same(8), Stroke::new(1.0_f32, SEL_RING_GRAY), StrokeKind::Inside);

@@ -46,6 +46,7 @@ struct App {
     gl_show: usize,
     gl_form: Option<glossary_panel::GlForm>,
     gl_del: Option<String>,
+    gl_mem_asked: bool,
     rows_scroll_to: Option<bool>,
     keys_win: bool,
     rail: usize,
@@ -236,7 +237,7 @@ fn game_job(text: &str, size: f32, actor_name: &dyn Fn(usize) -> Option<String>)
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, reply_to: None, reply_text: String::new(), del_confirm: None, closed_open: false, token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, reply_to: None, reply_text: String::new(), del_confirm: None, closed_open: false, token: String::new() }
     }
 }
 
@@ -3183,6 +3184,25 @@ mod ui_tests {
         assert_eq!(h.state().gl_form.as_ref().and_then(|f| f.was.as_deref()), Some("take … off"));
     }
 
+    /// Чипи глосарія «Рядки», «Пам’ять», «Розбіжності» відкривають свої списки (не заглушку).
+    #[test]
+    fn the_glossary_chips_rows_memory_and_differences_switch_the_list() {
+        let data = game("glchips");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.st.add_term("Hero", "Герой");
+        let mut h = harness(app);
+        h.state_mut().rail = 3;
+        h.run();
+        for (label, idx) in [("Рядки", 3), ("Пам’ять", 4), ("Розбіжності", 5)] {
+            h.get_by_label(&format!("Вид записів: {label}")).click();
+            h.run();
+            h.run();
+            assert_eq!(h.state().gl_show, idx, "{label}");
+        }
+        assert!(h.state().gl_mem_asked, "після «Пам’ять» лічильник пам’яті показується");
+    }
+
     /// Ширини рядків у egui для порівняння з веб-виміром (`TRANSLY_WIDTHS` — JSON `[[сімейство, розмір, текст], …]`).
     #[test]
     #[ignore]
@@ -3420,6 +3440,21 @@ mod ui_tests {
         h.state_mut().gl_form = Some(glossary_panel::GlForm { qa: true, ..Default::default() });
         shot(&mut h, "12-glossary-form");
         h.state_mut().gl_form = None;
+        // чипи: однакові рядки, пам'ять (із запитом), розбіжності; індекс слів будується у фоні — дамо йому час
+        for _ in 0..20 {
+            std::thread::sleep(std::time::Duration::from_millis(30));
+            h.run();
+        }
+        shot(&mut h, "11b-glossary-usage");
+        h.state_mut().gl_show = 3;
+        shot(&mut h, "11c-glossary-rows");
+        h.state_mut().gl_show = 4;
+        h.state_mut().gl_query = "villager".into();
+        shot(&mut h, "11d-glossary-memory");
+        h.state_mut().gl_show = 5;
+        h.state_mut().gl_query.clear();
+        shot(&mut h, "11e-glossary-diff");
+        h.state_mut().gl_show = 0;
         h.state_mut().focus = true;
         h.state_mut().rail = 1;
         h.state_mut().right_secs = [[false, true, false]; 2];

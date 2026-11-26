@@ -169,6 +169,10 @@ pub struct AppState {
     /// Розібраний файл бази даних, з якого щойно брали картинки рядка: (назва файлу, JSON).
     db_cache: std::cell::RefCell<Option<(String, serde_json::Value)>>,
     names_cache: std::cell::RefCell<Option<(usize, transly_core::gamenames::GameNameIndex)>>,
+    /// Індекс слів оригіналів для підрахунку вживання записів глосарія і підрахунки за поточним `rev`.
+    usage_cache: std::cell::RefCell<UsageCache>,
+    /// Групи однакових оригіналів, найбільші першими (для набору рядків із цим `stamp`).
+    links_cache: std::cell::RefCell<Option<(usize, Vec<LinkGroup>)>>,
     /// Реле-синхронізація: адреса, пароль, як часто й коли востаннє (лишається на цьому пристрої, у файл проєкту не потрапляє).
     pub relay: RelayCfg,
     relay_rx: Option<std::sync::mpsc::Receiver<Result<transly_platform::relay::SyncReport, String>>>,
@@ -216,7 +220,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { undo_count: 0, db_cache: std::cell::RefCell::new(None), names_cache: std::cell::RefCell::new(None), relay: RelayCfg::load(), relay_rx: None, speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![], saved_ms: None, session_start: now_ms(), session_edits: 0 }
+        AppState { undo_count: 0, db_cache: std::cell::RefCell::new(None), names_cache: std::cell::RefCell::new(None), usage_cache: Default::default(), links_cache: std::cell::RefCell::new(None), relay: RelayCfg::load(), relay_rx: None, speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![], saved_ms: None, session_start: now_ms(), session_edits: 0 }
     }
 }
 
@@ -298,6 +302,41 @@ type PickOptions<'a> = &'a mut dyn FnMut(&[(String, String)]) -> ExtractOptions;
 
 /// Годинник змін. Строго зростає: дві дії в одну й ту саму мілісекунду (швидкий тест, подвійний клік) мають різний час, інакше при злитті «хто пізніше»
 /// нічия лишала б старішу дію (наприклад, знятий внесок, якого щойно надіслали).
+/// Індекс слів оригіналів і позиції (файл, рядок) його рядків.
+type UsageIndex = (transly_core::termusage::WordIndex, Vec<(usize, usize)>);
+
+/// Кеш вживання записів: індекс слів (будується один раз на набір рядків) із позиціями рядків і готові числа для поточної версії змін.
+#[derive(Default)]
+struct UsageCache {
+    stamp: usize,
+    /// Індекс будується у фоновому потоці (на 100 тис. рядків це майже секунда): `pending` — чим він займається й для якого набору рядків.
+    pending: Option<(usize, std::sync::mpsc::Receiver<UsageIndex>)>,
+    index: Option<UsageIndex>,
+    rev: u64,
+    by_term: std::collections::HashMap<String, UsageCounts>,
+    /// Записи, переклад яких десь відрізняється від запису (для чипа «Розбіжності»); для `(stamp, rev)`.
+    diffs: Option<(usize, u64, std::collections::HashSet<String>)>,
+}
+
+/// Скільки рядків має запис і як вони перекладені: як у записі, іншим шляхом, ще без перекладу.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct UsageCounts {
+    pub rows: usize,
+    pub main: usize,
+    pub alt: usize,
+    pub other: usize,
+    pub none: usize,
+}
+
+/// Група рядків з однаковим оригіналом (`ctx.links().clusters()` у вебі): текст, скільки рядків, перший рядок (файл, ключ).
+#[derive(Clone, Debug)]
+pub struct LinkGroup {
+    pub text: String,
+    pub count: usize,
+    pub file: String,
+    pub key: String,
+}
+
 pub fn now_ms() -> i64 {
     use std::sync::atomic::{AtomicI64, Ordering};
     static LAST: AtomicI64 = AtomicI64::new(0);
@@ -772,6 +811,117 @@ impl AppState {
         }
     }
 
+    /// Як запис глосарія вживається в грі (лічильники), або `None`, поки будується індекс слів (він будується у фоні).
+    pub fn usage_counts(&self, t: &transly_core::glossary::GlossaryTerm) -> Option<UsageCounts> {
+        let stamp = self.views.iter().map(|v| v.units.len()).sum::<usize>() + self.views.len();
+        let mut c = self.usage_cache.borrow_mut();
+        if c.index.is_some() && c.stamp != stamp {
+            c.index = None;
+            c.by_term.clear();
+            c.diffs = None;
+        }
+        if c.index.is_none() {
+            // набір рядків змінився, а індекс для іншого набору ще будується: його результат не потрібен
+            if c.pending.as_ref().is_some_and(|(st, _)| *st != stamp) {
+                c.pending = None;
+            }
+            if c.pending.is_none() {
+                let rows: Vec<(String, String, String)> = self.views.iter().flat_map(|v| v.units.iter().map(move |u| (v.name.clone(), u.key.clone(), u.source.clone()))).collect();
+                let pos: Vec<(usize, usize)> = self.views.iter().enumerate().flat_map(|(f, v)| (0..v.units.len()).map(move |r| (f, r))).collect();
+                let (tx, rx) = std::sync::mpsc::channel();
+                std::thread::spawn(move || {
+                    let ix = transly_core::termusage::WordIndex::of(rows.iter().map(|(f, k, s)| (f.as_str(), k.as_str(), s.as_str())));
+                    let _ = tx.send((ix, pos));
+                });
+                c.pending = Some((stamp, rx));
+            }
+            let got = c.pending.as_ref().and_then(|(_, rx)| rx.try_recv().ok());
+            if let Some(done) = got {
+                c.index = Some(done);
+                c.stamp = stamp;
+                c.pending = None;
+                c.by_term.clear();
+            }
+        }
+        if c.rev != self.rev {
+            c.by_term.clear();
+            c.rev = self.rev;
+        }
+        if !c.by_term.contains_key(&t.en) {
+            let term = Term { en: t.en.clone(), uk: t.uk.clone(), alt: t.alt.clone(), qa: t.qa };
+            let u = c.index.as_ref().map(|(ix, pos)| transly_core::termusage::term_usage_at(ix, |at| pos.get(at).and_then(|&(f, r)| self.entry(f, r)).map(|e| e.target.as_str()), &term));
+            if let Some(u) = u {
+                c.by_term.insert(t.en.clone(), UsageCounts { rows: u.rows.len(), main: u.main, alt: u.alt, other: u.other, none: u.none });
+            }
+        }
+        c.by_term.get(&t.en).copied()
+    }
+
+    /// Скільки рядків гри мають запис глосарія і чи збігається їхній переклад із записом (`usageLine` у вебі):
+    /// «2 рядки · усюди як у записі», «3 рядки · 1 інакше», «ще ніде не вживається». Порожньо, поки індекс будується.
+    pub fn usage_line(&self, t: &transly_core::glossary::GlossaryTerm) -> String {
+        match self.usage_counts(t) {
+            None => String::new(),
+            Some(u) if u.rows == 0 => "ще ніде не вживається".into(),
+            Some(u) => format!("{} · {}", transly_core::plural::plural(u.rows as i64, ["рядок", "рядки", "рядків"]), if u.other > 0 { format!("{} інакше", u.other) } else { "усюди як у записі".to_string() }),
+        }
+    }
+
+    /// Записи, перекладені десь не так, як у них сказано (чип «Розбіжності»); `None`, поки індекс слів будується.
+    pub fn terms_with_differences(&self, terms: &[transly_core::glossary::GlossaryTerm]) -> Option<std::collections::HashSet<String>> {
+        let stamp = self.views.iter().map(|v| v.units.len()).sum::<usize>() + self.views.len();
+        if let Some((st, rev, set)) = self.usage_cache.borrow().diffs.as_ref() {
+            if *st == stamp && *rev == self.rev {
+                return Some(set.clone());
+            }
+        }
+        let mut set = std::collections::HashSet::new();
+        for t in terms {
+            let u = self.usage_counts(t)?;
+            if u.other > 0 {
+                set.insert(t.en.clone());
+            }
+        }
+        self.usage_cache.borrow_mut().diffs = Some((stamp, self.rev, set.clone()));
+        Some(set)
+    }
+
+    /// Групи рядків з однаковим оригіналом, найбільші першими; `q` — частина тексту. Повертає перші `limit` і скільки їх усього.
+    pub fn link_groups(&self, q: &str, limit: usize) -> (Vec<LinkGroup>, usize) {
+        let stamp = self.views.iter().map(|v| v.units.len()).sum::<usize>() + self.views.len();
+        if self.links_cache.borrow().as_ref().is_none_or(|c| c.0 != stamp) {
+            let idx = transly_core::links::LinkIndex::new(&self.views);
+            let mut all: Vec<LinkGroup> = idx.clusters().filter_map(|(text, rows)| rows.first().map(|f| LinkGroup { text: text.clone(), count: rows.len(), file: f.file.clone(), key: f.key.clone() })).collect();
+            all.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.text.cmp(&b.text)));
+            *self.links_cache.borrow_mut() = Some((stamp, all));
+        }
+        let cache = self.links_cache.borrow();
+        let Some((_, all)) = cache.as_ref() else { return (Vec::new(), 0) };
+        let q = q.trim().to_lowercase();
+        let hits: Vec<&LinkGroup> = all.iter().filter(|g| q.is_empty() || g.text.to_lowercase().contains(&q)).collect();
+        (hits.iter().take(limit).map(|g| (*g).clone()).collect(), hits.len())
+    }
+
+    /// Скільки груп однакових рядків у проєкті.
+    pub fn link_group_count(&self) -> usize {
+        self.link_groups("", 0).1
+    }
+
+    /// Пошук у пам'яті перекладів за словом: збіги (не більше `limit`) і скільки пар у пам'яті всього.
+    pub fn tm_search(&self, q: &str, limit: usize) -> (Vec<TmEntry>, usize) {
+        self.ensure_tm();
+        let cache = self.tm_cache.borrow();
+        match cache.as_ref() {
+            Some((_, idx)) => (if q.trim().is_empty() { Vec::new() } else { idx.search(q, limit) }, idx.size()),
+            None => (Vec::new(), 0),
+        }
+    }
+
+    /// Індекс слів для вживання ще будується (інтерфейс тоді перемальовується трохи згодом).
+    pub fn usage_pending(&self) -> bool {
+        self.usage_cache.borrow().index.is_none()
+    }
+
     /// Видаляє запис глосарія (слід лишається, щоб копія з іншого пристрою не повернулась).
     pub fn remove_glossary_term(&mut self, en: &str) -> String {
         let Some(p) = self.project.as_mut() else { return "Проєкт не відкрито".into() };
@@ -806,7 +956,7 @@ impl AppState {
 
     /// Збіги з пам'яті перекладів для оригіналу рядка (пари — з перекладених рядків проєкту й імпортованої пам'яті). Індекс
     /// будується раз на зміну даних, а не на кожен кадр.
-    pub fn tm_matches(&self, f: usize, r: usize) -> Vec<TmMatch> {
+    fn ensure_tm(&self) {
         if self.tm_cache.borrow().as_ref().is_none_or(|c| c.0 != self.rev) {
             let mut idx = TmIndex::new(false);
             for v in self.views.iter() {
@@ -824,6 +974,10 @@ impl AppState {
             }
             *self.tm_cache.borrow_mut() = Some((self.rev, idx));
         }
+    }
+
+    pub fn tm_matches(&self, f: usize, r: usize) -> Vec<TmMatch> {
+        self.ensure_tm();
         let own_s = self.source_of(f, r);
         let own_t = self.target_of(f, r);
         let cache = self.tm_cache.borrow();
@@ -2412,6 +2566,78 @@ mod tests {
         let reply_id = transly_core::workflow::comment_id(&s.threads(0, 0)[0].replies[0]);
         s.remove_comment(0, 0, &reply_id);
         assert!(s.threads(0, 0)[0].replies.is_empty());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn the_usage_line_counts_rows_with_the_entry_and_those_translated_another_way() {
+        let base = std::env::temp_dir().join(format!("transly-app-usage-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = game(&base);
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        s.add_term("Hero", "Герой");
+        let t = s.glossary_terms().into_iter().find(|t| t.en == "Hero").unwrap();
+        // індекс будується у фоні: чекаємо (до 5 с)
+        for _ in 0..500 {
+            if !s.usage_line(&t).is_empty() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        // оригінал «Hero» є в одному рядку, ще не перекладеному: «усюди як у записі»
+        assert_eq!(s.usage_line(&t), "1 рядок · усюди як у записі");
+        s.edit(0, 0, "Лицар");
+        assert_eq!(s.usage_line(&t), "1 рядок · 1 інакше");
+        s.edit(0, 0, "Герой");
+        assert_eq!(s.usage_line(&t), "1 рядок · усюди як у записі");
+        let none = transly_core::glossary::GlossaryTerm { en: "dragon".into(), uk: "дракон".into(), alt: None, qa: None, mt: 0, note: None, gender: None, kind: None };
+        assert_eq!(s.usage_line(&none), "ще ніде не вживається");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// Час побудови індексу слів на 100 тис. рядків (для довідки): `cargo test -p transly-app usage_index_build -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn usage_index_build_time_on_100k_rows() {
+        let words = ["the", "hero", "took", "his", "boots", "off", "and", "sat", "down", "by", "red", "apple", "tree", "Please", "take", "cloak", "wise", "tired", "quiet", "traveller"];
+        let texts: Vec<String> = (0..100_000).map(|i| (0..9).map(|k| words[(i * 7 + k * 3) % words.len()]).collect::<Vec<_>>().join(" ")).collect();
+        let t0 = std::time::Instant::now();
+        let ix = transly_core::termusage::WordIndex::of(texts.iter().enumerate().map(|(i, s)| ("f", Box::leak(i.to_string().into_boxed_str()) as &str, s.as_str())));
+        eprintln!("INDEX 100k rows: {:?}, rows {}", t0.elapsed(), ix.rows.len());
+    }
+
+    #[test]
+    fn identical_rows_memory_search_and_differences_feed_the_glossary_chips() {
+        let base = std::env::temp_dir().join(format!("transly-app-glchips-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = base.join("MyGame").join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        std::fs::write(data.join("Actors.json"), r#"[null,{"id":1,"name":"Brave Hero","nickname":"","profile":"","note":""},{"id":2,"name":"Brave Hero","nickname":"","profile":"","note":""},{"id":3,"name":"Wise Mage","nickname":"","profile":"","note":""}]"#).unwrap();
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        // однакові оригінали: одна група з двох рядків
+        let (groups, total) = s.link_groups("", 10);
+        assert_eq!((total, groups.len(), groups[0].count), (1, 1, 2), "{groups:?}");
+        assert_eq!(s.link_groups("mage", 10).1, 0);
+        assert_eq!(s.link_groups("hero", 10).1, 1);
+        // пам'ять: порожній запит не шукає, а розмір видно
+        s.submit(0, 0, "Хоробрий лицар").unwrap();
+        let (none, size) = s.tm_search("", 5);
+        assert!(none.is_empty() && size >= 1);
+        assert!(s.tm_search("hero", 5).0.iter().any(|e| e.t == "Хоробрий лицар"));
+        // розбіжності: запис «Hero → Герой», а рядок перекладено інакше
+        s.add_term("Hero", "Герой");
+        let terms = s.glossary_terms();
+        let mut diffs = None;
+        for _ in 0..500 {
+            diffs = s.terms_with_differences(&terms);
+            if diffs.is_some() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(diffs.unwrap().contains("Hero"), "переклад «Хоробрий лицар» не має «Герой»");
         let _ = std::fs::remove_dir_all(&base);
     }
 

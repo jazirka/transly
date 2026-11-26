@@ -73,6 +73,33 @@ impl WordIndex {
     }
 }
 
+/// Те саме, що `term_usage` без пропуску рядка, але переклад беруть за номером рядка в `index.rows`: на великих проєктах це швидше, ніж шукати за файлом і ключем.
+pub fn term_usage_at<'a>(index: &WordIndex, target_at: impl Fn(usize) -> Option<&'a str>, term: &Term) -> TermUsage {
+    let mut out = TermUsage { rows: Vec::new(), main: 0, alt: 0, other: 0, none: 0, other_rows: Vec::new() };
+    let en = crate::js::trim(&term.en);
+    let first = term_first_key(en);
+    let Some(first) = first.filter(|_| !en.is_empty()) else { return out };
+    let alt = term.alt.as_deref().unwrap_or(&[]);
+    for &at in index.with_key(&first) {
+        let r = &index.rows[at];
+        if term_matches_in(&prepare_text(&r.source), en).is_empty() {
+            continue;
+        }
+        let row = TermUse { file: r.file.clone(), key: r.key.clone() };
+        out.rows.push(row.clone());
+        match target_at(at).filter(|t| !crate::js::trim(t).is_empty()) {
+            None => out.none += 1,
+            Some(tr) if target_has_term(tr, &term.uk, &[]) => out.main += 1,
+            Some(tr) if !alt.is_empty() && target_has_term(tr, &alt[0], &alt[1..]) => out.alt += 1,
+            Some(_) => {
+                out.other += 1;
+                out.other_rows.push(row);
+            }
+        }
+    }
+    out
+}
+
 /// Як термін вживається в грі. `skip` пропускає один рядок (відкритий). `target_of(file, key)` — переклад рядка, якщо він є.
 pub fn term_usage<'a>(index: &WordIndex, target_of: impl Fn(&str, &str) -> Option<&'a str>, term: &Term, skip: Option<&TermUse>) -> TermUsage {
     let mut out = TermUsage { rows: Vec::new(), main: 0, alt: 0, other: 0, none: 0, other_rows: Vec::new() };

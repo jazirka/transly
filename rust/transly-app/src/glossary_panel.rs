@@ -1,9 +1,9 @@
 //! Ліва панель «Пов’язане» — глосарій проєкту (`app/src/ui/glossary-panel.ts`): пошук, чипи виду з лічильниками, підсумок і «＋ Додати»,
 //! форма запису, картки записів із «Змінити» й «Видалити». Розміри з computed style веб-DOM (`rust/parity/sel_gloss.json`).
-//! «Рядки», «Пам’ять» і «Розбіжності» поки що показують заглушку «Скоро». «＋» у вебі — повноширинний плюс; Inter його не має, тож тут звичайний «+».
+//! «Рядки» — групи однакових оригіналів, «Пам’ять» — пошук у пам’яті перекладів, «Розбіжності» — записи, перекладені десь не так. «＋» у вебі — повноширинний плюс; Inter його не має, тож тут звичайний «+».
 
 use super::*;
-use crate::layout::{empty_note, spaced};
+use crate::layout::spaced;
 use transly_core::glossary::{has_gap, pattern_parts, GlossaryTerm};
 use transly_core::termedit::{join_alts, TermForm};
 
@@ -71,6 +71,62 @@ fn input_box(ui: &mut egui::Ui, text: &mut String, lines: usize, hint: &str, id:
     r
 }
 
+/// Порожній стан списку (`.empty-state`): заголовок 14 середньої ваги, під ним підказка 12 приглушена, по центру зверху.
+fn empty_state(ui: &mut egui::Ui, title: &str, sub: &str) {
+    let area = ui.available_rect_before_wrap();
+    ui.allocate_rect(area, Sense::hover());
+    let g = ui.painter().layout(sub.to_string(), ip(12.0), MUTE, (area.width() - 48.0).max(80.0));
+    let c = area.center().x;
+    ui.painter().text(pos2(c, area.top() + 40.0), Align2::CENTER_CENTER, title, ipw(14.0, 500), TEXT);
+    let gw = g.size().x;
+    ui.painter().galley(pos2(c - gw / 2.0, area.top() + 56.0), g, MUTE);
+}
+
+/// Проста картка списку (`.gt-card`): заголовок, за потреби примітка, рядок «позначка + підказка» і дії; повертає номер натиснутої дії.
+fn simple_card(ui: &mut egui::Ui, id: (&str, usize), head: &str, note: Option<&str>, tag: &str, hint: &str, acts: &[&str]) -> Option<usize> {
+    let w = ui.available_width();
+    let note_g = note.map(|n| ui.painter().layout(n.to_string(), ip(12.0), MUTE, w - 22.0));
+    let note_h = note_g.as_ref().map_or(0.0, |g| 4.0 + g.size().y);
+    let acts_h = if acts.is_empty() { 0.0 } else { 5.0 + 16.8 };
+    let h = 8.0 + 17.5 + note_h + 4.0 + 22.0 + acts_h + 8.0;
+    let (card, _) = ui.allocate_exact_size(vec2(w, h), Sense::hover());
+    ui.painter().rect(card, CornerRadius::same(8), over_color(BG, Color32::WHITE, 0.02), Stroke::new(1.0_f32, LINE), StrokeKind::Inside);
+    let x = card.left() + 11.0;
+    let mut y = card.top() + 8.0;
+    let clip = ui.painter().with_clip_rect(Rect::from_min_max(pos2(x, card.top()), pos2(card.right() - 11.0, card.bottom())));
+    clip.text(pos2(x, y), Align2::LEFT_TOP, head, ip(12.5), if note.is_some() { MUTE } else { TEXT });
+    y += 17.5;
+    if let Some(g) = note_g {
+        y += 4.0;
+        let nh = g.size().y;
+        ui.painter().galley(pos2(x, y), g, TEXT);
+        y += nh;
+    }
+    y += 4.0;
+    let g = ui.painter().layout_no_wrap(tag.to_string(), ip(12.0), accent_text());
+    let pill = Rect::from_min_size(pos2(x, y), vec2(g.size().x + 18.0, 22.0));
+    ui.painter().rect(pill, CornerRadius::same(5), Color32::from_rgb(0x34, 0x36, 0x3b), Stroke::new(1.0_f32, accent_ring()), StrokeKind::Inside);
+    ui.painter().galley(pos2(pill.left() + 9.0, pill.center().y - g.size().y / 2.0), g, accent_text());
+    ui.painter().text(pos2(pill.right() + 8.0, y + 11.0), Align2::LEFT_CENTER, hint, ip(12.0), MUTE);
+    let mut clicked = None;
+    if !acts.is_empty() {
+        y += 22.0 + 5.0;
+        let mut lx = x;
+        for (i, label) in acts.iter().enumerate() {
+            let g = ui.painter().layout_no_wrap((*label).to_string(), ip(12.0), MUTE);
+            let r = Rect::from_min_size(pos2(lx, y), vec2(g.size().x, 16.8));
+            let resp = ui.interact(r, ui.id().with((id.0, id.1, i)), Sense::click());
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("{label}: {head}")));
+            ui.painter().galley(r.min, g, if resp.hovered() { TEXT } else { MUTE });
+            if resp.clicked() {
+                clicked = Some(i);
+            }
+            lx += r.width() + 12.0;
+        }
+    }
+    clicked
+}
+
 /// Кнопка 28 із текстом: основна (колір теми) або з рамкою `#4a4d54`.
 fn button28(ui: &mut egui::Ui, label: &str, primary: bool) -> egui::Response {
     let g = ui.painter().layout_no_wrap(label.to_string(), ip(12.5), if primary { Color32::WHITE } else { TEXT });
@@ -92,7 +148,12 @@ impl App {
         let q = self.gl_query.trim().to_lowercase();
         let n_all = terms.len();
         let n_con = terms.iter().filter(|t| is_construction(t)).count();
-        let counts = [Some(n_all), Some(n_all - n_con), Some(n_con), None, None, None];
+        // «Розбіжності» рахуються, коли їх обрали (індекс слів будується у фоні); «Пам'ять» — коли про неї спитали
+        let diffs = if self.gl_show == 5 { self.st.terms_with_differences(&terms) } else { None };
+        if self.gl_show == 4 {
+            self.gl_mem_asked = true;
+        }
+        let counts = [Some(n_all), Some(n_all - n_con), Some(n_con), Some(self.st.link_group_count()), if self.gl_mem_asked { Some(self.st.tm_search("", 0).1) } else { None }, diffs.as_ref().map(|d| d.len())];
         let w = ui.available_width();
         let origin = ui.cursor().min;
 
@@ -154,12 +215,19 @@ impl App {
             1 => terms.iter().filter(|t| !is_construction(t)).collect(),
             2 => terms.iter().filter(|t| is_construction(t)).collect(),
             0 => terms.iter().collect(),
+            5 => diffs.as_ref().map_or_else(Vec::new, |d| terms.iter().filter(|t| d.contains(&t.en)).collect()),
             _ => Vec::new(),
         };
         let mut found: Vec<&GlossaryTerm> = pool.iter().copied().filter(|t| rank(t, &q) < 4).collect();
         found.sort_by(|a, b| rank(a, &q).cmp(&rank(b, &q)).then_with(|| a.en.to_lowercase().cmp(&b.en.to_lowercase())));
-        let note = if self.gl_show >= 3 {
-            "Розділ у розробці".to_string()
+        let (groups, groups_total) = if self.gl_show == 3 { self.st.link_groups(&q, SHOWN) } else { (Vec::new(), 0) };
+        let (mem_hits, mem_size) = if self.gl_show == 4 { self.st.tm_search(&self.gl_query, SHOWN) } else { (Vec::new(), 0) };
+        let note = if self.gl_show == 3 {
+            if groups_total > 0 { transly_core::plural::plural(groups_total as i64, ["група однакових рядків", "групи однакових рядків", "груп однакових рядків"]) } else { "Однакових рядків немає".to_string() }
+        } else if self.gl_show == 4 {
+            format!("{} у пам’яті{}", transly_core::plural::plural(mem_size as i64, ["пара", "пари", "пар"]), if q.is_empty() { String::new() } else { format!(" · знайдено {}", mem_hits.len()) })
+        } else if self.gl_show == 5 && diffs.is_none() {
+            "Рахую розбіжності…".to_string()
         } else if terms.is_empty() {
             "Записів ще немає".to_string()
         } else {
@@ -186,15 +254,70 @@ impl App {
         }
 
         // ---- список карток
-        if self.gl_show >= 3 {
-            empty_note(ui, "Скоро");
+        if self.gl_show == 3 {
+            if groups.is_empty() {
+                empty_state(ui, "Однакових рядків немає", "Тут з’являються рядки, чий оригінал повторюється в грі.");
+                return;
+            }
+            let mut open: Option<(usize, bool)> = None;
+            egui::ScrollArea::vertical().id_salt("gl-groups").auto_shrink([false; 2]).show(ui, |ui| {
+                egui::Frame::new().inner_margin(egui::Margin { left: 8, right: 8, top: 8, bottom: 8 }).show(ui, |ui| {
+                    ui.spacing_mut().item_spacing = vec2(0.0, 6.0);
+                    for (i, gr) in groups.iter().enumerate() {
+                        let head = gr.text.replace('\n', " ");
+                        if let Some(a) = simple_card(ui, ("gl-grp", i), &head, None, "однаковий рядок", &format!("× {}", gr.count), &["Відкрити", "Поширити переклад…"]) {
+                            open = Some((i, a == 1));
+                        }
+                    }
+                    if groups_total > SHOWN {
+                        ui.label(RichText::new(format!("Показано {SHOWN} із {groups_total}. Уточніть пошук.")).size(12.0).color(MUTE));
+                    }
+                });
+            });
+            if let Some((i, spread)) = open {
+                let gr = &groups[i];
+                if self.st.open_ref(&gr.file, &gr.key) {
+                    self.draft_for = None;
+                    self.cell_edit = None;
+                    if spread {
+                        self.message = "Відкрито перший рядок групи: «Заповнити копії» — у «Пов’язаному» справа".into();
+                    }
+                }
+            }
+            return;
+        }
+        if self.gl_show == 4 {
+            if q.is_empty() {
+                empty_state(ui, "Пам’ять перекладів", "Введіть слово в пошуку: покажу, як воно вже перекладалося.");
+            } else if mem_hits.is_empty() {
+                empty_state(ui, "У пам’яті цього немає", "Спробуйте інше слово.");
+            } else {
+                egui::ScrollArea::vertical().id_salt("gl-mem").auto_shrink([false; 2]).show(ui, |ui| {
+                    egui::Frame::new().inner_margin(egui::Margin { left: 8, right: 8, top: 8, bottom: 8 }).show(ui, |ui| {
+                        ui.spacing_mut().item_spacing = vec2(0.0, 6.0);
+                        for (i, h) in mem_hits.iter().enumerate() {
+                            let label = if h.src == "Імпорт" { "імпорт".to_string() } else { h.src.trim_end_matches(".json").to_string() };
+                            simple_card(ui, ("gl-mem", i), &h.s.replace('\n', " "), Some(&h.t.replace('\n', " ")), "пам’ять", &label, &[]);
+                        }
+                    });
+                });
+            }
+            return;
+        }
+        if self.gl_show == 5 && diffs.is_none() {
+            empty_state(ui, "Рахую розбіжності…", "Дивлюсь, де запис перекладено не так, як у ньому сказано.");
+            ui.ctx().request_repaint_after(std::time::Duration::from_millis(150));
             return;
         }
         if found.is_empty() {
-            let area = ui.available_rect_before_wrap();
-            ui.allocate_rect(area, Sense::hover());
-            let c = pos2(area.center().x, area.top() + 40.0);
-            ui.painter().text(c, Align2::CENTER_CENTER, if terms.is_empty() { "Записів ще немає" } else { "Нічого не знайдено" }, ip(14.0), MUTE);
+            let (t, sub) = if terms.is_empty() {
+                ("Записів ще немає", "Додайте перший запис кнопкою «+ Додати».")
+            } else if self.gl_show == 5 {
+                ("Розбіжностей немає", "Усі записи перекладено так, як у них сказано.")
+            } else {
+                ("Нічого не знайдено", "Спробуйте інше слово або частину слова.")
+            };
+            empty_state(ui, t, sub);
             return;
         }
         let mut edit: Option<String> = None;
@@ -202,7 +325,7 @@ impl App {
         egui::ScrollArea::vertical().id_salt("gl-list").auto_shrink([false; 2]).show(ui, |ui| {
             egui::Frame::new().inner_margin(egui::Margin { left: 8, right: 8, top: 8, bottom: 8 }).show(ui, |ui| {
                 ui.spacing_mut().item_spacing = vec2(0.0, 6.0);
-                for t in found.iter().take(SHOWN) {
+                for (shown_n, t) in found.iter().take(SHOWN).enumerate() {
                     let note_g = t.note.as_deref().filter(|n| !n.is_empty()).map(|n| ui.painter().layout(n.to_string(), ip(12.0), MUTE, ui.available_width() - 22.0));
                     let note_h = note_g.as_ref().map_or(0.0, |g| 4.0 + g.size().y);
                     let (card, _) = ui.allocate_exact_size(vec2(ui.available_width(), 81.3 + note_h), Sense::hover());
@@ -230,6 +353,24 @@ impl App {
                     ui.painter().rect(pill, CornerRadius::same(5), Color32::from_rgb(0x34, 0x36, 0x3b), Stroke::new(1.0_f32, accent_ring()), StrokeKind::Inside);
                     ui.painter().galley(pos2(pill.left() + 9.0, pill.center().y - g.size().y / 2.0), g, accent_text());
                     let mut mx = pill.right() + 8.0;
+                    if shown_n < 30 {
+                        if self.st.usage_pending() {
+                            ui.ctx().request_repaint_after(std::time::Duration::from_millis(150));
+                        }
+                        let line = self.st.usage_line(t);
+                        if !line.is_empty() {
+                            let g = ui.painter().layout_no_wrap(line, ip(12.0), MUTE);
+                            ui.painter().galley(pos2(mx, my + 11.0 - g.size().y / 2.0), g.clone(), MUTE);
+                            mx += g.size().x + 8.0;
+                        }
+                    }
+                    if let Some(k) = t.kind.as_deref().filter(|k| !k.is_empty()) {
+                        let g = ui.painter().layout_no_wrap(k.to_string(), ip(12.0), MUTE);
+                        let kr = Rect::from_min_size(pos2(mx, my + 2.5), vec2(g.size().x + 16.0, 17.0));
+                        ui.painter().rect(kr, CornerRadius::same(9), Color32::from_rgb(0x2a, 0x2c, 0x31), Stroke::new(1.0_f32, LINE), StrokeKind::Inside);
+                        ui.painter().galley(pos2(kr.left() + 8.0, kr.center().y - g.size().y / 2.0), g, MUTE);
+                        mx += kr.width() + 8.0;
+                    }
                     if t.qa == Some(false) {
                         let g = ui.painter().layout_no_wrap("лише підказка, без QA".to_string(), ip(12.0), DIM);
                         ui.painter().galley(pos2(mx, my + 11.0 - g.size().y / 2.0), g.clone(), DIM);
@@ -239,13 +380,6 @@ impl App {
                         ui.painter().rect_stroke(qa, CornerRadius::same(3), Stroke::new(1.0_f32, Color32::from_rgb(0x2f, 0x4a, 0x3a)), StrokeKind::Inside);
                         ui.painter().text(qa.center(), Align2::CENTER_CENTER, "QA", mp(9.5), OK);
                         mx += 21.4 + 8.0;
-                    }
-                    if let Some(k) = t.kind.as_deref().filter(|k| !k.is_empty()) {
-                        let g = ui.painter().layout_no_wrap(k.to_string(), ip(12.0), MUTE);
-                        let kr = Rect::from_min_size(pos2(mx, my + 2.5), vec2(g.size().x + 16.0, 17.0));
-                        ui.painter().rect(kr, CornerRadius::same(9), Color32::from_rgb(0x2a, 0x2c, 0x31), Stroke::new(1.0_f32, LINE), StrokeKind::Inside);
-                        ui.painter().galley(pos2(kr.left() + 8.0, kr.center().y - g.size().y / 2.0), g, MUTE);
-                        mx += kr.width() + 8.0;
                     }
                     if let Some(alt) = t.alt.as_ref().filter(|a| !a.is_empty()) {
                         clip.text(pos2(mx, my + 11.0), Align2::LEFT_CENTER, format!("також: {}", alt.join("; ")), ip(12.0), MUTE);

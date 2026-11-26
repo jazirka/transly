@@ -45,7 +45,6 @@ impl App {
         let mut open = true;
         let (mut apply, mut close) = (false, false);
         dlg("Зв’язані рядки").open(&mut open).collapsible(false).resizable(false).default_width(640.0).show(ctx, |ui| {
-            ui.set_width(640.0 - 32.0);
             let mut job = egui::text::LayoutJob::default();
             job.wrap.max_width = ui.available_width();
             let f = |c: Color32| egui::TextFormat { font_id: ip(13.0), color: c, line_height: Some(18.0), ..Default::default() };
@@ -93,10 +92,9 @@ impl App {
                     ui.add_space(4.0);
                 }
             });
-            ui.add_space(10.0);
-            ui.horizontal(|ui| {
+            dlg_footer(ui, |ui| {
                 let n = w.sync.items.iter().filter(|i| !w.off.contains(&(i.file.clone(), i.key.clone()))).count();
-                if ui.add_enabled(n > 0, egui::Button::new(RichText::new("Оновити вибрані").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 26.0))).clicked() {
+                if ui.add_enabled(n > 0, egui::Button::new(RichText::new("Оновити вибрані").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 28.0))).clicked() {
                     apply = true;
                 }
                 if plain_button(ui, "Закрити").clicked() {

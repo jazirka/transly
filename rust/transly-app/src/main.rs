@@ -6,6 +6,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod glossary_panel;
+mod dialog;
 mod icons;
 mod layout;
 mod links_dialog;
@@ -17,6 +18,7 @@ mod winchrome;
 use eframe::egui::{self, pos2, vec2, Align2, Color32, CornerRadius, FontId, Rect, RichText, Sense, Stroke, StrokeKind};
 use state::{AppState, Filter, RowStatus};
 use theme::*;
+pub(crate) use dialog::{dlg, dlg_footer};
 
 /// Вікно «Оновити за глосарієм»: зміна терміна й рядки (пропозиція, вибрано, вибір форми на кожен проміжок).
 type TermSyncWin = (transly_core::termsync::TermChange, Vec<(transly_core::termsync::TermProposal, bool, Vec<i64>)>);
@@ -483,18 +485,6 @@ fn inbox_item(ui: &mut egui::Ui, icon: Option<&str>, title: &str, sub: &str) -> 
     resp
 }
 
-/// Вікно-діалог, як `.dlg` у вебі: по центру вікна, тло `#2b2d33`, рамка `#4a4d54` 1 px, радіус 12, тінь, поля 16×12. Далі — звичайні налаштування `egui::Window`.
-pub(crate) fn dlg<'a>(title: impl Into<egui::WidgetText>) -> egui::Window<'a> {
-    egui::Window::new(title).anchor(Align2::CENTER_CENTER, vec2(0.0, 0.0)).frame(
-        egui::Frame::new()
-            .fill(Color32::from_rgb(0x2b, 0x2d, 0x33))
-            .stroke(Stroke::new(1.0_f32, Color32::from_rgb(0x4a, 0x4d, 0x54)))
-            .corner_radius(CornerRadius::same(12))
-            .shadow(egui::epaint::Shadow { offset: [0, 24], blur: 70, spread: 0, color: Color32::from_black_alpha(153) })
-            .inner_margin(egui::Margin::symmetric(16, 12)),
-    )
-}
-
 /// Вигляд випадних меню, як `.mdd`/`.mi` у вебі: ширина від 260, пункти без проміжків, наведення — біле 7 %, без рамок і заливки.
 pub(crate) fn menu_style(ui: &mut egui::Ui) {
     ui.set_min_width(260.0);
@@ -549,11 +539,11 @@ fn label_caps(ui: &mut egui::Ui, text: &str) {
 }
 
 fn primary_button(ui: &mut egui::Ui, text: &str) -> egui::Response {
-    ui.add(egui::Button::new(RichText::new(text).color(Color32::WHITE)).fill(accent_solid()).stroke(Stroke::new(1.0_f32, accent_hover())).min_size(vec2(0.0, 26.0)))
+    ui.add(egui::Button::new(RichText::new(text).color(Color32::WHITE)).fill(accent_solid()).stroke(Stroke::new(1.0_f32, accent_hover())).min_size(vec2(0.0, 28.0)))
 }
 
 fn plain_button(ui: &mut egui::Ui, text: &str) -> egui::Response {
-    ui.add(egui::Button::new(text).min_size(vec2(0.0, 26.0)))
+    ui.add(egui::Button::new(text).min_size(vec2(0.0, 28.0)))
 }
 
 impl eframe::App for App {
@@ -1645,8 +1635,7 @@ impl App {
                 });
                 ui.end_row();
             });
-            ui.add_space(10.0);
-            ui.horizontal(|ui| {
+            dlg_footer(ui, |ui| {
                 if primary_button(ui, "Зберегти").clicked() {
                     save = true;
                 }
@@ -1688,8 +1677,7 @@ impl App {
                 ui.end_row();
             });
             ui.label(RichText::new("Токен не зберігається: його треба вводити в кожному сеансі.").size(11.0).color(MUTE));
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
+            dlg_footer(ui, |ui| {
                 if primary_button(ui, "Синхронізувати").clicked() {
                     go = true;
                 }
@@ -1750,7 +1738,7 @@ impl App {
             ui.label(RichText::new("Той самий пароль на кожному пристрої дає ту саму «кімнату». Пароль не передається, лише шифрує дані (щонайменше 8 символів). Адреса й пароль лишаються на цьому пристрої, у файл проєкту не потрапляють.").size(11.0).color(MUTE));
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                if ui.add_enabled(cfg.configured() && !self.st.syncing(), egui::Button::new(RichText::new("Синхронізувати").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 26.0))).clicked() {
+                if ui.add_enabled(cfg.configured() && !self.st.syncing(), egui::Button::new(RichText::new("Синхронізувати").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 28.0))).clicked() {
                     go = true;
                 }
                 if plain_button(ui, "Зберегти").clicked() {
@@ -1947,8 +1935,7 @@ impl App {
             if !keep.is_empty() {
                 ui.label(RichText::new(format!("Також увімкнено раніше: {}.", keep.join(", "))).color(MUTE));
             }
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
+            dlg_footer(ui, |ui| {
                 if primary_button(ui, "Застосувати").clicked() {
                     apply = true;
                 }
@@ -2108,9 +2095,8 @@ impl App {
             });
             ui.add_space(6.0);
             ui.label(RichText::new(if find.is_empty() { "Введіть, що шукати".to_string() } else { format!("Буде змінено рядків: {count}") }).color(MUTE));
-            ui.add_space(6.0);
-            ui.horizontal(|ui| {
-                if ui.add_enabled(count > 0, egui::Button::new(RichText::new("Замінити все").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 26.0))).clicked() {
+            dlg_footer(ui, |ui| {
+                if ui.add_enabled(count > 0, egui::Button::new(RichText::new("Замінити все").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 28.0))).clicked() {
                     apply = true;
                 }
                 if plain_button(ui, "Закрити").clicked() {
@@ -2163,10 +2149,9 @@ impl App {
                     }
                 });
             }
-            ui.add_space(6.0);
-            ui.horizontal(|ui| {
+            dlg_footer(ui, |ui| {
                 let n = list.iter().filter(|x| x.1).count();
-                if ui.add_enabled(n > 0, egui::Button::new(RichText::new(format!("Записати чернетками ({n})")).color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 26.0))).clicked() {
+                if ui.add_enabled(n > 0, egui::Button::new(RichText::new(format!("Записати чернетками ({n})")).color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 28.0))).clicked() {
                     apply = true;
                 }
                 if plain_button(ui, "Закрити").clicked() {
@@ -2203,8 +2188,7 @@ impl App {
                 }
             }
             ui.label(RichText::new("Файли гри не змінюються безповоротно: копії оригіналів лежать поруч, їх можна повернути.").size(11.0).color(MUTE));
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
+            dlg_footer(ui, |ui| {
                 if primary_button(ui, "Зібрати").clicked() {
                     go = true;
                 }
@@ -2240,9 +2224,8 @@ impl App {
                 }
             }
             ui.add(egui::TextEdit::multiline(&mut text).desired_rows(10).desired_width(f32::INFINITY));
-            ui.add_space(6.0);
-            ui.horizontal(|ui| {
-                if ui.add_enabled(!text.trim().is_empty(), egui::Button::new(RichText::new("Імпортувати").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 26.0))).clicked() {
+            dlg_footer(ui, |ui| {
+                if ui.add_enabled(!text.trim().is_empty(), egui::Button::new(RichText::new("Імпортувати").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 28.0))).clicked() {
                     go = true;
                 }
                 if plain_button(ui, "Закрити").clicked() {
@@ -2289,8 +2272,7 @@ impl App {
                     }
                 });
             }
-            ui.add_space(6.0);
-            ui.horizontal(|ui| {
+            dlg_footer(ui, |ui| {
                 if primary_button(ui, "Зберегти").clicked() {
                     save = true;
                 }
@@ -2319,9 +2301,8 @@ impl App {
                 ui.label("Код мови");
                 ui.add(egui::TextEdit::singleline(&mut lang).hint_text("ru").desired_width(80.0));
             });
-            ui.add_space(6.0);
-            ui.horizontal(|ui| {
-                if ui.add_enabled(!lang.trim().is_empty(), egui::Button::new(RichText::new("Обрати папку…").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 26.0))).clicked() {
+            dlg_footer(ui, |ui| {
+                if ui.add_enabled(!lang.trim().is_empty(), egui::Button::new(RichText::new("Обрати папку…").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 28.0))).clicked() {
                     go = true;
                 }
                 if plain_button(ui, "Закрити").clicked() {
@@ -2383,7 +2364,7 @@ impl App {
             ui.add_space(6.0);
             ui.horizontal(|ui| {
                 ui.add(egui::TextEdit::singleline(&mut name).hint_text("Назва нової групи").desired_width(220.0));
-                if ui.add_enabled(!name.trim().is_empty(), egui::Button::new(RichText::new("Створити").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 26.0))).clicked() {
+                if ui.add_enabled(!name.trim().is_empty(), egui::Button::new(RichText::new("Створити").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 28.0))).clicked() {
                     create = true;
                 }
             });
@@ -2453,7 +2434,7 @@ impl App {
             ui.add_space(6.0);
             ui.horizontal(|ui| {
                 ui.add(egui::TextEdit::singleline(&mut name).hint_text("Назва нової гілки").desired_width(220.0));
-                if ui.add_enabled(!name.trim().is_empty(), egui::Button::new(RichText::new("Створити з поточної").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 26.0))).clicked() {
+                if ui.add_enabled(!name.trim().is_empty(), egui::Button::new(RichText::new("Створити з поточної").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 28.0))).clicked() {
                     create = true;
                 }
             });
@@ -2618,7 +2599,7 @@ impl App {
                     ui.add_space(3.0);
                 }
             });
-            ui.horizontal(|ui| {
+            dlg_footer(ui, |ui| {
                 if primary_button(ui, "Злити").clicked() {
                     go = true;
                 }
@@ -2643,7 +2624,7 @@ impl App {
         let (mut go, mut close) = (false, false);
         dlg("Назва гілки").open(&mut open).collapsible(false).resizable(false).show(ctx, |ui| {
             ui.add(egui::TextEdit::singleline(&mut to).desired_width(260.0));
-            ui.horizontal(|ui| {
+            dlg_footer(ui, |ui| {
                 if primary_button(ui, "Перейменувати").clicked() {
                     go = true;
                 }
@@ -2714,8 +2695,8 @@ impl App {
                     ui.add_space(3.0);
                 }
             });
-            ui.horizontal(|ui| {
-                if ui.add_enabled(n > 0, egui::Button::new(RichText::new("Оновити вибрані").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 26.0))).clicked() {
+            dlg_footer(ui, |ui| {
+                if ui.add_enabled(n > 0, egui::Button::new(RichText::new("Оновити вибрані").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 28.0))).clicked() {
                     go = true;
                 }
                 if plain_button(ui, "Закрити").clicked() {

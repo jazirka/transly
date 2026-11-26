@@ -387,6 +387,13 @@ impl App {
         let now = state::now_ms();
         let off = |t: i64| chrono::TimeZone::timestamp_millis_opt(&chrono::Local, t).single().map_or(0, |d| i64::from(chrono::Offset::fix(d.offset()).local_minus_utc()) / 60);
         let mut restore: Option<String> = None;
+        let mut cmp_toggle: Option<usize> = None;
+        if self.hist_for != Some((f, r)) {
+            self.hist_cmp.clear();
+            self.hist_for = Some((f, r));
+        }
+        let cmp_on = self.hist_cmp.clone();
+        let current = self.st.target_of(f, r);
         egui::ScrollArea::vertical().id_salt("actscroll").auto_shrink([false; 2]).show(ui, |ui| {
             egui::Frame::new().inner_margin(egui::Margin { left: 14, right: 14, top: 6, bottom: 12 }).show(ui, |ui| {
                 ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
@@ -413,10 +420,12 @@ impl App {
                     let plain = |color: Color32| egui::TextFormat { font_id: ip(15.0), color, line_height: Some(21.0), ..Default::default() };
                     if h.rec.text.is_empty() {
                         job.append("текст не змінювався", 0.0, egui::TextFormat { color: DIM, font_id: ip(12.5), line_height: Some(21.0), ..Default::default() });
-                    } else if h.before.is_empty() {
+                    } else if h.before.is_empty() && !cmp_on.contains(&h.index) {
                         job.append(&h.rec.text, 0.0, plain(TEXT));
                     } else {
-                        for s in &h.diff {
+                        // «Порівняти з поточним»: що зникне й що повернеться, якщо відновити цю версію; інакше — зміни від версії до дії
+                        let cmp_diff = if cmp_on.contains(&h.index) { Some(transly_core::textdiff::diff_words(&current, &h.rec.text)) } else { None };
+                        for s in cmp_diff.as_ref().unwrap_or(&h.diff) {
                             use transly_core::textdiff::DiffKind;
                             let mut fm = plain(match s.t {
                                 DiffKind::Same => TEXT,
@@ -435,8 +444,10 @@ impl App {
                         }
                     }
                     let tg = ui.fonts(|f| f.layout_job(job));
+                    let hint_g = cmp_on.contains(&h.index).then(|| ui.painter().layout("Закреслене зникне, підкреслене повернеться, якщо відновити цю версію.".to_string(), ip(12.0), DIM, text_w));
+                    let hint_h = hint_g.as_ref().map_or(0.0, |g| 3.0 + g.size().y);
                     let head_h = 17.5;
-                    let body_h = (head_h + 3.0 + tg.size().y).max(28.0);
+                    let body_h = (head_h + 3.0 + tg.size().y + hint_h).max(28.0);
                     let (row, resp) = ui.allocate_exact_size(vec2(w, 8.0 + body_h + 8.0), Sense::hover());
                     let top = row.top() + 8.0;
                     // піктограма-коло 28 (біле 8 %), колір за видом дії
@@ -471,6 +482,9 @@ impl App {
                         if h.can_restore_before {
                             tools.push(("before", "Було до цього: повернути текст, що був перед цією дією", h.before.clone()));
                         }
+                        if !h.rec.text.is_empty() && !h.is_current {
+                            tools.push(("cmp", if cmp_on.contains(&h.index) { "Показати зміну" } else { "Порівняти з поточним" }, String::new()));
+                        }
                         for (n, tip, text) in tools.into_iter().rev() {
                             let b = Rect::from_min_size(pos2(rx - 22.0, top - 2.0), vec2(22.0, 22.0));
                             rx -= 24.0;
@@ -480,7 +494,11 @@ impl App {
                             }
                             icons::paint(ui, Rect::from_center_size(b.center(), vec2(14.0, 14.0)), n, if br.hovered() { TEXT } else { MUTE });
                             if br.on_hover_text(tip).clicked() {
-                                restore = Some(text);
+                                if n == "cmp" {
+                                    cmp_toggle = Some(h.index);
+                                } else {
+                                    restore = Some(text);
+                                }
                             }
                         }
                     } else if h.rec.at != 0 {
@@ -489,10 +507,19 @@ impl App {
                         let gw = g.size().x;
                         ui.painter().galley(pos2(row.right() - gw, top), g, DIM);
                     }
+                    let th = tg.size().y;
                     ui.painter().galley(pos2(x0, top + head_h + 3.0), tg, TEXT);
+                    if let Some(g) = hint_g {
+                        ui.painter().galley(pos2(x0, top + head_h + 3.0 + th + 3.0), g, DIM);
+                    }
                 }
             });
         });
+        if let Some(i) = cmp_toggle {
+            if !self.hist_cmp.remove(&i) {
+                self.hist_cmp.insert(i);
+            }
+        }
         if let Some(t) = restore {
             self.draft = t;
         }
@@ -516,13 +543,17 @@ impl App {
     }
 
     /// Одне повідомлення: аватар 28, «ім'я дата», текст 13,5 (рядок 19,6). `nested` — відповідь (зсув 14, ліва лінія 2).
-    fn comment_line(&self, ui: &mut egui::Ui, c: &transly_core::model::Comment, nested: bool, hover_acts: Option<&mut Option<String>>) {
+    fn comment_line(&self, ui: &mut egui::Ui, c: &transly_core::model::Comment, nested: bool, hover_acts: Option<&mut (Option<String>, Option<String>)>) {
         let id = transly_core::workflow::comment_id(c);
         let w = ui.available_width();
         let inset = if nested { 14.0 + 2.0 + 12.0 } else { 0.0 };
         let text_w = w - inset - 38.0;
         let who = if c.who.is_empty() { "Хтось" } else { c.who.as_str() };
-        let when = chrono::DateTime::from_timestamp_millis(c.at).map(|d| d.with_timezone(&chrono::Local).format("%d.%m, %H:%M").to_string()).unwrap_or_default();
+        let fmt = |t: i64| chrono::DateTime::from_timestamp_millis(t).map(|d| d.with_timezone(&chrono::Local).format("%d.%m, %H:%M").to_string()).unwrap_or_default();
+        let mut when = fmt(c.at);
+        if c.ed.is_some_and(|e| e > c.at) {
+            when.push_str(&format!(" · змінено {}", fmt(c.ed.unwrap_or(0))));
+        }
         let mut job = egui::text::LayoutJob::default();
         job.wrap.max_width = text_w;
         job.append(&c.text, 0.0, egui::TextFormat { font_id: ip(13.5), color: TEXT, line_height: Some(19.6), ..Default::default() });
@@ -545,17 +576,58 @@ impl App {
         ui.painter().galley(pos2(x + 38.0, row.top() + 17.5 + 3.0), tg.clone(), TEXT);
         if let Some(out) = hover_acts {
             if mine && resp.hovered() {
+                // «Редагувати» · «Видалити» (у два кліки), 12, проміжок 12; з'являються при наведенні (`.cm-acts`)
                 let confirm = self.del_confirm.as_deref() == Some(id.as_str());
-                let label = if confirm { "Справді видалити?" } else { "Видалити" };
-                let g = ui.painter().layout_no_wrap(label.to_string(), ip(12.0), if confirm { BAD } else { MUTE });
-                let r = Rect::from_min_size(pos2(x + 38.0, row.top() + 17.5 + 3.0 + tg.size().y + 2.0), vec2(g.size().x, 18.0));
-                let br = ui.interact(r, ui.id().with(("cm-del", &id)), Sense::click());
-                ui.painter().galley(pos2(r.left(), r.center().y - g.size().y / 2.0), g, if confirm { BAD } else if br.hovered() { TEXT } else { MUTE });
-                if br.clicked() {
-                    *out = Some(id);
+                let y = row.top() + 17.5 + 3.0 + tg.size().y + 2.0;
+                let mut lx = x + 38.0;
+                for (kind, label) in [(0u8, "Редагувати"), (1, if confirm { "Справді видалити?" } else { "Видалити" })] {
+                    let danger = kind == 1 && confirm;
+                    let g = ui.painter().layout_no_wrap(label.to_string(), ip(12.0), if danger { BAD } else { MUTE });
+                    let r = Rect::from_min_size(pos2(lx, y), vec2(g.size().x, 18.0));
+                    let br = ui.interact(r, ui.id().with(("cm-act", &id, kind)), Sense::click());
+                    ui.painter().galley(pos2(r.left(), r.center().y - g.size().y / 2.0), g, if danger { BAD } else if br.hovered() { TEXT } else { MUTE });
+                    if br.clicked() {
+                        if kind == 0 {
+                            out.1 = Some(id.clone());
+                        } else {
+                            out.0 = Some(id.clone());
+                        }
+                    }
+                    lx += r.width() + 12.0;
                 }
             }
         }
+    }
+
+    /// Коментар, що правиться: те саме місце, поле (3 рядки) замість тексту, «Зберегти» й «Скасувати» (Ctrl+Enter зберігає). `Some(true)` — зберегти, `Some(false)` — скасувати.
+    fn comment_edit_ui(&mut self, ui: &mut egui::Ui, c: &transly_core::model::Comment, nested: bool) -> Option<bool> {
+        let inset = if nested { 14.0 + 2.0 + 12.0 } else { 0.0 };
+        let who = if c.who.is_empty() { "Хтось" } else { c.who.as_str() };
+        let mut done = None;
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+            ui.add_space(inset);
+            let (ar, _) = ui.allocate_exact_size(vec2(28.0, 28.0), Sense::hover());
+            ui.painter().circle_filled(ar.center(), 14.0, who_color(who));
+            ui.painter().text(ar.center(), Align2::CENTER_CENTER, who.chars().next().map(|ch| ch.to_uppercase().to_string()).unwrap_or_else(|| "?".into()), ipw(12.0, 600), Color32::from_rgb(0x11, 0x11, 0x11));
+            ui.add_space(10.0);
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing = vec2(8.0, 6.0);
+                let w = ui.available_width();
+                ui.add(egui::TextEdit::multiline(&mut self.cm_edit_text).desired_rows(3).desired_width(w).font(ip(13.5)));
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 8.0;
+                    let ctrl_enter = ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Enter));
+                    if crate::glossary_panel::button28(ui, "Зберегти", true).clicked() || ctrl_enter {
+                        done = Some(true);
+                    }
+                    if crate::glossary_panel::button28(ui, "Скасувати", false).clicked() {
+                        done = Some(false);
+                    }
+                });
+            });
+        });
+        done
     }
 
     fn comment_threads(&mut self, ui: &mut egui::Ui, f: usize, r: usize) {
@@ -570,6 +642,8 @@ impl App {
             Delete(String),
             Send(String),
             Cancel,
+            EditSave(String),
+            EditCancel,
         }
         let mut act: Option<Act> = None;
         let (open, closed): (Vec<_>, Vec<_>) = threads.iter().partition(|t| !t.resolved);
@@ -586,12 +660,27 @@ impl App {
                     if dim {
                         ui.multiply_opacity(0.7);
                     }
-                    let mut del: Option<String> = None;
-                    this.comment_line(ui, &t.root, false, Some(&mut del));
-                    for re in &t.replies {
-                        this.comment_line(ui, re, true, Some(&mut del));
+                    let mut del: (Option<String>, Option<String>) = (None, None);
+                    for (i, c) in std::iter::once(&t.root).chain(t.replies.iter()).enumerate() {
+                        let cid = transly_core::workflow::comment_id(c);
+                        if this.cm_editing.as_deref() == Some(cid.as_str()) {
+                            match this.comment_edit_ui(ui, c, i > 0) {
+                                Some(true) => *act = Some(Act::EditSave(cid)),
+                                Some(false) => *act = Some(Act::EditCancel),
+                                None => {}
+                            }
+                        } else {
+                            this.comment_line(ui, c, i > 0, Some(&mut del));
+                        }
                     }
-                    if let Some(id) = del {
+                    if let Some(id) = del.1 {
+                        if let Some(c) = std::iter::once(&t.root).chain(t.replies.iter()).find(|c| transly_core::workflow::comment_id(c) == id) {
+                            this.cm_edit_text = c.text.clone();
+                        }
+                        this.cm_editing = Some(id);
+                        this.del_confirm = None;
+                    }
+                    if let Some(id) = del.0 {
                         if this.del_confirm.as_deref() == Some(id.as_str()) {
                             *act = Some(Act::Delete(id));
                         } else {
@@ -664,6 +753,14 @@ impl App {
                 self.reply_text.clear();
             }
             Some(Act::Cancel) => self.reply_to = None,
+            Some(Act::EditSave(id)) => {
+                let text = self.cm_edit_text.trim().to_string();
+                if !text.is_empty() {
+                    self.st.edit_comment_text(f, r, &id, &text);
+                }
+                self.cm_editing = None;
+            }
+            Some(Act::EditCancel) => self.cm_editing = None,
             Some(Act::Send(id)) => {
                 let text = self.reply_text.trim().to_string();
                 if !text.is_empty() {

@@ -106,6 +106,12 @@ struct App {
     reply_to: Option<String>,
     reply_text: String,
     del_confirm: Option<String>,
+    /// Коментар, що правиться, і його текст у полі.
+    cm_editing: Option<String>,
+    cm_edit_text: String,
+    /// Записи історії, показані проти поточного тексту («Порівняти з поточним»), і для якого рядка.
+    hist_cmp: std::collections::HashSet<usize>,
+    hist_for: Option<(usize, usize)>,
     closed_open: bool,
     token: String,
 }
@@ -237,7 +243,7 @@ fn game_job(text: &str, size: f32, actor_name: &dyn Fn(usize) -> Option<String>)
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, reply_to: None, reply_text: String::new(), del_confirm: None, closed_open: false, token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
     }
 }
 
@@ -3457,6 +3463,22 @@ mod ui_tests {
         h.state_mut().gl_show = 0;
         h.state_mut().focus = true;
         h.state_mut().rail = 1;
+        // правка коментаря й порівняння версії з поточним
+        {
+            let (f, r) = (h.state().st.file.unwrap_or(0), h.state().st.row.unwrap_or(0));
+            let id = transly_core::workflow::comment_id(&h.state().st.threads(f, r)[0].root);
+            h.state_mut().cm_editing = Some(id);
+            h.state_mut().cm_edit_text = "Чи не краще «Селюк»?".into();
+        }
+        h.state_mut().right_secs = [[false, false, true]; 2];
+        shot(&mut h, "09c-comment-edit");
+        h.state_mut().cm_editing = None;
+        h.state_mut().right_secs = [[true, false, false]; 2];
+        h.state_mut().hist_for = Some((h.state().st.file.unwrap_or(0), h.state().st.row.unwrap_or(0)));
+        h.state_mut().hist_cmp.insert(0);
+        h.state_mut().hist_cmp.insert(1);
+        shot(&mut h, "08c-activity-compare");
+        h.state_mut().hist_cmp.clear();
         h.state_mut().right_secs = [[false, true, false]; 2];
         h.state_mut().focus = false;
         h.state_mut().st.file = Some(map);

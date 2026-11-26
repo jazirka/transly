@@ -33,6 +33,7 @@ fn body(name: &str) -> (&'static str, bool) {
         "close" => ("<path d='M4 4l8 8M12 4l-8 8'/>", false),
         "restore" => ("<path d='M6 4L2.5 7.5 6 11M3 7.5h6.5a3.5 3.5 0 0 1 0 7H8'/>", false),
         "pencil" => ("<path d='M10.5 2.5l3 3L5.5 13.5l-3.5.5.5-3.5z'/>", false),
+        "cmp" => ("<path d='M5 3L2 6l3 3M2 6h8M11 13l3-3-3-3M14 10H6'/>", false),
         "before" => ("<path d='M8 4.5V8l2.5 1.5M2.5 8A5.5 5.5 0 1 0 4 4.2M2.5 2.5v2.8h2.8'/>", false),
         "check" => ("<path d='M3 8.5l3.2 3.2L13 4.8'/>", false),
         "left" => ("<path d='M10 3.5L5.5 8l4.5 4.5'/>", false),

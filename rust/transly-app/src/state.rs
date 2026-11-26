@@ -10,7 +10,7 @@ use transly_core::ingest::{ingest_note, ingest_quiet, plan_ingest};
 use transly_core::journal::{commit_rows, record_change};
 use transly_core::historyview::{history_rows, HistoryRow};
 use transly_core::tm::{FindOpts, TmEntry, TmIndex, TmMatch};
-use transly_core::comments::{delete_comment, reply_to, resolve_thread, threads_of, Thread};
+use transly_core::comments::{delete_comment, edit_comment, reply_to, resolve_thread, threads_of, Thread};
 use transly_core::workflow::add_comment;
 use transly_core::glossary::{prepare_text, term_ranges_in, Term};
 use transly_core::qa::{check, default_qa, Issue, UnitLike};
@@ -1022,6 +1022,15 @@ impl AppState {
         let Some(e) = self.entry(f, r).cloned() else { return };
         let name = self.views[f].name.clone();
         let next = resolve_thread(&e, root, on, &self.who(), now_ms());
+        self.put(f, name, u.key, next);
+    }
+
+    /// Змінити текст свого коментаря (час правки запам'ятовується, і в заголовку з'являється «змінено»).
+    pub fn edit_comment_text(&mut self, f: usize, r: usize, id: &str, text: &str) {
+        let Some(u) = self.unit(f, r).cloned() else { return };
+        let Some(e) = self.entry(f, r).cloned() else { return };
+        let name = self.views[f].name.clone();
+        let next = edit_comment(&e, id, text, now_ms());
         self.put(f, name, u.key, next);
     }
 
@@ -2544,6 +2553,23 @@ mod tests {
         assert!(!s.history(0, 0).is_empty());
         s.comment(0, 0, "Перевірити рід");
         assert_eq!(s.threads(0, 0).len(), 1);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_comment_can_be_edited_and_keeps_the_time_of_the_edit() {
+        let base = std::env::temp_dir().join(format!("transly-app-cmedit-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = game(&base);
+        let mut s = AppState::default();
+        s.open_game(&data).unwrap();
+        s.comment(0, 0, "Питання");
+        let root = s.threads(0, 0)[0].root.clone();
+        let id = transly_core::workflow::comment_id(&root);
+        s.edit_comment_text(0, 0, &id, "Інше питання");
+        let after = s.threads(0, 0)[0].root.clone();
+        assert_eq!(after.text, "Інше питання");
+        assert!(after.ed.is_some_and(|e| e > after.at), "час правки запам'ятовується: {after:?}");
         let _ = std::fs::remove_dir_all(&base);
     }
 

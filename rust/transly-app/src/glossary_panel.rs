@@ -128,7 +128,7 @@ fn simple_card(ui: &mut egui::Ui, id: (&str, usize), head: &str, note: Option<&s
 }
 
 /// Кнопка 28 із текстом: основна (колір теми) або з рамкою `#4a4d54`.
-fn button28(ui: &mut egui::Ui, label: &str, primary: bool) -> egui::Response {
+pub(crate) fn button28(ui: &mut egui::Ui, label: &str, primary: bool) -> egui::Response {
     let g = ui.painter().layout_no_wrap(label.to_string(), ip(12.5), if primary { Color32::WHITE } else { TEXT });
     let (rect, resp) = ui.allocate_exact_size(vec2(g.size().x + 24.0 + if primary { 0.0 } else { 2.0 }, 28.0), Sense::click());
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));

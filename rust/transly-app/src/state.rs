@@ -296,8 +296,20 @@ type LoadedDir = (Vec<(String, String)>, Vec<FileView>);
 /// Вибір параметрів витягання рядків за прочитаним сирим текстом файлів гри.
 type PickOptions<'a> = &'a mut dyn FnMut(&[(String, String)]) -> ExtractOptions;
 
+/// Годинник змін. Строго зростає: дві дії в одну й ту саму мілісекунду (швидкий тест, подвійний клік) мають різний час, інакше при злитті «хто пізніше»
+/// нічия лишала б старішу дію (наприклад, знятий внесок, якого щойно надіслали).
 pub fn now_ms() -> i64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64)
+    use std::sync::atomic::{AtomicI64, Ordering};
+    static LAST: AtomicI64 = AtomicI64::new(0);
+    let wall = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64);
+    let mut prev = LAST.load(Ordering::Relaxed);
+    loop {
+        let next = wall.max(prev + 1);
+        match LAST.compare_exchange_weak(prev, next, Ordering::Relaxed, Ordering::Relaxed) {
+            Ok(_) => return next,
+            Err(p) => prev = p,
+        }
+    }
 }
 
 impl AppState {

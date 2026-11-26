@@ -67,13 +67,18 @@ fn card_head_x(ui: &mut egui::Ui, title: &str, sub: Option<&str>, sub_col: Color
     let tw = g.size().x;
     ui.painter().galley(pos2(h.left() + pad, h.center().y - g.size().y / 2.0), g, MUTE);
     if let Some(s) = sub {
-        ui.painter().text(pos2(h.left() + pad + tw + gap, h.center().y), Align2::LEFT_CENTER, s, ip(12.0), sub_col);
+        ui.painter().text(pos2(h.left() + pad + tw + gap, h.center().y), Align2::LEFT_CENTER, s, ipw(12.0, if sub_col == TEXT { 500 } else { 400 }), sub_col);
     }
 }
 
 /// Підпис великими літерами з міжлітерним інтервалом `em` (як `text-transform:uppercase; letter-spacing` у вебі).
 pub(crate) fn spaced(ui: &egui::Ui, text: &str, size: f32, color: Color32, em: f32) -> std::sync::Arc<egui::Galley> {
-    let mut job = egui::text::LayoutJob::single_section(text.to_uppercase(), egui::TextFormat { font_id: ip(size), color, extra_letter_spacing: size * em, ..Default::default() });
+    spaced_w(ui, text, size, 400, color, em)
+}
+
+/// Те саме з вагою шрифту (`.pn-h`: 600).
+pub(crate) fn spaced_w(ui: &egui::Ui, text: &str, size: f32, weight: u16, color: Color32, em: f32) -> std::sync::Arc<egui::Galley> {
+    let mut job = egui::text::LayoutJob::single_section(text.to_uppercase(), egui::TextFormat { font_id: ipw(size, weight), color, extra_letter_spacing: size * em, ..Default::default() });
     job.wrap.max_width = f32::INFINITY;
     ui.painter().layout_job(job)
 }
@@ -336,7 +341,7 @@ impl App {
                     let (h, _) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::hover());
                     ui.painter().rect_filled(h, card_top(), PANEL);
                     ui.painter().hline(h.x_range(), h.bottom(), Stroke::new(1.0_f32, LINE));
-                    let g = spaced(ui, title, 11.0, MUTE, 0.04);
+                    let g = spaced_w(ui, title, 11.0, 600, MUTE, 0.04);
                     ui.painter().galley(pos2(h.left() + 14.0, h.center().y - g.size().y / 2.0), g, MUTE);
                     if ui.rect_contains_pointer(h) && mini_icon(ui, pos2(h.right() - 20.0, h.center().y), "minus", &format!("sec-x{sec}")).on_hover_text("Сховати розділ").clicked() {
                         self.right_secs[mi][*sec] = false;
@@ -436,7 +441,7 @@ impl App {
                     let mut hj = egui::text::LayoutJob::default();
                     hj.wrap.max_width = f32::INFINITY;
                     let hf = |color: Color32| egui::TextFormat { font_id: ip(13.0), color, line_height: Some(17.5), ..Default::default() };
-                    hj.append(who, 0.0, hf(TEXT));
+                    hj.append(who, 0.0, egui::TextFormat { font_id: ipw(13.0, 600), ..hf(TEXT) });
                     hj.append(&format!(" {}{}", h.rec.what, if h.is_current { " зараз у полі" } else { "" }), 0.0, hf(MUTE));
                     let hg = ui.fonts(|f| f.layout_job(hj));
                     ui.painter().galley(pos2(x0, top), hg, MUTE);
@@ -516,8 +521,8 @@ impl App {
         let x = row.left() + inset;
         let ac = pos2(x + 14.0, row.top() + 14.0);
         ui.painter().circle_filled(ac, 14.0, who_color(who));
-        ui.painter().text(ac, Align2::CENTER_CENTER, who.chars().next().map(|ch| ch.to_uppercase().to_string()).unwrap_or_else(|| "?".into()), ip(12.0), Color32::from_rgb(0x11, 0x11, 0x11));
-        let g = ui.painter().layout_no_wrap(who.to_string(), ip(13.0), TEXT);
+        ui.painter().text(ac, Align2::CENTER_CENTER, who.chars().next().map(|ch| ch.to_uppercase().to_string()).unwrap_or_else(|| "?".into()), ipw(12.0, 600), Color32::from_rgb(0x11, 0x11, 0x11));
+        let g = ui.painter().layout_no_wrap(who.to_string(), ipw(13.0, 500), TEXT);
         let gw = g.size().x;
         ui.painter().galley(pos2(x + 38.0, row.top()), g, TEXT);
         ui.painter().text(pos2(x + 38.0 + gw + 8.0, row.top() + 1.5), Align2::LEFT_TOP, when, ip(11.5), MUTE);
@@ -1438,9 +1443,7 @@ impl App {
                 let ng = ui.painter().layout_no_wrap(num, ip(12.0), MUTE);
                 let nw = ng.size().x;
                 ui.painter().galley(pos2(tx, top - ng.size().y / 2.0), ng, MUTE);
-                for dx in [0.0, 0.45] {
-                    ui.painter().text(pos2(tx + nw + 8.0 + dx, top), Align2::LEFT_CENTER, self.st.kind_label(f, r), ip(12.0), accent_text());
-                }
+                ui.painter().text(pos2(tx + nw + 8.0, top), Align2::LEFT_CENTER, self.st.kind_label(f, r), ipw(12.0, 500), accent_text());
                 ui.painter().text(pos2(card.right() - 8.0, top), Align2::RIGHT_CENTER, short_key(&self.st.key_of(f, r)), mp(12.0), MUTE);
                 let clip = Rect::from_min_max(pos2(tx, card.top()), pos2(card.right() - 8.0, card.bottom()));
                 let p = ui.painter().with_clip_rect(clip);
@@ -1586,10 +1589,10 @@ impl App {
                 let col = who_color(&who);
                 let c = pos2(row.left() + 26.0, row.top() + 24.0);
                 ui.painter().circle_filled(c, 12.0, col);
-                ui.painter().text(c, Align2::CENTER_CENTER, who.chars().next().map(|ch| ch.to_uppercase().to_string()).unwrap_or_default(), ip(12.0), BG);
+                ui.painter().text(c, Align2::CENTER_CENTER, who.chars().next().map(|ch| ch.to_uppercase().to_string()).unwrap_or_default(), ipw(12.0, 600), BG);
                 // ім'я, дата, позначка
                 let mut x = row.left() + 46.0;
-                let g = ui.painter().layout_no_wrap(who.clone(), ip(12.5), TEXT);
+                let g = ui.painter().layout_no_wrap(who.clone(), ipw(12.5, 500), TEXT);
                 let w = g.size().x;
                 ui.painter().galley(pos2(x, row.top() + 24.0 - g.size().y / 2.0), g, TEXT);
                 x += w + 8.0;

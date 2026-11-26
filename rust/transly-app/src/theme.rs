@@ -123,10 +123,34 @@ fn install_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
     fonts.font_data.insert("Inter".into(), std::sync::Arc::new(egui::FontData::from_static(include_bytes!("../assets/fonts/Inter.ttf"))));
     fonts.font_data.insert("JetBrainsMono".into(), std::sync::Arc::new(egui::FontData::from_static(include_bytes!("../assets/fonts/JetBrainsMono.ttf"))));
+    fonts.font_data.insert("Inter-Medium".into(), std::sync::Arc::new(egui::FontData::from_static(include_bytes!("../assets/fonts/Inter-Medium.ttf"))));
+    fonts.font_data.insert("Inter-SemiBold".into(), std::sync::Arc::new(egui::FontData::from_static(include_bytes!("../assets/fonts/Inter-SemiBold.ttf"))));
     // перші в черзі; типові лишаються запасними (символи, яких немає в Inter)
     fonts.families.entry(FontFamily::Proportional).or_default().insert(0, "Inter".into());
     fonts.families.entry(FontFamily::Monospace).or_default().insert(0, "JetBrainsMono".into());
+    // ваги 500 і 600 (у вебі вони в іменах, заголовках, лічильниках); знаків, яких у підмножині немає, дошукується звичайний Inter
+    let proportional = fonts.families.get(&FontFamily::Proportional).cloned().unwrap_or_default();
+    for (name, face) in [("InterMedium", "Inter-Medium"), ("InterSemiBold", "Inter-SemiBold")] {
+        let mut chain = vec![face.to_string()];
+        chain.extend(proportional.iter().cloned());
+        fonts.families.insert(FontFamily::Name(name.into()), chain);
+    }
     ctx.set_fonts(fonts);
+}
+
+thread_local! {
+    /// Чи вже прив'язані до шрифтів сімейства ваг (egui застосовує нові шрифти з наступного проходу; у застосунку вони стоять до першого кадру).
+    static WEIGHTS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// На початку кадру: з'ясовує, чи можна малювати ваги 500/600 (інакше `ipw` повертає звичайний шрифт, а не панікує).
+pub fn sync_weights(ctx: &egui::Context) {
+    let ok = ctx.fonts(|f| f.families().contains(&FontFamily::Name("InterSemiBold".into())));
+    WEIGHTS.with(|w| w.set(ok));
+}
+
+pub fn weights_ready() -> bool {
+    WEIGHTS.with(std::cell::Cell::get)
 }
 
 pub fn apply(ctx: &egui::Context) {

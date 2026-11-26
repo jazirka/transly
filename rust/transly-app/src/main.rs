@@ -248,6 +248,18 @@ pub(crate) fn ip(size: f32) -> FontId {
     FontId::proportional(size)
 }
 
+/// Шрифт інтерфейсу з вагою: 500 — Medium, 600 і вище — SemiBold (як `font-weight` у вебі), решта — звичайний.
+pub(crate) fn ipw(size: f32, weight: u16) -> FontId {
+    if !theme::weights_ready() {
+        return ip(size);
+    }
+    match weight {
+        500 => FontId::new(size, egui::FontFamily::Name("InterMedium".into())),
+        600..=900 => FontId::new(size, egui::FontFamily::Name("InterSemiBold".into())),
+        _ => ip(size),
+    }
+}
+
 /// Моноширинний шрифт (ключі, числа).
 pub(crate) fn mp(size: f32) -> FontId {
     FontId::monospace(size)
@@ -356,6 +368,7 @@ impl eframe::App for App {
 impl App {
     /// Один кадр інтерфейсу (окремо від `eframe`, щоб його можна було ганяти в тестах).
     fn frame(&mut self, ctx: &egui::Context) {
+        theme::sync_weights(ctx);
         // автозбереження: не рідше за раз на 20 с, коли є зміни
         if self.st.dirty && self.last_save.elapsed().as_secs() >= 20 {
             self.message = match self.st.save_project() {
@@ -3045,7 +3058,7 @@ mod ui_tests {
         h.run();
         for c in v.as_array().unwrap() {
             let (fam, size, text) = (c[0].as_str().unwrap(), c[1].as_f64().unwrap() as f32, c[2].as_str().unwrap());
-            let font = if fam == "mono" { mp(size) } else { ip(size) };
+            let font = match fam { "mono" => mp(size), "w500" => ipw(size, 500), "w600" => ipw(size, 600), _ => ip(size) };
             let w = h.ctx.fonts(|f| f.layout_no_wrap(text.to_string(), font, egui::Color32::WHITE).size().x);
             println!("W {fam} {size} {text:?} {w:.2}");
         }

@@ -209,13 +209,11 @@ impl App {
                     let x = card.left() + 11.0;
                     let y = card.top() + 8.0;
                     // en → uk (12,5; en — вага 500 кольору `#d9c3ee`, стрілка DIM, проміжки 8)
-                    let en_g = ui.painter().layout_no_wrap(t.en.clone(), ip(12.5), Color32::from_rgb(0xd9, 0xc3, 0xee));
+                    let en_g = ui.painter().layout_no_wrap(t.en.clone(), ipw(12.5, 500), Color32::from_rgb(0xd9, 0xc3, 0xee));
                     let arr_g = ui.painter().layout_no_wrap("→".to_string(), ip(12.5), DIM);
                     let clip = ui.painter().with_clip_rect(Rect::from_min_max(pos2(x, card.top()), pos2(card.right() - 11.0, card.bottom())));
                     let ew = en_g.size().x;
-                    for dx in [0.0, 0.45] {
-                        clip.galley(pos2(x + dx, y), en_g.clone(), Color32::from_rgb(0xd9, 0xc3, 0xee));
-                    }
+                    clip.galley(pos2(x, y), en_g.clone(), Color32::from_rgb(0xd9, 0xc3, 0xee));
                     let aw = arr_g.size().x;
                     clip.galley(pos2(x + ew + 8.0, y), arr_g, DIM);
                     clip.text(pos2(x + ew + 8.0 + aw + 8.0, y), Align2::LEFT_TOP, &t.uk, ip(12.5), TEXT);

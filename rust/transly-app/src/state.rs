@@ -10,6 +10,7 @@ use transly_core::ingest::{ingest_note, ingest_quiet, plan_ingest};
 use transly_core::journal::{commit_rows, record_change};
 use transly_core::historyview::{history_rows, HistoryRow};
 use transly_core::tm::{FindOpts, TmEntry, TmIndex, TmMatch};
+use transly_core::groups::RowRef;
 use transly_core::comments::{delete_comment, edit_comment, reply_to, resolve_thread, threads_of, Thread};
 use transly_core::workflow::add_comment;
 use transly_core::glossary::{prepare_text, term_ranges_in, Term};
@@ -185,6 +186,10 @@ pub struct AppState {
     auto_limit: std::cell::RefCell<Option<usize>>,
     /// Показувати лише рядки цієї групи.
     pub group_filter: Option<String>,
+    /// Показувати лише ці рядки (пункт зі сповіщень: «3 помилки QA», «Зміни від Олі» тощо); діє в кожному файлі, де такі рядки є.
+    pub rows_filter: Option<RowsFilter>,
+    /// Сповіщення: що потребує уваги й що зробили інші; рахується частинами між кадрами, коли дані не змінюються.
+    pub inbox: Inbox,
     scene_cache: std::cell::RefCell<(usize, Option<transly_core::scene::SceneIndex>)>,
     undo: transly_core::undostack::UndoStack,
     pub host: PluginHost,
@@ -220,7 +225,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { undo_count: 0, db_cache: std::cell::RefCell::new(None), names_cache: std::cell::RefCell::new(None), usage_cache: Default::default(), links_cache: std::cell::RefCell::new(None), relay: RelayCfg::load(), relay_rx: None, speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![], saved_ms: None, session_start: now_ms(), session_edits: 0 }
+        AppState { undo_count: 0, db_cache: std::cell::RefCell::new(None), names_cache: std::cell::RefCell::new(None), usage_cache: Default::default(), links_cache: std::cell::RefCell::new(None), relay: RelayCfg::load(), relay_rx: None, speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, rows_filter: None, inbox: Inbox::load(), scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![], saved_ms: None, session_start: now_ms(), session_edits: 0 }
     }
 }
 
@@ -304,6 +309,82 @@ type PickOptions<'a> = &'a mut dyn FnMut(&[(String, String)]) -> ExtractOptions;
 /// нічия лишала б старішу дію (наприклад, знятий внесок, якого щойно надіслали).
 /// Індекс слів оригіналів і позиції (файл, рядок) його рядків.
 type UsageIndex = (transly_core::termusage::WordIndex, Vec<(usize, usize)>);
+
+/// Набір рядків, на яких зупинено таблицю: назва для підказки й самі рядки (файл, ключ).
+#[derive(Clone, Debug)]
+pub struct RowsFilter {
+    pub title: String,
+    rows: std::collections::HashSet<(String, String)>,
+    /// Номер набору: щоб кеш видимих рядків бачив, що набір інший, навіть коли назва й розмір ті самі.
+    gen: u32,
+}
+
+impl RowsFilter {
+    pub fn has(&self, file: &str, key: &str) -> bool {
+        self.rows.contains(&(file.to_string(), key.to_string()))
+    }
+
+    /// Чи є в наборі хоч один рядок цього файлу.
+    pub fn touches(&self, file: &str) -> bool {
+        self.rows.iter().any(|(f, _)| f == file)
+    }
+}
+
+/// Скільки чекати після останньої зміни, перш ніж перераховувати сповіщення (так само, як у вебі): поки перекладач пише, список не смикається й не гальмує.
+const INBOX_QUIET: std::time::Duration = std::time::Duration::from_millis(2500);
+
+/// Сповіщення: список пунктів, помилки QA всього проєкту (прохід по рядках іде частинами) і час, коли новини востаннє позначено прочитаними.
+#[derive(Default)]
+pub struct Inbox {
+    /// Готовий список для кнопки-дзвоника.
+    pub items: Vec<transly_core::inbox::InboxItem>,
+    /// Коли перекладач останнього разу позначив новини прочитаними (мс); нове — те, що пізніше. Лежить у теці даних програми.
+    pub seen: i64,
+    /// Помилки QA за останнім завершеним проходом.
+    errors: Vec<RowRef>,
+    /// Для якого стану даних іде прохід: версія змін, кількість файлів.
+    stamp: (u64, usize),
+    /// Коли дані востаннє змінились: прохід починається, коли минуло `INBOX_QUIET`.
+    since: Option<std::time::Instant>,
+    /// Де прохід: (файл, рядок); `None`, коли він скінчився або ще не починався.
+    at: Option<(usize, usize)>,
+    found: Vec<RowRef>,
+    qa: Option<transly_core::qa::QaOptions>,
+    /// Тека гри, для якої йде прохід: інший проєкт — інший прохід, навіть коли версія змін збіглась.
+    dir: Option<PathBuf>,
+    /// Чи дані змінились і список треба перерахувати.
+    pending: bool,
+    /// Лічильник наборів рядків (див. `RowsFilter`).
+    gen: u32,
+}
+
+impl Inbox {
+    fn path() -> Option<PathBuf> {
+        plugins_dir().and_then(|p| p.parent().map(|d| d.join("inbox.json")))
+    }
+
+    /// Читає час «прочитано»; коли його ще не було, починає рахувати новини від цієї миті (і запам'ятовує її).
+    fn load() -> Inbox {
+        let saved = Self::path().and_then(|p| std::fs::read_to_string(p).ok()).and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok()).and_then(|v| v.get("seen").and_then(|s| s.as_i64())).filter(|s| *s > 0);
+        let ib = Inbox { seen: saved.unwrap_or_else(now_ms), ..Default::default() };
+        if saved.is_none() {
+            ib.save();
+        }
+        ib
+    }
+
+    fn save(&self) {
+        if let Some(p) = Self::path() {
+            let _ = std::fs::create_dir_all(p.parent().unwrap_or(Path::new(".")));
+            let _ = std::fs::write(p, serde_json::json!({ "seen": self.seen }).to_string());
+        }
+    }
+
+    /// Скільки пунктів і чи серед них є помилка QA (тоді бейдж червоний).
+    pub fn badge(&self) -> (usize, bool) {
+        (self.items.len(), self.items.iter().any(|i| i.kind == transly_core::inbox::InboxKind::Error))
+    }
+}
 
 /// Кеш вживання записів: індекс слів (будується один раз на набір рядків) із позиціями рядків і готові числа для поточної версії змін.
 #[derive(Default)]
@@ -678,7 +759,7 @@ impl AppState {
     }
 
     fn refresh_visible(&self, f: usize) {
-        let key = (f, Filter::ALL.iter().position(|x| *x == self.filter).unwrap_or(0) as u8, format!("{}\u{1}{}\u{1}{}\u{1}{}", self.search, self.group_filter.clone().unwrap_or_default(), self.speaker_filter.clone().unwrap_or_default(), self.len_filter), self.rev);
+        let key = (f, Filter::ALL.iter().position(|x| *x == self.filter).unwrap_or(0) as u8, format!("{}\u{1}{}\u{1}{}\u{1}{}\u{1}{}", self.search, self.group_filter.clone().unwrap_or_default(), self.speaker_filter.clone().unwrap_or_default(), self.len_filter, self.rows_filter.as_ref().map_or(0, |r| r.gen)), self.rev);
         if self.vis.borrow().key == key {
             return;
         }
@@ -690,8 +771,15 @@ impl AppState {
             let name = &self.views.get(f)?.name;
             Some(transly_core::groups::rows_of_group(&data, &self.views, id).into_iter().filter(|r| &r.file == name).map(|r| r.key).collect())
         });
+        let name = self.views.get(f).map(|v| v.name.as_str()).unwrap_or_default();
+        let listed = self.rows_filter.as_ref().filter(|rf| rf.touches(name));
         for r in 0..self.row_count(f) {
             let st = self.status_of(f, r);
+            if let Some(rf) = listed {
+                if !self.unit(f, r).is_some_and(|u| rf.has(name, &u.key)) {
+                    continue;
+                }
+            }
             if let Some(set) = &in_group {
                 if !self.unit(f, r).is_some_and(|u| set.contains(&u.key)) {
                     continue;
@@ -1663,11 +1751,102 @@ impl AppState {
         self.filter = Filter::All;
         self.search.clear();
         self.group_filter = None;
+        self.rows_filter = None;
         self.speaker_filter = None;
         self.len_filter = 0;
         self.file = Some(fi);
         self.row = Some(ri);
         true
+    }
+
+    /// Показує набір рядків із сповіщень: відкриває перший з них і лишає в таблицях лише рядки набору (там, де вони є).
+    pub fn show_rows(&mut self, title: &str, rows: &[RowRef]) -> String {
+        let Some(first) = rows.iter().find(|r| self.views.iter().any(|v| v.name == r.file && v.units.iter().any(|u| u.key == r.key))) else { return "Тут ще немає рядків".into() };
+        let (file, key) = (first.file.clone(), first.key.clone());
+        let set: std::collections::HashSet<(String, String)> = rows.iter().map(|r| (r.file.clone(), r.key.clone())).collect();
+        self.open_ref(&file, &key);
+        self.inbox.gen += 1;
+        self.rows_filter = Some(RowsFilter { title: title.to_string(), rows: set, gen: self.inbox.gen });
+        format!("Показано лише: {title}")
+    }
+
+    /// Позначає новини від інших прочитаними: з цієї миті нове — лише те, що зроблять далі.
+    pub fn inbox_mark_read(&mut self) {
+        self.inbox.seen = now_ms();
+        self.inbox.save();
+        self.inbox_rebuild();
+    }
+
+    fn inbox_rebuild(&mut self) {
+        let who = self.who();
+        let Some(p) = self.project.as_ref() else {
+            self.inbox.items.clear();
+            return;
+        };
+        self.inbox.items = transly_core::inbox::inbox_of(&transly_core::inbox::InboxInput { views: &self.views, saved: p, who: &who, seen: self.inbox.seen, errors: self.inbox.errors.clone() });
+    }
+
+    /// Робить частину роботи над сповіщеннями: коли дані 2,5 с не змінювались, проходить по рядках у пошуках помилок QA (не довше `budget` за раз), потім перераховує список.
+    /// Повертає, через скільки викликати знову (`ZERO` — прохід іде, перемалювати одразу); `None` — робити нічого.
+    pub fn inbox_step(&mut self, budget: std::time::Duration) -> Option<std::time::Duration> {
+        if self.project.is_none() || self.views.is_empty() {
+            self.inbox.items.clear();
+            self.inbox.errors.clear();
+            self.inbox.stamp = (u64::MAX, 0);
+            self.inbox.pending = false;
+            return None;
+        }
+        let now = std::time::Instant::now();
+        if self.inbox.stamp != (self.rev, self.views.len()) || self.inbox.dir != self.dir {
+            self.inbox.stamp = (self.rev, self.views.len());
+            self.inbox.dir = self.dir.clone();
+            self.inbox.since = Some(now);
+            self.inbox.at = None;
+            self.inbox.qa = None;
+            self.inbox.pending = true;
+        }
+        if !self.inbox.pending {
+            return None;
+        }
+        let quiet = if cfg!(test) { std::time::Duration::ZERO } else { INBOX_QUIET };
+        let waited = self.inbox.since.map_or(quiet, |t| now.duration_since(t));
+        if self.inbox.at.is_none() {
+            if waited < quiet {
+                return Some(quiet - waited);
+            }
+            self.inbox.qa = Some(self.qa_options());
+            self.inbox.found.clear();
+            self.inbox.at = Some((0, 0));
+        }
+        let (mut f, mut r) = self.inbox.at.unwrap_or((0, 0));
+        let p = self.project.as_ref()?;
+        let Inbox { qa, found, .. } = &mut self.inbox;
+        let qa = qa.get_or_insert_with(default_qa);
+        let mut n = 0u32;
+        while f < self.views.len() {
+            let v = &self.views[f];
+            let ents = p.files.get(&v.name);
+            while r < v.units.len() {
+                let u = &v.units[r];
+                if transly_core::queue::row_in_queue(transly_core::queue::QueueKind::Error, u, ents.and_then(|m| m.get(&u.key)), qa) {
+                    found.push(RowRef { file: v.name.clone(), key: u.key.clone() });
+                }
+                r += 1;
+                n += 1;
+                if n.is_multiple_of(128) && now.elapsed() >= budget {
+                    self.inbox.at = Some((f, r));
+                    return Some(std::time::Duration::ZERO);
+                }
+            }
+            f += 1;
+            r = 0;
+        }
+        self.inbox.errors = std::mem::take(&mut self.inbox.found);
+        self.inbox.at = None;
+        self.inbox.qa = None;
+        self.inbox.pending = false;
+        self.inbox_rebuild();
+        None
     }
 
     /// «Пошук скрізь»: файли, рядки (за оригіналом, перекладом і ключем) і терміни. Групи мають власні ліміти;
@@ -1722,6 +1901,7 @@ impl AppState {
         self.filter = Filter::All;
         self.search.clear();
         self.group_filter = None;
+        self.rows_filter = None;
         self.speaker_filter = None;
         self.len_filter = 0;
         self.file = Some(fi);

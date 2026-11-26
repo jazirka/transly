@@ -56,6 +56,11 @@ pub struct QueueRow {
     pub at: usize,
 }
 
+/// Чи входить один рядок до черги цього виду (для викликачів, що ходять по рядках частинами й не збирають усю чергу за раз).
+pub fn row_in_queue(kind: QueueKind, u: &Unit, e: Option<&Entry>, qa: &QaOptions) -> bool {
+    is_in(kind, u, e, qa)
+}
+
 fn is_in(kind: QueueKind, u: &Unit, e: Option<&Entry>, qa: &QaOptions) -> bool {
     match kind {
         QueueKind::Untranslated => row_state(e) == RowState::Untranslated,

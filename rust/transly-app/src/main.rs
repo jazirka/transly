@@ -406,6 +406,72 @@ fn pop(ui: &egui::Ui, resp: &egui::Response, id: &str, add: impl FnOnce(&mut egu
     });
 }
 
+/// Те саме, що `pop`, але список вирівняно за правим краєм кнопки й має задану ширину (так у вебі відкривається дзвоник): відступ від кнопки 6.
+fn pop_right(ui: &egui::Ui, resp: &egui::Response, id: &str, width: f32, add: impl FnOnce(&mut egui::Ui)) {
+    let pid = ui.make_persistent_id(id);
+    if resp.clicked() {
+        ui.memory_mut(|m| m.toggle_popup(pid));
+    }
+    if !ui.memory(|m| m.is_popup_open(pid)) {
+        return;
+    }
+    let frame = egui::Frame::popup(ui.style());
+    let inner = width - frame.total_margin().sum().x;
+    let area = egui::Area::new(pid).kind(egui::UiKind::Popup).order(egui::Order::Foreground).fixed_pos(resp.rect.right_bottom() + vec2(0.0, 6.0)).pivot(Align2::RIGHT_TOP).show(ui.ctx(), |ui| {
+        frame.show(ui, |ui| {
+            menu_style(ui);
+            ui.set_width(inner);
+            add(ui);
+        });
+    });
+    // як `CloseOnClick`: клік будь-де, крім самої кнопки (клік по пункту теж закриває список), і Esc
+    let _ = area;
+    if ui.input(|i| i.key_pressed(egui::Key::Escape)) || resp.clicked_elsewhere() {
+        ui.memory_mut(|m| m.close_popup());
+    }
+}
+
+/// Число на дзвонику (`.bellb b`): праворуч 2, зверху 3, висота 14, заокруглення 7, не вужче 14, відступи 3; колір акценту, а коли є помилка QA — червоний.
+fn bell_badge(ui: &egui::Ui, button: Rect, n: usize, bad: bool) {
+    let g = ui.painter().layout_no_wrap(n.to_string(), mp(10.0), Color32::WHITE);
+    let w = (g.size().x + 6.0).max(14.0);
+    let r = Rect::from_min_size(pos2(button.right() - 2.0 - w, button.top() + 3.0), vec2(w, 14.0));
+    ui.painter().rect_filled(r, CornerRadius::same(7), if bad { BAD } else { theme::accent_solid() });
+    ui.painter().galley(r.center() - g.size() / 2.0, g, Color32::WHITE);
+}
+
+/// Заголовок розділу в списку (`.pj-h`): відступи 6 зверху, 2 знизу, 10 ліворуч, 12 пікселів, приглушений.
+fn inbox_head(ui: &mut egui::Ui, text: &str) {
+    let g = ui.painter().layout_no_wrap(text.to_string(), ip(12.0), MUTE);
+    let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 6.0 + g.size().y + 2.0), Sense::hover());
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, text));
+    ui.painter().galley(pos2(r.left() + 10.0, r.top() + 6.0), g, MUTE);
+}
+
+/// Пункт списку сповіщень (`.cfgpop button`): відступи 8×10, назва (вага 500) зі значком 16 і приглушений рядок під нею (12 пікселів, міжрядкова 1,35).
+fn inbox_item(ui: &mut egui::Ui, icon: Option<&str>, title: &str, sub: &str) -> egui::Response {
+    let w = ui.available_width();
+    let lead = if icon.is_some() { 16.0 + 8.0 } else { 0.0 };
+    let tg = ui.painter().layout(title.to_string(), ipw(13.0, 500), TEXT, w - 20.0 - lead);
+    let sg = (!sub.is_empty()).then(|| ui.painter().layout(sub.to_string(), ip(12.0), MUTE, w - 20.0));
+    let title_h = tg.size().y.max(16.0);
+    let sub_h = sg.as_ref().map_or(0.0, |g| 2.0 + g.size().y.max(12.0 * 1.35));
+    let (rect, resp) = ui.allocate_exact_size(vec2(w, 8.0 + title_h + sub_h + 8.0), Sense::click());
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, if sub.is_empty() { title.to_string() } else { format!("{title}: {sub}") }));
+    if resp.hovered() {
+        ui.painter().rect_filled(rect, CornerRadius::same(8), over_color(PANEL, Color32::WHITE, 0.07));
+    }
+    let top = rect.top() + 8.0;
+    if let Some(ic) = icon {
+        icons::paint(ui, Rect::from_min_size(pos2(rect.left() + 10.0, top + (title_h - 16.0) / 2.0), vec2(16.0, 16.0)), ic, MUTE);
+    }
+    ui.painter().galley(pos2(rect.left() + 10.0 + lead, top + (title_h - tg.size().y) / 2.0), tg, TEXT);
+    if let Some(g) = sg {
+        ui.painter().galley(pos2(rect.left() + 10.0, top + title_h + 2.0), g, MUTE);
+    }
+    resp
+}
+
 /// Вікно-діалог, як `.dlg` у вебі: по центру вікна, тло `#2b2d33`, рамка `#4a4d54` 1 px, радіус 12, тінь, поля 16×12. Далі — звичайні налаштування `egui::Window`.
 pub(crate) fn dlg<'a>(title: impl Into<egui::WidgetText>) -> egui::Window<'a> {
     egui::Window::new(title).anchor(Align2::CENTER_CENTER, vec2(0.0, 0.0)).frame(
@@ -598,6 +664,13 @@ impl App {
             theme::apply_style(ctx);
         }
         self.topbar(ctx);
+        if let Some(after) = self.st.inbox_step(std::time::Duration::from_millis(6)) {
+            if after.is_zero() {
+                ctx.request_repaint();
+            } else {
+                ctx.request_repaint_after(after);
+            }
+        }
         self.statusbar(ctx);
         self.bottom(ctx);
         self.settings_window(ctx);
@@ -803,10 +876,13 @@ impl App {
                     }
                     let resp = icons::button(ui, "menu", "Дії: масові дії, скасування, автозаповнення, пошук і заміна", false, MUTE);
                     pop(ui, &resp, "actpop", |ui| self.menu_actions(ui));
-                    // сповіщення: як у старому дзвоник між «Запустити» і «Дії»; поки що заглушка
-                    if icons::button(ui, "bell", "Сповіщення: що потребує уваги й що змінили інші", false, MUTE).clicked() {
-                        self.message = "Сповіщення: розділ у розробці".into();
+                    // сповіщення: як у старому дзвоник між «Запустити» і «Дії», з числом пунктів
+                    let bell = icons::button(ui, "bell", "Сповіщення: що потребує уваги й що змінили інші", false, MUTE);
+                    let (count, bad) = self.st.inbox.badge();
+                    if count > 0 {
+                        bell_badge(ui, bell.rect, count, bad);
                     }
+                    pop_right(ui, &bell, "inboxpop", 340.0, |ui| self.inbox_menu(ui));
                     ui.add_enabled_ui(can, |ui| {
                         if icons::button(ui, "play", "Запустити (виконати вибране зліва)", false, OK).clicked() {
                             self.run_selected();
@@ -1168,6 +1244,64 @@ impl App {
                 self.act_plugins();
                 ui.close_menu();
             }
+    }
+
+    /// Список сповіщень (`#inboxpop`): «Потребує уваги», «Нове від інших» і «Позначити нове прочитаним»; порожній — «Усе гаразд». Клік по пункту показує його рядки.
+    fn inbox_menu(&mut self, ui: &mut egui::Ui) {
+        use transly_core::inbox::InboxKind;
+        let items = self.st.inbox.items.clone();
+        if items.is_empty() {
+            inbox_head(ui, "Усе гаразд");
+            let g = ui.painter().layout("Немає помилок QA, чернеток і рядків на вичитку, нових змін від інших теж.".to_string(), ip(13.0), MUTE, ui.available_width() - 24.0);
+            let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), g.size().y + 14.0), Sense::hover());
+            ui.painter().galley(pos2(r.left() + 12.0, r.top() + 4.0), g, MUTE);
+            return;
+        }
+        let (state, news): (Vec<_>, Vec<_>) = items.iter().partition(|i| !i.news);
+        let mut open: Option<&transly_core::inbox::InboxItem> = None;
+        let mut read = false;
+        let icon = |k: InboxKind| match k {
+            InboxKind::Error => "warn",
+            InboxKind::Draft => "pencil",
+            InboxKind::Unreviewed => "check",
+            InboxKind::Source => "refresh",
+            InboxKind::Replies => "cmt",
+            InboxKind::Others => "person",
+        };
+        if !state.is_empty() {
+            inbox_head(ui, "Потребує уваги");
+            for i in &state {
+                if inbox_item(ui, Some(icon(i.kind)), &i.title, &i.sub).clicked() {
+                    open = Some(i);
+                }
+            }
+        }
+        if !news.is_empty() {
+            if !state.is_empty() {
+                menu_sep(ui);
+            }
+            inbox_head(ui, "Нове від інших");
+            for i in &news {
+                if inbox_item(ui, Some(icon(i.kind)), &i.title, &i.sub).clicked() {
+                    open = Some(i);
+                }
+            }
+            menu_sep(ui);
+            if inbox_item(ui, None, "Позначити нове прочитаним", "").clicked() {
+                read = true;
+            }
+        }
+        if read || open.is_some() {
+            // і мишею, і з клавіатури пункт закриває список
+            ui.memory_mut(|m| m.close_popup());
+        }
+        if read {
+            self.st.inbox_mark_read();
+        } else if let Some(i) = open {
+            self.message = self.st.show_rows(&i.title, &i.rows);
+            self.draft_for = None;
+            self.cell_edit = None;
+        }
     }
 
     fn menu_actions(&mut self, ui: &mut egui::Ui) {
@@ -2950,6 +3084,79 @@ mod ui_tests {
         assert!(h.state().st.relay.configured());
     }
 
+    /// Проєкт для сповіщень: «Герой» без керівних кодів (помилка QA), «Маг» — чернетка з коментарем Олі.
+    fn bell_game() -> (App, usize, usize) {
+        let base = std::env::temp_dir().join(format!("transly-ui-bell-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = base.join("MyGame").join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        std::fs::write(data.join("Actors.json"), r#"[null,{"id":1,"name":"\\C[2]Hero\\C[0]","nickname":"","profile":"Brave","note":""},{"id":2,"name":"Mage","nickname":"","profile":"Wise","note":""}]"#).unwrap();
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        let row = |app: &App, src: &str| app.st.views[0].units.iter().position(|u| u.source == src).unwrap_or_else(|| panic!("нема рядка {src}"));
+        let (hero, mage) = (row(&app, "\\C[2]Hero\\C[0]"), row(&app, "Mage"));
+        app.st.edit(0, hero, "Герой");
+        app.st.edit(0, mage, "Маг");
+        app.st.project.as_mut().unwrap().settings.insert("who".into(), serde_json::json!("Оля"));
+        app.st.comment(0, mage, "Глянь, будь ласка");
+        app.st.project.as_mut().unwrap().settings.insert("who".into(), serde_json::json!("Ви"));
+        (app, hero, mage)
+    }
+
+    /// Дзвоник: число пунктів на кнопці (червоне, коли є помилка QA), список «Потребує уваги» / «Нове від інших», клік по пункту лишає в таблиці
+    /// його рядки, «Позначити нове прочитаним» прибирає новини, а коли нічого немає — «Усе гаразд».
+    #[test]
+    fn the_bell_counts_what_needs_attention_and_shows_the_rows_of_an_item() {
+        use transly_core::inbox::InboxKind;
+        let (mut app, hero, _mage) = bell_game();
+        for _ in 0..100 {
+            if app.st.inbox_step(std::time::Duration::from_millis(50)).is_none() {
+                break;
+            }
+        }
+        let kinds: Vec<InboxKind> = app.st.inbox.items.iter().map(|i| i.kind).collect();
+        assert_eq!(kinds, [InboxKind::Error, InboxKind::Replies, InboxKind::Draft], "{:?}", app.st.inbox.items);
+        assert_eq!(app.st.inbox.badge(), (3, true));
+        let mut h = harness(app);
+        h.run();
+        // бейдж не заважає кнопці: вона лишається в тому ж місці й знаходиться за підказкою
+        let bell = h.get_by_label("Сповіщення: що потребує уваги й що змінили інші");
+        bell.click();
+        h.run();
+        h.get_by_label_contains("Потребує уваги");
+        h.get_by_label_contains("Нове від інших");
+        h.get_by_label_contains("Оля: 1 новий коментар");
+        // пункт з помилкою відкриває її рядок і лишає в таблиці лише рядки пункту
+        h.get_by_label_contains("1 помилка QA").click();
+        h.run();
+        assert_eq!(h.state().st.row, Some(hero));
+        assert_eq!(h.state().st.rows_filter.as_ref().map(|r| r.title.as_str()), Some("1 помилка QA"));
+        assert_eq!(h.state().st.visible_len(0), 1);
+        assert_eq!(h.state().message, "Показано лише: 1 помилка QA");
+        // список закрився; «Ще» дає скинути набір
+        h.run();
+        assert!(h.query_by_label_contains("Нове від інших").is_none());
+        h.state_mut().st.rows_filter = None;
+        assert_eq!(h.state().st.visible_len(0), 4);
+        // «Позначити нове прочитаним» прибирає новини, а стан лишається
+        h.get_by_label("Сповіщення: що потребує уваги й що змінили інші").click();
+        h.run();
+        h.get_by_label("Позначити нове прочитаним").click();
+        h.run();
+        let kinds: Vec<InboxKind> = h.state().st.inbox.items.iter().map(|i| i.kind).collect();
+        assert_eq!(kinds, [InboxKind::Error, InboxKind::Draft]);
+        assert_eq!(h.state().st.inbox.badge(), (2, true));
+        // коли нічого немає — «Усе гаразд», а числа на кнопці немає
+        let mut quiet = App::default();
+        quiet.st.open_game(&game("bell-quiet")).unwrap();
+        let mut h = harness(quiet);
+        h.run();
+        assert_eq!(h.state().st.inbox.badge(), (0, false));
+        h.get_by_label("Сповіщення: що потребує уваги й що змінили інші").click();
+        h.run();
+        h.get_by_label_contains("Усе гаразд");
+    }
+
     /// Знайшли нову збірку — у рядку стану з'являється одна кнопка «Оновити» (без токена й репозиторію).
     #[test]
     fn a_newer_build_shows_one_update_button_in_the_status_bar() {
@@ -3447,6 +3654,27 @@ mod ui_tests {
             assert_eq!(h.state().gl_show, idx, "{label}");
         }
         assert!(h.state().gl_mem_asked, "після «Пам’ять» лічильник пам’яті показується");
+    }
+
+    /// Знімок відкритого списку сповіщень: `TRANSLY_SHOTS=<тека> cargo test -p transly-app bell_shot -- --ignored`.
+    #[test]
+    #[ignore]
+    fn bell_shot() {
+        let Some(dir) = std::env::var_os("TRANSLY_SHOTS").map(std::path::PathBuf::from) else { return };
+        std::fs::create_dir_all(&dir).unwrap();
+        let (mut app, _, _) = bell_game();
+        app.st.row = Some(0);
+        for _ in 0..100 {
+            if app.st.inbox_step(std::time::Duration::from_millis(50)).is_none() {
+                break;
+            }
+        }
+        let mut h = harness(app);
+        h.run();
+        h.get_by_label("Сповіщення: що потребує уваги й що змінили інші").click();
+        h.run();
+        h.run();
+        h.render().unwrap().save(dir.join("22-bell.png")).unwrap();
     }
 
     /// Знімок найменшого вікна (1000×600) з довгою назвою проєкту: перемикач режимів видно й він на місці. `TRANSLY_SHOTS=<тека> cargo test -p transly-app small_window -- --ignored`.

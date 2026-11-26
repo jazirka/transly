@@ -1226,12 +1226,18 @@ impl App {
             (resp, w)
         };
         let more_label = if self.st.filter == Filter::All { "Ще".to_string() } else { self.st.filter.label().to_string() };
-        let (more, _) = chip(ui, fin.right() + 6.0, &more_label, self.st.filter != Filter::All);
+        let (more, _) = chip(ui, fin.right() + 6.0, &more_label, self.st.filter != Filter::All || self.st.rows_filter.is_some());
         let counts = self.st.filter_counts(f);
         pop(ui, &more, "more-pop", |ui| {
             for (i, flt) in Filter::ALL.iter().enumerate() {
                 if ui.selectable_label(self.st.filter == *flt, format!("{}  {}", flt.label(), counts[i])).clicked() {
                     self.st.filter = *flt;
+                }
+            }
+            if let Some(title) = self.st.rows_filter.as_ref().map(|r| r.title.clone()) {
+                ui.separator();
+                if ui.button(format!("Показано лише: {title}  (скинути)")).clicked() {
+                    self.st.rows_filter = None;
                 }
             }
             if let Some(id) = self.st.group_filter.clone() {

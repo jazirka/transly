@@ -2919,16 +2919,22 @@ mod ui_tests {
         h.input_mut().events.push(egui::Event::Key { key, physical_key: None, pressed: false, repeat: false, modifiers: mods });
     }
 
-    /// Індекс слів для вживання записів будується у фоновому потоці, а панель глосарія, поки він не готовий, просить перемальовування (`Harness::run`
-    /// тоді вичерпує кроки). Тести з терміном у глосарії чекають на нього наперед: на повільній машині CI потік не встигає за кілька кадрів.
+    /// Індекс слів для вживання записів і пошук конструкцій ідуть у фонових потоках, а панель глосарія, поки вони не готові, просить перемальовування
+    /// (`Harness::run` тоді вичерпує кроки). Тести з глосарієм чекають на них наперед: на повільній машині CI потоки не встигають за кілька кадрів.
     fn warm_usage(app: &App) {
         if let Some(t) = app.st.glossary_terms().first() {
             for _ in 0..1000 {
                 if app.st.usage_counts(t).is_some() {
-                    return;
+                    break;
                 }
                 std::thread::sleep(std::time::Duration::from_millis(10));
             }
+        }
+        for _ in 0..1000 {
+            if !app.st.mine_cards().1 {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
         }
     }
 

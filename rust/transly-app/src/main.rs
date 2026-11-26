@@ -99,6 +99,8 @@ struct App {
     /// Розділи правої колонки (Активність, Пов’язане, Обговорення) окремо для таблиці й «Редагування».
     right_secs: [[bool; 3]; 2],
     comment: String,
+    /// Робоче вікно: остання панель, куди клацнули (спершу центр).
+    pane: Pane,
     /// Гілка, у якій відкрито поле відповіді, і текст відповіді; коментар, що чекає другого кліку «Видалити»; чи розкрито «Розв’язані».
     reply_to: Option<String>,
     reply_text: String,
@@ -234,7 +236,7 @@ fn game_job(text: &str, size: f32, actor_name: &dyn Fn(usize) -> Option<String>)
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), reply_to: None, reply_text: String::new(), del_confirm: None, closed_open: false, token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, rows_scroll_to: None, keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: None, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, reply_to: None, reply_text: String::new(), del_confirm: None, closed_open: false, token: String::new() }
     }
 }
 
@@ -327,6 +329,27 @@ fn pill(ui: &mut egui::Ui, avatar: Option<&str>, icon: Option<&str>, text: &str,
         icons::paint(ui, Rect::from_center_size(pos2(rect.left() + pad_l + lead + galley.size().x + 8.0 + 5.0, rect.center().y), vec2(10.0, 10.0)), "caret", MUTE);
     }
     resp
+}
+
+/// «Робоче вікно» (`html[data-pane]` у вебі): остання панель, куди клацнули. Вибране в ньому — кольору теми, в інших — сіре.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Pane {
+    Files,
+    Rows,
+    Scenes,
+    Glossary,
+    Centre,
+    Right,
+}
+
+/// Яке вікно відкриває кнопка смужки зліва.
+pub(crate) fn pane_of_rail(rail: usize) -> Pane {
+    match rail {
+        0 => Pane::Files,
+        1 => Pane::Rows,
+        2 => Pane::Scenes,
+        _ => Pane::Glossary,
+    }
 }
 
 /// Випадний список під кнопкою: відкривається кліком, закривається кліком у списку чи поза ним.
@@ -430,6 +453,17 @@ impl App {
     /// Один кадр інтерфейсу (окремо від `eframe`, щоб його можна було ганяти в тестах).
     fn frame(&mut self, ctx: &egui::Context) {
         theme::sync_weights(ctx);
+        // робоче вікно: куди клацнули в попередньому кадрі (прямокутники панелей запам'ятовують самі панелі)
+        if let Some(p) = ctx.input(|i| if i.pointer.any_pressed() { i.pointer.interact_pos() } else { None }) {
+            let rect_of = |name: &str| ctx.data(|d| d.get_temp::<Rect>(egui::Id::new(name)));
+            if rect_of("pane-left").is_some_and(|r| r.contains(p)) {
+                self.pane = pane_of_rail(self.rail);
+            } else if rect_of("pane-right").is_some_and(|r| r.contains(p)) {
+                self.pane = Pane::Right;
+            } else if rect_of("pane-centre").is_some_and(|r| r.contains(p)) {
+                self.pane = Pane::Centre;
+            }
+        }
         // автозбереження: не рідше за раз на 20 с, коли є зміни
         if self.st.dirty && self.last_save.elapsed().as_secs() >= 20 {
             self.message = match self.st.save_project() {
@@ -3043,6 +3077,40 @@ mod ui_tests {
         h.run();
         assert_eq!(h.state().st.progress().sent, 1);
         assert_eq!(h.state().message, "Надіслано");
+    }
+
+    /// «Робоче вікно» (`html[data-pane]`): остання панель, куди клацнули; кнопка смужки зліва вмикає своє вікно.
+    #[test]
+    fn the_working_pane_follows_the_last_click() {
+        let data = game("panes");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.st.row = Some(0);
+        let mut h = harness(app);
+        h.state_mut().focus = true;
+        h.state_mut().rail = 1;
+        h.run();
+        h.run();
+        let click = |h: &mut Harness<'static, App>, x: f32, y: f32| {
+            let p = pos2(x, y);
+            h.input_mut().events.push(egui::Event::PointerMoved(p));
+            for pressed in [true, false] {
+                h.input_mut().events.push(egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE });
+            }
+            h.run();
+            h.run();
+        };
+        assert_eq!(h.state().pane, Pane::Centre, "спершу працюємо в центрі");
+        click(&mut h, 150.0, 600.0);
+        assert_eq!(h.state().pane, Pane::Rows);
+        click(&mut h, 1100.0, 600.0);
+        assert_eq!(h.state().pane, Pane::Right);
+        click(&mut h, 650.0, 600.0);
+        assert_eq!(h.state().pane, Pane::Centre);
+        // кнопка смужки «Файли гри» вмикає вікно файлів
+        h.get_by_label("Панель: Файли гри").click();
+        h.run();
+        assert_eq!((h.state().rail, h.state().pane), (0, Pane::Files));
     }
 
     /// Числа з веб-версії (computed style `#b-save`, `.saveb`): кнопка надсилання в редакторі 36×36.

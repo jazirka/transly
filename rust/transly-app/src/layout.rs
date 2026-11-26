@@ -120,6 +120,7 @@ fn left_card(ctx: &egui::Context, id: &'static str, add: impl FnOnce(&mut egui::
         let full = ui.max_rect();
         let rect = Rect::from_min_max(pos2(full.left() + 6.0, full.top()), pos2(full.right(), full.bottom() - 6.0));
         let mut cui = ui.new_child(egui::UiBuilder::new().max_rect(rect));
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new("pane-left"), rect));
         card_lr(0, 0).outer_margin(egui::Margin::ZERO).show(&mut cui, |ui| {
             ui.set_min_height(rect.height() - 2.0);
             ui.set_max_height(rect.height() - 2.0);
@@ -129,7 +130,19 @@ fn left_card(ctx: &egui::Context, id: &'static str, add: impl FnOnce(&mut egui::
     });
 }
 
+/// Сіре «вибране» у вікні, де ви зараз не працюєте: біле 15 % із кільцем біле 26 % (`--sel`, `--on-ring`).
+const SEL_RING_GRAY: Color32 = Color32::from_rgb(89, 89, 92);
+
 impl App {
+    /// Заливка й кільце вибраного елемента: у робочому вікні — колір теми (`--use`, `--use-ring`), в інших — сірі (`states.css`).
+    pub(crate) fn chosen(&self, pane: Pane) -> (Color32, Color32) {
+        if self.pane == pane {
+            (sel_use(), accent_ring())
+        } else {
+            (SEL_GRAY, SEL_RING_GRAY)
+        }
+    }
+
     // ------------------------------------------------------------------ смужка значків
     pub(crate) fn strip(&mut self, ctx: &egui::Context) {
         let edit = self.focus && !self.scene_mode;
@@ -152,16 +165,18 @@ impl App {
                     let r = Rect::from_min_size(pos2(x, y), vec2(28.0, 28.0));
                     let resp = ui.interact(r, ui.id().with(("strip", *idx)), Sense::click());
                     let on = *idx == self.rail || (!edit && !self.scene_mode && *idx == 0 && self.rail != 3);
-                    let tint = over_color(SEL_GRAY, accent_solid(), 0.12);
+                    let (fill, ring) = self.chosen(pane_of_rail(*idx));
                     resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, format!("Панель: {tip}")));
                     if on {
-                        ui.painter().rect_filled(r, CornerRadius::same(8), tint);
+                        ui.painter().rect_filled(r, CornerRadius::same(8), fill);
+                        ui.painter().rect_stroke(r, CornerRadius::same(8), Stroke::new(1.0_f32, ring), StrokeKind::Inside);
                     } else if resp.hovered() {
                         ui.painter().rect_filled(r, CornerRadius::same(8), GHOST_HOVER);
                     }
                     icons::paint(ui, Rect::from_center_size(r.center(), vec2(17.0, 17.0)), ic, if on { Color32::WHITE } else { MUTE });
                     if resp.on_hover_text(*tip).clicked() {
                         self.rail = *idx;
+                        self.pane = pane_of_rail(*idx);
                     }
                     y += 34.0;
                 }
@@ -244,7 +259,9 @@ impl App {
                     let cur = self.st.file == Some(i);
                     resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, cur, name.clone()));
                     if cur {
-                        ui.painter().rect_filled(rect, CornerRadius::same(8), SEL_GRAY);
+                        let (fill, ring) = self.chosen(Pane::Files);
+                        ui.painter().rect_filled(rect, CornerRadius::same(8), fill);
+                        ui.painter().rect_stroke(rect, CornerRadius::same(8), Stroke::new(1.0_f32, ring), StrokeKind::Inside);
                     } else if resp.hovered() {
                         ui.painter().rect_filled(rect, CornerRadius::same(8), GHOST_HOVER);
                     }
@@ -310,11 +327,9 @@ impl App {
                 resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, self.right_secs[mi][i], format!("Права панель: {tip}")));
                 let on = self.right_secs[mi][i];
                 if on {
-                    let fill = if edit { over_color(GROUND, accent(), 0.38) } else { SEL_GRAY };
+                    let (fill, ring) = self.chosen(Pane::Right);
                     ui.painter().rect_filled(r, CornerRadius::same(8), fill);
-                    if edit {
-                        ui.painter().rect_stroke(r, CornerRadius::same(8), Stroke::new(1.0_f32, accent_ring()), StrokeKind::Inside);
-                    }
+                    ui.painter().rect_stroke(r, CornerRadius::same(8), Stroke::new(1.0_f32, ring), StrokeKind::Inside);
                 } else if resp.hovered() {
                     ui.painter().rect_filled(r, CornerRadius::same(8), GHOST_HOVER);
                 }
@@ -328,6 +343,7 @@ impl App {
                 return;
             }
             let area = Rect::from_min_max(pos2(full.left() + 6.0, full.top()), pos2(rx - 6.0, full.bottom() - 6.0));
+            ctx.data_mut(|d| d.insert_temp(egui::Id::new("pane-right"), area));
             let gap = 6.0;
             let each = (area.height() - gap * (on.len() as f32 - 1.0)) / on.len() as f32;
             for (n, sec) in on.iter().enumerate() {
@@ -681,9 +697,13 @@ impl App {
         ui.painter().text(pos2(bar.left() + 14.0, bar.center().y + 0.5), Align2::LEFT_CENTER, "Ctrl+Enter", ip(12.0), MUTE);
         let sr = Rect::from_center_size(pos2(bar.right() - 26.0, bar.center().y + 0.5), vec2(36.0, 36.0));
         let sresp = ui.interact(sr, ui.id().with("cm-add"), Sense::click());
-        let fill = if focused { if sresp.hovered() { accent_hover() } else { accent_solid() } } else if sresp.hovered() { over_ground(0.22) } else { over_ground(0.15) };
+        let lit = self.pane == Pane::Right;
+        let fill = if lit { if sresp.hovered() { accent_hover() } else { accent_solid() } } else if sresp.hovered() { over_ground(0.22) } else { over_ground(0.15) };
         ui.painter().rect_filled(sr, CornerRadius::same(8), fill);
-        icons::paint(ui, Rect::from_center_size(sr.center(), vec2(17.0, 17.0)), "send", Color32::WHITE);
+        if !lit {
+            ui.painter().rect_stroke(sr, CornerRadius::same(8), Stroke::new(1.0_f32, SEL_RING_GRAY), StrokeKind::Inside);
+        }
+        icons::paint(ui, Rect::from_center_size(sr.center(), vec2(17.0, 17.0)), "send", if lit { Color32::WHITE } else { TEXT });
         sresp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Коментувати"));
         let send = sresp.on_hover_text("Коментувати (Ctrl+Enter)").clicked() || (focused && ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Enter)));
         if send && !self.comment.trim().is_empty() {
@@ -819,6 +839,7 @@ impl App {
     // ------------------------------------------------------------------ центр
     pub(crate) fn editor(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().frame(card_lr(6, 0)).show(ctx, |ui| {
+            ctx.data_mut(|d| d.insert_temp(egui::Id::new("pane-centre"), ui.max_rect()));
             ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
             self.st.sync_tabs();
             let Some(f) = self.st.file else {
@@ -1009,8 +1030,9 @@ impl App {
             resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, format!("Вкладка {tn}")));
             if on {
                 let top = CornerRadius { nw: 8, ne: 8, sw: 0, se: 0 };
-                ui.painter().rect_filled(rect, top, over_color(PANEL, accent(), 0.30));
-                ui.painter().rect_stroke(rect, top, Stroke::new(1.0_f32, over_color(PANEL, accent(), 0.70)), StrokeKind::Inside);
+                let (fill, ring) = self.chosen(Pane::Centre);
+                ui.painter().rect_filled(rect, top, fill);
+                ui.painter().rect_stroke(rect, top, Stroke::new(1.0_f32, ring), StrokeKind::Inside);
             } else if resp.hovered() {
                 ui.painter().rect_filled(rect, CornerRadius::same(8), GHOST_HOVER);
             }
@@ -1210,7 +1232,7 @@ impl App {
                     resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, sel, format!("{src} — {tgt}")));
                     let body = Rect::from_min_max(rect.min, pos2(rect.right(), rect.bottom() - 1.0));
                     if sel {
-                        ui.painter().rect_filled(body, CornerRadius::same(8), sel_use());
+                        ui.painter().rect_filled(body, CornerRadius::same(8), self.chosen(Pane::Centre).0);
                     } else if resp.hovered() {
                         ui.painter().rect_filled(body, CornerRadius::same(8), ROW_HOVER);
                     } else if i % 2 == 0 {
@@ -1371,8 +1393,9 @@ impl App {
                 let on = cur.as_deref() == Some(title.as_str());
                 resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, format!("Сцена {title}")));
                 if on {
-                    ui.painter().rect_filled(rect, CornerRadius::same(8), SEL_GRAY);
-                    ui.painter().rect_stroke(rect, CornerRadius::same(8), Stroke::new(1.0_f32, accent_ring()), StrokeKind::Inside);
+                    let (fill, ring) = self.chosen(Pane::Scenes);
+                    ui.painter().rect_filled(rect, CornerRadius::same(8), fill);
+                    ui.painter().rect_stroke(rect, CornerRadius::same(8), Stroke::new(1.0_f32, ring), StrokeKind::Inside);
                 } else if resp.hovered() {
                     ui.painter().rect_filled(rect, CornerRadius::same(8), GHOST_HOVER);
                 }
@@ -1429,8 +1452,9 @@ impl App {
                 let (src, tgt, st) = self.st.row_view(f, r);
                 resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, sel, format!("{src} — {tgt}")));
                 if sel {
-                    ui.painter().rect_filled(card, CornerRadius::same(8), SEL_GRAY);
-                    ui.painter().rect_stroke(card, CornerRadius::same(8), Stroke::new(1.0_f32, CARD_LINE), StrokeKind::Inside);
+                    let (fill, ring) = self.chosen(Pane::Rows);
+                    ui.painter().rect_filled(card, CornerRadius::same(8), fill);
+                    ui.painter().rect_stroke(card, CornerRadius::same(8), Stroke::new(1.0_f32, ring), StrokeKind::Inside);
                 } else if resp.hovered() {
                     ui.painter().rect_filled(card, CornerRadius::same(8), ROW_HOVER);
                 }
@@ -1758,8 +1782,12 @@ impl App {
                     ui.painter().text(pos2(cb.center().x, cb.top() + 28.0), Align2::CENTER_CENTER, o.to_string(), mp(12.0), MUTE);
                     let sr = Rect::from_center_size(pos2(bar.right() - 26.0, cy), vec2(36.0, 36.0));
                     let sresp = ui.interact(sr, ui.id().with("send"), Sense::click());
-                    ui.painter().rect_filled(sr, CornerRadius::same(8), if sresp.hovered() { accent_hover() } else { accent_solid() });
-                    icons::paint(ui, Rect::from_center_size(sr.center(), vec2(17.0, 17.0)), "send", Color32::WHITE);
+                    let lit = self.pane == Pane::Centre;
+                    ui.painter().rect_filled(sr, CornerRadius::same(8), if lit { if sresp.hovered() { accent_hover() } else { accent_solid() } } else if sresp.hovered() { over_ground(0.22) } else { over_ground(0.15) });
+                    if !lit {
+                        ui.painter().rect_stroke(sr, CornerRadius::same(8), Stroke::new(1.0_f32, SEL_RING_GRAY), StrokeKind::Inside);
+                    }
+                    icons::paint(ui, Rect::from_center_size(sr.center(), vec2(17.0, 17.0)), "send", if lit { Color32::WHITE } else { TEXT });
                     sresp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Надіслати"));
                     if sresp.on_hover_text("Надіслати на вичитку (Ctrl+Enter)").clicked() {
                         self.message = match self.st.submit(f, r, &self.draft) {

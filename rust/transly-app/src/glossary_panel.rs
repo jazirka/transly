@@ -133,7 +133,8 @@ impl App {
             let r = Rect::from_min_size(pos2(*cx, chips_rect.top() + 2.0 + *ln as f32 * 30.0), vec2(*cw, 24.0));
             let resp = ui.interact(r, ui.id().with(("gl-chip", i)), Sense::click());
             let on = self.gl_show == i;
-            let (fill, ring, ink) = if on { (over_color(BG, accent(), 0.30), over_color(BG, accent(), 0.70), Color32::WHITE) } else { (if resp.hovered() { BTN_HOVER } else { BTN }, LINE, TEXT) };
+            let (cfill, cring) = self.chosen(Pane::Glossary);
+            let (fill, ring, ink) = if on { (cfill, cring, Color32::WHITE) } else { (if resp.hovered() { BTN_HOVER } else { BTN }, LINE, TEXT) };
             ui.painter().rect(r, CornerRadius::same(12), fill, Stroke::new(1.0_f32, ring), StrokeKind::Inside);
             let g = ui.painter().layout_no_wrap(CHIPS[i].to_string(), ip(12.0), ink);
             let gw = g.size().x;

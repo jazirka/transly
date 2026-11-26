@@ -296,10 +296,10 @@ fn glow(painter: &egui::Painter, center: egui::Pos2, radii: egui::Vec2, c: Color
         Color32::from_rgb(f(ground.r(), c.r()), f(ground.g(), c.g()), f(ground.b(), c.b()))
     };
     let mut mesh = Mesh::default();
-    mesh.vertices.push(Vertex { pos: center, uv: WHITE_UV, color: mix(0.16) });
+    mesh.vertices.push(Vertex { pos: center, uv: WHITE_UV, color: mix(0.16 * theme::GLOW_GAIN) });
     let n = 64usize;
     // кільця: 48 % радіуса (.075) і край (0); нижня половина еліпса
-    for (scale, alpha) in [(0.48_f32, 0.075_f32), (1.0, 0.0)] {
+    for (scale, alpha) in [(0.48_f32, 0.075_f32 * theme::GLOW_GAIN), (1.0, 0.0)] {
         for i in 0..=n {
             let t = std::f32::consts::PI * i as f32 / n as f32;
             mesh.vertices.push(Vertex { pos: pos2(center.x + radii.x * scale * t.cos(), center.y + radii.y * scale * t.sin()), uv: WHITE_UV, color: mix(alpha) });
@@ -340,6 +340,7 @@ fn pill(ui: &mut egui::Ui, avatar: Option<&str>, icon: Option<&str>, text: &str,
     }
     if let Some(letters) = avatar {
         let c = pos2(rect.left() + pad_l + 13.0, rect.center().y);
+        theme::set_glow_x(c.x + 60.0); // як `--gx` у вебі: середина аватара + 60
         ui.painter().circle_filled(c, 13.0, accent_solid());
         ui.painter().text(c, Align2::CENTER_CENTER, letters, FontId::monospace(11.5), Color32::WHITE);
     } else if let Some(ic) = icon {
@@ -565,7 +566,7 @@ impl App {
         // тло оболонки під картками й між ними
         ctx.layer_painter(egui::LayerId::background()).rect_filled(ctx.screen_rect(), CornerRadius::ZERO, GROUND);
         // підсвічення від значка проєкту (відтінок теми) на всьому тлі: еліпс 520×190 від верху вікна, згасає до нуля, як `.ide` у вебі (merge.css)
-        glow(&ctx.layer_painter(egui::LayerId::background()), pos2(theme::GLOW_CENTER.0, theme::GLOW_CENTER.1), vec2(theme::GLOW_RADII.0, theme::GLOW_RADII.1), accent(), GROUND);
+        glow(&ctx.layer_painter(egui::LayerId::background()), pos2(theme::glow_center().0, theme::glow_center().1), vec2(theme::GLOW_RADII.0, theme::GLOW_RADII.1), accent(), GROUND);
         self.hotkeys(ctx);
         let title = self.st.project.as_ref().map_or("Transly".to_string(), transly_core::projname::project_title);
         let hue = transly_core::theme::theme_hue(&title, self.st.project.as_ref().and_then(|p| p.settings.get("hue")));

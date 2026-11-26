@@ -106,20 +106,37 @@ pub fn sel_soft() -> Color32 {
     over(BG, Color32::WHITE, 0.15)
 }
 
-/// Центр і піврадіуси світіння вікна (`.ide` у вебі: еліпс 520×190 від верху вікна, 105 від лівого краю).
-pub const GLOW_CENTER: (f32, f32) = (105.0, 0.0);
+/// Піврадіуси світіння вікна (`.ide` у вебі: еліпс 520×190 від верху вікна).
 pub const GLOW_RADII: (f32, f32) = (520.0, 190.0);
+/// Підсилення світіння проти веба (1,0 — рівно як CSS: пік .16). Власник: 1,0 «надто темне», а прозорі вершини (≈ .48) «надто яскраве й суцільне»; взято середнє.
+pub const GLOW_GAIN: f32 = 1.6;
 
-/// Прозорість світіння в точці `p`: .16 у центрі, .075 на 48 % радіуса, нуль на краю й далі (піксель за пікселем як градієнт CSS).
+thread_local! {
+    /// Центр світіння по горизонталі: у вебі `--gx` = середина аватара проєкту + 60 (запам'ятовується при малюванні аватара).
+    static GLOW_X: std::cell::Cell<f32> = const { std::cell::Cell::new(105.0) };
+}
+
+pub fn set_glow_x(x: f32) {
+    GLOW_X.with(|g| g.set(x));
+}
+
+/// Центр світіння: (x, верх вікна).
+pub fn glow_center() -> (f32, f32) {
+    (GLOW_X.with(std::cell::Cell::get), 0.0)
+}
+
+/// Прозорість світіння в точці `p`: .16 у центрі, .075 на 48 % радіуса, нуль на краю й далі (піксель за пікселем як градієнт CSS), помножена на `GLOW_GAIN`.
 pub fn glow_alpha(p: egui::Pos2) -> f32 {
-    let d = (((p.x - GLOW_CENTER.0) / GLOW_RADII.0).powi(2) + ((p.y - GLOW_CENTER.1).max(0.0) / GLOW_RADII.1).powi(2)).sqrt();
-    if d >= 1.0 {
+    let (cx, cy) = glow_center();
+    let d = (((p.x - cx) / GLOW_RADII.0).powi(2) + ((p.y - cy).max(0.0) / GLOW_RADII.1).powi(2)).sqrt();
+    let a = if d >= 1.0 {
         0.0
     } else if d <= 0.48 {
         0.16 + (0.075 - 0.16) * d / 0.48
     } else {
         0.075 * (1.0 - (d - 0.48) / 0.52)
-    }
+    };
+    a * GLOW_GAIN
 }
 
 /// Колір тла оболонки в точці `p` разом зі світінням.
@@ -239,11 +256,15 @@ mod tests {
     /// Світіння, як градієнт у вебі (`merge.css`): .16 у центрі, .075 на 48 % радіуса, нуль на краю й поза еліпсом.
     #[test]
     fn the_glow_follows_the_css_gradient_stops() {
-        let (cx, cy) = GLOW_CENTER;
+        let (cx, cy) = glow_center();
         let (rx, ry) = GLOW_RADII;
-        assert!((glow_alpha(egui::pos2(cx, cy)) - 0.16).abs() < 1e-6);
-        assert!((glow_alpha(egui::pos2(cx + rx * 0.48, cy)) - 0.075).abs() < 1e-5);
-        assert!((glow_alpha(egui::pos2(cx, cy + ry * 0.48)) - 0.075).abs() < 1e-5);
+        assert!((glow_alpha(egui::pos2(cx, cy)) - 0.16 * GLOW_GAIN).abs() < 1e-6);
+        assert!((glow_alpha(egui::pos2(cx + rx * 0.48, cy)) - 0.075 * GLOW_GAIN).abs() < 1e-5);
+        assert!((glow_alpha(egui::pos2(cx, cy + ry * 0.48)) - 0.075 * GLOW_GAIN).abs() < 1e-5);
+        // центр рухається разом з аватаром проєкту
+        set_glow_x(149.0);
+        assert_eq!(glow_center(), (149.0, 0.0));
+        set_glow_x(105.0);
         assert_eq!(glow_alpha(egui::pos2(cx + rx, cy)), 0.0);
         assert_eq!(glow_alpha(egui::pos2(cx, cy + ry + 5.0)), 0.0);
         assert_eq!(ground_at(egui::pos2(900.0, 300.0)), GROUND);

@@ -105,6 +105,62 @@ fn mini_icon(ui: &mut egui::Ui, center: egui::Pos2, name: &str, id: &str) -> egu
 }
 
 /// «Таблетка» нитки: крапка кольору терміна, слово → переклад (або «ще не перекладено» курсивом).
+/// Позиція в UTF-16 → номер символа.
+fn char_of_u16(text: &str, u: usize) -> usize {
+    let mut acc = 0;
+    for (i, c) in text.chars().enumerate() {
+        if acc >= u {
+            return i;
+        }
+        acc += c.len_utf16();
+    }
+    text.chars().count()
+}
+
+/// Відрізки рядків галереї, що покривають символи `[a, b)` (номери символів): `(x0, x1, верх, низ)` відносно галереї.
+fn galley_spans(galley: &egui::Galley, a: usize, b: usize) -> Vec<(f32, f32, f32, f32)> {
+    let (mut out, mut idx) = (Vec::new(), 0usize);
+    for row in &galley.rows {
+        let n = row.glyphs.len();
+        let (lo, hi) = (a.max(idx), b.min(idx + n));
+        if lo < hi {
+            let (g0, g1) = (&row.glyphs[lo - idx], &row.glyphs[hi - 1 - idx]);
+            out.push((g0.pos.x, g1.pos.x + g1.advance_width, row.rect.top(), row.rect.bottom()));
+        }
+        idx += n + usize::from(row.ends_with_newline);
+    }
+    out
+}
+
+/// Розташування слів вивчених пар у тексті: відрізки в екранних координатах (`origin` — де малюється галерея).
+fn word_rects(text: &str, galley: &egui::Galley, origin: egui::Pos2, range: (usize, usize)) -> Vec<Rect> {
+    let (a, b) = (char_of_u16(text, range.0), char_of_u16(text, range.1));
+    galley_spans(galley, a, b).into_iter().map(|(x0, x1, t, bt)| Rect::from_min_max(origin + vec2(x0, t), origin + vec2(x1, bt))).collect()
+}
+
+/// Крапкова тонка лінія під словом (нитка вивченої пари: варіант «тонка крапкова, світліша»).
+fn dotted_under(painter: &egui::Painter, rects: &[Rect], color: Color32) {
+    for r in rects {
+        let y = r.bottom() - 1.0;
+        painter.extend(egui::Shape::dotted_line(&[pos2(r.left(), y), pos2(r.right(), y)], color, 3.0, 0.7));
+    }
+}
+
+/// Крапкова нитка від слова оригіналу до його відповідника в перекладі.
+fn dotted_thread(painter: &egui::Painter, from: Rect, to: Rect, color: Color32) {
+    let (p0, p3) = (pos2(from.center().x, from.bottom()), pos2(to.center().x, to.top()));
+    let dy = (p3.y - p0.y).max(20.0) * 0.5;
+    let (p1, p2) = (pos2(p0.x, p0.y + dy), pos2(p3.x, p3.y - dy));
+    let pts: Vec<egui::Pos2> = (0..=28)
+        .map(|i| {
+            let t = i as f32 / 28.0;
+            let u = 1.0 - t;
+            pos2(u * u * u * p0.x + 3.0 * u * u * t * p1.x + 3.0 * u * t * t * p2.x + t * t * t * p3.x, u * u * u * p0.y + 3.0 * u * u * t * p1.y + 3.0 * u * t * t * p2.y + t * t * t * p3.y)
+        })
+        .collect();
+    painter.extend(egui::Shape::dotted_line(&pts, color, 4.0, 0.9));
+}
+
 fn thread_chip(ui: &mut egui::Ui, dot: Color32, en: &str, uk: &str, pending: bool) -> egui::Response {
     let font = ip(13.0);
     let g_en = ui.painter().layout_no_wrap(en.to_string(), font.clone(), TEXT);
@@ -987,10 +1043,14 @@ impl App {
         use transly_core::strands::{StrandKind, StrandState};
         let strands = self.st.strands(f, r);
         let names = self.st.game_names_in(f, r);
-        if strands.is_empty() && names.is_empty() {
+        if strands.is_empty() && names.is_empty() && self.st.learned_threads(f, r, &self.st.target_of(f, r)).is_empty() {
             return;
         }
         let mut open: Option<(String, String)> = None;
+        let mut add: Option<(String, String, Vec<String>)> = None;
+        let mut no: Option<String> = None;
+        let shown = if self.draft_for == Some((f, r)) { self.draft.clone() } else { self.st.target_of(f, r) };
+        let learned = self.st.learned_threads(f, r, &shown);
         // як у старому: «таблетки» з кольоровою крапкою — слово → переклад; підказка каже, що це й який стан
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
@@ -1015,7 +1075,29 @@ impl App {
                     open = Some((g.file.clone(), g.key.clone()));
                 }
             }
+            // вивчені пари (автословник): світла крапка; клік — «→ У глосарій» чи «Не так»
+            let mut seen = std::collections::HashSet::new();
+            for l in learned.iter().filter(|l| seen.insert(l.key.clone())) {
+                let resp = thread_chip(ui, accent_text(), &l.en, &l.uk, l.dst.is_none());
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("Вивчено: {} → {}", l.en, l.uk)));
+                let tip = format!("Вивчено з ваших перекладів: {} з {} рядків ({} %). Клік: додати в глосарій", l.rows, l.of, (l.share * 100.0).round() as i64);
+                let resp = resp.on_hover_text(tip);
+                pop(ui, &resp, &format!("lchip-{}", l.key), |ui| {
+                    if mi(ui, "→ У глосарій", true).clicked() {
+                        add = Some((l.en.clone(), l.uk.clone(), l.alts.clone()));
+                    }
+                    if mi(ui, "Не так (не показувати)", true).clicked() {
+                        no = Some(l.key.clone());
+                    }
+                });
+            }
         });
+        if let Some((en, uk, alts)) = add {
+            self.message = self.st.auto_add(&en, &uk, &alts);
+        }
+        if let Some(k) = no {
+            self.st.dismiss("auto", &k);
+        }
         if let Some((file, key)) = open {
             self.st.open_ref(&file, &key);
             self.draft_for = None;
@@ -1985,9 +2067,15 @@ impl App {
                 ui.painter().galley(pos2(pr.left() + 27.0, pr.center().y - lg.size().y / 2.0), lg, MUTE);
                 ui.add_space(16.0);
                 // оригінал
+                let learned = self.st.learned_threads(f, r, &self.draft);
+                let mut src_at: Option<(egui::Pos2, std::sync::Arc<egui::Galley>)> = None;
                 egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(CornerRadius::same(8)).inner_margin(egui::Margin::symmetric(14, 12)).show(ui, |ui| {
                     ui.set_width(ui.available_width());
-                    ui.label(source_job_sized(&self.st.source_of(f, r), &self.st.source_marks(f, r), 15.0, Some(22.5)));
+                    let mut job = source_job_sized(&self.st.source_of(f, r), &self.st.source_marks(f, r), 15.0, Some(22.5));
+                    job.wrap.max_width = ui.available_width();
+                    let galley = ui.fonts(|fo| fo.layout_job(job.clone()));
+                    let lr = ui.label(job);
+                    src_at = Some((lr.rect.min, galley));
                 });
                 self.pics_ui(ui, f, r);
                 for (lang, text) in self.st.references_of(f, r) {
@@ -2013,6 +2101,7 @@ impl App {
                 ui.painter().add(egui::Shape::convex_polygon(vec![pos2(x1, hr.center().y - 3.5), pos2(x1 + 7.0, hr.center().y), pos2(x1, hr.center().y + 3.5)], Color32::from_rgb(0x4a, 0x4d, 0x54), Stroke::NONE));
                 ui.add_space(6.0);
                 // поле перекладу: рамка 12, нижня панель 49
+                let mut dst_at: Option<(egui::Pos2, std::sync::Arc<egui::Galley>)> = None;
                 let frame = egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, CARD_LINE)).corner_radius(CornerRadius::same(CARD_R));
                 let out = frame.show(ui, |ui| {
                     ui.set_width(ui.available_width());
@@ -2021,7 +2110,9 @@ impl App {
                         job.sections.iter_mut().for_each(|s| s.format.line_height = Some(22.5));
                         ui.fonts(|f| f.layout_job(job))
                     };
-                    let te = ui.add(egui::TextEdit::multiline(&mut self.draft).desired_rows(4).desired_width(f32::INFINITY).font(ip(15.0)).layouter(&mut lay).frame(false).margin(vec2(14.0, 12.0)).min_size(vec2(0.0, 120.0)));
+                    let teo = egui::TextEdit::multiline(&mut self.draft).desired_rows(4).desired_width(f32::INFINITY).font(ip(15.0)).layouter(&mut lay).frame(false).margin(vec2(14.0, 12.0)).min_size(vec2(0.0, 120.0)).show(ui);
+                    dst_at = Some((teo.galley_pos, teo.galley.clone()));
+                    let te = teo.response;
                     let focused = te.has_focus();
                     let (bar, _) = ui.allocate_exact_size(vec2(ui.available_width(), 49.0), Sense::hover());
                     ui.painter().rect_filled(bar, CornerRadius { nw: 0, ne: 0, sw: CARD_R - 1, se: CARD_R - 1 }, PANEL);
@@ -2064,6 +2155,60 @@ impl App {
                 });
                 if out.inner {
                     ui.painter().rect_stroke(out.response.rect, CornerRadius::same(CARD_R), Stroke::new(1.0_f32, accent()), StrokeKind::Inside);
+                }
+                // вивчені пари (з автословника): тонка крапкова лінія під словом в оригіналі й під його відповідником у перекладі; наведення показує нитку між ними
+                if let (Some((sp, sg)), Some((dp, dg))) = (&src_at, &dst_at) {
+                    let thin = accent_text().gamma_multiply(0.85);
+                    let src_text = self.st.source_of(f, r);
+                    for (i, l) in learned.iter().enumerate() {
+                        let srects = word_rects(&src_text, sg, *sp, l.src);
+                        let drects = l.dst.map(|d| word_rects(&self.draft, dg, *dp, d)).unwrap_or_default();
+                        dotted_under(ui.painter(), &srects, if l.dst.is_some() { thin } else { MUTE.gamma_multiply(0.7) });
+                        dotted_under(ui.painter(), &drects, thin);
+                        let tip = format!("{} → {} · вивчено з {} з {} рядків ({} %){}", l.en, l.uk, l.rows, l.of, (l.share * 100.0).round() as i64, if l.dst.is_none() { " · у перекладі цього слова нема" } else { "" });
+                        let hot = srects.iter().chain(&drects).enumerate().any(|(k, rc)| {
+                            let resp = ui.interact(*rc, ui.id().with(("lthread", i, k)), Sense::hover());
+                            let h = resp.hovered();
+                            resp.on_hover_text(tip.clone());
+                            h
+                        });
+                        if hot {
+                            if let (Some(a), Some(b)) = (srects.first(), drects.first()) {
+                                dotted_thread(ui.painter(), *a, *b, thin);
+                            }
+                        }
+                    }
+                }
+                // сторож узгодженості: слово зазвичай перекладено певним словом, а тут його немає (під полем, не блокує нічого)
+                if !self.draft.trim().is_empty() && (!out.inner || st != RowStatus::Untranslated) {
+                    let mut seen = std::collections::HashSet::new();
+                    let guard: Vec<&crate::state::LearnedView> = learned.iter().filter(|l| l.sure && l.dst.is_none() && !self.guard_off.contains(&(f, r, l.key.clone())) && !self.st.is_dismissed("guard", &l.key) && seen.insert(l.key.clone())).collect();
+                    for l in guard {
+                        let (mut keep, mut never) = (false, false);
+                        ui.add_space(8.0);
+                        egui::Frame::new().fill(over_color(BG, WARN, 0.07)).stroke(Stroke::new(1.0_f32, WARN.gamma_multiply(0.5))).corner_radius(CornerRadius::same(8)).inner_margin(egui::Margin::symmetric(12, 9)).show(ui, |ui| {
+                            ui.set_width(ui.available_width());
+                            let msg = format!("У вас «{}» зазвичай «{}» ({} з {} рядків). У цьому перекладі такого слова немає.", l.en, l.uk, l.rows, l.of);
+                            let r1 = ui.label(RichText::new(&msg).size(12.5).color(TEXT));
+                            r1.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, msg.clone()));
+                            ui.add_space(6.0);
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = 6.0;
+                                if plain_button(ui, "Лишити так").clicked() {
+                                    keep = true;
+                                }
+                                if plain_button(ui, "Не питати про це слово").clicked() {
+                                    never = true;
+                                }
+                            });
+                        });
+                        if keep {
+                            self.guard_off.insert((f, r, l.key.clone()));
+                        }
+                        if never {
+                            self.st.dismiss("guard", &l.key);
+                        }
+                    }
                 }
                 // як у грі: кольори й імена з керівних кодів, коли вони є в оригіналі чи перекладі
                 if self.draft.contains('\\') || src.contains('\\') {

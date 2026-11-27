@@ -541,6 +541,22 @@ pub struct UsageCounts {
     pub none: usize,
 }
 
+/// Нитка вивченої пари в одному рядку (для малювання й карток).
+#[derive(Clone, Debug)]
+pub struct LearnedView {
+    pub en: String,
+    pub uk: String,
+    pub key: String,
+    pub rows: usize,
+    pub of: usize,
+    pub share: f64,
+    pub sure: bool,
+    pub alts: Vec<String>,
+    /// Де слово в оригіналі й де його відповідник у перекладі (UTF-16); `None` — переклад передає слово інакше.
+    pub src: (usize, usize),
+    pub dst: Option<(usize, usize)>,
+}
+
 /// Рядок групи однакових оригіналів у діалозі «Поширити переклад…».
 #[derive(Clone, Debug)]
 pub struct LinkItem {
@@ -2185,6 +2201,24 @@ impl AppState {
         let known: std::collections::HashSet<String> = self.terms().iter().flat_map(|t| transly_core::glossary::word_tokens(&t.en).into_iter().map(|x| x.keys[0].clone())).collect();
         let idx = (0..d.pairs.len()).filter(|i| !known.contains(&d.pairs[*i].key) && !self.is_dismissed("auto", &d.pairs[*i].key)).collect();
         (d, idx, running)
+    }
+
+    /// Нитки вивчених пар у рядку для малювання (пунктиром): слово оригіналу, його місце в перекладі (`dst`) і підсумок пари. Не показуються слова, що вже є записами
+    /// глосарія (їхні нитки суцільні), і пари, які відкладено («Не так»).
+    pub fn learned_threads(&self, f: usize, r: usize, target: &str) -> Vec<LearnedView> {
+        let (d, running) = self.auto_dict();
+        let _ = running;
+        if d.pairs.is_empty() {
+            return Vec::new();
+        }
+        let known: std::collections::HashSet<String> = self.terms().iter().flat_map(|t| transly_core::glossary::word_tokens(&t.en).into_iter().map(|x| x.keys[0].clone())).collect();
+        d.threads(&self.source_of(f, r), target)
+            .into_iter()
+            .filter_map(|t| {
+                let p = &d.pairs[t.pair];
+                (!known.contains(&p.key) && !self.is_dismissed("auto", &p.key)).then(|| LearnedView { en: p.en.clone(), uk: p.uk.clone(), key: p.key.clone(), rows: p.rows, of: p.of, share: p.share, sure: p.sure(), alts: p.alts.iter().map(|a| a.0.clone()).collect(), src: t.src, dst: t.dst })
+            })
+            .collect()
     }
 
     /// Додає пару як запис глосарія; конкуруючі переклади (якщо вибрано один) стають альтернативами запису.

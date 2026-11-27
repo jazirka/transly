@@ -99,6 +99,8 @@ struct App {
     mine_win: bool,
     /// Слова, додані кнопкою «Додати всі певні» в автословнику: «Скасувати» прибирає саме їх.
     auto_added: Vec<String>,
+    /// Рядки, де перекладач вибрав «Лишити так» для підказки узгодженості (до закриття застосунку): (файл, рядок, слово).
+    guard_off: std::collections::HashSet<(usize, usize, String)>,
     /// Сповіщення внизу: (текст, коли з'явилось, чи можна скасувати); останнє показане повідомлення й лічильник скасувань.
     toast: Option<(String, std::time::Instant, bool)>,
     toast_seen: (String, u64),
@@ -263,7 +265,7 @@ fn game_job(text: &str, size: f32, actor_name: &dyn Fn(usize) -> Option<String>)
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, links_win: None, chrome_own: winchrome::own_chrome_chosen(), find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: false, auto_added: Vec::new(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, links_win: None, chrome_own: winchrome::own_chrome_chosen(), find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: false, auto_added: Vec::new(), guard_off: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
     }
 }
 
@@ -4271,6 +4273,42 @@ mod ui_tests {
         assert!(app.st.terms().is_empty(), "після «Скасувати» записів нема: {:?}", app.st.terms());
     }
 
+    /// Вивчена пара в рядку: нитка до слова перекладу (з відмінками); у «Пов'язаному» — фішка «Вивчено: …» з «→ У глосарій»; коли перекладу слова немає, під полем
+    /// з'являється сторож узгодженості, «Не питати про це слово» його вимикає.
+    #[test]
+    fn a_learned_pair_gets_a_thread_a_chip_and_a_consistency_guard() {
+        let mut app = construction_game("threads");
+        warm_usage(&app);
+        let ring = (0..app.st.row_count(0)).find(|r| app.st.source_of(0, *r) == "Take the ring off").unwrap();
+        app.st.row = Some(ring);
+        app.focus = true;
+        // «Зніми каблучку»: слово take → зніми знайдено в перекладі
+        let th = app.st.learned_threads(0, ring, "Зніми каблучку");
+        let t = th.iter().find(|t| t.key == "take").expect("нитка take");
+        assert_eq!((t.src, t.dst, t.sure), ((0, 4), Some((0, 5)), true), "{t:?}");
+        // «Бери каблучку»: слова нема
+        let th = app.st.learned_threads(0, ring, "Бери каблучку");
+        assert_eq!(th.iter().find(|t| t.key == "take").unwrap().dst, None);
+        let mut h = harness(app);
+        h.state_mut().draft = "Зніми каблучку".into();
+        h.state_mut().draft_for = Some((0, ring));
+        h.run();
+        h.get_by_label("Вивчено: take → зніми");
+        assert!(h.query_by_label_contains("У вас «take» зазвичай").is_none(), "слово є — сторожа нема");
+        h.state_mut().draft = "Бери каблучку".into();
+        h.run();
+        h.get_by_label_contains("У вас «take» зазвичай «зніми» (5 з 5 рядків)");
+        h.get_by_label("Лишити так").click();
+        h.run();
+        assert!(h.query_by_label_contains("У вас «take» зазвичай").is_none(), "«Лишити так» ховає підказку для цього рядка");
+        h.state_mut().guard_off.clear();
+        h.run();
+        h.get_by_label("Не питати про це слово").click();
+        h.run();
+        assert!(h.state().st.is_dismissed("guard", "take"));
+        assert!(h.query_by_label_contains("У вас «take» зазвичай").is_none());
+    }
+
     /// Підказки пам'яті після правки одного рядка: індекс міняє одну пару (а не будується з нуля), і результат той самий, що після повної перебудови;
     /// стара пара правленого рядка підказкою не лишається.
     #[test]
@@ -4447,6 +4485,29 @@ mod ui_tests {
         h.state_mut().gl_show = 6;
         h.run();
         h.render().unwrap().save(dir.join("26-auto-dictionary.png")).unwrap();
+    }
+
+    /// Знімок редагування з вивченими нитками й сторожем: `TRANSLY_SHOTS=<тека> cargo test -p transly-app threads_shot -- --ignored`.
+    #[test]
+    #[ignore]
+    fn threads_shot() {
+        let Some(dir) = std::env::var_os("TRANSLY_SHOTS").map(std::path::PathBuf::from) else { return };
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut app = construction_game("threadsshot");
+        warm_usage(&app);
+        let ring = (0..app.st.row_count(0)).find(|r| app.st.source_of(0, *r) == "Take the ring off").unwrap();
+        app.st.row = Some(ring);
+        app.focus = true;
+        let mut h = harness(app);
+        h.state_mut().draft = "Зніми каблучку".into();
+        h.state_mut().draft_for = Some((0, ring));
+        h.run();
+        let b = h.get_by_label_contains("Вивчено: take").bounding_box();
+        let _ = b;
+        h.render().unwrap().save(dir.join("27-threads-ok.png")).unwrap();
+        h.state_mut().draft = "Бери каблучку".into();
+        h.run();
+        h.render().unwrap().save(dir.join("27-threads-guard.png")).unwrap();
     }
 
     /// Знімок таблиці з виділеними рядками (смуга «вибрано» на шапці): `TRANSLY_SHOTS=<тека> cargo test -p transly-app bulk_shot -- --ignored`.

@@ -277,7 +277,7 @@ pub(crate) fn rail_button(ui: &mut egui::Ui, r: Rect, id: egui::Id, ic: &str, on
 }
 
 /// Прапорець 14×14 (як у старому): рамка, при відміченні заливка кольору теми й пташка.
-fn paint_check(ui: &egui::Ui, c: egui::Pos2, on: bool, hover: bool) {
+pub(crate) fn paint_check(ui: &egui::Ui, c: egui::Pos2, on: bool, hover: bool) {
     let r = Rect::from_center_size(c, vec2(14.0, 14.0));
     ui.painter().rect_filled(r, CornerRadius::same(4), if on { accent_solid() } else { BG });
     ui.painter().rect_stroke(r, CornerRadius::same(4), Stroke::new(1.0_f32, if on { accent_solid() } else if hover { TEXT } else { MUTE }), StrokeKind::Inside);

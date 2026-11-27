@@ -46,7 +46,7 @@ fn hex_color(s: &str) -> Color32 {
     Color32::from_rgb((v >> 16) as u8, (v >> 8) as u8, v as u8)
 }
 
-fn over(base: Color32, top: Color32, a: f32) -> Color32 {
+pub fn over(base: Color32, top: Color32, a: f32) -> Color32 {
     let m = |b: u8, t: u8| (b as f32 * (1.0 - a) + t as f32 * a).round() as u8;
     Color32::from_rgb(m(base.r(), top.r()), m(base.g(), top.g()), m(base.b(), top.b()))
 }

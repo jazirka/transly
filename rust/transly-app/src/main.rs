@@ -8,6 +8,7 @@
 mod glossary_panel;
 mod dialog;
 mod icons;
+mod stshell;
 mod layout;
 mod links_dialog;
 mod plugins;
@@ -76,6 +77,14 @@ struct App {
     spk_win: Option<Vec<(transly_core::speakers::SpeakerCandidate, String)>>,
     import_win: Option<(u8, String)>,
     build_win: Option<state::BuildChoice>,
+    /// Загальні налаштування («Файл → Налаштування…»): чернетка, що правиться у вікні.
+    app_set: Option<state::SettingsView>,
+    nav_proj: stshell::StNav,
+    nav_app: stshell::StNav,
+    reset_arm: Option<std::time::Instant>,
+    esc_at: Option<std::time::Instant>,
+    imp_terms: String,
+    imp_tm: String,
     fill_win: Option<Vec<(transly_core::autofill::Proposal, bool)>>,
     links_win: Option<links_dialog::LinksWin>,
     /// Власний заголовок вікна (кнопки в застосунку) чи системний.
@@ -267,7 +276,7 @@ fn game_job(text: &str, size: f32, actor_name: &dyn Fn(usize) -> Option<String>)
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, links_win: None, chrome_own: winchrome::own_chrome_chosen(), find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: false, auto_added: Vec::new(), guard_off: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, app_set: None, nav_proj: stshell::StNav::new("look"), nav_app: stshell::StNav::new("general"), reset_arm: None, esc_at: None, imp_terms: String::new(), imp_tm: String::new(), fill_win: None, links_win: None, chrome_own: winchrome::own_chrome_chosen(), find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: false, auto_added: Vec::new(), guard_off: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
     }
 }
 
@@ -539,6 +548,17 @@ pub(crate) fn mi(ui: &mut egui::Ui, label: impl AsRef<str>, enabled: bool) -> eg
     resp
 }
 
+/// Сторінка «Небезпечна зона» (спільна для обох вікон налаштувань): попередження й кнопка скидання з підтвердженням другим кліком. Повертає `true`, коли кнопку натиснуто.
+fn danger_page(ui: &mut egui::Ui, armed: bool) -> bool {
+    stshell::warn_banner(ui, true, "Скинути проєкт", "Видаляє весь переклад, глосарій та імпортовану пам’ять у цьому застосунку. Назва, колір і папка гри лишаються. Відновити неможливо: спершу збережіть проєкт у файл.");
+    let label = if armed { "Так, видалити весь переклад" } else { "Скинути проєкт…" };
+    let b = ui.add(egui::Button::new(RichText::new(label).color(if armed { Color32::WHITE } else { Color32::from_rgb(0xff, 0x9a, 0xa5) })).fill(if armed { BAD } else { BTN }).stroke(Stroke::new(1.0_f32, theme::over(BG, BAD, 0.60))).min_size(vec2(0.0, 28.0)));
+    if armed {
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(300));
+    }
+    b.clicked()
+}
+
 fn label_caps(ui: &mut egui::Ui, text: &str) {
     ui.label(RichText::new(text.to_uppercase()).size(10.5).color(MUTE));
 }
@@ -586,6 +606,7 @@ impl App {
             || self.find_win.is_some()
             || self.sync_win.is_some()
             || self.settings.is_some()
+            || self.app_set.is_some()
             || self.plug_win.is_some()
             || self.relay_win.is_some()
             || self.mine_win
@@ -690,6 +711,7 @@ impl App {
         self.statusbar(ctx);
         self.bottom(ctx);
         self.settings_window(ctx);
+        self.app_settings_window(ctx);
         self.sync_window(ctx);
         self.relay_window(ctx);
         self.relay_auto();
@@ -985,8 +1007,8 @@ impl App {
                 self.ref_win = Some(String::new());
                 ui.close_menu();
             }
-            if mi(ui, "Налаштування проєкту…", self.st.is_open()).clicked() {
-                self.act_settings();
+            if mi(ui, "Налаштування…", self.st.is_open()).clicked() {
+                self.app_set = self.st.settings_view();
                 ui.close_menu();
             }
     }
@@ -1631,142 +1653,623 @@ impl App {
         });
     }
 
+    /// Дерево сторінок «Налаштувань проєкту» (як `GROUPS` у `project-settings.ts`).
+    const PROJECT_PAGES: &'static [stshell::Group] = &[
+        ("Проєкт", &[("look", "Назва й вигляд"), ("branches", "Гілки"), ("folder", "Папка гри")]),
+        ("Підключення", &[("github", "GitHub"), ("lang", "Мови")]),
+        ("Обережно", &[("danger", "Небезпечна зона")]),
+    ];
+
+    /// Дерево сторінок «Налаштувань» (як `GROUPS` у `settings.ts`; «Claude» у застосунку немає).
+    const APP_PAGES: &'static [stshell::Group] = &[
+        ("Проєкт", &[("general", "Загальні"), ("look", "Вигляд"), ("folder", "Папка гри"), ("lang", "Гра і мови")]),
+        ("Пов’язане й пам’ять", &[("terms", "Імпорт глосарію"), ("tm", "Імпорт пам’яті перекладів")]),
+        ("Перевірка", &[("qa", "Правила QA"), ("wrap", "Перенесення рядків")]),
+        ("Синхронізація", &[("github", "GitHub"), ("server", "Власний сервер"), ("file", "Файл")]),
+        ("Застосунок", &[("update", "Оновлення застосунку"), ("danger", "Небезпечна зона")]),
+    ];
+
+    /// Записує в проєкт лише те, що змінюється на сторінці «Назва й вигляд» (решта налаштувань лишається як є).
+    fn apply_look(&mut self, v: &state::SettingsView) {
+        if let Some(mut base) = self.st.settings_view() {
+            base.name_from = v.name_from.clone();
+            base.title = v.title.clone();
+            base.icon_text = v.icon_text.clone();
+            base.hue = v.hue;
+            self.st.apply_settings(&base);
+        }
+    }
+
+    /// Записує лише «Загальні» налаштування (ім'я, допуск, прапорці, мови гри).
+    fn apply_general(&mut self, v: &state::SettingsView) {
+        if let Some(mut base) = self.st.settings_view() {
+            base.who = v.who.clone();
+            base.tolerance_pct = v.tolerance_pct;
+            base.block_errors = v.block_errors;
+            base.link_mode = v.link_mode.clone();
+            base.source_lang = v.source_lang.clone();
+            base.target_lang = v.target_lang.clone();
+            base.line_limit = v.line_limit;
+            self.st.apply_settings(&base);
+        }
+    }
+
+    /// Підтвердження «Скинути проєкт»: перший клік зводить кнопку, другий (не раніше ніж за 1,2 с і не пізніше ніж за 6 с) скидає (`armed` у `project-settings.ts`).
+    fn reset_clicked(&mut self) {
+        let now = std::time::Instant::now();
+        match self.reset_arm {
+            Some(t) if now.duration_since(t).as_millis() >= 1200 && now.duration_since(t).as_secs() < 6 => {
+                self.reset_arm = None;
+                self.settings = None;
+                self.app_set = None;
+                self.message = self.st.reset_project().unwrap_or_else(|e| e);
+                self.draft_for = None;
+            }
+            Some(t) if now.duration_since(t).as_secs() < 6 => {}
+            _ => self.reset_arm = Some(now),
+        }
+    }
+
+    /// «Налаштування проєкту»: вікно `.st-dlg` зі сторінками «Назва й вигляд», «Гілки», «Папка гри», «GitHub», «Мови», «Небезпечна зона»; «Зберегти / Застосувати / Скасувати».
     fn settings_window(&mut self, ctx: &egui::Context) {
         let Some(mut v) = self.settings.clone() else { return };
-        let mut open = true;
-        let (mut save, mut cancel) = (false, false);
+        let saved = self.st.settings_view();
+        let dirty = saved.as_ref().is_some_and(|s| (&s.name_from, &s.title, &s.icon_text, s.hue) != (&v.name_from, &v.title, &v.icon_text, v.hue));
         let (title, letters, hue) = self.st.settings_preview(&v);
         let auto_letters = self.st.settings_preview(&state::SettingsView { icon_text: String::new(), ..v.clone() }).1;
-        dlg("Налаштування проєкту").open(&mut open).collapsible(false).resizable(false).default_width(420.0).show(ctx, |ui| {
-            // «Так проєкт виглядає в шапці й у меню»: картка 12×14 з рамкою, значок 40, назва 15/600
-            let w = ui.available_width();
-            let tg = ui.painter().layout_no_wrap(title.clone(), ipw(15.0, 600), TEXT);
-            let sg = ui.painter().layout_no_wrap("Так проєкт виглядає в шапці й у меню".to_string(), ip(12.0), MUTE);
-            let (card, cresp) = ui.allocate_exact_size(vec2(w, 12.0 + 40.0 + 12.0 + 2.0), Sense::hover());
-            cresp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, format!("Проєкт: {title}")));
-            ui.painter().rect(card, CornerRadius::same(10), BG, Stroke::new(1.0_f32, LINE), StrokeKind::Inside);
-            let av = Rect::from_min_size(pos2(card.left() + 15.0, card.top() + 13.0), vec2(40.0, 40.0));
-            ui.painter().rect_filled(av, CornerRadius::same(8), accent_solid());
-            ui.painter().text(av.center(), Align2::CENTER_CENTER, &letters, mp(if letters.chars().count() > 1 { 14.0 } else { 16.0 }), Color32::WHITE);
-            let tx = av.right() + 12.0;
-            let th = tg.size().y + sg.size().y;
-            let ty = card.center().y - th / 2.0;
-            ui.painter().with_clip_rect(Rect::from_min_max(pos2(tx, card.top()), pos2(card.right() - 14.0, card.bottom()))).galley(pos2(tx, ty), tg.clone(), TEXT);
-            ui.painter().galley(pos2(tx, ty + tg.size().y), sg, MUTE);
-            ui.add_space(4.0);
-            // назва проєкту: звідки береться
-            ui.label(RichText::new("Назва проєкту").font(ipw(13.0, 600)));
-            let sample = |text: &str, none: &str| if text.is_empty() { RichText::new(none).size(12.0).color(DIM) } else { RichText::new(text).size(12.0).color(TEXT) };
-            ui.horizontal(|ui| {
-                ui.add_enabled_ui(!v.folder_name.is_empty(), |ui| ui.radio_value(&mut v.name_from, "folder".to_string(), "З папки гри"));
-                ui.label(sample(&v.folder_name, "папку ще не обрано"));
-            });
-            ui.horizontal(|ui| {
-                ui.add_enabled_ui(!v.game_title.is_empty(), |ui| ui.radio_value(&mut v.name_from, "game".to_string(), "З назви в грі"));
-                ui.label(sample(&v.game_title, "гра не називає себе"));
-            });
-            ui.horizontal(|ui| {
-                ui.radio_value(&mut v.name_from, "custom".to_string(), "Своя назва");
-                let r = ui.add(egui::TextEdit::singleline(&mut v.title).hint_text("наприклад, Покинута хатина").char_limit(80).desired_width(220.0));
-                r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::TextEdit, true, "Назва, написана вручну"));
-                if r.changed() && !v.title.trim().is_empty() {
-                    v.name_from = "custom".into();
+        let branches: Vec<(String, usize, bool, String)> = self.st.branches_view().into_iter().map(|(n, r, c)| { let from = self.st.branch_from(&n); (n, r, c, from) }).collect();
+        let folder = self.st.dir.as_ref().map(|d| d.to_string_lossy().to_string()).unwrap_or_default();
+        let mut nav = std::mem::replace(&mut self.nav_proj, stshell::StNav::new("look"));
+        let (mut apply, mut save, mut cancel) = (false, false, false);
+        let mut branch_act: Option<(String, u8)> = None;
+        let (mut new_branch, mut merge, mut change_folder, mut to_github, mut to_lang) = (false, false, false, false, false);
+        let mut reset_click = false;
+        let armed = self.reset_arm.is_some_and(|t| t.elapsed().as_secs() < 6);
+        let esc_armed = self.esc_at.is_some_and(|t| t.elapsed().as_secs() < 4);
+        let esc = stshell::StShell { key: "project", aria: "Налаштування проєкту", crumb: title.clone(), height: 700.0, groups: Self::PROJECT_PAGES, search: false, dirty, esc_armed }.show(
+            ctx,
+            &mut nav,
+            |ui, page| match page {
+                "look" => {
+                    // «Так проєкт виглядає в шапці й у меню»: картка 12×14 з рамкою, значок 40, назва 15/600
+                    let w = ui.available_width();
+                    let tg = ui.painter().layout_no_wrap(title.clone(), ipw(15.0, 600), TEXT);
+                    let sg = ui.painter().layout_no_wrap("Так проєкт виглядає в шапці й у меню".to_string(), ip(12.0), MUTE);
+                    let (card, cresp) = ui.allocate_exact_size(vec2(w, 12.0 + 40.0 + 12.0 + 2.0), Sense::hover());
+                    cresp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, format!("Проєкт: {title}")));
+                    ui.painter().rect(card, CornerRadius::same(10), BG, Stroke::new(1.0_f32, LINE), StrokeKind::Inside);
+                    let av = Rect::from_min_size(pos2(card.left() + 15.0, card.top() + 13.0), vec2(40.0, 40.0));
+                    ui.painter().rect_filled(av, CornerRadius::same(8), accent_solid());
+                    ui.painter().text(av.center(), Align2::CENTER_CENTER, &letters, mp(if letters.chars().count() > 1 { 14.0 } else { 16.0 }), Color32::WHITE);
+                    let tx = av.right() + 12.0;
+                    let th = tg.size().y + sg.size().y;
+                    let ty = card.center().y - th / 2.0;
+                    ui.painter().with_clip_rect(Rect::from_min_max(pos2(tx, card.top()), pos2(card.right() - 14.0, card.bottom()))).galley(pos2(tx, ty), tg.clone(), TEXT);
+                    ui.painter().galley(pos2(tx, ty + tg.size().y), sg, MUTE);
+                    ui.add_space(10.0);
+                    stshell::sub(ui, "Назва проєкту", false, |ui| {
+                        ui.spacing_mut().item_spacing.y = 6.0;
+                        let (fname, gname) = (v.folder_name.clone(), v.game_title.clone());
+                        let sample = |text: &str, none: &str| if text.is_empty() { RichText::new(none) } else { RichText::new(text) };
+                        stshell::radio(ui, &mut v.name_from, "folder", "З папки гри", Some(sample(&fname, "папку ще не обрано")), !fname.is_empty());
+                        stshell::radio(ui, &mut v.name_from, "game", "З назви в грі", Some(sample(&gname, "гра не називає себе")), !gname.is_empty());
+                        ui.horizontal(|ui| {
+                            stshell::radio(ui, &mut v.name_from, "custom", "Своя назва", None, true);
+                            let r = stshell::input(ui, &mut v.title, "наприклад, Покинута хатина", ui.available_width());
+                            r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::TextEdit, true, "Назва, написана вручну"));
+                            if r.changed() && !v.title.trim().is_empty() {
+                                v.name_from = "custom".into();
+                            }
+                        });
+                        stshell::hint(ui, "Назва лише підпис: переклад, злиття й синхронізація від неї не залежать, тож її можна міняти будь-коли.");
+                    });
+                    stshell::sub(ui, "Значок і колір", true, |ui| {
+                        stshell::grid_row(ui, "Літери значка (1–2)", |ui| {
+                            let mut t = v.icon_text.clone();
+                            let r = stshell::input(ui, &mut t, "", ui.available_width());
+                            v.icon_text = t.chars().take(2).collect();
+                            r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::TextEdit, true, "Літери значка"));
+                        });
+                        stshell::hint(ui, &if v.icon_text.trim().is_empty() { format!("Порожньо: перші літери назви ({auto_letters}).") } else { "Свої літери: вони не залежать від назви.".to_string() });
+                        stshell::grid_row(ui, "Колір акценту", |ui| {
+                            let mut h = hue as f32;
+                            let sl = stshell::hue_slider(ui, &mut h);
+                            sl.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Slider, true, "Колір акценту"));
+                            if sl.changed() {
+                                v.hue = Some(h.round() as u32);
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            let (sw, _) = ui.allocate_exact_size(vec2(16.0, 16.0), Sense::hover());
+                            ui.painter().circle_filled(sw.center(), 8.0, accent());
+                            ui.label(RichText::new(if v.hue.is_none() { format!("Колір береться з назви проєкту: {hue}°") } else { format!("Обрано вручну: {hue}°") }).size(12.0).color(MUTE));
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                if ui.add_enabled(v.hue.is_some(), egui::Button::new("Як за назвою").min_size(vec2(0.0, 28.0))).clicked() {
+                                    v.hue = None;
+                                }
+                            });
+                        });
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 8.0;
+                            for preset in [185u32, 215, 245, 275, 305, 335] {
+                                let tk = transly_core::theme::theme_tokens(preset);
+                                let c = tk.get("--accent").map_or(accent(), |hx| u32::from_str_radix(hx.trim_start_matches('#'), 16).map_or(accent(), |n| Color32::from_rgb((n >> 16) as u8, (n >> 8) as u8, n as u8)));
+                                let (r, resp) = ui.allocate_exact_size(vec2(26.0, 26.0), Sense::click());
+                                resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, preset == hue, format!("Відтінок {preset}°")));
+                                ui.painter().circle_filled(r.center(), 13.0, c);
+                                if preset == hue {
+                                    ui.painter().circle_stroke(r.center(), 12.0, Stroke::new(2.0_f32, TEXT));
+                                }
+                                if resp.clicked() {
+                                    v.hue = Some(preset);
+                                }
+                            }
+                        });
+                        stshell::hint(ui, "Колір береться з холодної частини кола, щоб його не сплутати зі статусами. Він міняється в усьому застосунку одразу і лишається, коли ви збережете.");
+                    });
                 }
-            });
-            ui.label(RichText::new("Назва лише підпис: переклад, злиття й синхронізація від неї не залежать, тож її можна міняти будь-коли.").size(12.0).color(MUTE));
-            ui.add_space(6.0);
-            // значок і колір
-            ui.label(RichText::new("Значок і колір").font(ipw(13.0, 600)));
-            ui.horizontal(|ui| {
-                ui.label("Літери значка (1–2)");
-                let r = ui.add(egui::TextEdit::singleline(&mut v.icon_text).char_limit(2).desired_width(40.0));
-                r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::TextEdit, true, "Літери значка"));
-            });
-            ui.label(RichText::new(if v.icon_text.trim().is_empty() { format!("Порожньо: перші літери назви ({auto_letters}).") } else { "Свої літери: вони не залежать від назви.".to_string() }).size(12.0).color(MUTE));
-            ui.horizontal(|ui| {
-                ui.label("Колір акценту");
-                let mut h = hue as f32;
-                ui.spacing_mut().slider_width = 260.0;
-                let sl = ui.add(egui::Slider::new(&mut h, 0.0..=359.0).integer().show_value(false));
-                sl.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Slider, true, "Колір акценту"));
-                if sl.changed() {
-                    v.hue = Some(h.round() as u32);
-                }
-            });
-            ui.horizontal(|ui| {
-                let (sw, _) = ui.allocate_exact_size(vec2(16.0, 16.0), Sense::hover());
-                ui.painter().circle_filled(sw.center(), 8.0, accent());
-                ui.label(RichText::new(if v.hue.is_none() { format!("Колір береться з назви проєкту: {hue}°") } else { format!("Обрано вручну: {hue}°") }).size(12.0).color(MUTE));
-                if ui.add_enabled(v.hue.is_some(), egui::Button::new("Як за назвою").min_size(vec2(0.0, 28.0))).clicked() {
-                    v.hue = None;
-                }
-            });
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 8.0;
-                for preset in [185u32, 215, 245, 275, 305, 335] {
-                    let tk = transly_core::theme::theme_tokens(preset);
-                    let c = tk.get("--accent").map_or(accent(), |hx| u32::from_str_radix(hx.trim_start_matches('#'), 16).map_or(accent(), |n| Color32::from_rgb((n >> 16) as u8, (n >> 8) as u8, n as u8)));
-                    let (r, resp) = ui.allocate_exact_size(vec2(26.0, 26.0), Sense::click());
-                    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, preset == hue, format!("Відтінок {preset}°")));
-                    ui.painter().circle_filled(r.center(), 13.0, c);
-                    if preset == hue {
-                        ui.painter().circle_stroke(r.center(), 12.0, Stroke::new(2.0_f32, TEXT));
+                "branches" => {
+                    // таблиця «Гілка / Від / Рядків / Дії» (`.pjs-brt`): рядки 36 заввишки з лінією знизу, поточна підсвічена
+                    let w = ui.available_width();
+                    let cols = [w * 0.30, w * 0.18, w * 0.16, w * 0.36];
+                    let (hr, _) = ui.allocate_exact_size(vec2(w, 32.0), Sense::hover());
+                    let mut x = hr.left() + 10.0;
+                    for (i, t) in ["Гілка", "Від", "Рядків", ""].into_iter().enumerate() {
+                        ui.painter().text(pos2(x, hr.center().y), Align2::LEFT_CENTER, t, ip(12.0), MUTE);
+                        x += cols[i];
                     }
-                    if resp.clicked() {
-                        v.hue = Some(preset);
+                    ui.painter().hline(hr.x_range(), hr.bottom() - 0.5, Stroke::new(1.0_f32, LINE));
+                    ui.spacing_mut().item_spacing.y = 0.0;
+                    for (n, rows, cur, from) in &branches {
+                        let (r, _) = ui.allocate_exact_size(vec2(w, 40.0), Sense::hover());
+                        if *cur {
+                            ui.painter().rect_filled(r, CornerRadius::ZERO, theme::over(BG, accent(), 0.12));
+                        }
+                        ui.painter().hline(r.x_range(), r.bottom() - 0.5, Stroke::new(1.0_f32, LINE));
+                        let mut x = r.left() + 10.0;
+                        icons::paint(ui, Rect::from_center_size(pos2(x + 8.0, r.center().y), vec2(16.0, 16.0)), "branch", MUTE);
+                        ui.painter().text(pos2(x + 24.0, r.center().y), Align2::LEFT_CENTER, n, ipw(13.0, 500), TEXT);
+                        x += cols[0];
+                        ui.painter().text(pos2(x, r.center().y), Align2::LEFT_CENTER, from, ip(13.0), TEXT);
+                        x += cols[1];
+                        ui.painter().text(pos2(x, r.center().y), Align2::LEFT_CENTER, format!("{rows} {}", transly_core::plural::plural_form(*rows as i64, ["рядок", "рядки", "рядків"])), ip(13.0), TEXT);
+                        // дії праворуч: «поточна ✓» або «Перемкнути», «Перейменувати…», «Видалити»
+                        let mut ui2 = ui.new_child(egui::UiBuilder::new().max_rect(Rect::from_min_max(pos2(r.right() - cols[3], r.top()), pos2(r.right() - 10.0, r.bottom()))).layout(egui::Layout::right_to_left(egui::Align::Center)));
+                        ui2.spacing_mut().item_spacing.x = 6.0;
+                        if n != "main" && !*cur && ui2.add(egui::Button::new("Видалити").min_size(vec2(0.0, 24.0))).clicked() {
+                            branch_act = Some((n.clone(), 2));
+                        }
+                        if n != "main" && ui2.add(egui::Button::new("Перейменувати…").min_size(vec2(0.0, 24.0))).clicked() {
+                            branch_act = Some((n.clone(), 3));
+                        }
+                        if *cur {
+                            ui2.label(RichText::new("поточна ✓").size(12.0).color(OK));
+                        } else if ui2.add(egui::Button::new("Перемкнути").min_size(vec2(0.0, 24.0))).clicked() {
+                            branch_act = Some((n.clone(), 0));
+                        }
+                    }
+                    ui.add_space(16.0);
+                    stshell::acts(ui, |ui| {
+                        if plain_button(ui, "+ Нова гілка…").clicked() {
+                            new_branch = true;
+                        }
+                        if ui.add_enabled(branches.len() > 1, egui::Button::new("Злити гілку…").min_size(vec2(0.0, 28.0))).clicked() {
+                            merge = true;
+                        }
+                    });
+                }
+                "folder" => {
+                    ui.label(RichText::new("Папка гри цього проєкту").size(12.5).color(TEXT));
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 8.0;
+                        let w = ui.available_width() - 8.0 - 90.0;
+                        let (r, _) = ui.allocate_exact_size(vec2(w.max(120.0), 30.0), Sense::hover());
+                        ui.painter().rect(r, CornerRadius::same(R2), theme::over(BG, Color32::WHITE, 0.03), Stroke::new(1.0_f32, LINE), StrokeKind::Inside);
+                        ui.painter().with_clip_rect(r.shrink2(vec2(10.0, 0.0))).text(pos2(r.left() + 10.0, r.center().y), Align2::LEFT_CENTER, &folder, ip(12.5), TEXT);
+                        if plain_button(ui, "Змінити…").clicked() {
+                            change_folder = true;
+                        }
+                    });
+                    stshell::hint(ui, "Папка запам’ятовується для проєкту й відновлюється під час запуску. Її назва стає назвою проєкту, поки ви не оберете іншу.");
+                }
+                "github" => {
+                    stshell::hint(ui, "Репозиторій, токен, гілка й папка в репозиторії, і синхронізація. Вони не залежать від самого проєкту: той самий токен годиться для кількох проєктів.");
+                    stshell::acts(ui, |ui| {
+                        if plain_button(ui, "Налаштування GitHub…").clicked() {
+                            to_github = true;
+                        }
+                    });
+                }
+                "lang" => {
+                    stshell::hint(ui, "Тексти плагінів, мовці та довідкові мови (та сама гра іншими мовами).");
+                    stshell::acts(ui, |ui| {
+                        if plain_button(ui, "Гра і мови…").clicked() {
+                            to_lang = true;
+                        }
+                    });
+                }
+                _ => {
+                    if danger_page(ui, armed) {
+                        reset_click = true;
                     }
                 }
-            });
-            ui.label(RichText::new("Колір береться з холодної частини кола, щоб його не сплутати зі статусами. Він міняється в усьому застосунку одразу і лишається, коли ви збережете.").size(12.0).color(MUTE));
-            ui.add_space(6.0);
-            egui::Grid::new("settings_grid").num_columns(2).spacing([14.0, 10.0]).show(ui, |ui| {
-                ui.label("Мова оригіналу");
-                ui.add(egui::TextEdit::singleline(&mut v.source_lang).desired_width(80.0));
-                ui.end_row();
-                ui.label("Мова перекладу");
-                ui.add(egui::TextEdit::singleline(&mut v.target_lang).desired_width(80.0));
-                ui.end_row();
-                ui.label("Хто перекладає");
-                ui.text_edit_singleline(&mut v.who);
-                ui.end_row();
-                ui.label("Допуск довжини, %");
-                ui.add(egui::DragValue::new(&mut v.tolerance_pct).range(0.0..=300.0));
-                ui.end_row();
-                ui.label("Найдовший рядок (0 — без межі)");
-                ui.add(egui::DragValue::new(&mut v.line_limit).range(0.0..=500.0));
-                ui.end_row();
-                ui.label("Помилки QA блокують надсилання");
-                ui.checkbox(&mut v.block_errors, "");
-                ui.end_row();
-                ui.label("Однакові рядки");
-                ui.horizontal(|ui| {
-                    ui.selectable_value(&mut v.link_mode, "ask".to_string(), "після надсилання заповнювати порожні");
-                    ui.selectable_value(&mut v.link_mode, "auto".to_string(), "оновлювати всі самі");
-                    ui.selectable_value(&mut v.link_mode, "off".to_string(), "не чіпати");
-                });
-                ui.end_row();
-            });
-            dlg_footer(ui, |ui| {
-                if primary_button(ui, "Зберегти").clicked() {
-                    save = true;
-                }
-                if plain_button(ui, "Скасувати").clicked() {
+            },
+            |ui| {
+                if stshell::bar_button(ui, "Скасувати", false, true).clicked() {
                     cancel = true;
                 }
-            });
-        });
-        if save && v.name_from == "custom" && v.title.trim().is_empty() {
+                if stshell::bar_button(ui, "Застосувати", false, dirty).clicked() {
+                    apply = true;
+                }
+                if stshell::bar_button(ui, "Зберегти", true, true).clicked() {
+                    save = true;
+                }
+            },
+        );
+        self.nav_proj = nav;
+        if reset_click {
+            self.reset_clicked();
+            if self.settings.is_none() {
+                return;
+            }
+        }
+        if let Some((n, k)) = branch_act {
+            self.branch_action(n, k);
+        }
+        if new_branch {
+            self.br_win = Some(String::new());
+        }
+        if merge {
+            self.settings = None;
+            self.br_win = Some(String::new());
+            return;
+        }
+        if change_folder {
+            self.settings = None;
+            self.open_dialog();
+            return;
+        }
+        if to_github {
+            self.settings = None;
+            self.act_sync();
+            return;
+        }
+        if to_lang {
+            self.settings = None;
+            self.app_set = self.st.settings_view();
+            self.nav_app.cur = "lang";
+            return;
+        }
+        if (save || apply) && v.name_from == "custom" && v.title.trim().is_empty() {
             // як у вебі: своя назва обрана, а написати забули
             self.message = "Напишіть свою назву або виберіть іншу".into();
             save = false;
+            apply = false;
         }
-        if save {
-            self.st.apply_settings(&v);
+        if save || apply {
+            self.apply_look(&v);
+            if apply {
+                self.message = "Збережено".into();
+            }
+        }
+        if save || cancel {
             self.settings = None;
-        } else if cancel || !open {
+        } else if esc && (!dirty || esc_armed) {
             self.settings = None;
+            self.esc_at = None;
         } else {
+            if esc {
+                self.esc_at = Some(std::time::Instant::now());
+            }
             self.settings = Some(v);
+        }
+    }
+
+    /// «Налаштування» (Файл → Налаштування…): вікно `.st-dlg` із пошуком і групами сторінок, як `openSettings` у вебі. Сторінки, що відкривають окремі вікна (Правила QA, Перенесення рядків,
+    /// GitHub, реле, оновлення), мають кнопку, як і в вебі там, де ці вікна окремі.
+    fn app_settings_window(&mut self, ctx: &egui::Context) {
+        let Some(mut v) = self.app_set.clone() else { return };
+        let saved = self.st.settings_view();
+        let dirty = saved.as_ref().is_some_and(|s| s != &v);
+        let folder = self.st.dir.as_ref().map(|d| d.to_string_lossy().to_string()).unwrap_or_default();
+        let refs = self.st.reference_langs();
+        let version = {
+            let id = transly_platform::selfupdate::build_id();
+            if id == "dev" { "локальна".to_string() } else { id.chars().take(7).collect() }
+        };
+        let mut nav = std::mem::replace(&mut self.nav_app, stshell::StNav::new("general"));
+        let (mut apply, mut save, mut cancel) = (false, false, false);
+        let mut go: Option<&'static str> = None;
+        let mut reset_click = false;
+        let armed = self.reset_arm.is_some_and(|t| t.elapsed().as_secs() < 6);
+        let esc_armed = self.esc_at.is_some_and(|t| t.elapsed().as_secs() < 4);
+        let (mut import_terms, mut import_tm) = (false, false);
+        let mut sysbar = false;
+        let own_chrome = self.chrome_own;
+        let (mut imp_terms, mut imp_tm) = (std::mem::take(&mut self.imp_terms), std::mem::take(&mut self.imp_tm));
+        let esc = stshell::StShell { key: "app", aria: "Налаштування", crumb: String::new(), height: 640.0, groups: Self::APP_PAGES, search: true, dirty, esc_armed }.show(
+            ctx,
+            &mut nav,
+            |ui, page| {
+                let group_of = |id: &str| Self::APP_PAGES.iter().find(|(_, p)| p.iter().any(|(i, _)| *i == id)).map_or("", |(g, _)| *g);
+                let _ = group_of;
+                match page {
+                    "general" => {
+                        stshell::grid_row(ui, "Радити, коли переклад відрізняється від оригіналу понад, % (від 5 до 100)", |ui| {
+                            let w = ui.available_width();
+                            let r = stshell::number(ui, egui::DragValue::new(&mut v.tolerance_pct).range(5.0..=100.0).speed(5.0), w);
+                            r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::DragValue, true, "Допуск довжини, %"));
+                        });
+                        stshell::grid_row(ui, "Ваше ім’я в коментарях та історії", |ui| {
+                            let mut t = v.who.clone();
+                            let r = stshell::input(ui, &mut t, "", ui.available_width());
+                            v.who = t.chars().take(40).collect();
+                            r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::TextEdit, true, "Хто перекладає"));
+                        });
+                        stshell::grid_row(ui, "Мова інтерфейсу", |ui| {
+                            ui.label("Українська");
+                        });
+                        stshell::hint(ui, "Інші мови додаються як розширення (мовні пакети).");
+                        stshell::check(ui, &mut v.block_errors, "Не надсилати рядок із помилкою QA");
+                        stshell::grid_row(ui, "Автозаповнення однакових рядків після «Надіслати»", |ui| {
+                            let name = |m: &str| match m {
+                                "auto" => "заповнювати порожні й самому оновлювати різні (вичитані не чіпає)",
+                                "off" => "не заповнювати",
+                                _ => "заповнювати порожні чернетками, про різні питати (рекомендовано)",
+                            };
+                            egui::ComboBox::from_id_salt("link-mode").width(ui.available_width() - 8.0).wrap_mode(egui::TextWrapMode::Truncate).selected_text(name(&v.link_mode)).show_ui(ui, |ui| {
+                                for m in ["ask", "auto", "off"] {
+                                    ui.selectable_value(&mut v.link_mode, m.to_string(), name(m));
+                                }
+                            });
+                        });
+                        stshell::hint(ui, "Порожні зв’язані рядки заповнюються одразу після надсилання чернетками з позначкою «авто» (цю дію можна відмінити в повідомленні). Вичитаний рядок і рядок, який ви змінили пізніше, не перезаписуються без вашого вибору.");
+                    }
+                    "look" => {
+                        stshell::sub(ui, "Назва, значок і колір проєкту", false, |ui| {
+                            stshell::hint(ui, "Тепер вони в окремому вікні налаштувань проєкту: колір береться з назви проєкту (назви папки гри), якщо його не вибрано вручну.");
+                            stshell::acts(ui, |ui| {
+                                if plain_button(ui, "Налаштування проєкту…").clicked() {
+                                    go = Some("project");
+                                }
+                            });
+                        });
+                        stshell::sub(ui, "Вікно", true, |ui| {
+                            let mut sys = !own_chrome;
+                            if stshell::check(ui, &mut sys, "Системний заголовок вікна").changed() {
+                                sysbar = true;
+                            }
+                            stshell::hint(ui, "Запасний варіант: якщо власного заголовка не видно або його кнопки не працюють. Застосовується одразу.");
+                        });
+                    }
+                    "folder" => {
+                        ui.label(RichText::new("Папка гри цього проєкту").size(12.5).color(TEXT));
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 8.0;
+                            let w = ui.available_width() - 8.0 - 90.0;
+                            let (r, _) = ui.allocate_exact_size(vec2(w.max(120.0), 30.0), Sense::hover());
+                            ui.painter().rect(r, CornerRadius::same(R2), theme::over(BG, Color32::WHITE, 0.03), Stroke::new(1.0_f32, LINE), StrokeKind::Inside);
+                            ui.painter().with_clip_rect(r.shrink2(vec2(10.0, 0.0))).text(pos2(r.left() + 10.0, r.center().y), Align2::LEFT_CENTER, &folder, ip(12.5), TEXT);
+                            if plain_button(ui, "Змінити…").clicked() {
+                                go = Some("folder");
+                            }
+                        });
+                        stshell::hint(ui, "Папка запам’ятовується для проєкту й відновлюється під час запуску. Якщо її перенесено чи видалено, програма покаже банер із вибором нової, а переклад і оригінали в проєкті збережуться.");
+                    }
+                    "lang" => {
+                        stshell::sub(ui, "Мови гри", false, |ui| {
+                            stshell::grid_row(ui, "Мова оригіналу", |ui| {
+                                let w = ui.available_width();
+                                stshell::input(ui, &mut v.source_lang, "", w);
+                            });
+                            stshell::grid_row(ui, "Мова перекладу", |ui| {
+                                let w = ui.available_width();
+                                stshell::input(ui, &mut v.target_lang, "", w);
+                            });
+                            stshell::grid_row(ui, "Найдовший рядок (0 — без межі)", |ui| {
+                                let w = ui.available_width();
+                                stshell::number(ui, egui::DragValue::new(&mut v.line_limit).range(0.0..=500.0), w);
+                            });
+                        });
+                        stshell::sub(ui, "Тексти плагінів", false, |ui| {
+                            stshell::hint(ui, "Частина ігор показує текст командами плагінів, а не вікнами повідомлень.");
+                            stshell::acts(ui, |ui| {
+                                if plain_button(ui, "Обрати команди з текстом…").clicked() {
+                                    go = Some("plug");
+                                }
+                            });
+                        });
+                        stshell::sub(ui, "Мовці", false, |ui| {
+                            stshell::hint(ui, "Імен мовців у грі на RPG Maker MV немає. Їх можна визначити за обличчям персонажа й подією.");
+                            stshell::acts(ui, |ui| {
+                                if plain_button(ui, "Визначити мовців…").clicked() {
+                                    go = Some("spk");
+                                }
+                            });
+                        });
+                        stshell::sub(ui, "Довідкові мови", true, |ui| {
+                            stshell::hint(ui, "Додайте ту саму гру іншими мовами (наприклад, російською, польською): кожна з’явиться під оригіналом як підказка. Мов можна додати скільки завгодно. Рядки вирівнюються автоматично, навіть якщо в тій версії є додані чи прибрані репліки.");
+                            ui.label(RichText::new(if refs.is_empty() { "Довідок ще немає".to_string() } else { refs.join(", ").to_uppercase() }).size(12.0).color(MUTE));
+                            stshell::acts(ui, |ui| {
+                                if plain_button(ui, "Додати мову: обрати папку довідкової версії…").clicked() {
+                                    go = Some("ref");
+                                }
+                            });
+                        });
+                    }
+                    "terms" => {
+                        stshell::hint(ui, "З файлу: таблиця Google Sheets, збережена як веб-сторінка (.html), або .csv / .tsv із колонками «Оригінал», «Переклад 1…», «Опис», «Розділ».");
+                        stshell::acts(ui, |ui| {
+                            if plain_button(ui, "Імпортувати з файлу…").clicked() {
+                                if let Some(p) = rfd::FileDialog::new().add_filter("Текст і таблиці", &["txt", "tsv", "csv", "html", "htm"]).pick_file() {
+                                    imp_terms = std::fs::read_to_string(p).unwrap_or_default();
+                                    import_terms = !imp_terms.trim().is_empty();
+                                }
+                            }
+                        });
+                        stshell::hint(ui, "Або вставте рядки «англійською, табуляція, українською»:");
+                        ui.add(egui::TextEdit::multiline(&mut imp_terms).desired_rows(4).desired_width(ui.available_width()));
+                        stshell::acts(ui, |ui| {
+                            if ui.add_enabled(!imp_terms.trim().is_empty(), egui::Button::new("Імпортувати вставлені терміни").min_size(vec2(0.0, 28.0))).clicked() {
+                                import_terms = true;
+                            }
+                        });
+                    }
+                    "tm" => {
+                        stshell::hint(ui, "Рядки «оригінал, табуляція, переклад».");
+                        ui.add(egui::TextEdit::multiline(&mut imp_tm).desired_rows(7).desired_width(ui.available_width()));
+                        stshell::acts(ui, |ui| {
+                            if plain_button(ui, "Завантажити з файлу…").clicked() {
+                                if let Some(p) = rfd::FileDialog::new().add_filter("Текст і таблиці", &["txt", "tsv", "csv"]).pick_file() {
+                                    imp_tm = std::fs::read_to_string(p).unwrap_or_default();
+                                }
+                            }
+                            if ui.add_enabled(!imp_tm.trim().is_empty(), egui::Button::new("Імпортувати пари").min_size(vec2(0.0, 28.0))).clicked() {
+                                import_tm = true;
+                            }
+                        });
+                    }
+                    "qa" => {
+                        stshell::grid_row(ui, "Правила перевірки тексту (літери, пробіли, апостроф, коди)", |ui| {
+                            if plain_button(ui, "Налаштувати…").clicked() {
+                                go = Some("qa");
+                            }
+                        });
+                        stshell::hint(ui, "Які перевірки ввімкнено й що вони вважають помилкою чи порадою. Довжина тексту не обмежується: застосунок лише радить.");
+                    }
+                    "wrap" => {
+                        stshell::grid_row(ui, "Перенесення рядків у повідомленнях гри", |ui| {
+                            if plain_button(ui, "Налаштувати…").clicked() {
+                                go = Some("wrap");
+                            }
+                        });
+                        stshell::hint(ui, "Коли й за якою шириною рядки розбиваються, чи переносяться слова з дефісом, коли попереджати про четвертий рядок.");
+                    }
+                    "github" => {
+                        stshell::warn_banner(ui, false, "Токен лишається тільки на цьому пристрої", "Дайте йому доступ лише до репозиторію з перекладом (право «Contents: Read and write»). Він не потрапляє у файл проєкту.");
+                        stshell::hint(ui, "Переклад зберігається у вашому репозиторії GitHub (краще приватному) звичайними файлами, а історія комітів показує, що й коли змінилося. Створіть репозиторій із файлом README, потім токен: GitHub → Settings → Developer settings → Fine-grained tokens.");
+                        stshell::acts(ui, |ui| {
+                            if plain_button(ui, "Налаштування GitHub…").clicked() {
+                                go = Some("github");
+                            }
+                        });
+                    }
+                    "server" => {
+                        stshell::warn_banner(ui, false, "Для адреси в інтернеті потрібен https", "Дані шифруються паролем на пристроях: сервер лише передає їх і забуває. Адреса в домашній мережі може бути й http.");
+                        stshell::acts(ui, |ui| {
+                            if plain_button(ui, "Налаштування сервера…").clicked() {
+                                go = Some("relay");
+                            }
+                        });
+                    }
+                    "file" => {
+                        stshell::hint(ui, "Проєкт зберігається поруч із грою. Файл проєкту можна передати на інший пристрій або відкрити з нього.");
+                        stshell::acts(ui, |ui| {
+                            if plain_button(ui, "Зберегти проєкт у файл").clicked() {
+                                go = Some("save");
+                            }
+                            if plain_button(ui, "Імпортувати з файлу…").clicked() {
+                                go = Some("open");
+                            }
+                        });
+                    }
+                    "update" => {
+                        stshell::hint(ui, &format!("Версія збірки: {version}"));
+                        stshell::acts(ui, |ui| {
+                            if plain_button(ui, "Перевірити оновлення зараз").clicked() {
+                                go = Some("update");
+                            }
+                        });
+                    }
+                    _ => {
+                        if danger_page(ui, armed) {
+                            reset_click = true;
+                        }
+                    }
+                }
+            },
+            |ui| {
+                if stshell::bar_button(ui, "Скасувати", false, true).clicked() {
+                    cancel = true;
+                }
+                if stshell::bar_button(ui, "Застосувати", false, dirty).clicked() {
+                    apply = true;
+                }
+                if stshell::bar_button(ui, "Зберегти", true, true).clicked() {
+                    save = true;
+                }
+            },
+        );
+        self.nav_app = nav;
+        self.imp_terms = imp_terms;
+        self.imp_tm = imp_tm;
+        if import_terms {
+            self.message = self.st.import_terms_table(&self.imp_terms.clone());
+            self.imp_terms.clear();
+        }
+        if import_tm {
+            self.message = self.st.import_memory(&self.imp_tm.clone());
+            self.imp_tm.clear();
+        }
+        if sysbar {
+            self.toggle_chrome(ctx);
+        }
+        if reset_click {
+            self.reset_clicked();
+            if self.app_set.is_none() {
+                return;
+            }
+        }
+        // кнопки сторінок, що відкривають окремі вікна: це вікно на цей час закривається (як `away` у вебі), зміни спершу застосовуються
+        if let Some(g) = go {
+            if dirty {
+                self.apply_general(&v);
+            }
+            self.app_set = None;
+            match g {
+                "project" => self.settings = self.st.settings_view(),
+                "folder" => self.open_dialog(),
+                "plug" => {
+                    let (names, asked) = self.st.plugin_choice();
+                    let mut chosen: std::collections::BTreeSet<String> = names.into_iter().collect();
+                    if !asked {
+                        chosen.extend(self.st.plugin_candidates().into_iter().filter(|c| c.likely).map(|c| c.name));
+                    }
+                    self.plug_win = Some(chosen);
+                }
+                "spk" => self.spk_win = Some(self.st.speaker_candidates()),
+                "ref" => self.ref_win = Some(String::new()),
+                "qa" => self.qar_win = true,
+                "wrap" => self.wrap_win = Some((self.st.wrap_settings(), "Мандрівник дістався перекладацького містечка наприкінці осені, і там на нього чекав старий друг, якого він не бачив багато років.".into(), false)),
+                "github" => self.act_sync(),
+                "relay" => self.relay_win = Some(self.st.relay.clone()),
+                "save" => self.message = self.st.save_project().map(|p| format!("Збережено: {p}")).unwrap_or_else(|e| e),
+                "open" => {
+                    if let Some(p) = rfd::FileDialog::new().add_filter("Проєкт Transly", &["json"]).pick_file() {
+                        self.message = self.st.open_project_file(&p).unwrap_or_else(|e| e);
+                        self.draft_for = None;
+                    }
+                }
+                _ => self.upd.win = true,
+            }
+            return;
+        }
+        if save || apply {
+            self.apply_general(&v);
+            if apply {
+                self.message = "Збережено".into();
+            }
+        }
+        if save || cancel {
+            self.app_set = None;
+        } else if esc && (!dirty || self.esc_at.is_some_and(|t| t.elapsed().as_secs() < 4)) {
+            self.app_set = None;
+            self.esc_at = None;
+        } else {
+            if esc {
+                self.esc_at = Some(std::time::Instant::now());
+            }
+            self.app_set = Some(v);
         }
     }
 
@@ -2556,22 +3059,7 @@ impl App {
             });
         });
         if let Some((n, k)) = act {
-            self.message = match k {
-                0 => self.st.switch_branch(&n).map(|_| format!("Гілка «{n}»")).unwrap_or_else(|e| e),
-                1 => match self.st.branch_diff(&n) {
-                    Ok(rows) if rows.iter().any(|r| r.kind == transly_core::branches::DiffKind::Conflict && !r.locked) => {
-                        self.merge_win = Some((n.clone(), rows, Default::default()));
-                        String::new()
-                    }
-                    Ok(_) => self.st.merge_branch(&n).unwrap_or_else(|e| e),
-                    Err(e) => e,
-                },
-                3 => {
-                    self.rename_win = Some((n.clone(), n.clone()));
-                    String::new()
-                }
-                _ => self.st.delete_branch(&n).map(|_| format!("Гілку «{n}» видалено")).unwrap_or_else(|e| e),
-            };
+            self.branch_action(n, k);
         }
         if create {
             self.message = self.st.create_branch(&name).map(|_| format!("Гілка «{}»", name.trim())).unwrap_or_else(|e| e);
@@ -2580,6 +3068,26 @@ impl App {
         if open {
             self.br_win = Some(name);
         }
+    }
+
+    /// Дія над гілкою зі списку: 0 — перемкнутись, 1 — злити сюди, 2 — видалити, 3 — перейменувати.
+    fn branch_action(&mut self, n: String, k: u8) {
+        self.message = match k {
+            0 => self.st.switch_branch(&n).map(|_| format!("Гілка «{n}»")).unwrap_or_else(|e| e),
+            1 => match self.st.branch_diff(&n) {
+                Ok(rows) if rows.iter().any(|r| r.kind == transly_core::branches::DiffKind::Conflict && !r.locked) => {
+                    self.merge_win = Some((n.clone(), rows, Default::default()));
+                    String::new()
+                }
+                Ok(_) => self.st.merge_branch(&n).unwrap_or_else(|e| e),
+                Err(e) => e,
+            },
+            3 => {
+                self.rename_win = Some((n.clone(), n.clone()));
+                String::new()
+            }
+            _ => self.st.delete_branch(&n).map(|_| format!("Гілку «{n}» видалено")).unwrap_or_else(|e| e),
+        };
     }
 
     fn qarules_window(&mut self, ctx: &egui::Context) {
@@ -3581,8 +4089,9 @@ mod ui_tests {
         assert!(!h.state().focus && !h.state().scene_mode);
     }
 
+    /// Вікна налаштувань — як у вебі: «Налаштування проєкту» зі сторінками «Назва й вигляд», «Гілки»…, «Налаштування» з пошуком і групами; «Зберегти / Застосувати / Скасувати».
     #[test]
-    fn the_settings_window_opens_and_saves() {
+    fn the_settings_windows_have_pages_and_save_like_the_web_ones() {
         let data = game("settings");
         let mut app = App::default();
         app.st.open_game(&data).unwrap();
@@ -3593,10 +4102,81 @@ mod ui_tests {
         h.get_by_label("Налаштування проєкту…").click();
         h.run();
         h.get_by_label("Налаштування проєкту");
-        h.get_by_label("Хто перекладає");
+        for page in ["Назва й вигляд", "Гілки", "Папка гри", "GitHub", "Мови", "Небезпечна зона"] {
+            h.get_by_label(page);
+        }
+        // у проєкті немає загальних полів: вони в «Налаштуваннях»
+        assert!(h.query_by_label("Хто перекладає").is_none());
+        h.get_by_label("Гілки").click();
+        h.run();
+        h.get_by_label("+ Нова гілка…");
+        assert_eq!(h.state().nav_proj.cur, "branches");
         h.get_by_label("Скасувати").click();
         h.run();
-        assert!(h.query_by_label("Хто перекладає").is_none());
+        assert!(h.state().settings.is_none());
+        // «Налаштування»: дерево з пошуком; «Загальні»; «Застосувати» мертва, поки нема змін
+        h.state_mut().app_set = h.state().st.settings_view();
+        h.run();
+        h.get_by_label("Налаштування");
+        h.get_by_label("Пошук налаштувань");
+        for page in ["Загальні", "Вигляд", "Гра і мови", "Імпорт глосарію", "Правила QA", "Перенесення рядків", "GitHub", "Власний сервер", "Небезпечна зона"] {
+            h.get_by_label(page);
+        }
+        assert!(h.state().app_set.is_some());
+        h.get_by_label("Хто перекладає").click();
+        h.get_by_label("Хто перекладає").type_text("Артем");
+        h.run();
+        h.get_all_by_label("Зберегти").last().unwrap().click();
+        h.run();
+        assert!(h.state().app_set.is_none());
+        assert!(h.state().st.settings_view().unwrap().who.ends_with("Артем"), "ім'я записано: {:?}", h.state().st.settings_view().map(|v| v.who));
+        // пошук залишає лише збіги й переходить до першого з них
+        h.state_mut().app_set = h.state().st.settings_view();
+        h.run();
+        h.get_by_label("Пошук налаштувань").click();
+        h.get_by_label("Пошук налаштувань").type_text("QA");
+        h.run();
+        h.run();
+        assert_eq!(h.state().nav_app.cur, "qa");
+        assert!(h.query_by_label("Власний сервер").is_none(), "решта сторінок сховалась");
+        // Esc із незмінним станом закриває
+        press(&mut h, egui::Modifiers::NONE, egui::Key::Escape);
+        h.run();
+        assert!(h.state().app_set.is_none());
+    }
+
+    /// «Скинути проєкт»: перший клік зводить кнопку («Так, видалити…»), другий (за 1,2 с…6 с) стирає переклад, назва й колір лишаються.
+    #[test]
+    fn resetting_the_project_asks_twice_and_keeps_the_look() {
+        let data = game("reset");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.st.edit(0, 0, "Герой");
+        let mut v = app.st.settings_view().unwrap();
+        v.title = "Моя назва".into();
+        v.name_from = "custom".into();
+        app.st.apply_settings(&v);
+        assert_eq!(app.st.progress().draft, 1);
+        app.settings = app.st.settings_view();
+        app.nav_proj.cur = "danger";
+        let mut h = harness(app);
+        h.run();
+        h.get_by_label("Скинути проєкт…").click();
+        h.run();
+        h.get_by_label("Так, видалити весь переклад");
+        assert!(h.state().reset_arm.is_some());
+        // надто швидкий другий клік (до 1,2 с) нічого не робить
+        h.get_by_label("Так, видалити весь переклад").click();
+        h.run();
+        assert_eq!(h.state().st.progress().draft, 1, "швидкий клік не стирає");
+        // після паузи — стирає
+        h.state_mut().reset_arm = Some(std::time::Instant::now() - std::time::Duration::from_millis(2000));
+        h.run();
+        h.get_by_label("Так, видалити весь переклад").click();
+        h.run();
+        assert_eq!(h.state().st.progress().draft, 0, "переклад скинуто");
+        assert_eq!(transly_core::projname::project_title(h.state().st.project.as_ref().unwrap()), "Моя назва", "назва лишилась");
+        assert!(h.state().settings.is_none());
     }
 
     /// Налаштування проєкту — вигляд: звідки назва, свої літери значка, колір акценту (готові відтінки й повзунок); колір пробується одразу, «Скасувати» його повертає,
@@ -4690,6 +5270,37 @@ mod ui_tests {
         assert!((cl.y1 - cl.y0 - 28.0).abs() < 0.6, "кнопка заввишки 28");
     }
 
+    /// Вікно налаштувань — як `.adlg.st-dlg` у вебі (числа з живого DOM у 1360×800): «Налаштування» 900×640 у (230; 100), дерево 236, рядок дерева «Загальні» 219×28 на (9; 84,5) від кута,
+    /// рядок кнопок внизу заввишки 49 (кнопки 28 на 601 від верху); «Налаштування проєкту» 900×700 у (230; 70).
+    #[test]
+    fn the_settings_dialog_is_laid_out_like_the_web_st_dlg() {
+        let data = game("stdlg");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.app_set = app.st.settings_view();
+        let mut h = harness(app);
+        h.run();
+        h.run();
+        let r = h.ctx.memory(|m| m.area_rect(egui::Id::new(("st-dlg", "app")))).expect("вікно є");
+        assert!((r.left() - 230.0).abs() < 1.0 && (r.top() - 100.0).abs() < 1.0, "вікно в (230; 100): {:?}", r.min);
+        assert!((r.width() - 900.0).abs() < 1.0 && (r.height() - 640.0).abs() < 1.0, "900×640: {:?}", r.size());
+        let ti = h.get_by_label("Загальні").bounding_box().unwrap();
+        assert!((ti.x0 as f32 - (r.left() + 9.0)).abs() < 1.5 && (ti.y0 as f32 - (r.top() + 84.5)).abs() < 1.5, "рядок дерева на (9; 84,5): ({}; {})", ti.x0 as f32 - r.left(), ti.y0 as f32 - r.top());
+        assert!((ti.x1 - ti.x0 - 219.0).abs() < 1.5 && (ti.y1 - ti.y0 - 28.0).abs() < 0.6, "219×28");
+        let save = h.get_all_by_label("Зберегти").last().unwrap().bounding_box().unwrap();
+        assert!((save.y0 as f32 - (r.top() + 601.0)).abs() < 1.5 && (save.y1 - save.y0 - 28.0).abs() < 0.6, "кнопки внизу: {}", save.y0 as f32 - r.top());
+        assert!((save.x1 as f32 - (r.right() - 16.0 - 8.0 - 98.3 - 8.0 - 110.4)).abs() < 12.0, "«Зберегти» стоїть ліворуч від «Застосувати» і «Скасувати»: {}", save.x1 as f32);
+        // налаштування проєкту: 900×700 і пласке дерево з підписами груп
+        h.state_mut().app_set = None;
+        h.state_mut().settings = h.state().st.settings_view();
+        h.run();
+        h.run();
+        let p = h.ctx.memory(|m| m.area_rect(egui::Id::new(("st-dlg", "project")))).expect("вікно є");
+        assert!((p.left() - 230.0).abs() < 1.0 && (p.top() - 70.0).abs() < 1.0 && (p.width() - 900.0).abs() < 1.0 && (p.height() - 700.0).abs() < 1.0, "900×700 у (230; 70): {:?} {:?}", p.min, p.size());
+        let ti = h.get_by_label("Назва й вигляд").bounding_box().unwrap();
+        assert!((ti.y0 as f32 - (p.top() + 24.8)).abs() < 1.5, "перша сторінка на 24,8 від верху: {}", ti.y0 as f32 - p.top());
+    }
+
     /// Високий діалог у низькому вікні: не вище «вікно − 64», тіло листається, а рядок кнопок лишається внизу вікна діалогу (`position: sticky` у вебі).
     #[test]
     fn a_tall_dialog_keeps_its_buttons_at_the_bottom() {
@@ -4746,8 +5357,17 @@ mod ui_tests {
         shot(&mut h, "d5-qa-short");
         h.set_size(egui::vec2(1360.0, 800.0));
         h.state_mut().qar_win = false;
-        h.state_mut().act_settings();
-        shot(&mut h, "d6-settings");
+        for (n, page) in [("d6-proj-look", "look"), ("d7-proj-branches", "branches"), ("d8-proj-danger", "danger")] {
+            h.state_mut().settings = h.state().st.settings_view();
+            h.state_mut().nav_proj.cur = page;
+            shot(&mut h, n);
+        }
+        h.state_mut().settings = None;
+        for (n, page) in [("d9-app-general", "general"), ("d10-app-lang", "lang"), ("d11-app-github", "github")] {
+            h.state_mut().app_set = h.state().st.settings_view();
+            h.state_mut().nav_app.cur = page;
+            shot(&mut h, n);
+        }
     }
 
     /// Знімок таблиці з виділеними рядками (смуга «вибрано» на шапці): `TRANSLY_SHOTS=<тека> cargo test -p transly-app bulk_shot -- --ignored`.

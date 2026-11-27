@@ -2857,6 +2857,12 @@ impl AppState {
         Ok(format!("Довідкова мова «{lang}»: зіставлено рядків {n}"))
     }
 
+    /// Коди довідкових мов, доданих до проєкту.
+    pub fn reference_langs(&self) -> Vec<String> {
+        let bundle: Option<transly_core::reference::ReferenceBundle> = self.project.as_ref().and_then(|p| p.reference.as_ref()).and_then(|x| serde_json::from_value(x.clone()).ok());
+        transly_core::reference::reference_sets(bundle.as_ref()).into_iter().map(|r| r.lang).collect()
+    }
+
     /// Довідкові переклади рядка: (код мови, текст).
     pub fn references_of(&self, f: usize, r: usize) -> Vec<(String, String)> {
         let Some(v) = self.views.get(f) else { return vec![] };
@@ -2961,6 +2967,32 @@ impl AppState {
         let Some(p) = self.project.as_ref() else { return vec![] };
         let cur = transly_core::branches::branch_of(p);
         transly_core::branches::branch_names(p).into_iter().map(|n| (transly_core::branches::rows_in(p, &n), n)).map(|(c, n)| { let is = n == cur; (n, c, is) }).collect()
+    }
+
+    /// «Від»: з якої гілки зроблено цю (для основної — «основна», для невідомої — «—»).
+    pub fn branch_from(&self, name: &str) -> String {
+        if name == transly_core::branches::MAIN {
+            return "основна".into();
+        }
+        self.project.as_ref().and_then(|p| p.branches.as_ref()).and_then(|b| b.get(name)).and_then(|b| b.from.clone()).unwrap_or_else(|| "—".into())
+    }
+
+    /// «Скинути проєкт»: порожній проєкт на місці поточного; назва, колір і папка гри лишаються (`KEEP_ON_RESET` у вебі). Гра перечитується з диска.
+    pub fn reset_project(&mut self) -> Result<String, String> {
+        let old = self.project.take().ok_or("Проєкт не відкрито")?;
+        let dir = self.dir.clone().ok_or("Гру не відкрито")?;
+        let mut fresh = transly_core::project::empty_project(&old.name, &old.source_lang, &old.target_lang);
+        fresh.reset_epoch = old.reset_epoch.max(now_ms());
+        for k in ["nameFrom", "title", "folderName", "iconText", "hue"] {
+            if let Some(v) = old.settings.get(k) {
+                fresh.settings.insert(k.into(), v.clone());
+            }
+        }
+        self.project = Some(fresh);
+        self.dirty = true;
+        self.save_project()?;
+        self.open_game(&dir)?;
+        Ok("Проєкт скинуто".into())
     }
 
     pub fn current_branch(&self) -> String {

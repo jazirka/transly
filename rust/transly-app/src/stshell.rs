@@ -15,7 +15,10 @@ const CRUMB_H: f32 = 45.0;
 const DLG_BG: Color32 = Color32::from_rgb(0x2b, 0x2d, 0x33);
 
 /// Група дерева: назва й сторінки (`id`, назва).
-pub(crate) type Group = (&'static str, &'static [(&'static str, &'static str)]);
+/// Сторінка дерева: ідентифікатор, назва, піктограма.
+pub(crate) type Page = (&'static str, &'static str, &'static str);
+/// Група дерева: назва й сторінки.
+pub(crate) type Group = (&'static str, &'static [Page]);
 
 /// Що пам'ятає вікно: поточна сторінка, пошук, згорнуті групи, де зараз «робоче вікно» (дерево чи сторінка).
 pub(crate) struct StNav {
@@ -47,7 +50,7 @@ pub(crate) struct StShell<'a> {
 }
 
 fn title_of(groups: &[Group], id: &str) -> &'static str {
-    groups.iter().flat_map(|(_, p)| p.iter()).find(|(i, _)| *i == id).map_or("", |(_, t)| t)
+    groups.iter().flat_map(|(_, p)| p.iter()).find(|(i, _, _)| *i == id).map_or("", |(_, t, _)| t)
 }
 
 /// Заливка й кільце вибраної сторінки в дереві: колір теми (30 % і 70 %), коли «робоче вікно» — дерево, інакше біле 15 % і 26 % — поверх фону дерева.
@@ -60,7 +63,7 @@ fn sel_colors(use_nav: bool) -> (Color32, Color32) {
 }
 
 /// Рядок дерева заввишки 28: наведення біле 7 %, вибраний — заливка з кільцем.
-fn nav_item(ui: &mut egui::Ui, text: &str, pad: f32, selected: bool, use_nav: bool, mark: &str) -> egui::Response {
+fn nav_item(ui: &mut egui::Ui, text: &str, icon: &str, selected: bool, use_nav: bool, mark: &str) -> egui::Response {
     let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 28.0), Sense::click());
     resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, selected, text));
     if selected {
@@ -71,13 +74,15 @@ fn nav_item(ui: &mut egui::Ui, text: &str, pad: f32, selected: bool, use_nav: bo
         ui.painter().rect_filled(r, CornerRadius::same(R2), theme::over(BG, Color32::WHITE, 0.07));
     }
     let col = if selected && use_nav { Color32::WHITE } else { TEXT };
+    // піктограма 16 (відступ 24 від краю рядка: під стрілкою групи), назва за нею через 10
+    icons::paint(ui, Rect::from_center_size(pos2(r.left() + 24.0 + 8.0, r.center().y), vec2(16.0, 16.0)), icon, if selected && use_nav { Color32::WHITE } else { MUTE });
     let g = ui.painter().layout_no_wrap(text.to_string(), ip(12.5), col);
-    let at = pos2(r.left() + pad, r.center().y - g.size().y / 2.0);
+    let at = pos2(r.left() + 24.0 + 16.0 + 10.0, r.center().y - g.size().y / 2.0);
     // знайдене пошуком слово підсвічується (`mark`)
     if !mark.is_empty() {
-        if let Some(i) = text.to_lowercase().find(mark) {
-            let pre = ui.painter().layout_no_wrap(text[..i].to_string(), ip(12.5), col).size().x;
-            let hit = ui.painter().layout_no_wrap(text[i..i + mark.len()].to_string(), ip(12.5), col).size().x;
+        if let Some((pre, hit)) = text.to_lowercase().find(mark).and_then(|i| Some((text.get(..i)?, text.get(i..i + mark.len())?))) {
+            let pre = ui.painter().layout_no_wrap(pre.to_string(), ip(12.5), col).size().x;
+            let hit = ui.painter().layout_no_wrap(hit.to_string(), ip(12.5), col).size().x;
             let m = Rect::from_min_size(pos2(at.x + pre, at.y), vec2(hit, g.size().y));
             ui.painter().rect_filled(m, CornerRadius::same(2), theme::over(BG, WARN, 0.35));
         }
@@ -148,45 +153,30 @@ impl StShell<'_> {
             egui::ScrollArea::vertical().id_salt(("st-tree", self.key)).auto_shrink([false, false]).show(&mut tui, |ui| {
                 ui.set_width(tree_r.width());
                 ui.spacing_mut().item_spacing.y = 1.0;
-                let mut first = true;
                 for (gname, pages) in self.groups {
-                    let hits: Vec<&(&str, &str)> = pages.iter().filter(|(_, t)| mark_ref.is_empty() || t.to_lowercase().contains(mark_ref)).collect();
+                    let hits: Vec<&Page> = pages.iter().filter(|(_, t, _)| mark_ref.is_empty() || t.to_lowercase().contains(mark_ref)).collect();
                     if hits.is_empty() {
                         continue;
                     }
-                    if self.search {
-                        // заголовок групи: стрілка 10, назва 12,5 вагою 600, відступи 9×8×4, клік складає групу
-                        let (r, gr) = ui.allocate_exact_size(vec2(ui.available_width(), 30.5), Sense::click());
-                        gr.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, *gname));
-                        if gr.hovered() {
-                            ui.painter().rect_filled(r, CornerRadius::same(R2), theme::over(BG, Color32::WHITE, 0.07));
-                        }
-                        let shut = folded.contains(gname) && mark_ref.is_empty();
-                        let c = pos2(r.left() + 8.0 + 5.0, r.top() + 9.0 + 8.75);
-                        let cr = Rect::from_center_size(c, vec2(10.0, 10.0));
-                        icons::paint_rot(ui, cr, "caret", MUTE, if shut { -std::f32::consts::FRAC_PI_2 } else { 0.0 });
-                        let g = ui.painter().layout_no_wrap((*gname).to_string(), ipw(12.5, 600), TEXT);
-                        ui.painter().galley(pos2(r.left() + 8.0 + 10.0 + 6.0, r.top() + 9.0), g, TEXT);
-                        if gr.clicked() && mark_ref.is_empty() && !folded.remove(gname) {
-                            folded.insert(gname);
-                        }
-                        if shut {
-                            continue;
-                        }
-                    } else {
-                        // плаский підпис групи 12, приглушений, заввишки 16,8; перший має відступ зверху 4
-                        if first {
-                            ui.add_space(3.0);
-                        }
-                        let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 16.8), Sense::hover());
-                        let g = ui.painter().layout_no_wrap((*gname).to_string(), ip(12.0), MUTE);
-                        ui.painter().galley(pos2(r.left(), r.top() + (16.8 - g.size().y) / 2.0), g, MUTE);
-                        let _ = first;
+                    // заголовок групи (однаковий в обох вікнах): стрілка 10, назва 12,5 вагою 600, відступи 9×8×4, клік складає групу; під час пошуку групи розкриті
+                    let (r, gr) = ui.allocate_exact_size(vec2(ui.available_width(), 30.5), Sense::click());
+                    gr.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, *gname));
+                    if gr.hovered() {
+                        ui.painter().rect_filled(r, CornerRadius::same(R2), theme::over(BG, Color32::WHITE, 0.07));
                     }
-                    first = false;
-                    for (pid, ptitle) in hits {
-                        let on = *pid == sel;
-                        let r = nav_item(ui, ptitle, if self.search { 26.0 } else { 10.0 }, on, use_nav, mark_ref);
+                    let shut = folded.contains(gname) && mark_ref.is_empty();
+                    let c = pos2(r.left() + 8.0 + 5.0, r.top() + 9.0 + 8.75);
+                    icons::paint_rot(ui, Rect::from_center_size(c, vec2(10.0, 10.0)), "caret", MUTE, if shut { -std::f32::consts::FRAC_PI_2 } else { 0.0 });
+                    let g = ui.painter().layout_no_wrap((*gname).to_string(), ipw(12.5, 600), TEXT);
+                    ui.painter().galley(pos2(r.left() + 8.0 + 10.0 + 6.0, r.top() + 9.0), g, TEXT);
+                    if gr.clicked() && mark_ref.is_empty() && !folded.remove(gname) {
+                        folded.insert(gname);
+                    }
+                    if shut {
+                        continue;
+                    }
+                    for (pid, ptitle, picon) in hits {
+                        let r = nav_item(ui, ptitle, picon, *pid == sel, use_nav, mark_ref);
                         if r.clicked() {
                             sel = pid;
                             use_nav = true;
@@ -195,8 +185,8 @@ impl StShell<'_> {
                 }
             });
             // пошук залишив поточну сторінку без збігу: перейти до першого збігу
-            if !mark.is_empty() && !self.groups.iter().flat_map(|(_, p)| p.iter()).any(|(i, t)| *i == sel && t.to_lowercase().contains(&mark)) {
-                if let Some((i, _)) = self.groups.iter().flat_map(|(_, p)| p.iter()).find(|(_, t)| t.to_lowercase().contains(&mark)) {
+            if !mark.is_empty() && !self.groups.iter().flat_map(|(_, p)| p.iter()).any(|(i, t, _)| *i == sel && t.to_lowercase().contains(&mark)) {
+                if let Some((i, _, _)) = self.groups.iter().flat_map(|(_, p)| p.iter()).find(|(_, t, _)| t.to_lowercase().contains(&mark)) {
                     sel = i;
                 }
             }

@@ -1665,18 +1665,18 @@ impl App {
 
     /// Дерево сторінок «Налаштувань проєкту»: усе, що стосується самого проєкту (воно лежить у `project.json`). Загальні налаштування — окреме вікно, сторінки не повторюються.
     const PROJECT_PAGES: &'static [stshell::Group] = &[
-        ("Проєкт", &[("look", "Назва й вигляд"), ("branches", "Гілки"), ("folder", "Папка гри"), ("file", "Файл")]),
-        ("Переклад", &[("lang", "Мови"), ("links", "Однакові рядки")]),
-        ("Перевірка", &[("qa", "Правила QA"), ("wrap", "Перенесення рядків")]),
-        ("Глосарій і пам’ять", &[("terms", "Імпорт глосарію"), ("tm", "Імпорт пам’яті перекладів")]),
-        ("Підключення", &[("github", "GitHub")]),
-        ("Обережно", &[("danger", "Небезпечна зона")]),
+        ("Проєкт", &[("look", "Назва й вигляд", "palette"), ("branches", "Гілки", "branch"), ("folder", "Папка гри", "files"), ("file", "Файл", "file")]),
+        ("Переклад", &[("lang", "Мови", "globe"), ("links", "Однакові рядки", "link")]),
+        ("Перевірка", &[("qa", "Правила QA", "check-sq"), ("wrap", "Перенесення рядків", "wrap")]),
+        ("Глосарій і пам’ять", &[("terms", "Імпорт глосарію", "book"), ("tm", "Імпорт пам’яті перекладів", "db")]),
+        ("Підключення", &[("github", "GitHub", "cloud")]),
+        ("Обережно", &[("danger", "Небезпечна зона", "warn")]),
     ];
 
     /// Дерево сторінок «Налаштувань»: те, що стосується застосунку й вас, а не окремого проєкту.
     const APP_PAGES: &'static [stshell::Group] = &[
-        ("Застосунок", &[("general", "Загальні"), ("look", "Вигляд"), ("update", "Оновлення застосунку")]),
-        ("Синхронізація", &[("server", "Власний сервер")]),
+        ("Застосунок", &[("general", "Загальні", "sliders"), ("look", "Вигляд", "scene"), ("update", "Оновлення застосунку", "refresh")]),
+        ("Синхронізація", &[("server", "Власний сервер", "server")]),
     ];
 
     /// Записує в проєкт усе, що правиться в «Налаштуваннях проєкту» (вигляд, мови, перевірка, однакові рядки); «Ваше ім'я» належить загальним налаштуванням.
@@ -1771,7 +1771,7 @@ impl App {
         let mut reset_click = false;
         let armed = self.reset_arm.is_some_and(|t| t.elapsed().as_secs() < 6);
         let esc_armed = self.esc_at.is_some_and(|t| t.elapsed().as_secs() < 4);
-        let esc = stshell::StShell { key: "project", aria: "Налаштування проєкту", crumb: title.clone(), height: 700.0, groups: Self::PROJECT_PAGES, search: false, dirty, esc_armed }.show(
+        let esc = stshell::StShell { key: "project", aria: "Налаштування проєкту", crumb: title.clone(), height: 700.0, groups: Self::PROJECT_PAGES, search: true, dirty, esc_armed }.show(
             ctx,
             &mut nav,
             |ui, page| match page {
@@ -4110,15 +4110,48 @@ mod ui_tests {
         assert!(h.state().app_set.is_none());
     }
 
+    /// Групи дерева складаються й розкриваються кліком по заголовку, в обох вікнах однаково; сторінки мають піктограми.
+    #[test]
+    fn the_groups_of_both_settings_trees_fold() {
+        let data = game("fold");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.settings = app.st.settings_view();
+        let mut h = harness(app);
+        h.run();
+        h.run();
+        h.get_by_label("Правила QA");
+        h.get_by_label("Перевірка").click();
+        h.run();
+        assert!(h.query_by_label("Правила QA").is_none() && h.query_by_label("Перенесення рядків").is_none(), "згорнуту групу сховано");
+        h.get_by_label("Назва й вигляд");
+        h.get_by_label("Перевірка").click();
+        h.run();
+        h.get_by_label("Правила QA");
+        // у загальних те саме
+        h.state_mut().settings = None;
+        h.state_mut().app_set = h.state().st.settings_view();
+        h.run();
+        h.run();
+        h.get_by_label("Оновлення застосунку");
+        h.get_by_label("Застосунок").click();
+        h.run();
+        assert!(h.query_by_label("Оновлення застосунку").is_none());
+        h.get_by_label("Синхронізація");
+        // кожна сторінка має піктограму
+        let icons = |g: &[stshell::Group]| g.iter().all(|(_, p)| p.iter().all(|(_, _, i)| !i.is_empty()));
+        assert!(icons(App::PROJECT_PAGES) && icons(App::APP_PAGES));
+    }
+
     /// Сторінки не повторюються: кожне налаштування лежить в одному вікні (проєкт — у проєкті, застосунок — у загальних).
     #[test]
     fn project_and_general_settings_do_not_share_pages() {
-        let ids = |g: &[stshell::Group]| g.iter().flat_map(|(_, p)| p.iter().map(|(i, _)| *i)).collect::<std::collections::HashSet<_>>();
+        let ids = |g: &[stshell::Group]| g.iter().flat_map(|(_, p)| p.iter().map(|(i, _, _)| *i)).collect::<std::collections::HashSet<_>>();
         let (p, a) = (ids(App::PROJECT_PAGES), ids(App::APP_PAGES));
         // «look» названо однаково, але в проєкті це «Назва й вигляд», а в загальних — «Вигляд» вікна: різні сторінки; решта не збігається
         let shared: Vec<_> = p.intersection(&a).collect();
         assert_eq!(shared, vec![&"look"], "спільний лише ідентифікатор look (різний зміст): {shared:?}");
-        let titles = |g: &[stshell::Group]| g.iter().flat_map(|(_, p)| p.iter().map(|(_, t)| *t)).collect::<std::collections::HashSet<_>>();
+        let titles = |g: &[stshell::Group]| g.iter().flat_map(|(_, p)| p.iter().map(|(_, t, _)| *t)).collect::<std::collections::HashSet<_>>();
         assert!(titles(App::PROJECT_PAGES).is_disjoint(&titles(App::APP_PAGES)), "назви сторінок не повторюються");
     }
 
@@ -5275,7 +5308,7 @@ mod ui_tests {
         let p = h.ctx.memory(|m| m.area_rect(egui::Id::new(("st-dlg", "project")))).expect("вікно є");
         assert!((p.left() - 230.0).abs() < 1.0 && (p.top() - 70.0).abs() < 1.0 && (p.width() - 900.0).abs() < 1.0 && (p.height() - 700.0).abs() < 1.0, "900×700 у (230; 70): {:?} {:?}", p.min, p.size());
         let ti = h.get_by_label("Назва й вигляд").bounding_box().unwrap();
-        assert!((ti.y0 as f32 - (p.top() + 24.8)).abs() < 1.5, "перша сторінка на 24,8 від верху: {}", ti.y0 as f32 - p.top());
+        assert!((ti.y0 as f32 - (p.top() + 84.5)).abs() < 1.5, "перша сторінка на 84,5 від верху (пошук і заголовок групи, як у загальних): {}", ti.y0 as f32 - p.top());
     }
 
     /// Високий діалог у низькому вікні: не вище «вікно − 64», тіло листається, а рядок кнопок лишається внизу вікна діалогу (`position: sticky` у вебі).

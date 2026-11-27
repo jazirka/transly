@@ -46,6 +46,14 @@ fn body(name: &str) -> (&'static str, bool) {
         "left" => ("<path d='M10 3.5L5.5 8l4.5 4.5'/>", false),
         "right" => ("<path d='M6 3.5L10.5 8 6 12.5'/>", false),
         "json" => ("<path d='M6 3H5a1 1 0 0 0-1 1v2.2a1 1 0 0 1-1 1 1 1 0 0 1 1 1V11a1 1 0 0 0 1 1h1M10 3h1a1 1 0 0 1 1 1v2.2a1 1 0 0 0 1 1 1 1 0 0 0-1 1V11a1 1 0 0 1-1 1h-1'/>", false),
+        "globe" => ("<circle cx='8' cy='8' r='5.5'/><path d='M2.5 8h11M8 2.5c2 2 2 9 0 11M8 2.5c-2 2-2 9 0 11'/>", false),
+        "server" => ("<rect x='2.5' y='3' width='11' height='4' rx='1'/><rect x='2.5' y='9' width='11' height='4' rx='1'/><path d='M5 5h.01M5 11h.01'/>", false),
+        "palette" => ("<path d='M8 2.5a5.5 5.5 0 1 0 0 11c1 0 1.3-.7.9-1.3-.4-.7 0-1.6.9-1.6H11a2.5 2.5 0 0 0 2.5-2.5C13.5 4.7 11 2.5 8 2.5z'/><path d='M5 7.5h.01M7 5.2h.01M10 5.5h.01'/>", false),
+        "sliders" => ("<path d='M3 5h6M12 5h1M3 11h2M8 11h5'/><circle cx='10.5' cy='5' r='1.5'/><circle cx='6.5' cy='11' r='1.5'/>", false),
+        "wrap" => ("<path d='M3 4h10M3 8h7.5a2.2 2.2 0 0 1 0 4.4H8M9.6 10.6L8 12.4l1.6 1.8M3 12.5h2'/>", false),
+        "db" => ("<ellipse cx='8' cy='4' rx='5' ry='1.8'/><path d='M3 4v8c0 1 2.2 1.8 5 1.8s5-.8 5-1.8V4M3 8c0 1 2.2 1.8 5 1.8s5-.8 5-1.8'/>", false),
+        "cloud" => ("<path d='M4.5 12.5a3 3 0 0 1-.4-5.9A4 4 0 0 1 11.7 6a3.3 3.3 0 0 1-.2 6.5z'/>", false),
+        "check-sq" => ("<rect x='2.5' y='2.5' width='11' height='11' rx='2'/><path d='M5.5 8.2l1.8 1.8 3.2-3.6'/>", false),
         _ => ("", false),
     }
 }
@@ -66,14 +74,31 @@ fn svg(name: &str) -> Vec<u8> {
     format!("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' width='64' height='64' {style}>{b}</svg>").into_bytes()
 }
 
+/// Адреса й вміст піктограми: збираються один раз на назву (раніше кожне малювання виділяло рядок адреси й копію SVG, а на кадрі їх десятки).
+fn asset(name: &str) -> (&'static str, egui::load::Bytes) {
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex, OnceLock};
+    static CACHE: OnceLock<Mutex<HashMap<String, (&'static str, Arc<[u8]>)>>> = OnceLock::new();
+    let mut m = CACHE.get_or_init(Default::default).lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((uri, bytes)) = m.get(name) {
+        return (uri, egui::load::Bytes::Shared(bytes.clone()));
+    }
+    let uri: &'static str = Box::leak(format!("bytes://icon-{name}.svg").into_boxed_str());
+    let bytes: Arc<[u8]> = Arc::from(svg(name));
+    m.insert(name.to_string(), (uri, bytes.clone()));
+    (uri, egui::load::Bytes::Shared(bytes))
+}
+
 /// Малює піктограму в прямокутнику.
 pub fn paint(ui: &egui::Ui, rect: Rect, name: &str, color: Color32) {
-    egui::Image::from_bytes(format!("bytes://icon-{name}.svg"), svg(name)).tint(color).paint_at(ui, rect);
+    let (uri, bytes) = asset(name);
+    egui::Image::from_bytes(uri, bytes).tint(color).paint_at(ui, rect);
 }
 
 /// Те саме, повернуте на `angle` радіан навколо центру (згорнута тека: шеврон −90°).
 pub fn paint_rot(ui: &egui::Ui, rect: Rect, name: &str, color: Color32, angle: f32) {
-    egui::Image::from_bytes(format!("bytes://icon-{name}.svg"), svg(name)).tint(color).rotate(angle, Vec2::splat(0.5)).paint_at(ui, rect);
+    let (uri, bytes) = asset(name);
+    egui::Image::from_bytes(uri, bytes).tint(color).rotate(angle, Vec2::splat(0.5)).paint_at(ui, rect);
 }
 
 /// Квадратна кнопка з піктограмою (як `tb-ic` у старому застосунку).
@@ -91,5 +116,6 @@ pub fn button(ui: &mut egui::Ui, name: &str, tip: &str, on: bool, color: Color32
 
 /// Зображення піктограми (для `Button::image`).
 pub fn image(name: &str, color: Color32, size: f32) -> egui::Image<'static> {
-    egui::Image::from_bytes(format!("bytes://icon-{name}.svg"), svg(name)).tint(color).fit_to_exact_size(Vec2::splat(size))
+    let (uri, bytes) = asset(name);
+    egui::Image::from_bytes(uri, bytes).tint(color).fit_to_exact_size(Vec2::splat(size))
 }

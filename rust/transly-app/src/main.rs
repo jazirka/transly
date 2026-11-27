@@ -2761,7 +2761,9 @@ impl App {
         let preview = self.st.build_preview(&c);
         dlg("Збірка в гру").open(&mut open).collapsible(false).resizable(false).default_width(420.0).show(ctx, |ui| {
             stshell::check(ui, &mut c.only_approved, "Лише вичитані рядки");
-            ui.add_enabled(!c.only_approved, egui::Checkbox::new(&mut c.include_drafts, "Додати чернетки (щоб перевірити переклад у грі)"));
+            ui.add_enabled_ui(!c.only_approved, |ui| {
+                stshell::check(ui, &mut c.include_drafts, "Додати чернетки (щоб перевірити переклад у грі)");
+            });
             stshell::check(ui, &mut c.block_errors, "Рядки з помилкою QA лишати мовою оригіналу");
             ui.add_space(8.0);
             match &preview {
@@ -3123,7 +3125,7 @@ impl App {
         let before = w.clone();
         let mut open = true;
         dlg("Перенесення рядків").open(&mut open).collapsible(false).default_width(560.0).show(ctx, |ui| {
-            ui.label(RichText::new("Вікно повідомлення в грі не переносить рядки саме. Тут обираєте, хто це робить і як. Довжина перекладу ніколи не обмежується, це лише рекомендації. Ширину задає «Налаштування проєкту → Довжина рядка».").size(11.5).color(MUTE));
+            ui.label(RichText::new("Вікно повідомлення в грі не переносить рядки саме. Тут обираєте, хто це робить і як. Довжина перекладу ніколи не обмежується, це лише рекомендації. Ширину задає «Налаштування проєкту → Правила QA → Найдовший рядок».").size(11.5).color(MUTE));
             ui.add_space(6.0);
             label_caps(ui, "Коли переносити");
             ui.radio_value(&mut w.mode, WrapMode::Build, "Під час збірки й запуску гри (рекомендовано)");
@@ -5458,6 +5460,25 @@ mod ui_tests {
             h.state_mut().nav_proj.cur = page;
             shot(&mut h, n);
         }
+        h.state_mut().settings = None;
+        h.state_mut().plugins_win = true;
+        shot(&mut h, "d14-plugins");
+        h.state_mut().plugins_win = false;
+        h.state_mut().sync_win = Some((h.state().st.github_settings(), String::new()));
+        shot(&mut h, "d15-sync");
+        h.state_mut().sync_win = None;
+        h.state_mut().relay_win = Some(h.state().st.relay.clone());
+        shot(&mut h, "d16-relay");
+        h.state_mut().relay_win = None;
+        h.state_mut().wrap_win = Some((h.state().st.wrap_settings(), "Мандрівник дістався перекладацького містечка наприкінці осені.".into(), false));
+        shot(&mut h, "d17-wrap");
+        h.state_mut().wrap_win = None;
+        h.state_mut().ref_win = Some(String::new());
+        shot(&mut h, "d18-ref");
+        h.state_mut().ref_win = None;
+        h.state_mut().settings = h.state().st.settings_view();
+        h.state_mut().nav_proj.cur = "github";
+        shot(&mut h, "d19-proj-github");
         h.state_mut().settings = None;
         for (n, page) in [("d9-app-general", "general"), ("d10-app-look", "look"), ("d11-app-server", "server")] {
             h.state_mut().app_set = h.state().st.settings_view();

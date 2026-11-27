@@ -4208,6 +4208,119 @@ mod ui_tests {
         h.render().unwrap().save(dir.join("25-window-controls.png")).unwrap();
     }
 
+    /// Вимір на великому проєкті (100 тис. рядків): скільки забирають сповіщення й пошук конструкцій. `cargo test -p transly-app --release big_inbox -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn big_inbox_timing() {
+        let base = std::env::temp_dir().join(format!("transly-ui-big-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = base.join("MyGame").join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        let items: Vec<String> = (1..=50000).map(|i| format!(r#"{{"id":{i},"name":"Thing number {i}","description":"Take the thing {i} off carefully","note":""}}"#)).collect();
+        std::fs::write(data.join("Items.json"), format!("[null,{}]", items.join(","))).unwrap();
+        let mut app = App::default();
+        let t = std::time::Instant::now();
+        app.st.open_game(&data).unwrap();
+        println!("  відкрито: {} рядків за {:.2} с", app.st.row_count(0), t.elapsed().as_secs_f32());
+        let t = std::time::Instant::now();
+        for r in (0..app.st.row_count(0)).step_by(3) {
+            app.st.edit(0, r, "Переклад рядка");
+        }
+        println!("  3-й кожен рядок переведено за {:.2} с", t.elapsed().as_secs_f32());
+        let t = std::time::Instant::now();
+        let mut steps = 0;
+        while app.st.inbox_step(std::time::Duration::from_millis(6)).is_some() {
+            steps += 1;
+        }
+        println!("  сповіщення: {steps} кадрів по 6 мс, разом {:.2} с, пунктів {}", t.elapsed().as_secs_f32(), app.st.inbox.items.len());
+        let t = std::time::Instant::now();
+        let mut n = 0;
+        loop {
+            let (list, running) = app.st.mine_cards();
+            if !running {
+                println!("  конструкції: {} пропозицій", list.len());
+                break;
+            }
+            n += 1;
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        println!("  фоновий пошук конструкцій: {:.2} с ({n} опитувань)", t.elapsed().as_secs_f32());
+        // що рахується щокадру, поки вибрано рядок: «Пов'язане» питає про двійників рядка (індекс будується раз, далі береться з кешу)
+        let t = std::time::Instant::now();
+        let _ = app.st.link_info(0, 10);
+        let first = t.elapsed().as_secs_f32() * 1000.0;
+        let t = std::time::Instant::now();
+        for _ in 0..100 {
+            let _ = app.st.link_info(0, 10);
+        }
+        println!("  link_info (двійники вибраного рядка): перший виклик {first:.0} мс, далі {:.3} мс", t.elapsed().as_secs_f32() * 10.0);
+        // що з відомого стану коштує щокадру (вдруге й далі, коли кеші вже є)
+        macro_rules! cost {
+            ($name:expr, $e:expr) => {{
+                let _ = $e;
+                let t = std::time::Instant::now();
+                for _ in 0..5 {
+                    let _ = $e;
+                }
+                let ms = t.elapsed().as_secs_f32() * 200.0;
+                if ms > 0.5 {
+                    println!("  щокадру {}: {ms:.1} мс", $name);
+                }
+            }};
+        }
+        {
+            let s = &app.st;
+            let f = 0;
+            cost!("progress", s.progress());
+            cost!("file_progress", s.file_progress());
+            cost!("filter_counts", s.filter_counts(f));
+            cost!("visible_len", s.visible_len(f));
+            cost!("file_has_speakers", s.file_has_speakers(f));
+            cost!("file_speakers", s.file_speakers(f));
+            cost!("file_issues", s.file_issues(f));
+            cost!("tm_matches", s.tm_matches(f, 500));
+            cost!("issues", s.issues(f, 500, ""));
+            cost!("strands", s.strands(f, 500));
+            cost!("game_names_in", s.game_names_in(f, 500));
+            cost!("link_flags", s.link_flags(f, 500));
+            cost!("history", s.history(f, 500));
+            cost!("threads", s.threads(f, 500));
+            cost!("contributions", s.contributions(f, 500));
+            cost!("references_of", s.references_of(f, 500));
+            cost!("activity", s.activity());
+            cost!("last_build", s.last_build());
+            cost!("map_title", s.map_title(f));
+            cost!("kind_label", s.kind_label(f, 500));
+            cost!("source_marks", s.source_marks(f, 500));
+            cost!("scenes_list", s.scenes_list(f));
+            cost!("scene_view", s.scene_view(f, 500));
+            cost!("glossary_terms", s.glossary_terms());
+            cost!("link_group_count", s.link_group_count());
+            cost!("groups_view", s.groups_view());
+            cost!("qa_keep", s.qa_keep());
+        }
+        // кадр інтерфейсу на цьому проєкті: таблиця, редагування, праві розділи й ліва панель глосарія
+        app.st.row = Some(500);
+        let mut h = harness(app);
+        h.state_mut().focus = false;
+        let frame = |h: &mut Harness<'static, App>, label: &str| {
+            for _ in 0..3 {
+                h.step();
+            }
+            let t = std::time::Instant::now();
+            for _ in 0..10 {
+                h.step();
+            }
+            println!("  кадр «{label}»: {:.0} мс", t.elapsed().as_secs_f32() * 100.0);
+        };
+        frame(&mut h, "таблиця, ліва — файли");
+        h.state_mut().rail = 3;
+        frame(&mut h, "таблиця, ліва — глосарій");
+        h.state_mut().rail = 0;
+        h.state_mut().focus = true;
+        frame(&mut h, "редагування");
+    }
+
     /// Знімок таблиці з виділеними рядками (смуга «вибрано» на шапці): `TRANSLY_SHOTS=<тека> cargo test -p transly-app bulk_shot -- --ignored`.
     #[test]
     #[ignore]

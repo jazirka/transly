@@ -65,7 +65,7 @@ pub struct SettingsView {
     pub game_title: String,
 }
 
-#[derive(Default, Debug, PartialEq, Eq)]
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Counts {
     pub total: usize,
     pub draft: usize,
@@ -185,6 +185,8 @@ pub struct AppState {
     usage_cache: std::cell::RefCell<UsageCache>,
     /// Групи однакових оригіналів, найбільші першими (для набору рядків із цим `stamp`).
     links_cache: std::cell::RefCell<Option<(usize, Vec<LinkGroup>)>>,
+    /// Індекс однакових оригіналів: будується один раз на набір рядків (на 100 тис. рядків це сотні мілісекунд), а не щокадру.
+    link_index: std::cell::RefCell<Option<(usize, std::rc::Rc<transly_core::links::LinkIndex>)>>,
     /// Реле-синхронізація: адреса, пароль, як часто й коли востаннє (лишається на цьому пристрої, у файл проєкту не потрапляє).
     pub relay: RelayCfg,
     relay_rx: Option<std::sync::mpsc::Receiver<Result<transly_platform::relay::SyncReport, String>>>,
@@ -202,6 +204,7 @@ pub struct AppState {
     /// Сповіщення: що потребує уваги й що зробили інші; рахується частинами між кадрами, коли дані не змінюються.
     pub inbox: Inbox,
     row_memo: RowMemo,
+    frame_caches: std::cell::RefCell<FrameCaches>,
     /// Конструкції, які ще не в глосарії: шукаються у фоні (див. `mine_cards`).
     mine_cache: std::cell::RefCell<MineCache>,
     scene_cache: std::cell::RefCell<(usize, Option<transly_core::scene::SceneIndex>)>,
@@ -239,7 +242,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { undo_count: 0, db_cache: std::cell::RefCell::new(None), names_cache: std::cell::RefCell::new(None), usage_cache: Default::default(), links_cache: std::cell::RefCell::new(None), relay: RelayCfg::load(), relay_rx: None, speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, rows_filter: None, inbox: Inbox::load(), row_memo: RowMemo::load(), mine_cache: Default::default(), scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![], saved_ms: None, session_start: now_ms(), session_edits: 0 }
+        AppState { undo_count: 0, db_cache: std::cell::RefCell::new(None), names_cache: std::cell::RefCell::new(None), usage_cache: Default::default(), links_cache: std::cell::RefCell::new(None), link_index: std::cell::RefCell::new(None), relay: RelayCfg::load(), relay_rx: None, speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, rows_filter: None, inbox: Inbox::load(), row_memo: RowMemo::load(), frame_caches: Default::default(), mine_cache: Default::default(), scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![], saved_ms: None, session_start: now_ms(), session_edits: 0 }
     }
 }
 
@@ -393,6 +396,22 @@ struct MineCache {
 const MINE_AGAIN: std::time::Duration = std::time::Duration::from_secs(10);
 /// Скільки перекладених рядків переглядає пошук конструкцій.
 const MINE_ROWS: usize = 20000;
+
+/// Назви з гри в оригіналі рядка з їхнім перекладом, і мовці файлу з числом рядків.
+type NamesInRow = Vec<(transly_core::gamenames::GameName, String)>;
+type SpeakerCounts = Vec<(String, usize)>;
+
+/// Те, що малюється щокадру, а рахується по всіх рядках: кеші за версією змін (`rev`). Без них кадр на 100 тис. рядків займав би десятки мілісекунд.
+#[derive(Default)]
+struct FrameCaches {
+    progress: Option<(u64, Counts)>,
+    /// Підказки пам'яті для вибраного рядка: (файл, рядок, версія).
+    tm: Option<((usize, usize, u64), Vec<TmMatch>)>,
+    names: Option<((usize, usize, u64), NamesInRow)>,
+    speakers: Option<((usize, u64), SpeakerCounts)>,
+    /// Останні дії: (версія, хвилина) — «щойно / 5 хв тому» оновлюється раз на хвилину.
+    activity: Option<((u64, i64), Vec<ActivityItem>)>,
+}
 
 /// Скільки чекати після останньої зміни, перш ніж перераховувати сповіщення (так само, як у вебі): поки перекладач пише, список не смикається й не гальмує.
 const INBOX_QUIET: std::time::Duration = std::time::Duration::from_millis(2500);
@@ -631,6 +650,8 @@ impl AppState {
             reconcile(&v.units, entries, now_ms());
         }
         self.views = views;
+        *self.link_index.borrow_mut() = None;
+        *self.links_cache.borrow_mut() = None;
         self.file = cur.and_then(|n| self.views.iter().position(|v| v.name == n)).or(if self.views.is_empty() { None } else { Some(0) });
         self.tabs.retain(|t| *t < self.views.len());
         self.row = None;
@@ -728,6 +749,8 @@ impl AppState {
         let n = views.len();
         self.game_raw = files;
         self.views = views;
+        *self.link_index.borrow_mut() = None;
+        *self.links_cache.borrow_mut() = None;
         self.project = Some(project);
         self.dir = Some(dir.to_path_buf());
         self.file = if n > 0 { Some(0) } else { None };
@@ -1070,11 +1093,25 @@ impl AppState {
         Some(set)
     }
 
+    /// Індекс однакових оригіналів набору рядків (кеш за кількістю рядків і файлів; скидається при відкритті гри).
+    pub fn links(&self) -> std::rc::Rc<transly_core::links::LinkIndex> {
+        let stamp = self.views.iter().map(|v| v.units.len()).sum::<usize>() + self.views.len();
+        let mut c = self.link_index.borrow_mut();
+        match c.as_ref() {
+            Some((s, idx)) if *s == stamp => idx.clone(),
+            _ => {
+                let idx = std::rc::Rc::new(transly_core::links::LinkIndex::new(&self.views));
+                *c = Some((stamp, idx.clone()));
+                idx
+            }
+        }
+    }
+
     /// Групи рядків з однаковим оригіналом, найбільші першими; `q` — частина тексту. Повертає перші `limit` і скільки їх усього.
     pub fn link_groups(&self, q: &str, limit: usize) -> (Vec<LinkGroup>, usize) {
         let stamp = self.views.iter().map(|v| v.units.len()).sum::<usize>() + self.views.len();
         if self.links_cache.borrow().as_ref().is_none_or(|c| c.0 != stamp) {
-            let idx = transly_core::links::LinkIndex::new(&self.views);
+            let idx = self.links();
             let mut all: Vec<LinkGroup> = idx.clusters().filter_map(|(text, rows)| rows.first().map(|f| LinkGroup { text: text.clone(), count: rows.len(), file: f.file.clone(), key: f.key.clone() })).collect();
             all.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.text.cmp(&b.text)));
             *self.links_cache.borrow_mut() = Some((stamp, all));
@@ -1161,6 +1198,18 @@ impl AppState {
     }
 
     pub fn tm_matches(&self, f: usize, r: usize) -> Vec<TmMatch> {
+        let key = (f, r, self.rev);
+        if let Some((k, v)) = self.frame_caches.borrow().tm.as_ref() {
+            if *k == key {
+                return v.clone();
+            }
+        }
+        let v = self.tm_matches_now(f, r);
+        self.frame_caches.borrow_mut().tm = Some((key, v.clone()));
+        v
+    }
+
+    fn tm_matches_now(&self, f: usize, r: usize) -> Vec<TmMatch> {
         self.ensure_tm();
         let own_s = self.source_of(f, r);
         let own_t = self.target_of(f, r);
@@ -1893,6 +1942,18 @@ impl AppState {
 
     /// Назви, які гра визначає сама (предмети, навички, персонажі…) і які згадано в оригіналі рядка, з їхніми поточними перекладами.
     pub fn game_names_in(&self, f: usize, r: usize) -> Vec<(transly_core::gamenames::GameName, String)> {
+        let key = (f, r, self.rev);
+        if let Some((k, v)) = self.frame_caches.borrow().names.as_ref() {
+            if *k == key {
+                return v.clone();
+            }
+        }
+        let v = self.game_names_now(f, r);
+        self.frame_caches.borrow_mut().names = Some((key, v.clone()));
+        v
+    }
+
+    fn game_names_now(&self, f: usize, r: usize) -> Vec<(transly_core::gamenames::GameName, String)> {
         let stamp = self.views.iter().map(|v| v.units.len()).sum::<usize>() + self.views.len();
         let mut cache = self.names_cache.borrow_mut();
         if cache.as_ref().is_none_or(|(s, _)| *s != stamp) {
@@ -2498,7 +2559,7 @@ impl AppState {
     pub fn link_info(&self, f: usize, r: usize) -> Option<(usize, usize, usize, usize)> {
         let p = self.project.as_ref()?;
         let key = self.unit(f, r)?.key.clone();
-        let idx = transly_core::links::LinkIndex::new(&self.views);
+        let idx = self.links();
         let others = idx.others(&self.views[f].name, &key);
         if others == 0 {
             return None;
@@ -2513,7 +2574,7 @@ impl AppState {
     pub fn apply_links(&mut self, f: usize, r: usize, with_edited: bool) -> usize {
         let Some(p) = self.project.as_ref() else { return 0 };
         let Some(key) = self.unit(f, r).map(|u| u.key.clone()) else { return 0 };
-        let idx = transly_core::links::LinkIndex::new(&self.views);
+        let idx = self.links();
         let Some(plan) = transly_core::links::plan_link_sync(p, &idx, &self.views[f].name, &key) else { return 0 };
         let Some(rf) = plan.view.reference else { return 0 };
         let reference = plan.view.rows[rf].target.clone();
@@ -2542,7 +2603,7 @@ impl AppState {
     pub fn link_sync(&self, file: &str, key: &str) -> Result<LinkSync, String> {
         use transly_core::links::LinkState;
         let p = self.project.as_ref().ok_or("Проєкт не відкрито")?;
-        let idx = transly_core::links::LinkIndex::new(&self.views);
+        let idx = self.links();
         let plan = transly_core::links::plan_link_sync(p, &idx, file, key).ok_or("Для цих рядків немає чого поширювати: жоден не надіслано")?;
         let rf = plan.view.reference.ok_or("Для цих рядків немає чого поширювати: жоден не надіслано")?;
         let mut order: Vec<usize> = plan.fills.iter().chain(plan.updates.iter()).chain(plan.edited.iter()).copied().collect();
@@ -2565,7 +2626,7 @@ impl AppState {
     /// Записує еталон у позначені рядки групи: чернетки, одна дія журналу зі «Скасувати». Скільки рядків змінено.
     pub fn apply_link_picks(&mut self, file: &str, key: &str, picked: &std::collections::HashSet<(String, String)>) -> usize {
         let Some(p) = self.project.as_ref() else { return 0 };
-        let idx = transly_core::links::LinkIndex::new(&self.views);
+        let idx = self.links();
         let Some(plan) = transly_core::links::plan_link_sync(p, &idx, file, key) else { return 0 };
         let Some(rf) = plan.view.reference else { return 0 };
         let reference = plan.view.rows[rf].target.clone();
@@ -2696,7 +2757,7 @@ impl AppState {
         }
         let Some(p) = self.project.as_ref() else { return };
         let file = self.views[f].name.clone();
-        let idx = transly_core::links::LinkIndex::new(&self.views);
+        let idx = self.links();
         let sync = transly_core::links::after_send(p, &idx, mode, &file, key, now_ms());
         if sync.changes.is_empty() {
             return;
@@ -2715,7 +2776,7 @@ impl AppState {
     pub fn link_flags(&self, f: usize, r: usize) -> Option<(bool, bool)> {
         let p = self.project.as_ref()?;
         let key = self.unit(f, r)?.key.clone();
-        let idx = transly_core::links::LinkIndex::new(&self.views);
+        let idx = self.links();
         let v = transly_core::links::link_view(p, &idx, &self.views[f].name, &key)?;
         Some((v.main == Some(v.self_i), v.rows[v.self_i].state == transly_core::links::LinkState::Unlinked))
     }
@@ -2765,6 +2826,18 @@ impl AppState {
 
     /// Останні масові дії проєкту: (id, заголовок, коли, підпис кнопки, кілька прикладів рядків).
     pub fn activity(&self) -> Vec<ActivityItem> {
+        let key = (self.rev, now_ms() / 60_000);
+        if let Some((k, v)) = self.frame_caches.borrow().activity.as_ref() {
+            if *k == key {
+                return v.clone();
+            }
+        }
+        let v = self.activity_now();
+        self.frame_caches.borrow_mut().activity = Some((key, v.clone()));
+        v
+    }
+
+    fn activity_now(&self) -> Vec<ActivityItem> {
         let Some(p) = self.project.as_ref() else { return vec![] };
         let now = now_ms() as f64;
         transly_core::journal::journal_batches(&self.views, &p.files, 60)
@@ -2895,6 +2968,17 @@ impl AppState {
 
     /// Мовці файлу для фільтра: (ім'я, скільки рядків), найрозмовніші першими.
     pub fn file_speakers(&self, f: usize) -> Vec<(String, usize)> {
+        if let Some(((cf, rev), v)) = self.frame_caches.borrow().speakers.as_ref() {
+            if *cf == f && *rev == self.rev {
+                return v.clone();
+            }
+        }
+        let v = self.file_speakers_now(f);
+        self.frame_caches.borrow_mut().speakers = Some(((f, self.rev), v.clone()));
+        v
+    }
+
+    fn file_speakers_now(&self, f: usize) -> Vec<(String, usize)> {
         let mut by: indexmap::IndexMap<String, usize> = indexmap::IndexMap::new();
         for r in 0..self.row_count(f) {
             let who = self.speaker_of_row(f, r);
@@ -2912,6 +2996,17 @@ impl AppState {
     }
 
     pub fn progress(&self) -> Counts {
+        if let Some((rev, c)) = self.frame_caches.borrow().progress {
+            if rev == self.rev {
+                return c;
+            }
+        }
+        let c = self.progress_now();
+        self.frame_caches.borrow_mut().progress = Some((self.rev, c));
+        c
+    }
+
+    fn progress_now(&self) -> Counts {
         let mut c = Counts::default();
         for (fi, v) in self.views.iter().enumerate() {
             for ri in 0..v.units.len() {

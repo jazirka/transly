@@ -1317,8 +1317,8 @@ impl App {
         let gw = ui.painter().layout_no_wrap(who_label.clone(), ip(12.0), TEXT);
         let ww = gw.size().x + 40.0;
         let (who_resp, _) = chip(ui, fr.right() - 10.0 - lw - 6.0 - ww, &who_label, self.st.speaker_filter.is_some());
-        let speakers = self.st.file_speakers(f);
         pop(ui, &who_resp, "who-pop", |ui| {
+            let speakers = self.st.file_speakers(f);
             if ui.selectable_label(self.st.speaker_filter.is_none(), "Усі мовці").clicked() {
                 self.st.speaker_filter = None;
             }

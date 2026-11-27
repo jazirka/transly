@@ -221,6 +221,8 @@ pub struct AppState {
     frame_caches: std::cell::RefCell<FrameCaches>,
     /// Конструкції, які ще не в глосарії: шукаються у фоні (див. `mine_cards`).
     mine_cache: std::cell::RefCell<MineCache>,
+    auto_cache: std::cell::RefCell<AutoCache>,
+    dismissed: Dismissed,
     scene_cache: std::cell::RefCell<(usize, Option<transly_core::scene::SceneIndex>)>,
     undo: transly_core::undostack::UndoStack,
     pub host: PluginHost,
@@ -255,7 +257,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { undo_count: 0, db_cache: std::cell::RefCell::new(None), names_cache: std::cell::RefCell::new(None), usage_cache: Default::default(), links_cache: std::cell::RefCell::new(None), link_index: std::cell::RefCell::new(None), relay: RelayCfg::load(), relay_rx: None, speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, rows_filter: None, inbox: Inbox::load(), row_memo: RowMemo::load(), frame_caches: Default::default(), mine_cache: Default::default(), scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: Default::default(), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![], saved_ms: None, session_start: now_ms(), session_edits: 0 }
+        AppState { undo_count: 0, db_cache: std::cell::RefCell::new(None), names_cache: std::cell::RefCell::new(None), usage_cache: Default::default(), links_cache: std::cell::RefCell::new(None), link_index: std::cell::RefCell::new(None), relay: RelayCfg::load(), relay_rx: None, speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, rows_filter: None, inbox: Inbox::load(), row_memo: RowMemo::load(), frame_caches: Default::default(), mine_cache: Default::default(), auto_cache: Default::default(), dismissed: Dismissed::load(), scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: Default::default(), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![], saved_ms: None, session_start: now_ms(), session_edits: 0 }
     }
 }
 
@@ -413,6 +415,40 @@ const MINE_ROWS: usize = 20000;
 /// Назви з гри в оригіналі рядка з їхнім перекладом, і мовці файлу з числом рядків.
 type NamesInRow = Vec<(transly_core::gamenames::GameName, String)>;
 type SpeakerCounts = Vec<(String, usize)>;
+
+/// Автословник: те саме, що `MineCache`, для пар «слово → слово».
+#[derive(Default)]
+struct AutoCache {
+    stamp: u64,
+    rev_seen: u64,
+    started: Option<std::time::Instant>,
+    dict: std::sync::Arc<transly_core::autodict::AutoDict>,
+    have: bool,
+    pending: Option<std::sync::mpsc::Receiver<transly_core::autodict::AutoDict>>,
+}
+
+/// Скільки надісланих і вичитаних рядків переглядає автословник.
+const AUTO_ROWS: usize = 60000;
+
+/// Відкладені пропозиції («Не зараз»): `конструкція:…`, `автословник:…` окремо для кожного проєкту; файл `dismissed.json` у теці даних програми.
+#[derive(Default)]
+struct Dismissed {
+    by_project: std::collections::HashMap<String, std::collections::HashSet<String>>,
+}
+
+impl Dismissed {
+    fn load() -> Dismissed {
+        let by_project = local_file("dismissed.json").and_then(|p| std::fs::read_to_string(p).ok()).and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+        Dismissed { by_project }
+    }
+
+    fn save(&self) {
+        if let Some(p) = local_file("dismissed.json") {
+            let _ = std::fs::create_dir_all(p.parent().unwrap_or(Path::new(".")));
+            let _ = std::fs::write(p, serde_json::to_string(&self.by_project).unwrap_or_default());
+        }
+    }
+}
 
 /// Те, що малюється щокадру, а рахується по всіх рядках: кеші за версією змін (`rev`). Без них кадр на 100 тис. рядків займав би десятки мілісекунд.
 #[derive(Default)]
@@ -2076,6 +2112,125 @@ impl AppState {
             .collect()
     }
 
+    /// Легка копія лише надісланих і вичитаних рядків (до `limit`) для фонового потоку: оригінали й записи, без решти проєкту.
+    fn slim_translated(&self, limit: usize) -> (Vec<FileView>, SavedProject) {
+        let (mut views, mut saved, mut n) = (Vec::new(), transly_core::project::empty_project("", "", ""), 0usize);
+        let Some(p) = self.project.as_ref() else { return (views, saved) };
+        for v in &self.views {
+            let Some(ents) = p.files.get(&v.name) else { continue };
+            let (mut units, mut slim) = (Vec::new(), indexmap::IndexMap::new());
+            for u in &v.units {
+                if n >= limit {
+                    break;
+                }
+                if let Some(e) = ents.get(&u.key).filter(|e| !e.target.trim().is_empty() && matches!(e.status, transly_core::model::Status::Done | transly_core::model::Status::Appr)) {
+                    units.push(u.clone());
+                    slim.insert(u.key.clone(), e.clone());
+                    n += 1;
+                }
+            }
+            if !units.is_empty() {
+                saved.files.insert(v.name.clone(), slim);
+                views.push(FileView { name: v.name.clone(), units, label: v.label.clone() });
+            }
+        }
+        (views, saved)
+    }
+
+    /// Автословник: пари «слово → слово», виведені з надісланих і вичитаних рядків; (словник, чи ще рахується). Рахується у фоні, як пошук конструкцій;
+    /// заново — коли змінились терміни, або (не частіше ніж раз на 10 с) коли змінились рядки.
+    pub fn auto_dict(&self) -> (std::sync::Arc<transly_core::autodict::AutoDict>, bool) {
+        use std::hash::{Hash, Hasher};
+        let mut c = self.auto_cache.borrow_mut();
+        if let Some(rx) = c.pending.as_ref() {
+            match rx.try_recv() {
+                Ok(d) => {
+                    c.dict = std::sync::Arc::new(d);
+                    c.have = true;
+                    c.pending = None;
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    c.have = true;
+                    c.pending = None;
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+            }
+        }
+        if self.project.is_none() || self.views.is_empty() {
+            return (c.dict.clone(), false);
+        }
+        let terms: Vec<String> = self.terms().into_iter().map(|t| t.en).collect();
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        (&terms, self.views.len()).hash(&mut h);
+        let stamp = h.finish();
+        let stale = !c.have || c.stamp != stamp || (c.rev_seen != self.rev && c.started.is_none_or(|t| t.elapsed() >= MINE_AGAIN));
+        if stale && c.pending.is_none() {
+            let (views, saved) = self.slim_translated(AUTO_ROWS);
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let _ = tx.send(transly_core::autodict::learn_dictionary(&views, &saved, &terms, AUTO_ROWS));
+            });
+            c.stamp = stamp;
+            c.rev_seen = self.rev;
+            c.started = Some(std::time::Instant::now());
+            c.pending = Some(rx);
+        }
+        (c.dict.clone(), c.pending.is_some() && !c.have)
+    }
+
+    /// Кандидати в глосарій з автословника без відкладених («Не зараз»): словник, номери його пар за впевненістю й частотою, чи ще рахується.
+    pub fn auto_candidates(&self) -> (std::sync::Arc<transly_core::autodict::AutoDict>, Vec<usize>, bool) {
+        let (d, running) = self.auto_dict();
+        // слово, що щойно стало записом, зникає зі списку одразу, не чекаючи, поки фон перерахує словник
+        let known: std::collections::HashSet<String> = self.terms().iter().flat_map(|t| transly_core::glossary::word_tokens(&t.en).into_iter().map(|x| x.keys[0].clone())).collect();
+        let idx = (0..d.pairs.len()).filter(|i| !known.contains(&d.pairs[*i].key) && !self.is_dismissed("auto", &d.pairs[*i].key)).collect();
+        (d, idx, running)
+    }
+
+    /// Додає пару як запис глосарія; конкуруючі переклади (якщо вибрано один) стають альтернативами запису.
+    pub fn auto_add(&mut self, en: &str, uk: &str, alts: &[String]) -> String {
+        let form = TermForm { en: en.into(), uk: uk.into(), alt: (!alts.is_empty()).then(|| alts.join(", ")), ..Default::default() };
+        self.save_term_form(&form, None)
+    }
+
+    /// «Додати всі певні»: усі пари, де від 90 % рядків згодні й конкурентів нема. Повертає слова оригіналу доданих записів (для «Скасувати»).
+    pub fn auto_add_sure(&mut self) -> Vec<String> {
+        let (d, idx, _) = self.auto_candidates();
+        let mut done = Vec::new();
+        for p in idx.iter().map(|i| &d.pairs[*i]).filter(|p| p.sure()) {
+            self.auto_add(&p.en, &p.uk, &[]);
+            done.push(p.en.clone());
+        }
+        done
+    }
+
+    /// Прибирає записи, додані «Додати всі певні» (слід лишається, як при звичайному видаленні).
+    pub fn auto_undo(&mut self, ens: &[String]) -> usize {
+        let Some(p) = self.project.as_mut() else { return 0 };
+        let n = ens.iter().filter(|en| transly_core::termedit::remove_term(p, en, now_ms())).count();
+        self.rev += 1;
+        self.dirty = true;
+        n
+    }
+
+    /// Показує пропозиції знову (для тестів).
+    #[cfg(test)]
+    pub fn clear_dismissed(&mut self) {
+        self.dismissed.by_project.clear();
+    }
+
+    pub fn is_dismissed(&self, kind: &str, key: &str) -> bool {
+        let Some(p) = self.project.as_ref() else { return false };
+        self.dismissed.by_project.get(&p.name).is_some_and(|s| s.contains(&format!("{kind}:{key}")))
+    }
+
+    /// «Не зараз»: пропозицію сховано назавжди для цього проєкту (лежить на цьому пристрої, у проєкт не пишеться).
+    pub fn dismiss(&mut self, kind: &str, key: &str) {
+        let Some(p) = self.project.as_ref() else { return };
+        self.dismissed.by_project.entry(p.name.clone()).or_default().insert(format!("{kind}:{key}"));
+        self.dismissed.save();
+    }
+
     /// Конструкції («take … off»), які рядки вже передають одним словом, а в глосарії їх ще немає: (список, чи ще шукаються).
     /// Пошук іде у фоні на копії лише надісланих і вичитаних рядків (до 20 000), тож інтерфейс не завмирає; результат лишається, поки не змінились терміни.
     pub fn mine_cards(&self) -> (std::sync::Arc<Vec<transly_core::mine::ConstructionSuggestion>>, bool) {
@@ -2095,32 +2250,16 @@ impl AppState {
                 Err(std::sync::mpsc::TryRecvError::Empty) => {}
             }
         }
-        let Some(p) = self.project.as_ref().filter(|_| !self.views.is_empty()) else { return (c.list.clone(), false) };
+        if self.project.is_none() || self.views.is_empty() {
+            return (c.list.clone(), false);
+        }
         let terms: Vec<String> = self.terms().into_iter().map(|t| t.en).collect();
         let mut h = std::collections::hash_map::DefaultHasher::new();
         (&terms, self.views.len()).hash(&mut h);
         let stamp = h.finish();
         let stale = !c.have || c.stamp != stamp || (c.rev_seen != self.rev && c.started.is_none_or(|t| t.elapsed() >= MINE_AGAIN));
         if stale && c.pending.is_none() {
-            let (mut views, mut saved, mut n) = (Vec::new(), transly_core::project::empty_project("", "", ""), 0usize);
-            for v in &self.views {
-                let Some(ents) = p.files.get(&v.name) else { continue };
-                let (mut units, mut slim) = (Vec::new(), indexmap::IndexMap::new());
-                for u in &v.units {
-                    if n >= MINE_ROWS {
-                        break;
-                    }
-                    if let Some(e) = ents.get(&u.key).filter(|e| !e.target.trim().is_empty() && matches!(e.status, transly_core::model::Status::Done | transly_core::model::Status::Appr)) {
-                        units.push(u.clone());
-                        slim.insert(u.key.clone(), e.clone());
-                        n += 1;
-                    }
-                }
-                if !units.is_empty() {
-                    saved.files.insert(v.name.clone(), slim);
-                    views.push(FileView { name: v.name.clone(), units, label: v.label.clone() });
-                }
-            }
+            let (views, saved) = self.slim_translated(MINE_ROWS);
             let (tx, rx) = std::sync::mpsc::channel();
             std::thread::spawn(move || {
                 let _ = tx.send(transly_core::mine::mine_constructions(&views, &saved, &terms, &mut || {}, MINE_ROWS, 2500));

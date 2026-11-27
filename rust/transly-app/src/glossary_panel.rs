@@ -19,7 +19,7 @@ pub(crate) struct GlForm {
     pub qa: bool,
 }
 
-const CHIPS: [&str; 6] = ["Усе", "Слова", "Конструкції", "Рядки", "Пам’ять", "Розбіжності"];
+const CHIPS: [&str; 7] = ["Усе", "Слова", "Конструкції", "Рядки", "Пам’ять", "Розбіжності", "Автословник"];
 /// Скільки карток показується одразу (як `SHOWN` у вебі).
 const SHOWN: usize = 200;
 
@@ -153,7 +153,12 @@ impl App {
         if self.gl_show == 4 {
             self.gl_mem_asked = true;
         }
-        let counts = [Some(n_all), Some(n_all - n_con), Some(n_con), Some(self.st.link_group_count()), if self.gl_mem_asked { Some(self.st.tm_search("", 0).1) } else { None }, diffs.as_ref().map(|d| d.len())];
+        // автословник рахується у фоні, поки показано глосарій; число на чипі з'являється, коли готовий
+        let (auto_dict, auto_idx, auto_running) = self.st.auto_candidates();
+        if auto_running {
+            ui.ctx().request_repaint_after(std::time::Duration::from_millis(150));
+        }
+        let counts = [Some(n_all), Some(n_all - n_con), Some(n_con), Some(self.st.link_group_count()), if self.gl_mem_asked { Some(self.st.tm_search("", 0).1) } else { None }, diffs.as_ref().map(|d| d.len()), (!auto_running).then_some(auto_idx.len())];
         let w = ui.available_width();
         let origin = ui.cursor().min;
 
@@ -226,6 +231,8 @@ impl App {
             if groups_total > 0 { transly_core::plural::plural(groups_total as i64, ["група однакових рядків", "групи однакових рядків", "груп однакових рядків"]) } else { "Однакових рядків немає".to_string() }
         } else if self.gl_show == 4 {
             format!("{} у пам’яті{}", transly_core::plural::plural(mem_size as i64, ["пара", "пари", "пар"]), if q.is_empty() { String::new() } else { format!(" · знайдено {}", mem_hits.len()) })
+        } else if self.gl_show == 6 {
+            if auto_running { "Вчуся на ваших перекладах…".to_string() } else { format!("{} · з них певних {}", transly_core::plural::plural(auto_idx.len() as i64, ["кандидат", "кандидати", "кандидатів"]), auto_idx.iter().filter(|i| auto_dict.pairs[**i].sure()).count()) }
         } else if self.gl_show == 5 && diffs.is_none() {
             "Рахую розбіжності…".to_string()
         } else if terms.is_empty() {
@@ -286,6 +293,10 @@ impl App {
             }
             return;
         }
+        if self.gl_show == 6 {
+            self.auto_list(ui, &auto_dict, &auto_idx, auto_running);
+            return;
+        }
         if self.gl_show == 4 {
             if q.is_empty() {
                 empty_state(ui, "Пам’ять перекладів", "Введіть слово в пошуку: покажу, як воно вже перекладалося.");
@@ -311,7 +322,7 @@ impl App {
         }
         // чип «Конструкції» без пошуку: зверху пропозиції (знайдені у фоні) — що ваші рядки вже передають одним словом, а в глосарії ще нема
         let (mine, mine_running) = if self.gl_show == 2 && q.is_empty() { self.st.mine_cards() } else { Default::default() };
-        let sugg: Vec<&transly_core::mine::ConstructionSuggestion> = mine.iter().filter(|x| !self.mine_no.contains(&x.en)).take(20).collect();
+        let sugg: Vec<&transly_core::mine::ConstructionSuggestion> = mine.iter().filter(|x| !self.st.is_dismissed("mine", &x.en)).take(20).collect();
         if mine_running {
             ui.ctx().request_repaint_after(std::time::Duration::from_millis(150));
         }
@@ -447,7 +458,7 @@ impl App {
                     self.cell_edit = None;
                 }
                 _ => {
-                    self.mine_no.insert(x.en.clone());
+                    self.st.dismiss("mine", &x.en);
                 }
             }
         }
@@ -469,6 +480,101 @@ impl App {
     }
 
     /// Форма запису: «Новий запис» чи «Змінити запис «…»», оригінал, переклад, інші переклади, категорія, примітка, прапорець QA, «Зберегти» й «Скасувати».
+    /// Чип «Автословник»: пари, виведені з ваших перекладів. Зверху «Додати всі певні» (від 90 % згоди, без конкурентів) зі «Скасувати», далі картки пар:
+    /// «Додати» (запис одразу), «Показати N» (рядки в таблиці), «Не зараз» (ховає назавжди для проєкту). Слово з двома чіткими перекладами пропонує обидва.
+    fn auto_list(&mut self, ui: &mut egui::Ui, dict: &transly_core::autodict::AutoDict, idx: &[usize], running: bool) {
+        if running && idx.is_empty() {
+            empty_state(ui, "Вчуся на ваших перекладах…", "Дивлюсь, як ви перекладаєте слова в надісланих і вичитаних рядках.");
+            return;
+        }
+        if idx.is_empty() && self.auto_added.is_empty() {
+            empty_state(ui, "Нових пар поки немає", "Автословник пропонує слово, яке ви переклали однаково щонайменше в трьох надісланих рядках.");
+            return;
+        }
+        enum Act {
+            Add(usize, Option<usize>),
+            Show(usize),
+            Later(usize),
+            Sure,
+            Undo,
+        }
+        let mut act: Option<Act> = None;
+        let sure = idx.iter().filter(|i| dict.pairs[**i].sure()).count();
+        egui::ScrollArea::vertical().id_salt("gl-auto").auto_shrink([false; 2]).show(ui, |ui| {
+            egui::Frame::new().inner_margin(egui::Margin { left: 8, right: 8, top: 8, bottom: 8 }).show(ui, |ui| {
+                ui.spacing_mut().item_spacing = vec2(0.0, 6.0);
+                if !self.auto_added.is_empty() {
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(format!("Додано записів у глосарій: {}", self.auto_added.len())).size(12.0).color(MUTE));
+                        if button28(ui, "Скасувати", false).clicked() {
+                            act = Some(Act::Undo);
+                        }
+                    });
+                } else if sure > 0 && button28(ui, &format!("Додати всі певні ({sure})"), true).clicked() {
+                    act = Some(Act::Sure);
+                }
+                for (n, &i) in idx.iter().take(SHOWN).enumerate() {
+                    let p = &dict.pairs[i];
+                    let head = format!("{} → {}", p.en, p.uk);
+                    let rows = p.rows;
+                    let (tag, hint, acts): (&str, String, Vec<String>) = if p.alts.is_empty() {
+                        ("вивчено", format!("{} · {} %", transly_core::plural::plural(rows as i64, ["рядок", "рядки", "рядків"]), (p.share * 100.0).round() as i64), vec!["Додати".into(), format!("Показати {rows}"), "Не зараз".into()])
+                    } else {
+                        let alt = p.alts[0].0.clone();
+                        ("два варіанти", format!("{} {rows} · {alt} {}", p.uk, p.alts[0].1), vec![format!("+ {}", p.uk), format!("+ {alt}"), format!("Показати {rows}"), "Не зараз".into()])
+                    };
+                    let labels: Vec<&str> = acts.iter().map(|a| a.as_str()).collect();
+                    if let Some(a) = simple_card(ui, ("gl-auto", n), &head, None, tag, &hint, &labels) {
+                        act = Some(if p.alts.is_empty() {
+                            match a {
+                                0 => Act::Add(i, None),
+                                1 => Act::Show(i),
+                                _ => Act::Later(i),
+                            }
+                        } else {
+                            match a {
+                                0 => Act::Add(i, None),
+                                1 => Act::Add(i, Some(0)),
+                                2 => Act::Show(i),
+                                _ => Act::Later(i),
+                            }
+                        });
+                    }
+                }
+                if idx.len() > SHOWN {
+                    ui.label(RichText::new(format!("Показано {SHOWN} із {}.", idx.len())).size(12.0).color(MUTE));
+                }
+            });
+        });
+        match act {
+            Some(Act::Add(i, alt)) => {
+                let p = &dict.pairs[i];
+                let (uk, others): (String, Vec<String>) = match alt {
+                    Some(k) => (p.alts[k].0.clone(), vec![p.uk.clone()]),
+                    None => (p.uk.clone(), p.alts.iter().map(|a| a.0.clone()).collect()),
+                };
+                self.message = self.st.auto_add(&p.en, &uk, &others);
+            }
+            Some(Act::Show(i)) => {
+                let p = &dict.pairs[i];
+                let rows: Vec<transly_core::groups::RowRef> = p.refs.iter().map(|r| transly_core::groups::RowRef { file: r.file.clone(), key: r.key.clone() }).collect();
+                self.message = self.st.show_rows(&format!("«{} → {}»: так уже перекладено", p.en, p.uk), &rows);
+                self.draft_for = None;
+                self.cell_edit = None;
+            }
+            Some(Act::Later(i)) => self.st.dismiss("auto", &dict.pairs[i].key),
+            Some(Act::Sure) => {
+                self.auto_added = self.st.auto_add_sure();
+                self.message = format!("Додано записів у глосарій: {}", self.auto_added.len());
+            }
+            Some(Act::Undo) => {
+                let n = self.st.auto_undo(&std::mem::take(&mut self.auto_added));
+                self.message = format!("Скасовано записів: {n}");
+            }
+            None => {}
+        }
+    }
+
     fn glossary_form(&mut self, ui: &mut egui::Ui, w: f32) {
         let Some(mut form) = self.gl_form.clone() else { return };
         let top = ui.cursor().top();

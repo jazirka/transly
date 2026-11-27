@@ -97,7 +97,8 @@ struct App {
     relay_win: Option<state::RelayCfg>,
     /// Вікно «Конструкції»: знайдені пропозиції; відкладені («Не зараз») пам'ятаються до кінця сеансу.
     mine_win: bool,
-    mine_no: std::collections::HashSet<String>,
+    /// Слова, додані кнопкою «Додати всі певні» в автословнику: «Скасувати» прибирає саме їх.
+    auto_added: Vec<String>,
     /// Сповіщення внизу: (текст, коли з'явилось, чи можна скасувати); останнє показане повідомлення й лічильник скасувань.
     toast: Option<(String, std::time::Instant, bool)>,
     toast_seen: (String, u64),
@@ -262,7 +263,7 @@ fn game_job(text: &str, size: f32, actor_name: &dyn Fn(usize) -> Option<String>)
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, links_win: None, chrome_own: winchrome::own_chrome_chosen(), find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: false, mine_no: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, fill_win: None, links_win: None, chrome_own: winchrome::own_chrome_chosen(), find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: false, auto_added: Vec::new(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
     }
 }
 
@@ -1127,7 +1128,7 @@ impl App {
         let mut add: Option<usize> = None;
         let mut show: Option<usize> = None;
         let mut no: Option<usize> = None;
-        let shown: Vec<&transly_core::mine::ConstructionSuggestion> = list.iter().filter(|x| !self.mine_no.contains(&x.en)).collect();
+        let shown: Vec<&transly_core::mine::ConstructionSuggestion> = list.iter().filter(|x| !self.st.is_dismissed("mine", &x.en)).collect();
         dlg("Конструкції").open(&mut open).collapsible(false).default_width(560.0).default_height(460.0).show(ctx, |ui| {
             if shown.is_empty() {
                 ui.add_space(8.0);
@@ -1172,7 +1173,8 @@ impl App {
             self.draft_for = None;
             self.cell_edit = None;
         } else if let Some(i) = no {
-            self.mine_no.insert(shown[i].en.clone());
+            let en = shown[i].en.clone();
+            self.st.dismiss("mine", &en);
         }
         if !open {
             self.mine_win = false;
@@ -2931,7 +2933,7 @@ mod ui_tests {
             }
         }
         for _ in 0..1000 {
-            if !app.st.mine_cards().1 {
+            if !app.st.mine_cards().1 && !app.st.auto_dict().1 {
                 break;
             }
             std::thread::sleep(std::time::Duration::from_millis(10));
@@ -3201,9 +3203,9 @@ mod ui_tests {
         h.get_by_label_contains("так уже перекладено в 5 рядках");
         h.get_by_label("Не зараз").click();
         h.run();
-        assert_eq!(h.state().mine_no.len(), 1);
+        assert!(h.state().st.is_dismissed("mine", "take … off"));
         h.get_by_label_contains("Нових конструкцій не знайдено");
-        h.state_mut().mine_no.clear();
+        h.state_mut().st.clear_dismissed();
         h.run();
         h.get_by_label("Додати").click();
         h.run();
@@ -3872,7 +3874,7 @@ mod ui_tests {
         assert!(h.state().st.terms().is_empty(), "нічого не записано, поки форму не збережено");
         h.get_by_label_contains("Не зараз: take … off").click();
         h.run();
-        assert_eq!(h.state().mine_no.len(), 1);
+        assert!(h.state().st.is_dismissed("mine", "take … off"));
         assert!(h.query_by_label_contains("Додати: take … off").is_none(), "картка зникла");
     }
 
@@ -4230,6 +4232,45 @@ mod ui_tests {
         assert_eq!(app.st.file_issues(0), incremental, "інкрементальний результат дорівнює повному");
     }
 
+    /// Чип «Автословник»: пари, виведені з надісланих рядків, з картками «Додати» / «Показати N» / «Не зараз»; «Додати всі певні» додає впевнені пари, «Скасувати» прибирає їх.
+    #[test]
+    fn the_auto_dictionary_chip_offers_learned_pairs() {
+        let app = construction_game("autodict");
+        warm_usage(&app);
+        let mut h = harness(app);
+        h.state_mut().rail = 3;
+        h.run();
+        h.get_by_label("Вид записів: Автословник").click();
+        h.run();
+        assert_eq!(h.state().gl_show, 6);
+        // «take» передано «Зніми» у всіх п'яти рядках: впевнена пара
+        let (dict, idx, _) = h.state().st.auto_candidates();
+        let take = idx.iter().map(|i| &dict.pairs[*i]).find(|p| p.key == "take").expect("take → зніми");
+        assert_eq!((take.rows, take.sure()), (5, true), "{take:?}");
+        h.get_by_label_contains("Додати: take → ").click();
+        h.run();
+        assert_eq!(h.state().st.terms().len(), 1, "запис додано в глосарій");
+        // слово вже в глосарії — з пропозицій зникло
+        let (_, idx2, _) = h.state().st.auto_candidates();
+        assert!(!idx2.iter().any(|i| h.state().st.auto_dict().0.pairs[*i].key == "take"));
+        // «Не зараз» ховає назавжди (для проєкту)
+        h.state_mut().st.dismiss("auto", "thing");
+        assert!(h.state().st.is_dismissed("auto", "thing"));
+    }
+
+    /// «Додати всі певні» додає всі впевнені пари одним рухом, «Скасувати» повертає глосарій як було.
+    #[test]
+    fn adding_all_sure_pairs_can_be_undone() {
+        let mut app = construction_game("autosure");
+        warm_usage(&app);
+        let done = app.st.auto_add_sure();
+        assert!(done.contains(&"take".to_string()), "{done:?}");
+        let n = app.st.terms().len();
+        assert_eq!(n, done.len());
+        assert_eq!(app.st.auto_undo(&done), n);
+        assert!(app.st.terms().is_empty(), "після «Скасувати» записів нема: {:?}", app.st.terms());
+    }
+
     /// Підказки пам'яті після правки одного рядка: індекс міняє одну пару (а не будується з нуля), і результат той самий, що після повної перебудови;
     /// стара пара правленого рядка підказкою не лишається.
     #[test]
@@ -4390,6 +4431,22 @@ mod ui_tests {
         h.state_mut().rail = 0;
         h.state_mut().focus = true;
         frame(&mut h, "редагування");
+    }
+
+    /// Знімок чипа «Автословник»: `TRANSLY_SHOTS=<тека> cargo test -p transly-app auto_shot -- --ignored`.
+    #[test]
+    #[ignore]
+    fn auto_shot() {
+        let Some(dir) = std::env::var_os("TRANSLY_SHOTS").map(std::path::PathBuf::from) else { return };
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut app = construction_game("autoshot");
+        app.st.row = Some(0);
+        warm_usage(&app);
+        let mut h = harness(app);
+        h.state_mut().rail = 3;
+        h.state_mut().gl_show = 6;
+        h.run();
+        h.render().unwrap().save(dir.join("26-auto-dictionary.png")).unwrap();
     }
 
     /// Знімок таблиці з виділеними рядками (смуга «вибрано» на шапці): `TRANSLY_SHOTS=<тека> cargo test -p transly-app bulk_shot -- --ignored`.

@@ -18,6 +18,7 @@ pub mod gamenames;
 pub mod hints;
 pub mod hyphen;
 pub mod inbox;
+pub mod autodict;
 pub mod autofill;
 pub mod autolog;
 pub mod branches;

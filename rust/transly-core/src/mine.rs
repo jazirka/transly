@@ -41,8 +41,8 @@ const MIN_FOR_COMMON: usize = 50;
 const CONTROL_SHARE: f64 = 0.3;
 const MAX_SUGGESTIONS: usize = 30;
 
-const PARTICLES: &[&str] = &["up", "off", "on", "out", "in", "down", "away", "back", "over", "through", "around", "apart", "along", "aside", "ahead", "into", "onto", "to", "for", "from", "with", "about", "at"];
-const STOP: &[&str] = &[
+pub(crate) const PARTICLES: &[&str] = &["up", "off", "on", "out", "in", "down", "away", "back", "over", "through", "around", "apart", "along", "aside", "ahead", "into", "onto", "to", "for", "from", "with", "about", "at"];
+pub(crate) const STOP: &[&str] = &[
     "the", "a", "an", "and", "or", "but", "of", "to", "in", "on", "at", "by", "for", "with", "from", "it", "its", "he", "she", "we", "you", "they", "i", "me", "him", "her", "us", "them", "my", "your", "his", "our", "their", "this", "that", "these", "those", "is", "are",
     "was", "were", "be", "been", "am", "do", "does", "did", "have", "has", "had", "will", "would", "can", "could", "shall", "should", "may", "might", "must", "not", "no", "so", "if", "then", "than", "as", "there", "here", "what", "who", "how", "why", "when", "where", "all",
     "any", "some",
@@ -51,7 +51,7 @@ static BREAK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[.!?;]|\n").unwrap
 static LETTERS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\p{L}+$").unwrap());
 static TY: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"ти$").unwrap());
 
-fn translated(e: Option<&Entry>) -> Option<&Entry> {
+pub(crate) fn translated(e: Option<&Entry>) -> Option<&Entry> {
     e.filter(|e| !js::trim(&e.target).is_empty() && (e.status == Status::Done || e.status == Status::Appr))
 }
 
@@ -93,7 +93,7 @@ struct Cand {
 }
 
 /// Слово — кандидат у дієслова, коли має лише літери, не службове і саме не частка.
-fn content(keys: &[String], word: &str) -> bool {
+pub(crate) fn content(keys: &[String], word: &str) -> bool {
     LETTERS.is_match(word) && js::len16(word) >= 3 && !STOP.contains(&keys[0].as_str()) && !PARTICLES.contains(&keys[0].as_str())
 }
 

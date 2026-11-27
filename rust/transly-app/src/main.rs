@@ -4636,6 +4636,35 @@ mod ui_tests {
         h.render().unwrap().save(dir.join("28-ghost-edit.png")).unwrap();
     }
 
+    /// Діалоги не пересуваються: вони стоять по центру й затемнюють решту вікна (плаваючих вікон, які можна тягати, у застосунку немає).
+    #[test]
+    fn dialogs_are_fixed_and_cannot_be_dragged_around() {
+        let data = game("fixeddlg");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.settings = app.st.settings_view();
+        let mut h = harness(app);
+        h.run();
+        let title = |h: &Harness<'static, App>| {
+            let b = h.get_by_label("Налаштування проєкту").bounding_box().unwrap();
+            (b.x0 as f32, b.y0 as f32)
+        };
+        let (x0, y0) = title(&h);
+        let from = pos2(x0 + 60.0, y0 + 8.0);
+        h.input_mut().events.push(egui::Event::PointerMoved(from));
+        h.step();
+        h.input_mut().events.push(egui::Event::PointerButton { pos: from, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE });
+        h.step();
+        for k in 1..=4 {
+            h.input_mut().events.push(egui::Event::PointerMoved(from + vec2(30.0 * k as f32, 20.0 * k as f32)));
+            h.step();
+        }
+        h.input_mut().events.push(egui::Event::PointerButton { pos: from + vec2(120.0, 80.0), button: egui::PointerButton::Primary, pressed: false, modifiers: egui::Modifiers::NONE });
+        h.step();
+        h.run();
+        assert_eq!(title(&h), (x0, y0), "діалог лишився на місці");
+    }
+
     /// Знімок таблиці з виділеними рядками (смуга «вибрано» на шапці): `TRANSLY_SHOTS=<тека> cargo test -p transly-app bulk_shot -- --ignored`.
     #[test]
     #[ignore]

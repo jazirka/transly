@@ -73,7 +73,7 @@ impl App {
                     let id = (it.file.clone(), it.key.clone());
                     let mut on = !w.off.contains(&id);
                     ui.horizontal_top(|ui| {
-                        let cb = ui.checkbox(&mut on, "");
+                        let cb = stshell::check(ui, &mut on, "");
                         cb.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, on, format!("Оновити {}", file_title(&it.file))));
                         ui.vertical(|ui| {
                             ui.label(RichText::new(format!("{} · {}{}", file_title(&it.file), it.state, if it.approved { " · вичитано (стане чернеткою)" } else { "" })).size(12.0).color(MUTE));

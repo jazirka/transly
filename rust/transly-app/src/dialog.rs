@@ -24,6 +24,18 @@ const FOOT_H: f32 = 1.0 + 8.0 + 28.0 + 2.0;
 const FOOT_MT: f32 = 6.0;
 const BG: Color32 = Color32::from_rgb(0x2b, 0x2d, 0x33);
 
+/// Кнопки вікон — як `.btn` у `buttons.css`: без заливки, рамка 1 px `--b-line` (`#4a4d54`), наведення біле 7 %, радіус 8; головна (`.p`) — заливка кольору теми. Діє на все всередині `ui`.
+pub(crate) fn dialog_style(ui: &mut egui::Ui) {
+    let line = Stroke::new(1.0_f32, Color32::from_rgb(0x4a, 0x4d, 0x54));
+    let w = &mut ui.visuals_mut().widgets;
+    w.inactive.weak_bg_fill = Color32::TRANSPARENT;
+    w.inactive.bg_stroke = line;
+    w.hovered.weak_bg_fill = Color32::from_white_alpha(18);
+    w.hovered.bg_stroke = line;
+    w.active.weak_bg_fill = Color32::from_white_alpha(30);
+    w.active.bg_stroke = line;
+}
+
 pub(crate) struct Dlg<'a> {
     title: String,
     open: Option<&'a mut bool>,
@@ -98,6 +110,7 @@ impl<'a> Dlg<'a> {
         let mut measured = (0.0_f32, 0.0_f32);
         let area = egui::Modal::default_area(id).anchor(Align2::CENTER_CENTER, vec2(0.0, TB_H / 2.0));
         let resp = egui::Modal::new(id).area(area).backdrop_color(Color32::from_black_alpha(128)).frame(frame).show(ctx, |ui| {
+            dialog_style(ui);
             ui.set_min_width(wi);
             // область діалогу в egui «пам'ятає» розмір попереднього кадру й обмежує по ньому, скільки лишилось місця: даємо їй повну висоту, інакше тіло не росло б
             ui.set_max_height(max_h);

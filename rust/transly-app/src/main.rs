@@ -2292,7 +2292,7 @@ impl App {
                 ui.add(egui::TextEdit::singleline(&mut token).password(true));
                 ui.end_row();
                 ui.label("Зберігати оригінали (лише приватний)");
-                ui.checkbox(&mut cfg.originals, "");
+                stshell::check(ui, &mut cfg.originals, "");
                 ui.end_row();
             });
             ui.label(RichText::new("Токен не зберігається: його треба вводити в кожному сеансі.").size(11.0).color(MUTE));
@@ -2533,7 +2533,7 @@ impl App {
                 for c in &cands {
                     let mut on = chosen.contains(&c.name);
                     ui.horizontal(|ui| {
-                        if ui.checkbox(&mut on, "").changed() {
+                        if stshell::check(ui, &mut on, "").changed() {
                             if on {
                                 chosen.insert(c.name.clone());
                             } else {
@@ -2610,7 +2610,7 @@ impl App {
                     ui.set_width(ui.available_width());
                     ui.horizontal(|ui| {
                         let mut on = r.enabled;
-                        if ui.checkbox(&mut on, "").changed() {
+                        if stshell::check(ui, &mut on, "").changed() {
                             action = Some((r.id.clone(), 0));
                         }
                         ui.vertical(|ui| {
@@ -2697,23 +2697,19 @@ impl App {
         let (mut apply, mut close) = (false, false);
         let step = transly_core::commands::ReplaceStep { find: find.clone(), replace: repl.clone(), whole_word: word, case_sensitive: case };
         let count = self.st.run_replace(std::slice::from_ref(&step), false).unwrap_or(0);
-        dlg("Пошук і заміна в перекладах").open(&mut open).collapsible(false).resizable(false).default_width(420.0).show(ctx, |ui| {
-            egui::Grid::new("find_grid").num_columns(2).spacing([14.0, 10.0]).show(ui, |ui| {
-                ui.label("Знайти");
-                ui.text_edit_singleline(&mut find);
-                ui.end_row();
-                ui.label("Замінити на");
-                ui.text_edit_singleline(&mut repl);
-                ui.end_row();
-                ui.label("Враховувати регістр");
-                ui.checkbox(&mut case, "");
-                ui.end_row();
-                ui.label("Лише ціле слово");
-                ui.checkbox(&mut word, "");
-                ui.end_row();
+        dlg("Знайти й замінити в перекладах").open(&mut open).collapsible(false).resizable(false).default_width(420.0).show(ctx, |ui| {
+            // як `tools-dialogs.ts`: сітка «Знайти / Замінити на» (1,4fr / 1fr), прапорці рядками, блок підсумку
+            stshell::grid_row(ui, "Знайти", |ui| {
+                let w = ui.available_width();
+                stshell::input(ui, &mut find, "", w);
             });
-            ui.add_space(6.0);
-            ui.label(RichText::new(if find.is_empty() { "Введіть, що шукати".to_string() } else { format!("Буде змінено рядків: {count}") }).color(MUTE));
+            stshell::grid_row(ui, "Замінити на", |ui| {
+                let w = ui.available_width();
+                stshell::input(ui, &mut repl, "", w);
+            });
+            stshell::check(ui, &mut word, "Лише ціле слово");
+            stshell::check(ui, &mut case, "Враховувати регістр");
+            stshell::sum_box(ui, &if find.is_empty() { "Введіть, що шукати".to_string() } else { format!("Буде змінено рядків: {count}") });
             dlg_footer(ui, |ui| {
                 if ui.add_enabled(count > 0, egui::Button::new(RichText::new("Замінити все").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 28.0))).clicked() {
                     apply = true;
@@ -2758,7 +2754,7 @@ impl App {
                 egui::ScrollArea::vertical().max_height(340.0).show(ui, |ui| {
                     for (p, on) in list.iter_mut() {
                         ui.horizontal(|ui| {
-                            ui.checkbox(on, "");
+                            stshell::check(ui, on, "");
                             ui.vertical(|ui| {
                                 ui.label(RichText::new(&p.source).color(SRC_TEXT));
                                 ui.label(RichText::new(&p.target).color(TEXT));
@@ -2793,9 +2789,9 @@ impl App {
         let (mut go, mut close) = (false, false);
         let preview = self.st.build_preview(&c);
         dlg("Збірка в гру").open(&mut open).collapsible(false).resizable(false).default_width(420.0).show(ctx, |ui| {
-            ui.checkbox(&mut c.only_approved, "Лише вичитані рядки");
+            stshell::check(ui, &mut c.only_approved, "Лише вичитані рядки");
             ui.add_enabled(!c.only_approved, egui::Checkbox::new(&mut c.include_drafts, "Додати чернетки (щоб перевірити переклад у грі)"));
-            ui.checkbox(&mut c.block_errors, "Рядки з помилкою QA лишати мовою оригіналу");
+            stshell::check(ui, &mut c.block_errors, "Рядки з помилкою QA лишати мовою оригіналу");
             ui.add_space(8.0);
             match &preview {
                 Ok((inc, skip, blocked)) => {
@@ -3185,7 +3181,7 @@ impl App {
             ui.add_space(6.0);
             label_caps(ui, "Приклад");
             ui.add(egui::TextEdit::multiline(&mut sample).desired_rows(3).desired_width(f32::INFINITY));
-            ui.checkbox(&mut face, "Поруч портрет персонажа");
+            stshell::check(ui, &mut face, "Поруч портрет персонажа");
             let (shown, n) = self.st.wrap_preview(&sample, face);
             ui.label(RichText::new(shown).monospace().color(TEXT));
             ui.label(RichText::new(format!("Рядків: {n}")).size(11.0).color(MUTE));
@@ -3295,7 +3291,7 @@ impl App {
                 for (p, on, choice) in rows.iter_mut() {
                     egui::Frame::new().fill(PANEL2).corner_radius(CornerRadius::same(R2)).inner_margin(egui::Margin::symmetric(10, 6)).show(ui, |ui| {
                         ui.set_width(ui.available_width());
-                        ui.checkbox(on, RichText::new(format!("{} · {}", p.file, if p.conf.level == "high" { "впевнено" } else { "перевірте" })).size(11.0).color(MUTE));
+                        stshell::check(ui, on, &format!("{} · {}", p.file, if p.conf.level == "high" { "впевнено" } else { "перевірте" }));
                         ui.label(RichText::new(&p.before).color(MUTE));
                         ui.label(RichText::new(transly_core::termsync::apply_spans(&p.before, &p.spans, choice)).color(TEXT));
                         for (si, sp) in p.spans.iter().enumerate() {

@@ -105,6 +105,7 @@ impl StShell<'_> {
         let mut use_nav = nav.tree_use;
         let mut folded = std::mem::take(&mut nav.folded);
         let resp = egui::Modal::new(id).area(area).backdrop_color(Color32::from_black_alpha(128)).frame(frame).show(ctx, |ui| {
+            crate::dialog::dialog_style(ui);
             ui.set_min_size(vec2(w - 2.0, h - 2.0));
             ui.set_max_size(vec2(w - 2.0, h - 2.0));
             let full = ui.max_rect();
@@ -442,4 +443,12 @@ pub(crate) fn number(ui: &mut egui::Ui, dv: egui::DragValue<'_>, width: f32) -> 
         ui.add_sized(vec2(width, 30.0), dv)
     })
     .inner
+}
+
+/// Блок підсумку `.sum`: відступи 8×10, фон `--bg`, рамка `--line`, радіус 8, текст `#c8ccd3`.
+pub(crate) fn sum_box(ui: &mut egui::Ui, text: &str) {
+    egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(CornerRadius::same(R2)).inner_margin(egui::Margin::symmetric(10, 8)).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.label(RichText::new(text).size(12.5).color(SRC_TEXT));
+    });
 }

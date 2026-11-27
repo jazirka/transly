@@ -201,7 +201,14 @@ struct QaCache {
     bad: Option<std::rc::Rc<std::collections::HashSet<usize>>>,
 }
 
+/// Підсумок збірки для діалогу: версія змін, параметри, результат (збирання на великому проєкті ≈0,6 с, тож рахується лише коли щось змінилось, а не щокадру).
+type BuildPrev = Option<(u64, [bool; 3], Result<(usize, usize, usize), String>)>;
+/// Рядок правила QA для діалогу «Правила QA»: (id, назва, пояснення, рівень, рядків, виправних).
+pub type QaRuleRow = (String, String, String, String, usize, usize);
+
 pub struct AppState {
+    build_prev: std::cell::RefCell<BuildPrev>,
+    qa_view_cache: std::cell::RefCell<Option<(u64, usize, Vec<QaRuleRow>)>>,
     /// Фільтр «Мовець» і «Довжина» (0 усі, 1 далеко від оригіналу, 2 довші, 3 коротші).
     /// Скільки масових дій записано в стек скасування (за зміною показується «Скасувати» у сповіщенні).
     pub undo_count: u64,
@@ -273,7 +280,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { undo_count: 0, db_cache: std::cell::RefCell::new(None), names_cache: std::cell::RefCell::new(None), usage_cache: Default::default(), links_cache: std::cell::RefCell::new(None), link_index: std::cell::RefCell::new(None), relay: RelayCfg::load(), relay_rx: None, speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, rows_filter: None, inbox: Inbox::load(), row_memo: RowMemo::load(), frame_caches: Default::default(), ghost_budget: std::cell::Cell::new(0), ghost_more: std::cell::Cell::new(false), mine_cache: Default::default(), auto_cache: Default::default(), dismissed: Dismissed::load(), scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: Default::default(), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![], saved_ms: None, session_start: now_ms(), session_edits: 0 }
+        AppState { build_prev: Default::default(), qa_view_cache: Default::default(), undo_count: 0, db_cache: std::cell::RefCell::new(None), names_cache: std::cell::RefCell::new(None), usage_cache: Default::default(), links_cache: std::cell::RefCell::new(None), link_index: std::cell::RefCell::new(None), relay: RelayCfg::load(), relay_rx: None, speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, rows_filter: None, inbox: Inbox::load(), row_memo: RowMemo::load(), frame_caches: Default::default(), ghost_budget: std::cell::Cell::new(0), ghost_more: std::cell::Cell::new(false), mine_cache: Default::default(), auto_cache: Default::default(), dismissed: Dismissed::load(), scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: Default::default(), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![], saved_ms: None, session_start: now_ms(), session_edits: 0 }
     }
 }
 
@@ -3149,7 +3156,18 @@ impl AppState {
     }
 
     /// Правила форми: (id, назва, пояснення, рівень, рядків із приміткою у файлі, виправних).
-    pub fn qa_rules_view(&self, f: usize) -> Vec<(String, String, String, String, usize, usize)> {
+    pub fn qa_rules_view(&self, f: usize) -> Vec<QaRuleRow> {
+        if let Some((rev, file, rows)) = self.qa_view_cache.borrow().as_ref() {
+            if *rev == self.rev && *file == f {
+                return rows.clone();
+            }
+        }
+        let rows = self.qa_rules_compute(f);
+        *self.qa_view_cache.borrow_mut() = Some((self.rev, f, rows.clone()));
+        rows
+    }
+
+    fn qa_rules_compute(&self, f: usize) -> Vec<QaRuleRow> {
         let Some(p) = self.project.as_ref() else { return vec![] };
         let opts = self.qa_options();
         let rules = transly_core::qaconfig::qa_of(p.settings.get("qa"));
@@ -3539,8 +3557,15 @@ impl AppState {
 
     /// Скільки рядків потрапить у збірку з такими параметрами: (у грі, поза збіркою, заблоковано помилками QA). Нічого не пишеться.
     pub fn build_preview(&self, c: &BuildChoice) -> Result<(usize, usize, usize), String> {
-        let r = self.build_result(c)?;
-        Ok((r.included, r.skipped, r.blocked.len()))
+        let key = [c.only_approved, c.include_drafts, c.block_errors];
+        if let Some((rev, k, res)) = self.build_prev.borrow().as_ref() {
+            if *rev == self.rev && *k == key {
+                return res.clone();
+            }
+        }
+        let res = self.build_result(c).map(|r| (r.included, r.skipped, r.blocked.len()));
+        *self.build_prev.borrow_mut() = Some((self.rev, key, res.clone()));
+        res
     }
 
     /// Збирає переклад і кладе файли в теку гри (копії оригіналів лишаються поруч). Повертає підсумок.

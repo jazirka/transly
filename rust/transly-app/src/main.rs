@@ -40,6 +40,9 @@ fn main() -> eframe::Result {
     }))
 }
 
+/// Що відрізняє підрахунок у «Знайти й замінити»: версія змін, запит, заміна, регістр, ціле слово.
+type FindKey = (u64, String, String, bool, bool);
+
 struct App {
     st: AppState,
     last_save: std::time::Instant,
@@ -79,6 +82,7 @@ struct App {
     build_win: Option<state::BuildChoice>,
     /// Загальні налаштування («Файл → Налаштування…»): чернетка, що правиться у вікні.
     app_set: Option<state::SettingsView>,
+    find_count: Option<(FindKey, usize)>,
     nav_proj: stshell::StNav,
     nav_app: stshell::StNav,
     reset_arm: Option<std::time::Instant>,
@@ -276,7 +280,7 @@ fn game_job(text: &str, size: f32, actor_name: &dyn Fn(usize) -> Option<String>)
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, app_set: None, nav_proj: stshell::StNav::new("look"), nav_app: stshell::StNav::new("general"), reset_arm: None, esc_at: None, imp_terms: String::new(), imp_tm: String::new(), fill_win: None, links_win: None, chrome_own: winchrome::own_chrome_chosen(), find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: false, auto_added: Vec::new(), guard_off: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, app_set: None, find_count: None, nav_proj: stshell::StNav::new("look"), nav_app: stshell::StNav::new("general"), reset_arm: None, esc_at: None, imp_terms: String::new(), imp_tm: String::new(), fill_win: None, links_win: None, chrome_own: winchrome::own_chrome_chosen(), find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: false, auto_added: Vec::new(), guard_off: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
     }
 }
 
@@ -2654,7 +2658,16 @@ impl App {
         let mut open = true;
         let (mut apply, mut close) = (false, false);
         let step = transly_core::commands::ReplaceStep { find: find.clone(), replace: repl.clone(), whole_word: word, case_sensitive: case };
-        let count = self.st.run_replace(std::slice::from_ref(&step), false).unwrap_or(0);
+        // кількість рахується лише коли змінилися запит, прапорці чи сам переклад (на сотні тисяч рядків це не для кожного кадру)
+        let key = (self.st.rev, find.clone(), repl.clone(), case, word);
+        let count = match &self.find_count {
+            Some((k, n)) if *k == key => *n,
+            _ => {
+                let n = self.st.run_replace(std::slice::from_ref(&step), false).unwrap_or(0);
+                self.find_count = Some((key, n));
+                n
+            }
+        };
         dlg("Знайти й замінити в перекладах").open(&mut open).collapsible(false).resizable(false).default_width(420.0).show(ctx, |ui| {
             // як `tools-dialogs.ts`: сітка «Знайти / Замінити на» (1,4fr / 1fr), прапорці рядками, блок підсумку
             stshell::grid_row(ui, "Знайти", |ui| {
@@ -5154,6 +5167,60 @@ mod ui_tests {
         h.state_mut().rail = 0;
         h.state_mut().focus = true;
         frame(&mut h, "редагування");
+        // вікна поверх великого проєкту: що додає діалог і сторінки налаштувань до кадру
+        h.state_mut().focus = false;
+        h.state_mut().build_win = Some(h.state().st.build_defaults());
+        frame(&mut h, "діалог «Збірка в гру»");
+        h.state_mut().build_win = None;
+        h.state_mut().qar_win = true;
+        frame(&mut h, "діалог «Правила QA»");
+        h.state_mut().qar_win = false;
+        h.state_mut().find_win = Some(("Thing number 1".into(), "Предмет".into(), false, false));
+        frame(&mut h, "діалог «Знайти й замінити» з текстом");
+        h.state_mut().find_win = None;
+        h.state_mut().activity_win = true;
+        frame(&mut h, "діалог «Активність»");
+        h.state_mut().activity_win = false;
+        h.state_mut().wrap_win = Some((h.state().st.wrap_settings(), "Приклад довгого рядка для перевірки перенесення слів".into(), false));
+        frame(&mut h, "діалог «Перенесення рядків»");
+        h.state_mut().wrap_win = None;
+        h.state_mut().spk_win = Some(h.state().st.speaker_candidates());
+        frame(&mut h, "діалог «Мовці»");
+        h.state_mut().spk_win = None;
+        h.state_mut().groups_win = Some(String::new());
+        frame(&mut h, "діалог «Групи рядків»");
+        h.state_mut().groups_win = None;
+        h.state_mut().br_win = Some(String::new());
+        frame(&mut h, "діалог «Гілки»");
+        h.state_mut().br_win = None;
+        h.state_mut().mine_win = true;
+        frame(&mut h, "діалог «Конструкції»");
+        h.state_mut().mine_win = false;
+        h.state_mut().plugins_win = true;
+        frame(&mut h, "діалог «Плагіни»");
+        h.state_mut().plugins_win = false;
+        h.state_mut().keys_win = true;
+        frame(&mut h, "діалог «Гарячі клавіші»");
+        h.state_mut().keys_win = false;
+        h.state_mut().import_win = Some((0, String::new()));
+        frame(&mut h, "діалог «Імпорт»");
+        h.state_mut().import_win = None;
+        h.state_mut().search_win = Some(("Thing number".into(), 0));
+        frame(&mut h, "«Пошук скрізь» із запитом");
+        h.state_mut().search_win = None;
+        h.state_mut().fill_win = Some(h.state().st.autofill_proposals(500).into_iter().map(|p| (p, true)).collect());
+        frame(&mut h, "діалог «Автозаповнення»");
+        h.state_mut().fill_win = None;
+        for page in ["look", "branches", "lang", "qa", "terms", "danger"] {
+            h.state_mut().settings = h.state().st.settings_view();
+            h.state_mut().nav_proj.cur = page;
+            frame(&mut h, &format!("налаштування проєкту: {page}"));
+        }
+        h.state_mut().settings = None;
+        h.state_mut().app_set = h.state().st.settings_view();
+        h.state_mut().nav_app.cur = "general";
+        frame(&mut h, "налаштування загальні");
+        h.state_mut().app_set = None;
     }
 
     /// Знімок чипа «Автословник»: `TRANSLY_SHOTS=<тека> cargo test -p transly-app auto_shot -- --ignored`.

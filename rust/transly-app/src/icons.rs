@@ -78,7 +78,8 @@ fn svg(name: &str) -> Vec<u8> {
 fn asset(name: &str) -> (&'static str, egui::load::Bytes) {
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex, OnceLock};
-    static CACHE: OnceLock<Mutex<HashMap<String, (&'static str, Arc<[u8]>)>>> = OnceLock::new();
+    type Entry = (&'static str, Arc<[u8]>);
+    static CACHE: OnceLock<Mutex<HashMap<String, Entry>>> = OnceLock::new();
     let mut m = CACHE.get_or_init(Default::default).lock().unwrap_or_else(|e| e.into_inner());
     if let Some((uri, bytes)) = m.get(name) {
         return (uri, egui::load::Bytes::Shared(bytes.clone()));

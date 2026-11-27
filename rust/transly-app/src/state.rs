@@ -172,7 +172,21 @@ struct Visible {
 }
 
 /// Кеш приміток QA файлу: (файл, rev) і примітки (рядок, текст, помилка?).
-type QaCache = ((usize, u64), Vec<(usize, String, bool)>);
+/// Примітки QA одного файлу, рядок за рядком. Правка одного рядка (`put`) не скидає кеш, а лише записує ключ рядка: перевіряється тільки він
+/// (на 100 тис. рядків повна перевірка файлу — секунди, і її не можна робити після кожного Enter).
+#[derive(Default)]
+struct QaCache {
+    f: usize,
+    rev: u64,
+    valid: bool,
+    /// Лише рядки, що мають примітки: рядок → (текст, помилка?).
+    rows: std::collections::BTreeMap<usize, Vec<(String, bool)>>,
+    /// Ключі рядків, змінених відтоді, як кеш був вірним для попередньої версії змін.
+    dirty: Vec<String>,
+    /// Готовий плаский список і множина рядків з помилками для малювання (перебудовуються лише коли щось змінилось).
+    flat: Option<std::rc::Rc<Vec<(usize, String, bool)>>>,
+    bad: Option<std::rc::Rc<std::collections::HashSet<usize>>>,
+}
 
 pub struct AppState {
     /// Фільтр «Мовець» і «Довжина» (0 усі, 1 далеко від оригіналу, 2 довші, 3 коротші).
@@ -222,7 +236,6 @@ pub struct AppState {
     /// Збільшується при кожній правці: за ним скидаються кеші.
     pub rev: u64,
     vis: std::cell::RefCell<Visible>,
-    prog: std::cell::RefCell<(u64, Vec<(usize, usize)>)>,
     roots: Roots,
     picked: Picked,
     pub project: Option<SavedProject>,
@@ -242,7 +255,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { undo_count: 0, db_cache: std::cell::RefCell::new(None), names_cache: std::cell::RefCell::new(None), usage_cache: Default::default(), links_cache: std::cell::RefCell::new(None), link_index: std::cell::RefCell::new(None), relay: RelayCfg::load(), relay_rx: None, speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, rows_filter: None, inbox: Inbox::load(), row_memo: RowMemo::load(), frame_caches: Default::default(), mine_cache: Default::default(), scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: std::cell::RefCell::new(((usize::MAX, 0), vec![])), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), prog: std::cell::RefCell::new((u64::MAX, vec![])), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![], saved_ms: None, session_start: now_ms(), session_edits: 0 }
+        AppState { undo_count: 0, db_cache: std::cell::RefCell::new(None), names_cache: std::cell::RefCell::new(None), usage_cache: Default::default(), links_cache: std::cell::RefCell::new(None), link_index: std::cell::RefCell::new(None), relay: RelayCfg::load(), relay_rx: None, speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, rows_filter: None, inbox: Inbox::load(), row_memo: RowMemo::load(), frame_caches: Default::default(), mine_cache: Default::default(), scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: Default::default(), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![], saved_ms: None, session_start: now_ms(), session_edits: 0 }
     }
 }
 
@@ -404,7 +417,7 @@ type SpeakerCounts = Vec<(String, usize)>;
 /// Те, що малюється щокадру, а рахується по всіх рядках: кеші за версією змін (`rev`). Без них кадр на 100 тис. рядків займав би десятки мілісекунд.
 #[derive(Default)]
 struct FrameCaches {
-    progress: Option<(u64, Counts)>,
+    counts: Option<(u64, std::rc::Rc<Vec<Counts>>)>,
     /// Підказки пам'яті для вибраного рядка: (файл, рядок, версія).
     tm: Option<((usize, usize, u64), Vec<TmMatch>)>,
     names: Option<((usize, usize, u64), NamesInRow)>,
@@ -800,13 +813,38 @@ impl AppState {
     }
 
     fn put(&mut self, f: usize, key_file: String, key: String, e: Entry) {
-        let _ = f;
+        // кеші по всіх рядках, вірні для поточної версії, лишаються вірними й для наступної, якщо врахувати саме цей рядок:
+        // QA запам'ятовує ключ рядка (див. `file_issues`), індекс пам'яті перекладів міняє одну пару (а не будується з нуля після кожного Enter)
+        let carry = {
+            let c = self.qa_cache.borrow();
+            c.valid && c.f == f && c.rev == self.rev && c.dirty.len() < 200
+        };
+        let touched = carry.then(|| key.clone());
+        let tm_valid = self.tm_cache.borrow().as_ref().is_some_and(|c| c.0 == self.rev);
+        let tm_pair = tm_valid.then(|| {
+            let source = self.views.get(f).and_then(|v| v.units.iter().find(|u| u.key == key)).map(|u| u.source.clone()).unwrap_or_default();
+            let old = self.project.as_ref().and_then(|p| p.files.get(&key_file)).and_then(|m| m.get(&key)).map(|x| x.target.clone()).unwrap_or_default();
+            (source, old, key_file.clone(), e.target.clone())
+        });
         if let Some(p) = self.project.as_mut() {
             p.files.entry(key_file).or_default().insert(key, e);
         }
         self.rev += 1;
         self.dirty = true;
-        self.dirty = true;
+        if let Some(k) = touched {
+            let mut c = self.qa_cache.borrow_mut();
+            c.rev = self.rev;
+            c.dirty.push(k);
+        }
+        if let Some((source, old, file, new)) = tm_pair {
+            if let Some((rev, idx)) = self.tm_cache.borrow_mut().as_mut() {
+                if !old.is_empty() {
+                    idx.remove(&TmEntry { s: source.clone(), t: old, src: file.clone() });
+                }
+                idx.add(TmEntry { s: source, t: new, src: file });
+                *rev = self.rev;
+            }
+        }
     }
 
     /// Правка перекладу рядка (чернетка).
@@ -868,7 +906,13 @@ impl AppState {
     }
 
     fn status_of(&self, f: usize, r: usize) -> RowStatus {
-        self.row_view(f, r).2
+        // без копій оригіналу й перекладу (`row_view` їх клонує): це викликається для кожного рядка файлу
+        match row_state(self.entry(f, r)) {
+            RowState::Untranslated => RowStatus::Untranslated,
+            RowState::Draft => RowStatus::Draft,
+            RowState::Sent => RowStatus::Sent,
+            RowState::Approved => RowStatus::Approved,
+        }
     }
 
     fn refresh_visible(&self, f: usize) {
@@ -961,13 +1005,38 @@ impl AppState {
         self.vis.borrow().counts
     }
 
-    /// (усього, перекладено) для кожного файлу; кеш за `rev`.
-    pub fn file_progress(&self) -> Vec<(usize, usize)> {
-        if self.prog.borrow().0 != self.rev {
-            let v = (0..self.views.len()).map(|f| (self.row_count(f), (0..self.row_count(f)).filter(|r| self.status_of(f, *r) != RowStatus::Untranslated).count())).collect();
-            *self.prog.borrow_mut() = (self.rev, v);
+    /// Рядки кожного файлу за станами, одним проходом: кеш за `rev` (з нього ж виходять підсумки рядка стану й відсотки дерева файлів).
+    fn file_counts(&self) -> std::rc::Rc<Vec<Counts>> {
+        if let Some((rev, v)) = self.frame_caches.borrow().counts.as_ref() {
+            if *rev == self.rev {
+                return v.clone();
+            }
         }
-        self.prog.borrow().1.clone()
+        let v: Vec<Counts> = self
+            .views
+            .iter()
+            .enumerate()
+            .map(|(f, view)| {
+                let mut c = Counts { total: view.units.len(), ..Default::default() };
+                for r in 0..view.units.len() {
+                    match row_state(self.entry(f, r)) {
+                        RowState::Draft => c.draft += 1,
+                        RowState::Sent => c.sent += 1,
+                        RowState::Approved => c.approved += 1,
+                        RowState::Untranslated => {}
+                    }
+                }
+                c
+            })
+            .collect();
+        let v = std::rc::Rc::new(v);
+        self.frame_caches.borrow_mut().counts = Some((self.rev, v.clone()));
+        v
+    }
+
+    /// (усього, перекладено) для кожного файлу.
+    pub fn file_progress(&self) -> Vec<(usize, usize)> {
+        self.file_counts().iter().map(|c| (c.total, c.draft + c.sent + c.approved)).collect()
     }
 
     /// Терміни глосарія проєкту.
@@ -1276,24 +1345,59 @@ impl AppState {
         self.put(f, name, u.key, next);
     }
 
-    /// Примітки QA по всіх перекладених рядках файлу: (рядок, текст, помилка?). Кеш за `rev`.
-    pub fn file_issues(&self, f: usize) -> Vec<(usize, String, bool)> {
-        let key = (f, self.rev);
-        if self.qa_cache.borrow().0 != key {
-            let mut out = Vec::new();
+    /// Примітки QA одного рядка: (текст, помилка?). Порожньо для рядка без перекладу.
+    fn row_issues(&self, f: usize, r: usize, qa: &transly_core::qa::QaOptions) -> Vec<(String, bool)> {
+        let Some(e) = self.entry(f, r).filter(|e| !e.target.is_empty()) else { return Vec::new() };
+        let Some(u) = self.unit(f, r) else { return Vec::new() };
+        let mut all = check(&UnitLike::from(u), &e.target, qa);
+        all.extend(self.host.qa_issues(UnitLike::from(u).kind.as_deref(), &u.source, &e.target));
+        all.into_iter().map(|i| (i.message, i.severity == transly_core::qa::Severity::Bad)).collect()
+    }
+
+    /// Примітки QA по всіх перекладених рядках файлу: (рядок, текст, помилка?). Файл перевіряється повністю один раз; далі після правки одного рядка
+    /// перевіряється лише він, а будь-яка інша зміна (терміни, налаштування, масова дія) скидає кеш.
+    pub fn file_issues(&self, f: usize) -> std::rc::Rc<Vec<(usize, String, bool)>> {
+        let mut c = self.qa_cache.borrow_mut();
+        if !(c.valid && c.f == f && c.rev == self.rev) {
             let qa = self.qa_options();
+            let mut rows = std::collections::BTreeMap::new();
             for r in 0..self.row_count(f) {
-                let Some(e) = self.entry(f, r).filter(|e| !e.target.is_empty()) else { continue };
-                let Some(u) = self.unit(f, r) else { continue };
-                let mut all = check(&UnitLike::from(u), &e.target, &qa);
-                all.extend(self.host.qa_issues(UnitLike::from(u).kind.as_deref(), &u.source, &e.target));
-                for i in all {
-                    out.push((r, i.message, i.severity == transly_core::qa::Severity::Bad));
+                let list = self.row_issues(f, r, &qa);
+                if !list.is_empty() {
+                    rows.insert(r, list);
                 }
             }
-            *self.qa_cache.borrow_mut() = (key, out);
+            *c = QaCache { f, rev: self.rev, valid: true, rows, ..Default::default() };
+        } else if !c.dirty.is_empty() {
+            let qa = self.qa_options();
+            let keys = std::mem::take(&mut c.dirty);
+            for key in keys {
+                let Some(r) = self.views.get(f).and_then(|v| v.units.iter().position(|u| u.key == key)) else { continue };
+                let list = self.row_issues(f, r, &qa);
+                if list.is_empty() {
+                    c.rows.remove(&r);
+                } else {
+                    c.rows.insert(r, list);
+                }
+            }
+            c.flat = None;
+            c.bad = None;
         }
-        self.qa_cache.borrow().1.clone()
+        if c.flat.is_none() {
+            let flat: Vec<(usize, String, bool)> = c.rows.iter().flat_map(|(r, list)| list.iter().map(|(m, bad)| (*r, m.clone(), *bad))).collect();
+            c.flat = Some(std::rc::Rc::new(flat));
+        }
+        c.flat.clone().unwrap_or_default()
+    }
+
+    /// Рядки файлу, що мають примітки QA (для червоного трикутника й підсвічення в таблиці).
+    pub fn file_bad_rows(&self, f: usize) -> std::rc::Rc<std::collections::HashSet<usize>> {
+        let flat = self.file_issues(f);
+        let mut c = self.qa_cache.borrow_mut();
+        if c.bad.is_none() {
+            c.bad = Some(std::rc::Rc::new(flat.iter().map(|i| i.0).collect()));
+        }
+        c.bad.clone().unwrap_or_default()
     }
 
     /// Скільки рядків файлу мають термін в оригіналі: для таблиці глосарія.
@@ -2996,30 +3100,7 @@ impl AppState {
     }
 
     pub fn progress(&self) -> Counts {
-        if let Some((rev, c)) = self.frame_caches.borrow().progress {
-            if rev == self.rev {
-                return c;
-            }
-        }
-        let c = self.progress_now();
-        self.frame_caches.borrow_mut().progress = Some((self.rev, c));
-        c
-    }
-
-    fn progress_now(&self) -> Counts {
-        let mut c = Counts::default();
-        for (fi, v) in self.views.iter().enumerate() {
-            for ri in 0..v.units.len() {
-                c.total += 1;
-                match row_state(self.entry(fi, ri)) {
-                    RowState::Draft => c.draft += 1,
-                    RowState::Sent => c.sent += 1,
-                    RowState::Approved => c.approved += 1,
-                    RowState::Untranslated => {}
-                }
-            }
-        }
-        c
+        self.file_counts().iter().fold(Counts::default(), |a, c| Counts { total: a.total + c.total, draft: a.draft + c.draft, sent: a.sent + c.sent, approved: a.approved + c.approved })
     }
 
     /// Записує `transly-project.json` поруч із текою гри (не всередині неї).

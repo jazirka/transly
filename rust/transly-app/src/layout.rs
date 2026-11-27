@@ -1438,7 +1438,7 @@ impl App {
                     None => {}
                 }
             }
-            let bad_rows: std::collections::HashSet<usize> = self.st.file_issues(f).into_iter().map(|i| i.0).collect();
+            let bad_rows = self.st.file_bad_rows(f);
             let editing = self.cell_edit;
             let mut commit: Option<bool> = None; // Some(true) — зберегти й далі, Some(false) — скасувати
             let mut begin: Option<usize> = None;
@@ -1697,7 +1697,7 @@ impl App {
     pub(crate) fn rows_cards(&mut self, ui: &mut egui::Ui, f: usize) {
         let total = self.st.visible_len(f);
         let row_h = 68.8;
-        let bad_rows: std::collections::HashSet<usize> = self.st.file_issues(f).into_iter().map(|i| i.0).collect();
+        let bad_rows = self.st.file_bad_rows(f);
         let area = ui.available_rect_before_wrap();
         let cur_pos = self.st.row.and_then(|r| (0..total).find(|i| self.st.visible_at(f, *i) == Some(r)));
         let mut scroll = egui::ScrollArea::vertical().id_salt(("rowcards", self.focus)).auto_shrink([false; 2]);

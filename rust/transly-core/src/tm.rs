@@ -117,6 +117,8 @@ struct Indexed {
     e: TmEntry,
     w: Vec<String>,
     len: usize,
+    /// Пару вилучено (див. `TmIndex::remove`): місце в індексі лишається, але збігом вона не стає.
+    dead: bool,
 }
 
 /// Пошуковий індекс по перекладених парах. Будується раз; запит — на кожен вибраний рядок.
@@ -168,11 +170,26 @@ impl TmIndex {
         for x in &w {
             self.by_word.entry(x.clone()).or_default().push(id);
         }
-        self.items.push(Indexed { e, w, len });
+        self.items.push(Indexed { e, w, len, dead: false });
+    }
+
+    /// Вилучає пару (оригінал, переклад, файл): рядок змінили, і його стара пара не повинна лишатися підказкою. Індекс не перебудовується.
+    pub fn remove(&mut self, e: &TmEntry) -> bool {
+        let words: Vec<String> = words(&e.s);
+        let Some(first) = words.first() else { return false };
+        let Some(ids) = self.by_word.get(first) else { return false };
+        for &id in ids {
+            let it = &mut self.items[id];
+            if !it.dead && it.e == *e {
+                it.dead = true;
+                return true;
+            }
+        }
+        false
     }
 
     pub fn size(&self) -> usize {
-        self.items.len()
+        self.items.iter().filter(|i| !i.dead).count()
     }
 
     /// Пари, чий оригінал чи переклад має кожне слово `query` (для перегляду пам'яті за словом), не більше `limit`, найкоротші першими.
@@ -184,14 +201,14 @@ impl TmIndex {
         let mut out: Vec<&Indexed> = Vec::new();
         for &id in self.by_word.get(&qw[0]).map_or(&[][..], |v| v.as_slice()) {
             let it = &self.items[id];
-            if qw.iter().all(|w| it.w.contains(w)) {
+            if !it.dead && qw.iter().all(|w| it.w.contains(w)) {
                 out.push(it);
             }
         }
         // слово, що є лише в перекладі, шукається за його текстом
         if out.is_empty() {
             let q = qw.join(" ");
-            for it in &self.items {
+            for it in self.items.iter().filter(|i| !i.dead) {
                 if norm(&it.e.t).contains(&q) {
                     out.push(it);
                     if out.len() >= limit * 4 {
@@ -236,7 +253,7 @@ impl TmIndex {
         let mut floor = min;
         for (id, overlap) in cands {
             let it = &self.items[id];
-            if opts.exclude.is_some_and(|f| f(&it.e)) {
+            if it.dead || opts.exclude.is_some_and(|f| f(&it.e)) {
                 continue;
             }
             let union = qw.len() + it.w.len() - overlap;

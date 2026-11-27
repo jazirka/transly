@@ -4208,6 +4208,51 @@ mod ui_tests {
         h.render().unwrap().save(dir.join("25-window-controls.png")).unwrap();
     }
 
+    /// Примітки QA файлу після правки одного рядка перевіряються лише для нього (повна перевірка файлу на 100 тис. рядків — секунди); результат той самий,
+    /// що й після повної перевірки; зміна термінів чи налаштувань скидає кеш.
+    #[test]
+    fn file_issues_after_a_single_edit_match_a_full_check() {
+        let (mut app, hero, mage) = bell_game();
+        let rows = |app: &App| -> Vec<(usize, bool)> { app.st.file_issues(0).iter().map(|i| (i.0, i.2)).collect() };
+        assert_eq!(rows(&app), [(hero, true)], "«Герой» без керівних кодів — помилка");
+        // правка іншого рядка: кеш лишається, помилка героя на місці
+        app.st.edit(0, mage, "Чаклун");
+        assert_eq!(rows(&app), [(hero, true)]);
+        // виправили сам рядок з помилкою: примітка зникла
+        app.st.edit(0, hero, "\\C[2]Герой\\C[0]");
+        assert!(rows(&app).is_empty(), "{:?}", rows(&app));
+        // знову зламали: повернулась
+        app.st.edit(0, hero, "Герой");
+        assert_eq!(rows(&app), [(hero, true)]);
+        // порівняння з повною перевіркою з нуля (кеш скинуто зміною версії не через put)
+        let incremental = app.st.file_issues(0);
+        app.st.rev += 1;
+        assert_eq!(app.st.file_issues(0), incremental, "інкрементальний результат дорівнює повному");
+    }
+
+    /// Підказки пам'яті після правки одного рядка: індекс міняє одну пару (а не будується з нуля), і результат той самий, що після повної перебудови;
+    /// стара пара правленого рядка підказкою не лишається.
+    #[test]
+    fn the_memory_index_follows_single_edits_without_a_rebuild() {
+        let app = construction_game("tmfollow");
+        let mut app = app;
+        let desc = |app: &App, word: &str| (0..app.st.row_count(0)).find(|r| app.st.source_of(0, *r) == format!("Take the {word} off")).unwrap();
+        let (ring, hat) = (desc(&app, "ring"), desc(&app, "hat"));
+        let texts = |app: &App, r: usize| -> Vec<String> { app.st.tm_matches(0, r).into_iter().map(|m| m.t).collect() };
+        // «hat» бачить переклад «ring» як підказку
+        assert!(texts(&app, hat).contains(&"Зніми каблучку".to_string()), "{:?}", texts(&app, hat));
+        // «ring» перекладено інакше: нова пара є, стара зникла — без повної перебудови (кеш пам'яті лишився вірним)
+        app.st.edit(0, ring, "Зніми перстень");
+        let after = texts(&app, hat);
+        assert!(after.contains(&"Зніми перстень".to_string()) && !after.contains(&"Зніми каблучку".to_string()), "{after:?}");
+        // повна перебудова (версія змін зросла не через put) дає те саме
+        app.st.rev += 1;
+        assert_eq!(texts(&app, hat), after, "інкрементальний індекс дорівнює повному");
+        // порожній переклад прибирає пару
+        app.st.edit(0, ring, "");
+        assert!(!texts(&app, hat).contains(&"Зніми перстень".to_string()));
+    }
+
     /// Вимір на великому проєкті (100 тис. рядків): скільки забирають сповіщення й пошук конструкцій. `cargo test -p transly-app --release big_inbox -- --ignored --nocapture`.
     #[test]
     #[ignore]
@@ -4314,6 +4359,32 @@ mod ui_tests {
             println!("  кадр «{label}»: {:.0} мс", t.elapsed().as_secs_f32() * 100.0);
         };
         frame(&mut h, "таблиця, ліва — файли");
+        // що відбувається після правки одного рядка (Enter у клітинці): версія змін зросла, кеші по всіх рядках скинуто; що саме дорого
+        {
+            macro_rules! after_edit {
+                ($name:expr, $e:expr) => {{
+                    h.state_mut().st.edit(0, 600, &format!("Правка для {}", $name));
+                    let t = std::time::Instant::now();
+                    let _ = $e;
+                    println!("  після правки {}: {:.0} мс", $name, t.elapsed().as_secs_f32() * 1000.0);
+                }};
+            }
+            after_edit!("progress", h.state().st.progress());
+            after_edit!("visible_len", h.state().st.visible_len(0));
+            after_edit!("filter_counts", h.state().st.filter_counts(0));
+            after_edit!("file_issues", h.state().st.file_issues(0).len());
+            after_edit!("tm_matches", h.state().st.tm_matches(0, 500).len());
+            after_edit!("file_progress", h.state().st.file_progress().len());
+        }
+        for round in 0..3 {
+            h.state_mut().st.edit(0, 500 + round, &format!("Нова правка {round}"));
+            let t = std::time::Instant::now();
+            h.step();
+            let first = t.elapsed().as_secs_f32() * 1000.0;
+            let t = std::time::Instant::now();
+            h.step();
+            println!("  кадр одразу після правки: {first:.0} мс, наступний {:.0} мс", t.elapsed().as_secs_f32() * 1000.0);
+        }
         h.state_mut().rail = 3;
         frame(&mut h, "таблиця, ліва — глосарій");
         h.state_mut().rail = 0;

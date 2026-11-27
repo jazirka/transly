@@ -4665,6 +4665,91 @@ mod ui_tests {
         assert_eq!(title(&h), (x0, y0), "діалог лишився на місці");
     }
 
+    /// Діалог — як `.adlg` у вебі (числа знято з живого DOM у 1360×800: «Збірка» — вікно 640 по центру під верхньою панеллю 40; заголовок 15/500 у тілі з відступами 16×18,
+    /// без «✕»; внизу рядок кнопок з лінією, нижній край кнопок — на 17 від краю вікна, кнопка «Закрити» ліворуч від головної).
+    #[test]
+    fn a_dialog_is_laid_out_like_the_web_adlg() {
+        let data = game("adlg");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.build_win = Some(app.st.build_defaults());
+        let mut h = harness(app);
+        h.run();
+        h.run();
+        let r = h.ctx.memory(|m| m.area_rect(egui::Id::new(("dlg", "Збірка в гру")))).expect("діалог є");
+        assert!((r.width() - 640.0).abs() < 1.5, "ширина 640, а є {}", r.width());
+        assert!((r.center().x - 680.0).abs() < 1.0, "по центру вікна по горизонталі");
+        // по центру частини під верхньою панеллю (40…800)
+        assert!((r.center().y - 420.0).abs() < 1.5, "по центру під верхньою панеллю: {}", r.center().y);
+        let t = h.get_by_label("Збірка в гру").bounding_box().unwrap();
+        assert!((t.x0 as f32 - (r.left() + 19.0)).abs() < 1.0, "заголовок на 19 від краю (рамка 1 + поле 18): {}", t.x0 as f32 - r.left());
+        assert!(t.y0 as f32 > r.top() + 17.0 && (t.y0 as f32) < r.top() + 24.0, "заголовок біля 17 від верху: {}", t.y0 as f32 - r.top());
+        assert!(h.query_by_label("Закрити").is_some() && h.query_by_label("✕").is_none(), "кнопка внизу, ✕ немає");
+        let cl = h.get_by_label("Закрити").bounding_box().unwrap();
+        assert!((r.bottom() - cl.y1 as f32 - 19.0).abs() < 1.5, "низ кнопок на 19 від краю (1 + 16 + 2): {}", r.bottom() - cl.y1 as f32);
+        assert!((cl.y1 - cl.y0 - 28.0).abs() < 0.6, "кнопка заввишки 28");
+    }
+
+    /// Високий діалог у низькому вікні: не вище «вікно − 64», тіло листається, а рядок кнопок лишається внизу вікна діалогу (`position: sticky` у вебі).
+    #[test]
+    fn a_tall_dialog_keeps_its_buttons_at_the_bottom() {
+        let data = game("tall");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.qar_win = true;
+        let mut h = Harness::builder().with_size(egui::vec2(1360.0, 420.0)).build_state(|ctx, app: &mut App| {
+            theme::apply(ctx);
+            app.frame(ctx);
+        }, app);
+        for _ in 0..4 {
+            h.run();
+        }
+        let r = h.ctx.memory(|m| m.area_rect(egui::Id::new(("dlg", "Правила QA")))).expect("діалог є");
+        assert!((r.height() - (420.0 - 64.0)).abs() < 1.5, "висота вікно − 64: {}", r.height());
+        let cl = h.get_by_label("Закрити").bounding_box().unwrap();
+        assert!(cl.y1 as f32 <= r.bottom() && (r.bottom() - cl.y1 as f32 - 3.0).abs() < 1.5, "кнопка внизу вікна діалогу: {} від низу", r.bottom() - cl.y1 as f32);
+        // клік по «Закрити» закриває діалог
+        h.get_by_label("Закрити").click();
+        for _ in 0..4 {
+            h.run();
+        }
+        assert!(!h.state().qar_win);
+    }
+
+    /// Знімки діалогів для порівняння з веб-знімками (`web_dialogs.cjs`): `TRANSLY_FIXTURE=… TRANSLY_SHOTS=<тека> cargo test -p transly-app dialog_shots -- --ignored`.
+    #[test]
+    #[ignore]
+    fn dialog_shots() {
+        let (Some(fix), Some(out)) = (std::env::var_os("TRANSLY_FIXTURE").map(std::path::PathBuf::from), std::env::var_os("TRANSLY_SHOTS").map(std::path::PathBuf::from)) else { return };
+        std::fs::create_dir_all(&out).unwrap();
+        let mut app = App::default();
+        app.st.open_game(&fix.join("ParityGame").join("data")).unwrap();
+        app.st.open_project_file(&fix.join("project.json")).unwrap();
+        let mut h = harness(app);
+        let shot = |h: &mut Harness<'static, App>, n: &str| {
+            h.run();
+            h.run();
+            h.render().unwrap().save(out.join(format!("{n}.png"))).unwrap();
+        };
+        h.state_mut().build_win = Some(h.state().st.build_defaults());
+        shot(&mut h, "d1-build");
+        h.state_mut().build_win = None;
+        h.state_mut().find_win = Some(Default::default());
+        shot(&mut h, "d2-find");
+        h.state_mut().find_win = None;
+        h.state_mut().activity_win = true;
+        shot(&mut h, "d3-activity");
+        h.state_mut().activity_win = false;
+        h.state_mut().qar_win = true;
+        shot(&mut h, "d4-qa");
+        h.set_size(egui::vec2(1360.0, 420.0));
+        shot(&mut h, "d5-qa-short");
+        h.set_size(egui::vec2(1360.0, 800.0));
+        h.state_mut().qar_win = false;
+        h.state_mut().act_settings();
+        shot(&mut h, "d6-settings");
+    }
+
     /// Знімок таблиці з виділеними рядками (смуга «вибрано» на шапці): `TRANSLY_SHOTS=<тека> cargo test -p transly-app bulk_shot -- --ignored`.
     #[test]
     #[ignore]

@@ -65,6 +65,19 @@ pub struct SettingsView {
     pub game_title: String,
 }
 
+impl SettingsView {
+    /// Чи відрізняються налаштування, що правляться в «Налаштуваннях проєкту» (усе, крім «Ваше ім'я»).
+    pub fn project_differs(&self, o: &SettingsView) -> bool {
+        (&self.name_from, &self.title, &self.icon_text, self.hue, self.tolerance_pct.to_bits(), self.block_errors, &self.link_mode, &self.source_lang, &self.target_lang, self.line_limit.to_bits())
+            != (&o.name_from, &o.title, &o.icon_text, o.hue, o.tolerance_pct.to_bits(), o.block_errors, &o.link_mode, &o.source_lang, &o.target_lang, o.line_limit.to_bits())
+    }
+
+    /// Чи відрізняються загальні налаштування («Ваше ім'я»).
+    pub fn general_differs(&self, o: &SettingsView) -> bool {
+        self.who != o.who
+    }
+}
+
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Counts {
     pub total: usize,

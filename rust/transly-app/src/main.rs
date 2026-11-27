@@ -1663,37 +1663,29 @@ impl App {
         });
     }
 
-    /// Дерево сторінок «Налаштувань проєкту» (як `GROUPS` у `project-settings.ts`).
+    /// Дерево сторінок «Налаштувань проєкту»: усе, що стосується самого проєкту (воно лежить у `project.json`). Загальні налаштування — окреме вікно, сторінки не повторюються.
     const PROJECT_PAGES: &'static [stshell::Group] = &[
-        ("Проєкт", &[("look", "Назва й вигляд"), ("branches", "Гілки"), ("folder", "Папка гри")]),
-        ("Підключення", &[("github", "GitHub"), ("lang", "Мови")]),
+        ("Проєкт", &[("look", "Назва й вигляд"), ("branches", "Гілки"), ("folder", "Папка гри"), ("file", "Файл")]),
+        ("Переклад", &[("lang", "Мови"), ("links", "Однакові рядки")]),
+        ("Перевірка", &[("qa", "Правила QA"), ("wrap", "Перенесення рядків")]),
+        ("Глосарій і пам’ять", &[("terms", "Імпорт глосарію"), ("tm", "Імпорт пам’яті перекладів")]),
+        ("Підключення", &[("github", "GitHub")]),
         ("Обережно", &[("danger", "Небезпечна зона")]),
     ];
 
-    /// Дерево сторінок «Налаштувань» (як `GROUPS` у `settings.ts`; «Claude» у застосунку немає).
+    /// Дерево сторінок «Налаштувань»: те, що стосується застосунку й вас, а не окремого проєкту.
     const APP_PAGES: &'static [stshell::Group] = &[
-        ("Проєкт", &[("general", "Загальні"), ("look", "Вигляд"), ("folder", "Папка гри"), ("lang", "Гра і мови")]),
-        ("Пов’язане й пам’ять", &[("terms", "Імпорт глосарію"), ("tm", "Імпорт пам’яті перекладів")]),
-        ("Перевірка", &[("qa", "Правила QA"), ("wrap", "Перенесення рядків")]),
-        ("Синхронізація", &[("github", "GitHub"), ("server", "Власний сервер"), ("file", "Файл")]),
-        ("Застосунок", &[("update", "Оновлення застосунку"), ("danger", "Небезпечна зона")]),
+        ("Застосунок", &[("general", "Загальні"), ("look", "Вигляд"), ("update", "Оновлення застосунку")]),
+        ("Синхронізація", &[("server", "Власний сервер")]),
     ];
 
-    /// Записує в проєкт лише те, що змінюється на сторінці «Назва й вигляд» (решта налаштувань лишається як є).
-    fn apply_look(&mut self, v: &state::SettingsView) {
+    /// Записує в проєкт усе, що правиться в «Налаштуваннях проєкту» (вигляд, мови, перевірка, однакові рядки); «Ваше ім'я» належить загальним налаштуванням.
+    fn apply_project(&mut self, v: &state::SettingsView) {
         if let Some(mut base) = self.st.settings_view() {
             base.name_from = v.name_from.clone();
             base.title = v.title.clone();
             base.icon_text = v.icon_text.clone();
             base.hue = v.hue;
-            self.st.apply_settings(&base);
-        }
-    }
-
-    /// Записує лише «Загальні» налаштування (ім'я, допуск, прапорці, мови гри).
-    fn apply_general(&mut self, v: &state::SettingsView) {
-        if let Some(mut base) = self.st.settings_view() {
-            base.who = v.who.clone();
             base.tolerance_pct = v.tolerance_pct;
             base.block_errors = v.block_errors;
             base.link_mode = v.link_mode.clone();
@@ -1701,6 +1693,45 @@ impl App {
             base.target_lang = v.target_lang.clone();
             base.line_limit = v.line_limit;
             self.st.apply_settings(&base);
+        }
+    }
+
+    /// Записує лише «Загальні» налаштування (ваше ім'я в коментарях та історії).
+    fn apply_general(&mut self, v: &state::SettingsView) {
+        if let Some(mut base) = self.st.settings_view() {
+            base.who = v.who.clone();
+            self.st.apply_settings(&base);
+        }
+    }
+
+    /// Кнопки сторінок налаштувань, що відкривають окремі вікна й дії (одне місце для обох вікон налаштувань).
+    fn settings_go(&mut self, g: &str) {
+        match g {
+            "project" => self.settings = self.st.settings_view(),
+            "folder" => self.open_dialog(),
+            "plug" => {
+                let (names, asked) = self.st.plugin_choice();
+                let mut chosen: std::collections::BTreeSet<String> = names.into_iter().collect();
+                if !asked {
+                    chosen.extend(self.st.plugin_candidates().into_iter().filter(|c| c.likely).map(|c| c.name));
+                }
+                self.plug_win = Some(chosen);
+            }
+            "spk" => self.spk_win = Some(self.st.speaker_candidates()),
+            "ref" => self.ref_win = Some(String::new()),
+            "qa" => self.qar_win = true,
+            "wrap" => self.wrap_win = Some((self.st.wrap_settings(), "Мандрівник дістався перекладацького містечка наприкінці осені, і там на нього чекав старий друг, якого він не бачив багато років.".into(), false)),
+            "github" => self.act_sync(),
+            "relay" => self.relay_win = Some(self.st.relay.clone()),
+            "branches" => self.br_win = Some(String::new()),
+            "save" => self.message = self.st.save_project().map(|p| format!("Збережено: {p}")).unwrap_or_else(|e| e),
+            "open" => {
+                if let Some(p) = rfd::FileDialog::new().add_filter("Проєкт Transly", &["json"]).pick_file() {
+                    self.message = self.st.open_project_file(&p).unwrap_or_else(|e| e);
+                    self.draft_for = None;
+                }
+            }
+            _ => self.upd.win = true,
         }
     }
 
@@ -1724,15 +1755,19 @@ impl App {
     fn settings_window(&mut self, ctx: &egui::Context) {
         let Some(mut v) = self.settings.clone() else { return };
         let saved = self.st.settings_view();
-        let dirty = saved.as_ref().is_some_and(|s| (&s.name_from, &s.title, &s.icon_text, s.hue) != (&v.name_from, &v.title, &v.icon_text, v.hue));
+        let dirty = saved.as_ref().is_some_and(|s| s.project_differs(&v));
         let (title, letters, hue) = self.st.settings_preview(&v);
         let auto_letters = self.st.settings_preview(&state::SettingsView { icon_text: String::new(), ..v.clone() }).1;
         let branches: Vec<(String, usize, bool, String)> = self.st.branches_view().into_iter().map(|(n, r, c)| { let from = self.st.branch_from(&n); (n, r, c, from) }).collect();
         let folder = self.st.dir.as_ref().map(|d| d.to_string_lossy().to_string()).unwrap_or_default();
+        let refs = self.st.reference_langs();
         let mut nav = std::mem::replace(&mut self.nav_proj, stshell::StNav::new("look"));
         let (mut apply, mut save, mut cancel) = (false, false, false);
         let mut branch_act: Option<(String, u8)> = None;
-        let (mut new_branch, mut merge, mut change_folder, mut to_github, mut to_lang) = (false, false, false, false, false);
+        let mut new_branch = false;
+        let mut go: Option<&'static str> = None;
+        let (mut import_terms, mut import_tm) = (false, false);
+        let (mut imp_terms, mut imp_tm) = (std::mem::take(&mut self.imp_terms), std::mem::take(&mut self.imp_tm));
         let mut reset_click = false;
         let armed = self.reset_arm.is_some_and(|t| t.elapsed().as_secs() < 6);
         let esc_armed = self.esc_at.is_some_and(|t| t.elapsed().as_secs() < 4);
@@ -1864,7 +1899,7 @@ impl App {
                             new_branch = true;
                         }
                         if ui.add_enabled(branches.len() > 1, egui::Button::new("Злити гілку…").min_size(vec2(0.0, 28.0))).clicked() {
-                            merge = true;
+                            go = Some("branches");
                         }
                     });
                 }
@@ -1877,24 +1912,138 @@ impl App {
                         ui.painter().rect(r, CornerRadius::same(R2), theme::over(BG, Color32::WHITE, 0.03), Stroke::new(1.0_f32, LINE), StrokeKind::Inside);
                         ui.painter().with_clip_rect(r.shrink2(vec2(10.0, 0.0))).text(pos2(r.left() + 10.0, r.center().y), Align2::LEFT_CENTER, &folder, ip(12.5), TEXT);
                         if plain_button(ui, "Змінити…").clicked() {
-                            change_folder = true;
+                            go = Some("folder");
                         }
                     });
                     stshell::hint(ui, "Папка запам’ятовується для проєкту й відновлюється під час запуску. Її назва стає назвою проєкту, поки ви не оберете іншу.");
                 }
-                "github" => {
-                    stshell::hint(ui, "Репозиторій, токен, гілка й папка в репозиторії, і синхронізація. Вони не залежать від самого проєкту: той самий токен годиться для кількох проєктів.");
+                "file" => {
+                    stshell::hint(ui, "Проєкт зберігається поруч із грою. Файл проєкту можна передати на інший пристрій або відкрити з нього.");
                     stshell::acts(ui, |ui| {
-                        if plain_button(ui, "Налаштування GitHub…").clicked() {
-                            to_github = true;
+                        if plain_button(ui, "Зберегти проєкт у файл").clicked() {
+                            go = Some("save");
+                        }
+                        if plain_button(ui, "Імпортувати з файлу…").clicked() {
+                            go = Some("open");
                         }
                     });
                 }
                 "lang" => {
-                    stshell::hint(ui, "Тексти плагінів, мовці та довідкові мови (та сама гра іншими мовами).");
+                    stshell::sub(ui, "Мови гри", false, |ui| {
+                        stshell::grid_row(ui, "Мова оригіналу", |ui| {
+                            let w = ui.available_width();
+                            stshell::input(ui, &mut v.source_lang, "", w);
+                        });
+                        stshell::grid_row(ui, "Мова перекладу", |ui| {
+                            let w = ui.available_width();
+                            stshell::input(ui, &mut v.target_lang, "", w);
+                        });
+                    });
+                    stshell::sub(ui, "Тексти плагінів", false, |ui| {
+                        stshell::hint(ui, "Частина ігор показує текст командами плагінів, а не вікнами повідомлень.");
+                        stshell::acts(ui, |ui| {
+                            if plain_button(ui, "Обрати команди з текстом…").clicked() {
+                                go = Some("plug");
+                            }
+                        });
+                    });
+                    stshell::sub(ui, "Мовці", false, |ui| {
+                        stshell::hint(ui, "Імен мовців у грі на RPG Maker MV немає. Їх можна визначити за обличчям персонажа й подією.");
+                        stshell::acts(ui, |ui| {
+                            if plain_button(ui, "Визначити мовців…").clicked() {
+                                go = Some("spk");
+                            }
+                        });
+                    });
+                    stshell::sub(ui, "Довідкові мови", true, |ui| {
+                        stshell::hint(ui, "Додайте ту саму гру іншими мовами (наприклад, російською, польською): кожна з’явиться під оригіналом як підказка. Мов можна додати скільки завгодно. Рядки вирівнюються автоматично, навіть якщо в тій версії є додані чи прибрані репліки.");
+                        ui.label(RichText::new(if refs.is_empty() { "Довідок ще немає".to_string() } else { refs.join(", ").to_uppercase() }).size(12.0).color(MUTE));
+                        stshell::acts(ui, |ui| {
+                            if plain_button(ui, "Додати мову: обрати папку довідкової версії…").clicked() {
+                                go = Some("ref");
+                            }
+                        });
+                    });
+                }
+                "links" => {
+                    stshell::grid_row(ui, "Автозаповнення однакових рядків після «Надіслати»", |ui| {
+                        let name = |m: &str| match m {
+                            "auto" => "заповнювати порожні й самому оновлювати різні (вичитані не чіпає)",
+                            "off" => "не заповнювати",
+                            _ => "заповнювати порожні чернетками, про різні питати (рекомендовано)",
+                        };
+                        egui::ComboBox::from_id_salt("link-mode").width(ui.available_width() - 8.0).wrap_mode(egui::TextWrapMode::Truncate).selected_text(name(&v.link_mode)).show_ui(ui, |ui| {
+                            for m in ["ask", "auto", "off"] {
+                                ui.selectable_value(&mut v.link_mode, m.to_string(), name(m));
+                            }
+                        });
+                    });
+                    stshell::hint(ui, "Порожні зв’язані рядки заповнюються одразу після надсилання чернетками з позначкою «авто» (цю дію можна відмінити в повідомленні). Вичитаний рядок і рядок, який ви змінили пізніше, не перезаписуються без вашого вибору.");
+                }
+                "qa" => {
+                    stshell::grid_row(ui, "Радити, коли переклад відрізняється від оригіналу понад, % (від 5 до 100)", |ui| {
+                        let w = ui.available_width();
+                        let r = stshell::number(ui, egui::DragValue::new(&mut v.tolerance_pct).range(5.0..=100.0).speed(5.0), w);
+                        r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::DragValue, true, "Допуск довжини, %"));
+                    });
+                    stshell::grid_row(ui, "Найдовший рядок (0 — без межі)", |ui| {
+                        let w = ui.available_width();
+                        stshell::number(ui, egui::DragValue::new(&mut v.line_limit).range(0.0..=500.0), w);
+                    });
+                    stshell::check(ui, &mut v.block_errors, "Не надсилати рядок із помилкою QA");
+                    stshell::grid_row(ui, "Правила перевірки тексту (літери, пробіли, апостроф, коди)", |ui| {
+                        if plain_button(ui, "Налаштувати…").clicked() {
+                            go = Some("qa");
+                        }
+                    });
+                    stshell::hint(ui, "Які перевірки ввімкнено й що вони вважають помилкою чи порадою. Довжина тексту не обмежується: застосунок лише радить.");
+                }
+                "wrap" => {
+                    stshell::grid_row(ui, "Перенесення рядків у повідомленнях гри", |ui| {
+                        if plain_button(ui, "Налаштувати…").clicked() {
+                            go = Some("wrap");
+                        }
+                    });
+                    stshell::hint(ui, "Коли й за якою шириною рядки розбиваються, чи переносяться слова з дефісом, коли попереджати про четвертий рядок.");
+                }
+                "terms" => {
+                    stshell::hint(ui, "З файлу: таблиця Google Sheets, збережена як веб-сторінка (.html), або .csv / .tsv із колонками «Оригінал», «Переклад 1…», «Опис», «Розділ».");
                     stshell::acts(ui, |ui| {
-                        if plain_button(ui, "Гра і мови…").clicked() {
-                            to_lang = true;
+                        if plain_button(ui, "Імпортувати з файлу…").clicked() {
+                            if let Some(p) = rfd::FileDialog::new().add_filter("Текст і таблиці", &["txt", "tsv", "csv", "html", "htm"]).pick_file() {
+                                imp_terms = std::fs::read_to_string(p).unwrap_or_default();
+                                import_terms = !imp_terms.trim().is_empty();
+                            }
+                        }
+                    });
+                    stshell::hint(ui, "Або вставте рядки «англійською, табуляція, українською»:");
+                    ui.add(egui::TextEdit::multiline(&mut imp_terms).desired_rows(4).desired_width(ui.available_width()));
+                    stshell::acts(ui, |ui| {
+                        if ui.add_enabled(!imp_terms.trim().is_empty(), egui::Button::new("Імпортувати вставлені терміни").min_size(vec2(0.0, 28.0))).clicked() {
+                            import_terms = true;
+                        }
+                    });
+                }
+                "tm" => {
+                    stshell::hint(ui, "Рядки «оригінал, табуляція, переклад».");
+                    ui.add(egui::TextEdit::multiline(&mut imp_tm).desired_rows(7).desired_width(ui.available_width()));
+                    stshell::acts(ui, |ui| {
+                        if plain_button(ui, "Завантажити з файлу…").clicked() {
+                            if let Some(p) = rfd::FileDialog::new().add_filter("Текст і таблиці", &["txt", "tsv", "csv"]).pick_file() {
+                                imp_tm = std::fs::read_to_string(p).unwrap_or_default();
+                            }
+                        }
+                        if ui.add_enabled(!imp_tm.trim().is_empty(), egui::Button::new("Імпортувати пари").min_size(vec2(0.0, 28.0))).clicked() {
+                            import_tm = true;
+                        }
+                    });
+                }
+                "github" => {
+                    stshell::warn_banner(ui, false, "Токен лишається тільки на цьому пристрої", "Дайте йому доступ лише до репозиторію з перекладом (право «Contents: Read and write»). Він не потрапляє у файл проєкту.");
+                    stshell::hint(ui, "Переклад зберігається у вашому репозиторії GitHub (краще приватному) звичайними файлами, а історія комітів показує, що й коли змінилося. Створіть репозиторій із файлом README, потім токен: GitHub → Settings → Developer settings → Fine-grained tokens.");
+                    stshell::acts(ui, |ui| {
+                        if plain_button(ui, "Налаштування GitHub…").clicked() {
+                            go = Some("github");
                         }
                     });
                 }
@@ -1917,6 +2066,16 @@ impl App {
             },
         );
         self.nav_proj = nav;
+        self.imp_terms = imp_terms;
+        self.imp_tm = imp_tm;
+        if import_terms {
+            self.message = self.st.import_terms_table(&self.imp_terms.clone());
+            self.imp_terms.clear();
+        }
+        if import_tm {
+            self.message = self.st.import_memory(&self.imp_tm.clone());
+            self.imp_tm.clear();
+        }
         if reset_click {
             self.reset_clicked();
             if self.settings.is_none() {
@@ -1929,25 +2088,13 @@ impl App {
         if new_branch {
             self.br_win = Some(String::new());
         }
-        if merge {
+        // кнопки сторінок, що відкривають окремі вікна: це вікно на цей час закривається (як `away` у вебі), зміни спершу застосовуються
+        if let Some(g) = go {
+            if dirty {
+                self.apply_project(&v);
+            }
             self.settings = None;
-            self.br_win = Some(String::new());
-            return;
-        }
-        if change_folder {
-            self.settings = None;
-            self.open_dialog();
-            return;
-        }
-        if to_github {
-            self.settings = None;
-            self.act_sync();
-            return;
-        }
-        if to_lang {
-            self.settings = None;
-            self.app_set = self.st.settings_view();
-            self.nav_app.cur = "lang";
+            self.settings_go(g);
             return;
         }
         if (save || apply) && v.name_from == "custom" && v.title.trim().is_empty() {
@@ -1957,7 +2104,7 @@ impl App {
             apply = false;
         }
         if save || apply {
-            self.apply_look(&v);
+            self.apply_project(&v);
             if apply {
                 self.message = "Збережено".into();
             }
@@ -1975,14 +2122,12 @@ impl App {
         }
     }
 
-    /// «Налаштування» (Файл → Налаштування…): вікно `.st-dlg` із пошуком і групами сторінок, як `openSettings` у вебі. Сторінки, що відкривають окремі вікна (Правила QA, Перенесення рядків,
-    /// GitHub, реле, оновлення), мають кнопку, як і в вебі там, де ці вікна окремі.
+    /// «Налаштування» (Файл → Налаштування…): вікно `.st-dlg` із пошуком і групами сторінок. Лише те, що стосується застосунку й вас («Загальні», «Вигляд» вікна, «Оновлення», «Власний сервер»);
+    /// усе про сам проєкт (назва, мови, перевірка, глосарій, гілки, GitHub, скидання) — у «Налаштуваннях проєкту».
     fn app_settings_window(&mut self, ctx: &egui::Context) {
         let Some(mut v) = self.app_set.clone() else { return };
         let saved = self.st.settings_view();
-        let dirty = saved.as_ref().is_some_and(|s| s != &v);
-        let folder = self.st.dir.as_ref().map(|d| d.to_string_lossy().to_string()).unwrap_or_default();
-        let refs = self.st.reference_langs();
+        let dirty = saved.as_ref().is_some_and(|s| s.general_differs(&v));
         let version = {
             let id = transly_platform::selfupdate::build_id();
             if id == "dev" { "локальна".to_string() } else { id.chars().take(7).collect() }
@@ -1990,212 +2135,56 @@ impl App {
         let mut nav = std::mem::replace(&mut self.nav_app, stshell::StNav::new("general"));
         let (mut apply, mut save, mut cancel) = (false, false, false);
         let mut go: Option<&'static str> = None;
-        let mut reset_click = false;
-        let armed = self.reset_arm.is_some_and(|t| t.elapsed().as_secs() < 6);
         let esc_armed = self.esc_at.is_some_and(|t| t.elapsed().as_secs() < 4);
-        let (mut import_terms, mut import_tm) = (false, false);
         let mut sysbar = false;
         let own_chrome = self.chrome_own;
-        let (mut imp_terms, mut imp_tm) = (std::mem::take(&mut self.imp_terms), std::mem::take(&mut self.imp_tm));
         let esc = stshell::StShell { key: "app", aria: "Налаштування", crumb: String::new(), height: 640.0, groups: Self::APP_PAGES, search: true, dirty, esc_armed }.show(
             ctx,
             &mut nav,
-            |ui, page| {
-                let group_of = |id: &str| Self::APP_PAGES.iter().find(|(_, p)| p.iter().any(|(i, _)| *i == id)).map_or("", |(g, _)| *g);
-                let _ = group_of;
-                match page {
-                    "general" => {
-                        stshell::grid_row(ui, "Радити, коли переклад відрізняється від оригіналу понад, % (від 5 до 100)", |ui| {
-                            let w = ui.available_width();
-                            let r = stshell::number(ui, egui::DragValue::new(&mut v.tolerance_pct).range(5.0..=100.0).speed(5.0), w);
-                            r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::DragValue, true, "Допуск довжини, %"));
-                        });
-                        stshell::grid_row(ui, "Ваше ім’я в коментарях та історії", |ui| {
-                            let mut t = v.who.clone();
-                            let r = stshell::input(ui, &mut t, "", ui.available_width());
-                            v.who = t.chars().take(40).collect();
-                            r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::TextEdit, true, "Хто перекладає"));
-                        });
-                        stshell::grid_row(ui, "Мова інтерфейсу", |ui| {
-                            ui.label("Українська");
-                        });
-                        stshell::hint(ui, "Інші мови додаються як розширення (мовні пакети).");
-                        stshell::check(ui, &mut v.block_errors, "Не надсилати рядок із помилкою QA");
-                        stshell::grid_row(ui, "Автозаповнення однакових рядків після «Надіслати»", |ui| {
-                            let name = |m: &str| match m {
-                                "auto" => "заповнювати порожні й самому оновлювати різні (вичитані не чіпає)",
-                                "off" => "не заповнювати",
-                                _ => "заповнювати порожні чернетками, про різні питати (рекомендовано)",
-                            };
-                            egui::ComboBox::from_id_salt("link-mode").width(ui.available_width() - 8.0).wrap_mode(egui::TextWrapMode::Truncate).selected_text(name(&v.link_mode)).show_ui(ui, |ui| {
-                                for m in ["ask", "auto", "off"] {
-                                    ui.selectable_value(&mut v.link_mode, m.to_string(), name(m));
-                                }
-                            });
-                        });
-                        stshell::hint(ui, "Порожні зв’язані рядки заповнюються одразу після надсилання чернетками з позначкою «авто» (цю дію можна відмінити в повідомленні). Вичитаний рядок і рядок, який ви змінили пізніше, не перезаписуються без вашого вибору.");
-                    }
-                    "look" => {
-                        stshell::sub(ui, "Назва, значок і колір проєкту", false, |ui| {
-                            stshell::hint(ui, "Тепер вони в окремому вікні налаштувань проєкту: колір береться з назви проєкту (назви папки гри), якщо його не вибрано вручну.");
-                            stshell::acts(ui, |ui| {
-                                if plain_button(ui, "Налаштування проєкту…").clicked() {
-                                    go = Some("project");
-                                }
-                            });
-                        });
-                        stshell::sub(ui, "Вікно", true, |ui| {
-                            let mut sys = !own_chrome;
-                            if stshell::check(ui, &mut sys, "Системний заголовок вікна").changed() {
-                                sysbar = true;
-                            }
-                            stshell::hint(ui, "Запасний варіант: якщо власного заголовка не видно або його кнопки не працюють. Застосовується одразу.");
-                        });
-                    }
-                    "folder" => {
-                        ui.label(RichText::new("Папка гри цього проєкту").size(12.5).color(TEXT));
-                        ui.horizontal(|ui| {
-                            ui.spacing_mut().item_spacing.x = 8.0;
-                            let w = ui.available_width() - 8.0 - 90.0;
-                            let (r, _) = ui.allocate_exact_size(vec2(w.max(120.0), 30.0), Sense::hover());
-                            ui.painter().rect(r, CornerRadius::same(R2), theme::over(BG, Color32::WHITE, 0.03), Stroke::new(1.0_f32, LINE), StrokeKind::Inside);
-                            ui.painter().with_clip_rect(r.shrink2(vec2(10.0, 0.0))).text(pos2(r.left() + 10.0, r.center().y), Align2::LEFT_CENTER, &folder, ip(12.5), TEXT);
-                            if plain_button(ui, "Змінити…").clicked() {
-                                go = Some("folder");
-                            }
-                        });
-                        stshell::hint(ui, "Папка запам’ятовується для проєкту й відновлюється під час запуску. Якщо її перенесено чи видалено, програма покаже банер із вибором нової, а переклад і оригінали в проєкті збережуться.");
-                    }
-                    "lang" => {
-                        stshell::sub(ui, "Мови гри", false, |ui| {
-                            stshell::grid_row(ui, "Мова оригіналу", |ui| {
-                                let w = ui.available_width();
-                                stshell::input(ui, &mut v.source_lang, "", w);
-                            });
-                            stshell::grid_row(ui, "Мова перекладу", |ui| {
-                                let w = ui.available_width();
-                                stshell::input(ui, &mut v.target_lang, "", w);
-                            });
-                            stshell::grid_row(ui, "Найдовший рядок (0 — без межі)", |ui| {
-                                let w = ui.available_width();
-                                stshell::number(ui, egui::DragValue::new(&mut v.line_limit).range(0.0..=500.0), w);
-                            });
-                        });
-                        stshell::sub(ui, "Тексти плагінів", false, |ui| {
-                            stshell::hint(ui, "Частина ігор показує текст командами плагінів, а не вікнами повідомлень.");
-                            stshell::acts(ui, |ui| {
-                                if plain_button(ui, "Обрати команди з текстом…").clicked() {
-                                    go = Some("plug");
-                                }
-                            });
-                        });
-                        stshell::sub(ui, "Мовці", false, |ui| {
-                            stshell::hint(ui, "Імен мовців у грі на RPG Maker MV немає. Їх можна визначити за обличчям персонажа й подією.");
-                            stshell::acts(ui, |ui| {
-                                if plain_button(ui, "Визначити мовців…").clicked() {
-                                    go = Some("spk");
-                                }
-                            });
-                        });
-                        stshell::sub(ui, "Довідкові мови", true, |ui| {
-                            stshell::hint(ui, "Додайте ту саму гру іншими мовами (наприклад, російською, польською): кожна з’явиться під оригіналом як підказка. Мов можна додати скільки завгодно. Рядки вирівнюються автоматично, навіть якщо в тій версії є додані чи прибрані репліки.");
-                            ui.label(RichText::new(if refs.is_empty() { "Довідок ще немає".to_string() } else { refs.join(", ").to_uppercase() }).size(12.0).color(MUTE));
-                            stshell::acts(ui, |ui| {
-                                if plain_button(ui, "Додати мову: обрати папку довідкової версії…").clicked() {
-                                    go = Some("ref");
-                                }
-                            });
-                        });
-                    }
-                    "terms" => {
-                        stshell::hint(ui, "З файлу: таблиця Google Sheets, збережена як веб-сторінка (.html), або .csv / .tsv із колонками «Оригінал», «Переклад 1…», «Опис», «Розділ».");
+            |ui, page| match page {
+                "general" => {
+                    stshell::grid_row(ui, "Ваше ім’я в коментарях та історії", |ui| {
+                        let mut t = v.who.clone();
+                        let r = stshell::input(ui, &mut t, "", ui.available_width());
+                        v.who = t.chars().take(40).collect();
+                        r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::TextEdit, true, "Хто перекладає"));
+                    });
+                    stshell::grid_row(ui, "Мова інтерфейсу", |ui| {
+                        ui.label("Українська");
+                    });
+                    stshell::hint(ui, "Інші мови додаються як розширення (мовні пакети).");
+                    stshell::sub(ui, "Проєкт", true, |ui| {
+                        stshell::hint(ui, "Назва, мови, перевірка, однакові рядки, глосарій і пам’ять, гілки, папка гри, GitHub і скидання налаштовуються окремо для кожного проєкту.");
                         stshell::acts(ui, |ui| {
-                            if plain_button(ui, "Імпортувати з файлу…").clicked() {
-                                if let Some(p) = rfd::FileDialog::new().add_filter("Текст і таблиці", &["txt", "tsv", "csv", "html", "htm"]).pick_file() {
-                                    imp_terms = std::fs::read_to_string(p).unwrap_or_default();
-                                    import_terms = !imp_terms.trim().is_empty();
-                                }
+                            if plain_button(ui, "Налаштування проєкту…").clicked() {
+                                go = Some("project");
                             }
                         });
-                        stshell::hint(ui, "Або вставте рядки «англійською, табуляція, українською»:");
-                        ui.add(egui::TextEdit::multiline(&mut imp_terms).desired_rows(4).desired_width(ui.available_width()));
-                        stshell::acts(ui, |ui| {
-                            if ui.add_enabled(!imp_terms.trim().is_empty(), egui::Button::new("Імпортувати вставлені терміни").min_size(vec2(0.0, 28.0))).clicked() {
-                                import_terms = true;
-                            }
-                        });
+                    });
+                }
+                "look" => {
+                    let mut sys = !own_chrome;
+                    if stshell::check(ui, &mut sys, "Системний заголовок вікна").changed() {
+                        sysbar = true;
                     }
-                    "tm" => {
-                        stshell::hint(ui, "Рядки «оригінал, табуляція, переклад».");
-                        ui.add(egui::TextEdit::multiline(&mut imp_tm).desired_rows(7).desired_width(ui.available_width()));
-                        stshell::acts(ui, |ui| {
-                            if plain_button(ui, "Завантажити з файлу…").clicked() {
-                                if let Some(p) = rfd::FileDialog::new().add_filter("Текст і таблиці", &["txt", "tsv", "csv"]).pick_file() {
-                                    imp_tm = std::fs::read_to_string(p).unwrap_or_default();
-                                }
-                            }
-                            if ui.add_enabled(!imp_tm.trim().is_empty(), egui::Button::new("Імпортувати пари").min_size(vec2(0.0, 28.0))).clicked() {
-                                import_tm = true;
-                            }
-                        });
-                    }
-                    "qa" => {
-                        stshell::grid_row(ui, "Правила перевірки тексту (літери, пробіли, апостроф, коди)", |ui| {
-                            if plain_button(ui, "Налаштувати…").clicked() {
-                                go = Some("qa");
-                            }
-                        });
-                        stshell::hint(ui, "Які перевірки ввімкнено й що вони вважають помилкою чи порадою. Довжина тексту не обмежується: застосунок лише радить.");
-                    }
-                    "wrap" => {
-                        stshell::grid_row(ui, "Перенесення рядків у повідомленнях гри", |ui| {
-                            if plain_button(ui, "Налаштувати…").clicked() {
-                                go = Some("wrap");
-                            }
-                        });
-                        stshell::hint(ui, "Коли й за якою шириною рядки розбиваються, чи переносяться слова з дефісом, коли попереджати про четвертий рядок.");
-                    }
-                    "github" => {
-                        stshell::warn_banner(ui, false, "Токен лишається тільки на цьому пристрої", "Дайте йому доступ лише до репозиторію з перекладом (право «Contents: Read and write»). Він не потрапляє у файл проєкту.");
-                        stshell::hint(ui, "Переклад зберігається у вашому репозиторії GitHub (краще приватному) звичайними файлами, а історія комітів показує, що й коли змінилося. Створіть репозиторій із файлом README, потім токен: GitHub → Settings → Developer settings → Fine-grained tokens.");
-                        stshell::acts(ui, |ui| {
-                            if plain_button(ui, "Налаштування GitHub…").clicked() {
-                                go = Some("github");
-                            }
-                        });
-                    }
-                    "server" => {
-                        stshell::warn_banner(ui, false, "Для адреси в інтернеті потрібен https", "Дані шифруються паролем на пристроях: сервер лише передає їх і забуває. Адреса в домашній мережі може бути й http.");
-                        stshell::acts(ui, |ui| {
-                            if plain_button(ui, "Налаштування сервера…").clicked() {
-                                go = Some("relay");
-                            }
-                        });
-                    }
-                    "file" => {
-                        stshell::hint(ui, "Проєкт зберігається поруч із грою. Файл проєкту можна передати на інший пристрій або відкрити з нього.");
-                        stshell::acts(ui, |ui| {
-                            if plain_button(ui, "Зберегти проєкт у файл").clicked() {
-                                go = Some("save");
-                            }
-                            if plain_button(ui, "Імпортувати з файлу…").clicked() {
-                                go = Some("open");
-                            }
-                        });
-                    }
-                    "update" => {
-                        stshell::hint(ui, &format!("Версія збірки: {version}"));
-                        stshell::acts(ui, |ui| {
-                            if plain_button(ui, "Перевірити оновлення зараз").clicked() {
-                                go = Some("update");
-                            }
-                        });
-                    }
-                    _ => {
-                        if danger_page(ui, armed) {
-                            reset_click = true;
+                    stshell::hint(ui, "Запасний варіант: якщо власного заголовка не видно або його кнопки не працюють. Застосовується одразу.");
+                }
+                "update" => {
+                    stshell::hint(ui, &format!("Версія збірки: {version}"));
+                    stshell::acts(ui, |ui| {
+                        if plain_button(ui, "Перевірити оновлення зараз").clicked() {
+                            go = Some("update");
                         }
-                    }
+                    });
+                }
+                _ => {
+                    stshell::warn_banner(ui, false, "Для адреси в інтернеті потрібен https", "Дані шифруються паролем на пристроях: сервер лише передає їх і забуває. Адреса в домашній мережі може бути й http.");
+                    stshell::hint(ui, "Власний сервер для обміну між вашими пристроями: адреса, пароль і період. Він не залежить від проєкту.");
+                    stshell::acts(ui, |ui| {
+                        if plain_button(ui, "Налаштування сервера…").clicked() {
+                            go = Some("relay");
+                        }
+                    });
                 }
             },
             |ui| {
@@ -2211,24 +2200,8 @@ impl App {
             },
         );
         self.nav_app = nav;
-        self.imp_terms = imp_terms;
-        self.imp_tm = imp_tm;
-        if import_terms {
-            self.message = self.st.import_terms_table(&self.imp_terms.clone());
-            self.imp_terms.clear();
-        }
-        if import_tm {
-            self.message = self.st.import_memory(&self.imp_tm.clone());
-            self.imp_tm.clear();
-        }
         if sysbar {
             self.toggle_chrome(ctx);
-        }
-        if reset_click {
-            self.reset_clicked();
-            if self.app_set.is_none() {
-                return;
-            }
         }
         // кнопки сторінок, що відкривають окремі вікна: це вікно на цей час закривається (як `away` у вебі), зміни спершу застосовуються
         if let Some(g) = go {
@@ -2236,32 +2209,7 @@ impl App {
                 self.apply_general(&v);
             }
             self.app_set = None;
-            match g {
-                "project" => self.settings = self.st.settings_view(),
-                "folder" => self.open_dialog(),
-                "plug" => {
-                    let (names, asked) = self.st.plugin_choice();
-                    let mut chosen: std::collections::BTreeSet<String> = names.into_iter().collect();
-                    if !asked {
-                        chosen.extend(self.st.plugin_candidates().into_iter().filter(|c| c.likely).map(|c| c.name));
-                    }
-                    self.plug_win = Some(chosen);
-                }
-                "spk" => self.spk_win = Some(self.st.speaker_candidates()),
-                "ref" => self.ref_win = Some(String::new()),
-                "qa" => self.qar_win = true,
-                "wrap" => self.wrap_win = Some((self.st.wrap_settings(), "Мандрівник дістався перекладацького містечка наприкінці осені, і там на нього чекав старий друг, якого він не бачив багато років.".into(), false)),
-                "github" => self.act_sync(),
-                "relay" => self.relay_win = Some(self.st.relay.clone()),
-                "save" => self.message = self.st.save_project().map(|p| format!("Збережено: {p}")).unwrap_or_else(|e| e),
-                "open" => {
-                    if let Some(p) = rfd::FileDialog::new().add_filter("Проєкт Transly", &["json"]).pick_file() {
-                        self.message = self.st.open_project_file(&p).unwrap_or_else(|e| e);
-                        self.draft_for = None;
-                    }
-                }
-                _ => self.upd.win = true,
-            }
+            self.settings_go(g);
             return;
         }
         if save || apply {
@@ -2272,7 +2220,7 @@ impl App {
         }
         if save || cancel {
             self.app_set = None;
-        } else if esc && (!dirty || self.esc_at.is_some_and(|t| t.elapsed().as_secs() < 4)) {
+        } else if esc && (!dirty || esc_armed) {
             self.app_set = None;
             self.esc_at = None;
         } else {
@@ -4108,27 +4056,38 @@ mod ui_tests {
         h.get_by_label("Налаштування проєкту…").click();
         h.run();
         h.get_by_label("Налаштування проєкту");
-        for page in ["Назва й вигляд", "Гілки", "Папка гри", "GitHub", "Мови", "Небезпечна зона"] {
+        for page in ["Назва й вигляд", "Гілки", "Папка гри", "Файл", "Мови", "Однакові рядки", "Правила QA", "Перенесення рядків", "Імпорт глосарію", "Імпорт пам’яті перекладів", "GitHub", "Небезпечна зона"] {
             h.get_by_label(page);
         }
-        // у проєкті немає загальних полів: вони в «Налаштуваннях»
-        assert!(h.query_by_label("Хто перекладає").is_none());
+        // загальне («Ваше ім'я», вікно, оновлення, сервер) у проєкті не лежить
+        assert!(h.query_by_label("Хто перекладає").is_none() && h.query_by_label("Власний сервер").is_none() && h.query_by_label("Оновлення застосунку").is_none());
         h.get_by_label("Гілки").click();
         h.run();
         h.get_by_label("+ Нова гілка…");
         assert_eq!(h.state().nav_proj.cur, "branches");
-        h.get_by_label("Скасувати").click();
+        // «Правила QA»: допуск довжини, найдовший рядок і прапорець правляться тут, і «Зберегти» записує їх у проєкт
+        h.get_by_label("Правила QA").click();
+        h.run();
+        h.get_by_label("Допуск довжини, %");
+        let before = h.state().st.settings_view().unwrap().block_errors;
+        h.get_by_label("Не надсилати рядок із помилкою QA").click();
+        h.run();
+        assert!(h.state().settings.as_ref().unwrap().block_errors != h.state().st.settings_view().unwrap().block_errors, "зміна чекає на «Застосувати»");
+        h.get_all_by_label("Зберегти").last().unwrap().click();
         h.run();
         assert!(h.state().settings.is_none());
-        // «Налаштування»: дерево з пошуком; «Загальні»; «Застосувати» мертва, поки нема змін
+        assert_eq!(h.state().st.settings_view().unwrap().block_errors, !before, "«Зберегти» записало прапорець у проєкт");
+        // «Налаштування»: дерево з пошуком; лише загальне; «Застосувати» мертва, поки нема змін
         h.state_mut().app_set = h.state().st.settings_view();
         h.run();
         h.get_by_label("Налаштування");
         h.get_by_label("Пошук налаштувань");
-        for page in ["Загальні", "Вигляд", "Гра і мови", "Імпорт глосарію", "Правила QA", "Перенесення рядків", "GitHub", "Власний сервер", "Небезпечна зона"] {
+        for page in ["Загальні", "Вигляд", "Оновлення застосунку", "Власний сервер"] {
             h.get_by_label(page);
         }
-        assert!(h.state().app_set.is_some());
+        for page in ["Правила QA", "Імпорт глосарію", "GitHub", "Небезпечна зона", "Гра і мови", "Папка гри"] {
+            assert!(h.query_by_label(page).is_none(), "«{page}» — сторінка проєкту, у загальних її немає");
+        }
         h.get_by_label("Хто перекладає").click();
         h.get_by_label("Хто перекладає").type_text("Артем");
         h.run();
@@ -4140,15 +4099,27 @@ mod ui_tests {
         h.state_mut().app_set = h.state().st.settings_view();
         h.run();
         h.get_by_label("Пошук налаштувань").click();
-        h.get_by_label("Пошук налаштувань").type_text("QA");
+        h.get_by_label("Пошук налаштувань").type_text("сервер");
         h.run();
         h.run();
-        assert_eq!(h.state().nav_app.cur, "qa");
-        assert!(h.query_by_label("Власний сервер").is_none(), "решта сторінок сховалась");
+        assert_eq!(h.state().nav_app.cur, "server");
+        assert!(h.query_by_label("Оновлення застосунку").is_none(), "решта сторінок сховалась");
         // Esc із незмінним станом закриває
         press(&mut h, egui::Modifiers::NONE, egui::Key::Escape);
         h.run();
         assert!(h.state().app_set.is_none());
+    }
+
+    /// Сторінки не повторюються: кожне налаштування лежить в одному вікні (проєкт — у проєкті, застосунок — у загальних).
+    #[test]
+    fn project_and_general_settings_do_not_share_pages() {
+        let ids = |g: &[stshell::Group]| g.iter().flat_map(|(_, p)| p.iter().map(|(i, _)| *i)).collect::<std::collections::HashSet<_>>();
+        let (p, a) = (ids(App::PROJECT_PAGES), ids(App::APP_PAGES));
+        // «look» названо однаково, але в проєкті це «Назва й вигляд», а в загальних — «Вигляд» вікна: різні сторінки; решта не збігається
+        let shared: Vec<_> = p.intersection(&a).collect();
+        assert_eq!(shared, vec![&"look"], "спільний лише ідентифікатор look (різний зміст): {shared:?}");
+        let titles = |g: &[stshell::Group]| g.iter().flat_map(|(_, p)| p.iter().map(|(_, t)| *t)).collect::<std::collections::HashSet<_>>();
+        assert!(titles(App::PROJECT_PAGES).is_disjoint(&titles(App::APP_PAGES)), "назви сторінок не повторюються");
     }
 
     /// «Скинути проєкт»: перший клік зводить кнопку («Так, видалити…»), другий (за 1,2 с…6 с) стирає переклад, назва й колір лишаються.
@@ -5382,13 +5353,13 @@ mod ui_tests {
         shot(&mut h, "d5-qa-short");
         h.set_size(egui::vec2(1360.0, 800.0));
         h.state_mut().qar_win = false;
-        for (n, page) in [("d6-proj-look", "look"), ("d7-proj-branches", "branches"), ("d8-proj-danger", "danger")] {
+        for (n, page) in [("d6-proj-look", "look"), ("d7-proj-branches", "branches"), ("d8-proj-danger", "danger"), ("d12-proj-lang", "lang"), ("d13-proj-qa", "qa")] {
             h.state_mut().settings = h.state().st.settings_view();
             h.state_mut().nav_proj.cur = page;
             shot(&mut h, n);
         }
         h.state_mut().settings = None;
-        for (n, page) in [("d9-app-general", "general"), ("d10-app-lang", "lang"), ("d11-app-github", "github")] {
+        for (n, page) in [("d9-app-general", "general"), ("d10-app-look", "look"), ("d11-app-server", "server")] {
             h.state_mut().app_set = h.state().st.settings_view();
             h.state_mut().nav_app.cur = page;
             shot(&mut h, n);

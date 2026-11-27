@@ -164,6 +164,8 @@ impl Default for UpdUi {
 }
 
 /// Кольори ниток рядка (`--s0…--s5` у вебі).
+/// Колір тексту примари (не збереженого, підказаного перекладу).
+pub(crate) const GHOST_INK: Color32 = Color32::from_rgb(0x8c, 0x92, 0x9b);
 pub(crate) const TERM_COLORS: [Color32; 6] = [VIOLET, INFO, OK, WARN, Color32::from_rgb(0xee, 0x7a, 0xa8), Color32::from_rgb(0x4c, 0xc9, 0xc0)];
 
 fn source_job_sized(text: &str, marks: &[(usize, usize, usize)], size: f32, line_height: Option<f32>) -> egui::text::LayoutJob {
@@ -662,6 +664,7 @@ impl App {
         ctx.layer_painter(egui::LayerId::background()).rect_filled(ctx.screen_rect(), CornerRadius::ZERO, GROUND);
         // підсвічення від значка проєкту (відтінок теми) на всьому тлі: еліпс 520×190 від верху вікна, згасає до нуля, як `.ide` у вебі (merge.css)
         glow(&ctx.layer_painter(egui::LayerId::background()), pos2(theme::glow_center().0, theme::glow_center().1), vec2(theme::GLOW_RADII.0, theme::GLOW_RADII.1), accent(), GROUND);
+        self.st.begin_frame();
         self.hotkeys(ctx);
         let title = self.st.project.as_ref().map_or("Transly".to_string(), transly_core::projname::project_title);
         // поки відкрито налаштування проєкту, колір пробується на всьому застосунку одразу; скасували — повертається збережений
@@ -732,6 +735,9 @@ impl App {
         }
         self.right_panel(ctx);
         self.editor(ctx);
+        if self.st.take_ghost_more() {
+            ctx.request_repaint();
+        }
     }
 
     /// Клавіші: Ctrl+Enter — надіслати й перейти далі, Ctrl+S — зберегти, F2 — «Фокус», стрілки вгору/вниз — між рядками (поки не набирається текст).
@@ -756,6 +762,23 @@ impl App {
                     }
                     Err(e) => e,
                 };
+            }
+        }
+        // примара вибраного рядка в таблиці: Tab приймає й веде далі, Enter приймає (поки в жодному полі нема курсора й діалогу нема)
+        if self.st.is_open() && self.cell_edit.is_none() && !self.focus && !self.scene_mode && !self.any_dialog() && ctx.memory(|m| m.focused().is_none()) {
+            if let Some((f, r)) = self.st.file.zip(self.st.row) {
+                if self.st.ghost_of(f, r).is_some() {
+                    let tab = ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Tab));
+                    let enter = !tab && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Enter));
+                    if tab || enter {
+                        self.st.accept_ghost(f, r);
+                        self.draft_for = None;
+                        self.message = "Примару прийнято (чернетка)".into();
+                        if tab {
+                            self.st.step_row(1);
+                        }
+                    }
+                }
             }
         }
         if ctx.input_mut(|i| i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, Key::K))) && self.st.is_open() {
@@ -4309,6 +4332,78 @@ mod ui_tests {
         assert!(h.query_by_label_contains("У вас «take» зазвичай").is_none());
     }
 
+    /// Примарні пов'язані рядки замість чернеток: у порожній клітинці сірий переклад із підписом, Tab приймає й веде далі, «Прийняти примари (N)» — усі однакові оригінали
+    /// файлу одним записом журналу; «Скасувати» повертає порожні рядки. У проєкт примара не пишеться, у відсотки не рахується.
+    #[test]
+    fn ghost_rows_replace_drafts_and_are_accepted_with_tab_or_in_bulk() {
+        let base = std::env::temp_dir().join(format!("transly-ui-ghosts-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = base.join("MyGame").join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        let cmd = |code: i64, p: &str| format!(r#"{{"code":{code},"indent":0,"parameters":[{p}]}}"#);
+        let page = |t: &str| format!(r#"{{"conditions":{{}},"list":[{},{},{}],"trigger":0}}"#, cmd(101, r#""",0,0,2"#), cmd(401, &format!("\"{t}\"")), cmd(0, ""));
+        let ev = |id: i64| format!(r#"{{"id":{id},"name":"EV{id}","x":1,"y":1,"pages":[{}]}}"#, page("Welcome to the village, traveler"));
+        std::fs::write(data.join("Map001.json"), format!(r#"{{"displayName":"T","events":[null,{},{},{},{}]}}"#, ev(1), ev(2), ev(3), ev(4))).unwrap();
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        let f = app.st.file_names().iter().position(|n| n == "Map001.json").unwrap();
+        let rows: Vec<usize> = (0..app.st.row_count(f)).filter(|r| app.st.source_of(f, *r) == "Welcome to the village, traveler").collect();
+        assert_eq!(rows.len(), 4);
+        app.st.submit(f, rows[0], "Ласкаво просимо до села, мандрівнику").unwrap();
+        app.st.file = Some(f);
+        app.st.row = Some(rows[1]);
+        let before = app.st.progress();
+        assert_eq!(app.st.twin_ghost_count(f), 3, "три порожні двійники мають примару");
+        let mut h = harness(app);
+        h.run();
+        // у таблиці: рядок з примарою називається «… — примара: …» і є кнопка «Прийняти примари (3)»
+        assert_eq!(h.get_all_by_label_contains("— примара: Ласкаво просимо до села, мандрівнику").count(), 3, "три рядки з примарою");
+        h.get_by_label("Прийняти примари (3)");
+        assert_eq!(h.state().st.progress(), before, "примари не рахуються у відсотках");
+        assert!(h.state().st.target_of(f, rows[1]).is_empty());
+        // Tab на вибраному рядку приймає примару й веде до наступного рядка
+        h.input_mut().events.push(egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE });
+        h.step();
+        h.run();
+        assert_eq!(h.state().st.target_of(f, rows[1]), "Ласкаво просимо до села, мандрівнику");
+        assert_eq!(h.state().st.row.map(|r| r > rows[1]), Some(true), "перейшли далі");
+        // «Прийняти примари» заповнює решту одним записом
+        h.get_by_label_contains("Прийняти примари (2)").click();
+        h.run();
+        assert_eq!(rows.iter().filter(|r| !h.state().st.target_of(f, **r).is_empty()).count(), 4);
+        assert_eq!(h.state().st.twin_ghost_count(f), 0);
+        // один запис журналу: «Скасувати» повертає ті два, а не лише останній
+        h.state_mut().st.undo_last();
+        assert_eq!(rows.iter().filter(|r| !h.state().st.target_of(f, **r).is_empty()).count(), 2);
+    }
+
+    /// Примара з пам'яті перекладів: порожній рядок, схожий на перекладені (від 80 %), показує найближчий переклад із підписом «пам'ять N %»; без збігу примари нема.
+    #[test]
+    fn a_close_memory_match_becomes_a_ghost() {
+        use state::GhostFrom;
+        let mut app = construction_game("memghost");
+        let ring = (0..app.st.row_count(0)).find(|r| app.st.source_of(0, *r) == "Take the ring off").unwrap();
+        app.st.edit(0, ring, "");
+        assert_eq!(app.st.row_view(0, ring).2, RowStatus::Untranslated);
+        app.st.begin_frame();
+        // описи інших предметів («Take the hat off», 76 %) нижчі за поріг 80 %: примари нема
+        assert!(app.st.ghost_of(0, ring).is_none(), "76 % — ще не примара");
+        app.st.import_memory("Take the ring off now\tЗніми каблучку зараз");
+        app.st.begin_frame();
+        let g = app.st.ghost_of(0, ring).expect("примара з пам'яті");
+        assert_eq!(g.text, "Зніми каблучку зараз");
+        let GhostFrom::Memory(score) = g.from else { panic!("{g:?}") };
+        assert!((80..100).contains(&score), "{score}");
+        assert_eq!(g.label("Items.json"), format!("пам’ять {score} %"));
+        // назва предмета («Thing 3») на перекладені описи не схожа: примари нема
+        let thing = (0..app.st.row_count(0)).find(|r| app.st.source_of(0, *r) == "Thing 3").unwrap();
+        assert!(app.st.ghost_of(0, thing).is_none());
+        // прийняли: чернетка, а примари більше нема
+        assert!(app.st.accept_ghost(0, ring));
+        assert!(app.st.ghost_of(0, ring).is_none());
+        assert_eq!(app.st.row_view(0, ring).2, RowStatus::Draft);
+    }
+
     /// Підказки пам'яті після правки одного рядка: індекс міняє одну пару (а не будується з нуля), і результат той самий, що після повної перебудови;
     /// стара пара правленого рядка підказкою не лишається.
     #[test]
@@ -4508,6 +4603,37 @@ mod ui_tests {
         h.state_mut().draft = "Бери каблучку".into();
         h.run();
         h.render().unwrap().save(dir.join("27-threads-guard.png")).unwrap();
+    }
+
+    /// Знімок примарних рядків у таблиці й редагуванні: `TRANSLY_SHOTS=<тека> cargo test -p transly-app ghost_shot -- --ignored`.
+    #[test]
+    #[ignore]
+    fn ghost_shot() {
+        let Some(dir) = std::env::var_os("TRANSLY_SHOTS").map(std::path::PathBuf::from) else { return };
+        std::fs::create_dir_all(&dir).unwrap();
+        let base = std::env::temp_dir().join(format!("transly-ui-ghostshot-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = base.join("MyGame").join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        let cmd = |code: i64, p: &str| format!(r#"{{"code":{code},"indent":0,"parameters":[{p}]}}"#);
+        let page = |t: &str| format!(r#"{{"conditions":{{}},"list":[{},{},{}],"trigger":0}}"#, cmd(101, r#""",0,0,2"#), cmd(401, &format!("\"{t}\"")), cmd(0, ""));
+        let ev = |id: i64, t: &str| format!(r#"{{"id":{id},"name":"EV{id}","x":1,"y":1,"pages":[{}]}}"#, page(t));
+        let w = "Welcome to the village, traveler";
+        std::fs::write(data.join("Map001.json"), format!(r#"{{"displayName":"Village","events":[null,{},{},{},{},{}]}}"#, ev(1, w), ev(2, "Where is the elder?"), ev(3, w), ev(4, "Take the ring off now"), ev(5, w))).unwrap();
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        let f = app.st.file_names().iter().position(|n| n == "Map001.json").unwrap();
+        let rows: Vec<usize> = (0..app.st.row_count(f)).filter(|r| app.st.source_of(f, *r) == w).collect();
+        app.st.submit(f, rows[0], "Ласкаво просимо до села, мандрівнику").unwrap();
+        app.st.import_memory("Take the ring off\tЗніми каблучку");
+        app.st.file = Some(f);
+        app.st.row = Some(rows[1]);
+        let mut h = harness(app);
+        h.run();
+        h.render().unwrap().save(dir.join("28-ghost-table.png")).unwrap();
+        h.state_mut().focus = true;
+        h.run();
+        h.render().unwrap().save(dir.join("28-ghost-edit.png")).unwrap();
     }
 
     /// Знімок таблиці з виділеними рядками (смуга «вибрано» на шапці): `TRANSLY_SHOTS=<тека> cargo test -p transly-app bulk_shot -- --ignored`.

@@ -219,6 +219,9 @@ pub struct AppState {
     pub inbox: Inbox,
     row_memo: RowMemo,
     frame_caches: std::cell::RefCell<FrameCaches>,
+    /// Скільки примар із пам'яті ще можна порахувати в цьому кадрі, і чи лишились непораховані (тоді інтерфейс просить ще кадр).
+    ghost_budget: std::cell::Cell<u8>,
+    ghost_more: std::cell::Cell<bool>,
     /// Конструкції, які ще не в глосарії: шукаються у фоні (див. `mine_cards`).
     mine_cache: std::cell::RefCell<MineCache>,
     auto_cache: std::cell::RefCell<AutoCache>,
@@ -257,7 +260,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { undo_count: 0, db_cache: std::cell::RefCell::new(None), names_cache: std::cell::RefCell::new(None), usage_cache: Default::default(), links_cache: std::cell::RefCell::new(None), link_index: std::cell::RefCell::new(None), relay: RelayCfg::load(), relay_rx: None, speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, rows_filter: None, inbox: Inbox::load(), row_memo: RowMemo::load(), frame_caches: Default::default(), mine_cache: Default::default(), auto_cache: Default::default(), dismissed: Dismissed::load(), scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: Default::default(), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![], saved_ms: None, session_start: now_ms(), session_edits: 0 }
+        AppState { undo_count: 0, db_cache: std::cell::RefCell::new(None), names_cache: std::cell::RefCell::new(None), usage_cache: Default::default(), links_cache: std::cell::RefCell::new(None), link_index: std::cell::RefCell::new(None), relay: RelayCfg::load(), relay_rx: None, speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, rows_filter: None, inbox: Inbox::load(), row_memo: RowMemo::load(), frame_caches: Default::default(), ghost_budget: std::cell::Cell::new(0), ghost_more: std::cell::Cell::new(false), mine_cache: Default::default(), auto_cache: Default::default(), dismissed: Dismissed::load(), scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: Default::default(), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![], saved_ms: None, session_start: now_ms(), session_edits: 0 }
     }
 }
 
@@ -458,6 +461,9 @@ struct FrameCaches {
     tm: Option<((usize, usize, u64), Vec<TmMatch>)>,
     names: Option<((usize, usize, u64), NamesInRow)>,
     speakers: Option<((usize, u64), SpeakerCounts)>,
+    /// Примари з однаковим оригіналом для файлу: (файл, версія) → рядок → примара; і примари з пам'яті, що вже порахували для цієї версії (рядок → примара чи нічого).
+    twin_ghosts: Option<((usize, u64), GhostMap)>,
+    mem_ghosts: Option<(u64, MemGhosts)>,
     /// Останні дії: (версія, хвилина) — «щойно / 5 хв тому» оновлюється раз на хвилину.
     activity: Option<((u64, i64), Vec<ActivityItem>)>,
 }
@@ -540,6 +546,36 @@ pub struct UsageCounts {
     pub other: usize,
     pub none: usize,
 }
+
+/// Звідки взято примару: рядок з таким самим оригіналом чи пам'ять перекладів.
+#[derive(Clone, Debug, PartialEq)]
+pub enum GhostFrom {
+    /// Еталон групи однакових оригіналів: файл, ключ і номер рядка в цьому файлі (з 1).
+    Twin { file: String, key: String, row: usize },
+    /// Найближчий збіг пам'яті перекладів, у відсотках.
+    Memory(i64),
+}
+
+/// Примара: переклад, який можна взяти в порожній рядок, але який не записано в проєкт, поки його не прийняли.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Ghost {
+    pub text: String,
+    pub from: GhostFrom,
+}
+
+impl Ghost {
+    /// Коротко, звідки: «як рядок 1», «як Map001 · рядок 3», «пам'ять 82 %». `here` — файл рядка, для якого показано примару.
+    pub fn label(&self, here: &str) -> String {
+        match &self.from {
+            GhostFrom::Twin { file, row, .. } if file == here => format!("як рядок {row}"),
+            GhostFrom::Twin { file, row, .. } => format!("як {} · рядок {row}", file.trim_end_matches(".json")),
+            GhostFrom::Memory(score) => format!("пам’ять {score} %"),
+        }
+    }
+}
+
+type GhostMap = std::rc::Rc<std::collections::HashMap<usize, Ghost>>;
+type MemGhosts = std::collections::HashMap<(usize, usize), Option<Ghost>>;
 
 /// Нитка вивченої пари в одному рядку (для малювання й карток).
 #[derive(Clone, Debug)]
@@ -2203,6 +2239,150 @@ impl AppState {
         (d, idx, running)
     }
 
+    /// Новий кадр: бюджет обчислень примар із пам'яті (по кілька рядків за кадр, щоб таблиця не гальмувала).
+    pub fn begin_frame(&self) {
+        self.ghost_budget.set(5);
+    }
+
+    /// Чи є ще непораховані примари (інтерфейс тоді просить перемалювання).
+    pub fn take_ghost_more(&self) -> bool {
+        self.ghost_more.replace(false)
+    }
+
+    /// Примари однакових оригіналів для файлу: порожній рядок групи, де вже є еталон (головний чи надісланий останнім). Режим «не чіпати» примар не дає.
+    fn twin_ghosts(&self, f: usize) -> GhostMap {
+        if let Some(((cf, rev), m)) = self.frame_caches.borrow().twin_ghosts.as_ref() {
+            if *cf == f && *rev == self.rev {
+                return m.clone();
+            }
+        }
+        let mut out: std::collections::HashMap<usize, Ghost> = std::collections::HashMap::new();
+        if let (Some(p), Some(v)) = (self.project.as_ref(), self.views.get(f)) {
+            if self.link_mode() != transly_core::links::LinkMode::Off {
+                let idx = self.links();
+                let mut by_cluster: std::collections::HashMap<String, Option<(transly_core::links::LinkView, usize)>> = std::collections::HashMap::new();
+                for (r, u) in v.units.iter().enumerate() {
+                    if self.entry(f, r).is_some_and(|e| !e.target.trim().is_empty()) {
+                        continue;
+                    }
+                    let Some((text, _)) = idx.cluster_of(&v.name, &u.key) else { continue };
+                    let slot = by_cluster.entry(text.to_string()).or_insert_with(|| {
+                        let view = transly_core::links::link_view(p, &idx, &v.name, &u.key)?;
+                        let rf = view.reference?;
+                        Some((view, rf))
+                    });
+                    let Some((view, rf)) = slot.as_ref() else { continue };
+                    let Some(me) = view.rows.iter().find(|x| x.file == v.name && x.key == u.key) else { continue };
+                    if me.state != transly_core::links::LinkState::Empty {
+                        continue;
+                    }
+                    let rr = &view.rows[*rf];
+                    let row = self.views.iter().find(|x| x.name == rr.file).and_then(|x| x.units.iter().position(|y| y.key == rr.key)).map_or(0, |i| i + 1);
+                    out.insert(r, Ghost { text: rr.target.clone(), from: GhostFrom::Twin { file: rr.file.clone(), key: rr.key.clone(), row } });
+                }
+            }
+        }
+        let m = std::rc::Rc::new(out);
+        self.frame_caches.borrow_mut().twin_ghosts = Some(((f, self.rev), m.clone()));
+        m
+    }
+
+    /// Примара порожнього рядка: спершу еталон групи однакових оригіналів, потім найближчий збіг пам'яті перекладів від 80 %. Рядок із перекладом примари не має.
+    pub fn ghost_of(&self, f: usize, r: usize) -> Option<Ghost> {
+        if self.entry(f, r).is_some_and(|e| !e.target.trim().is_empty()) {
+            return None;
+        }
+        if let Some(g) = self.twin_ghosts(f).get(&r) {
+            return Some(g.clone());
+        }
+        if let Some((rev, m)) = self.frame_caches.borrow().mem_ghosts.as_ref() {
+            if *rev == self.rev {
+                if let Some(g) = m.get(&(f, r)) {
+                    return g.clone();
+                }
+            }
+        }
+        // не вистачило бюджету кадру — порахуємо в наступних (рядки, що вже в пам'яті, не рахуються вдруге)
+        let left = self.ghost_budget.get();
+        if left == 0 {
+            self.ghost_more.set(true);
+            return None;
+        }
+        self.ghost_budget.set(left - 1);
+        self.ensure_tm();
+        let source = self.source_of(f, r);
+        let found = self.tm_cache.borrow().as_ref().and_then(|(_, idx)| idx.find(&source, &FindOpts { min: Some(80.0), limit: Some(1), exclude: None }).into_iter().next());
+        let ghost = found.map(|m| Ghost { text: m.t, from: GhostFrom::Memory(m.score) });
+        let mut c = self.frame_caches.borrow_mut();
+        if c.mem_ghosts.as_ref().is_none_or(|(rev, _)| *rev != self.rev) {
+            c.mem_ghosts = Some((self.rev, Default::default()));
+        }
+        if let Some((_, m)) = c.mem_ghosts.as_mut() {
+            m.insert((f, r), ghost.clone());
+        }
+        ghost
+    }
+
+    /// Скільки примар однакових оригіналів у файлі (їх можна прийняти всі разом).
+    pub fn twin_ghost_count(&self, f: usize) -> usize {
+        self.twin_ghosts(f).len()
+    }
+
+    /// Приймає примару: переклад стає чернеткою (один запис журналу зі «Скасувати»).
+    pub fn accept_ghost(&mut self, f: usize, r: usize) -> bool {
+        let Some(g) = self.ghost_of(f, r) else { return false };
+        let Some(u) = self.unit(f, r).cloned() else { return false };
+        let (name, now, who) = (self.views[f].name.clone(), now_ms(), self.who());
+        let next = edit(self.entry(f, r), &u, &g.text, Stage::Translate, now);
+        let change = transly_core::journal::RowChange { file: name, key: u.key.clone(), text: g.text.clone(), next, what: Some(format!("прийнято примару ({})", g.label(&self.views[f].name))) };
+        let mut rand = Self::seeded_rand();
+        let kind = if matches!(g.from, GhostFrom::Memory(_)) { "memory" } else { "twin" };
+        let Some(p) = self.project.as_mut() else { return false };
+        let id = commit_rows(&mut p.files, &[change], kind, &who, now, None, &mut rand);
+        self.note_undo(&id);
+        self.rev += 1;
+        self.dirty = true;
+        true
+    }
+
+    /// Приймає всі примари однакових оригіналів файлу одним записом журналу; скільки рядків заповнено.
+    pub fn accept_twin_ghosts(&mut self, f: usize) -> usize {
+        let ghosts = self.twin_ghosts(f);
+        if ghosts.is_empty() {
+            return 0;
+        }
+        let Some(p) = self.project.as_ref() else { return 0 };
+        let Some(v) = self.views.get(f) else { return 0 };
+        let idx = self.links();
+        let (mut seen, mut changes) = (std::collections::HashSet::new(), Vec::new());
+        let mut rows: Vec<usize> = ghosts.keys().copied().collect();
+        rows.sort_unstable();
+        for r in rows {
+            let key = &v.units[r].key;
+            let Some((text, _)) = idx.cluster_of(&v.name, key) else { continue };
+            if !seen.insert(text.to_string()) {
+                continue;
+            }
+            let Some(view) = transly_core::links::link_view(p, &idx, &v.name, key) else { continue };
+            let Some(rf) = view.reference else { continue };
+            let reference = view.rows[rf].target.clone();
+            let mine: Vec<&transly_core::links::LinkRowView> = view.rows.iter().filter(|x| x.file == v.name && x.state == transly_core::links::LinkState::Empty).collect();
+            changes.extend(transly_core::links::link_changes(&reference, &mine, now_ms()));
+        }
+        let n = changes.len();
+        if n == 0 {
+            return 0;
+        }
+        let who = self.who();
+        let mut rand = Self::seeded_rand();
+        let Some(p) = self.project.as_mut() else { return 0 };
+        let id = commit_rows(&mut p.files, &changes, "twin", &who, now_ms(), None, &mut rand);
+        self.note_undo(&id);
+        self.rev += 1;
+        self.dirty = true;
+        n
+    }
+
     /// Нитки вивчених пар у рядку для малювання (пунктиром): слово оригіналу, його місце в перекладі (`dst`) і підсумок пари. Не показуються слова, що вже є записами
     /// глосарія (їхні нитки суцільні), і пари, які відкладено («Не так»).
     pub fn learned_threads(&self, f: usize, r: usize, target: &str) -> Vec<LearnedView> {
@@ -3030,6 +3210,14 @@ impl AppState {
     fn after_send_links(&mut self, f: usize, key: &str) {
         let mode = self.link_mode();
         if mode == transly_core::links::LinkMode::Off {
+            return;
+        }
+        // режим «після надсилання заповнювати порожні» більше не пише чернеток: порожні двійники показано примарами, їх приймає перекладач (див. `ghost_of`)
+        if mode == transly_core::links::LinkMode::Ask {
+            let n = self.twin_ghost_count(f);
+            if n > 0 {
+                self.last_note = format!("Однакові рядки: {} показано примарами (Tab приймає)", transly_core::plural::plural(n as i64, ["порожній", "порожні", "порожніх"]));
+            }
             return;
         }
         let Some(p) = self.project.as_ref() else { return };
@@ -4108,12 +4296,20 @@ menu.quit=Quit game
         s.open_game(&data).unwrap();
         let f = s.file_names().iter().position(|n| n == "Map001.json").unwrap();
         let rows: Vec<usize> = (0..s.row_count(f)).filter(|r| s.source_of(f, *r) == "Welcome to the village, traveler").collect();
-        // режим «спитати»: після надсилання порожні двійники заповнюються самі
+        // режим «спитати»: після надсилання порожні двійники показуються примарами (чернеток не пишемо), від'єднаний рядок примари не має
         assert_eq!(s.link_mode(), transly_core::links::LinkMode::Ask);
         s.link_action(f, rows[2], 2);
         assert_eq!(s.link_flags(f, rows[2]), Some((false, true)));
         s.submit(f, rows[0], "Ласкаво просимо").unwrap();
-        assert_eq!(s.target_of(f, rows[1]), "Ласкаво просимо");
+        assert_eq!(s.target_of(f, rows[1]), "", "примара не записується в проєкт");
+        let g = s.ghost_of(f, rows[1]).expect("примара для порожнього двійника");
+        assert_eq!(g.text, "Ласкаво просимо");
+        assert_eq!(g.label("Map001.json"), format!("як рядок {}", rows[0] + 1));
+        assert!(s.ghost_of(f, rows[2]).is_none(), "від'єднаний рядок примари не має");
+        assert!(s.ghost_of(f, rows[0]).is_none(), "рядок із перекладом примари не має");
+        assert!(s.accept_ghost(f, rows[1]));
+        assert_eq!(s.target_of(f, rows[1]), "Ласкаво просимо", "прийнята примара стала чернеткою");
+        assert_eq!(s.row_view(f, rows[1]).2, RowStatus::Draft);
         assert_eq!(s.target_of(f, rows[2]), "", "від'єднаний рядок не чіпається");
         s.link_action(f, rows[2], 3);
         s.link_action(f, rows[1], 0);

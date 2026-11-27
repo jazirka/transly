@@ -1370,6 +1370,15 @@ impl App {
                     self.st.filter = *flt;
                 }
             }
+            let nghost = self.st.twin_ghost_count(f);
+            if nghost > 0 {
+                ui.separator();
+                if ui.button(format!("Прийняти примари ({nghost})")).on_hover_text("Однакові оригінали, де вже є переклад: порожні рядки стають чернетками одним записом, його можна скасувати").clicked() {
+                    let n = self.st.accept_twin_ghosts(f);
+                    self.message = format!("Прийнято примар: {n} (чернетки)");
+                    self.draft_for = None;
+                }
+            }
             if let Some(title) = self.st.rows_filter.as_ref().map(|r| r.title.clone()) {
                 ui.separator();
                 if ui.button(format!("Показано лише: {title}  (скинути)")).clicked() {
@@ -1413,6 +1422,29 @@ impl App {
                 }
             }
         });
+        // примари однакових оригіналів у файлі: кнопка «Прийняти примари (N)» між «Ще» і «Мовець», коли там є місце (завжди є й у списку «Ще»)
+        let nghost = self.st.twin_ghost_count(f);
+        if nghost > 0 {
+            let label = format!("Прийняти примари ({nghost})");
+            let mut g = ui.painter().layout_no_wrap(label.clone(), ip(12.0), Color32::WHITE);
+            let mut rect = Rect::from_min_size(pos2(more.rect.right() + 6.0, fr.top() + 6.0), vec2(g.size().x + 20.0, 24.0));
+            if rect.right() + 6.0 > who_resp.rect.left() {
+                // вузька таблиця: коротший підпис
+                g = ui.painter().layout_no_wrap(format!("Прийняти ({nghost})"), ip(12.0), Color32::WHITE);
+                rect = Rect::from_min_size(rect.min, vec2(g.size().x + 20.0, 24.0));
+            }
+            if rect.right() + 6.0 <= who_resp.rect.left() {
+                let resp = ui.interact(rect, ui.id().with("accept-ghosts"), Sense::click());
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label.clone()));
+                ui.painter().rect_filled(rect, CornerRadius::same(8), if resp.hovered() { accent_hover() } else { accent_solid() });
+                ui.painter().galley(pos2(rect.left() + 10.0, rect.center().y - g.size().y / 2.0), g, Color32::WHITE);
+                if resp.on_hover_text("Однакові оригінали, де вже є переклад: порожні рядки стають чернетками одним записом, його можна скасувати").clicked() {
+                    let n = self.st.accept_twin_ghosts(f);
+                    self.message = format!("Прийнято примар: {n} (чернетки)");
+                    self.draft_for = None;
+                }
+            }
+        }
     }
 
     /// Таблиця: шапка 26, рядки 34 із зеброю, колонки №, стан, ключ, [мовець], оригінал, переклад, кількість знаків. Переклад правиться в клітинці.
@@ -1544,7 +1576,8 @@ impl App {
                     let (rect, resp) = ui.allocate_exact_size(vec2(w, ROW_H), Sense::click());
                     let sel = self.st.row == Some(r);
                     let (src, tgt, st) = self.st.row_view(f, r);
-                    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, sel, format!("{src} — {tgt}")));
+                    let ghost = if tgt.is_empty() && editing != Some((f, r)) { self.st.ghost_of(f, r) } else { None };
+                    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, sel, match &ghost { Some(g) => format!("{src} — примара: {}", g.text), None => format!("{src} — {tgt}") }));
                     let body = Rect::from_min_max(rect.min, pos2(rect.right(), rect.bottom() - 1.0));
                     if sel {
                         ui.painter().rect_filled(body, CornerRadius::ZERO, self.chosen(Pane::Centre).0);
@@ -1588,7 +1621,14 @@ impl App {
                         }
                         self.sel_last = Some(i);
                     }
-                    paint_state(ui, pos2(rect.left() + xs[1] + st_w / 2.0, rect.top() + 17.0), st, bad_rows.contains(&r));
+                    if ghost.is_some() {
+                        // примара: порожній пунктирний круг замість суцільного
+                        let c = pos2(rect.left() + xs[1] + st_w / 2.0, rect.top() + 17.0);
+                        let ring: Vec<egui::Pos2> = (0..=24).map(|i| { let a = i as f32 / 24.0 * std::f32::consts::TAU; c + vec2(4.5 * a.cos(), 4.5 * a.sin()) }).collect();
+                        ui.painter().extend(egui::Shape::dotted_line(&ring, accent_text(), 3.0, 0.7));
+                    } else {
+                        paint_state(ui, pos2(rect.left() + xs[1] + st_w / 2.0, rect.top() + 17.0), st, bad_rows.contains(&r));
+                    }
                     ui.painter().with_clip_rect(col(2, key_w)).text(pos2(rect.left() + xs[2] + 8.0, rect.top() + 20.0), Align2::LEFT_CENTER, short_key(&self.st.key_of(f, r)), mp(12.0), MUTE);
                     if who {
                         let name = self.st.speaker_of_row(f, r);
@@ -1614,8 +1654,18 @@ impl App {
                             commit = Some(false);
                         }
                     } else {
-                        let (t, c) = if tgt.is_empty() { ("—".to_string(), DIM) } else { (tgt.replace('\n', " "), TEXT) };
-                        ui.painter().with_clip_rect(tcell).text(pos2(tcell.left() + 8.0, mid), Align2::LEFT_CENTER, t, ip(12.5), c);
+                        if let Some(g) = &ghost {
+                            // примара: сірий курсив і короткий підпис, звідки вона (як рядок 1, пам'ять 82 %)
+                            let mut job = egui::text::LayoutJob::default();
+                            job.append(&g.text.replace('\n', " "), 0.0, egui::TextFormat { font_id: ip(12.5), color: GHOST_INK, italics: true, ..Default::default() });
+                            job.append(&g.label(&self.st.file_names()[f]), 0.0, egui::TextFormat { font_id: mp(11.0), color: accent_text().gamma_multiply(0.85), ..Default::default() });
+                            job.sections[1].leading_space = 8.0;
+                            let gg = ui.fonts(|fo| fo.layout_job(job));
+                            ui.painter().with_clip_rect(tcell).galley(pos2(tcell.left() + 8.0, mid - gg.size().y / 2.0), gg, GHOST_INK);
+                        } else {
+                            let (t, c) = if tgt.is_empty() { ("—".to_string(), DIM) } else { (tgt.replace('\n', " "), TEXT) };
+                            ui.painter().with_clip_rect(tcell).text(pos2(tcell.left() + 8.0, mid), Align2::LEFT_CENTER, t, ip(12.5), c);
+                        }
                         if sel {
                             ui.painter().rect_stroke(tcell, CornerRadius::ZERO, Stroke::new(1.0_f32, accent()), StrokeKind::Inside);
                         }
@@ -1663,7 +1713,12 @@ impl App {
             match commit {
                 Some(true) => {
                     if let Some((cf, cr)) = self.cell_edit {
-                        self.st.edit(cf, cr, &self.draft.clone());
+                        // порожнє поле, а в рядка є примара: Tab/Enter приймає її
+                        if self.draft.trim().is_empty() && self.st.ghost_of(cf, cr).is_some() {
+                            self.st.accept_ghost(cf, cr);
+                        } else {
+                            self.st.edit(cf, cr, &self.draft.clone());
+                        }
                         self.st.step_row(1);
                         if let Some(nr) = self.st.row {
                             self.draft = self.st.target_of(cf, nr);
@@ -2100,6 +2155,8 @@ impl App {
                 ui.painter().hline(x0..=x1, hr.center().y, Stroke::new(1.0_f32, Color32::from_rgb(0x4a, 0x4d, 0x54)));
                 ui.painter().add(egui::Shape::convex_polygon(vec![pos2(x1, hr.center().y - 3.5), pos2(x1 + 7.0, hr.center().y), pos2(x1, hr.center().y + 3.5)], Color32::from_rgb(0x4a, 0x4d, 0x54), Stroke::NONE));
                 ui.add_space(6.0);
+                // примара порожнього рядка: підказка в полі (сірим), Tab вставляє
+                let ghost = if self.draft.trim().is_empty() { self.st.ghost_of(f, r) } else { None };
                 // поле перекладу: рамка 12, нижня панель 49
                 let mut dst_at: Option<(egui::Pos2, std::sync::Arc<egui::Galley>)> = None;
                 let frame = egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, CARD_LINE)).corner_radius(CornerRadius::same(CARD_R));
@@ -2110,10 +2167,22 @@ impl App {
                         job.sections.iter_mut().for_each(|s| s.format.line_height = Some(22.5));
                         ui.fonts(|f| f.layout_job(job))
                     };
-                    let teo = egui::TextEdit::multiline(&mut self.draft).desired_rows(4).desired_width(f32::INFINITY).font(ip(15.0)).layouter(&mut lay).frame(false).margin(vec2(14.0, 12.0)).min_size(vec2(0.0, 120.0)).show(ui);
+                    let mut edit = egui::TextEdit::multiline(&mut self.draft).desired_rows(4).desired_width(f32::INFINITY).font(ip(15.0)).layouter(&mut lay).frame(false).margin(vec2(14.0, 12.0)).min_size(vec2(0.0, 120.0));
+                    if let Some(g) = &ghost {
+                        edit = edit.hint_text(RichText::new(&g.text).italics().font(ip(15.0)).color(GHOST_INK));
+                    }
+                    let teo = edit.show(ui);
                     dst_at = Some((teo.galley_pos, teo.galley.clone()));
                     let te = teo.response;
                     let focused = te.has_focus();
+                    // Tab у порожньому полі з примарою вставляє її (ще не збережено: надіслати чи правити далі)
+                    if focused {
+                        if let Some(g) = &ghost {
+                            if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Tab)) {
+                                self.draft = g.text.clone();
+                            }
+                        }
+                    }
                     let (bar, _) = ui.allocate_exact_size(vec2(ui.available_width(), 49.0), Sense::hover());
                     ui.painter().rect_filled(bar, CornerRadius { nw: 0, ne: 0, sw: CARD_R - 1, se: CARD_R - 1 }, PANEL);
                     ui.painter().hline(bar.x_range(), bar.top(), Stroke::new(1.0_f32, LINE));
@@ -2177,6 +2246,20 @@ impl App {
                                 dotted_thread(ui.painter(), *a, *b, thin);
                             }
                         }
+                    }
+                }
+                if let Some(g) = &ghost {
+                    ui.add_space(8.0);
+                    let mut take = false;
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 8.0;
+                        ui.label(RichText::new(format!("Примара · {}", g.label(&self.st.file_names()[f]))).font(mp(11.5)).color(accent_text().gamma_multiply(0.9)));
+                        if plain_button(ui, "Прийняти (Tab у полі)").clicked() {
+                            take = true;
+                        }
+                    });
+                    if take {
+                        self.draft = g.text.clone();
                     }
                 }
                 // сторож узгодженості: слово зазвичай перекладено певним словом, а тут його немає (під полем, не блокує нічого)

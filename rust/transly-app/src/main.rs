@@ -847,7 +847,17 @@ impl App {
         egui::TopBottomPanel::top("topbar").exact_height(40.0).show_separator_line(false).frame(egui::Frame::new().fill(Color32::TRANSPARENT).inner_margin(egui::Margin::symmetric(6, 0))).show(ctx, |ui| {
             // власний заголовок: смуга перетягування й три кнопки справа; решта панелі не заходить на місце кнопок
             if self.chrome_own {
-                self.window_controls(ctx, ui);
+                if self.any_dialog() {
+                    // як у вебі (`html.dlg-open .wdrag`, кнопки вікна над підложкою): поки відкрито діалог, смуга перетягування й кнопки лежать над ним
+                    egui::Area::new(egui::Id::new("window-controls-above")).order(egui::Order::Tooltip).fixed_pos(pos2(0.0, 0.0)).interactable(true).show(ctx, |ui| {
+                        ui.set_clip_rect(ctx.screen_rect());
+                        // область займає всю верхню панель: тільки так шар лежить під вказівником над підложкою діалогу
+                        ui.allocate_exact_size(vec2(ctx.screen_rect().width(), 40.0), Sense::hover());
+                        self.window_controls(ctx, ui);
+                    });
+                } else {
+                    self.window_controls(ctx, ui);
+                }
             }
             let mut inner;
             let ui: &mut egui::Ui = if self.chrome_own {
@@ -5321,6 +5331,25 @@ mod ui_tests {
             h.run();
         }
         assert!(!h.state().qar_win);
+    }
+
+    /// Поки відкрито діалог, кнопки вікна («Згорнути», «Розгорнути», «Закрити») лишаються над підложкою й працюють (у вебі вони над `.dlg-scrim`).
+    #[test]
+    fn the_window_buttons_stay_above_a_dialog() {
+        let data = game("above");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.chrome_own = true;
+        app.build_win = Some(app.st.build_defaults());
+        let mut h = harness(app);
+        h.run();
+        h.run();
+        for label in ["Згорнути вікно", "Розгорнути вікно", "Закрити вікно"] {
+            let b = h.get_by_label(label).bounding_box().unwrap();
+            let c = pos2((b.x0 + b.x1) as f32 / 2.0, (b.y0 + b.y1) as f32 / 2.0);
+            let top = h.ctx.layer_id_at(c).expect("шар під вказівником");
+            assert_eq!(top.order, egui::Order::Tooltip, "{label}: над підложкою діалогу, а шар {top:?}");
+        }
     }
 
     /// Знімки діалогів для порівняння з веб-знімками (`web_dialogs.cjs`): `TRANSLY_FIXTURE=… TRANSLY_SHOTS=<тека> cargo test -p transly-app dialog_shots -- --ignored`.

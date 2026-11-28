@@ -212,6 +212,21 @@ fn card_head_x(ui: &mut egui::Ui, title: &str, sub: Option<&str>, sub_col: Color
     }
 }
 
+/// Зауваження QA смугами-попередженнями (як `.st-warn` у налаштуваннях): кольорова смуга зліва, круглий значок «!», перше речення жирним, далі текст.
+/// Червона — помилка, жовта — порада.
+pub(crate) fn qa_banners(ui: &mut egui::Ui, issues: &[transly_core::qa::Issue]) {
+    for (n, i) in issues.iter().enumerate() {
+        if n > 0 {
+            ui.add_space(8.0);
+        }
+        let (head, rest) = match i.message.find(". ") {
+            Some(p) => (&i.message[..=p], i.message[p + 2..].trim()),
+            None => (i.message.as_str(), ""),
+        };
+        crate::stshell::warn_banner(ui, i.severity == transly_core::qa::Severity::Bad, head, rest);
+    }
+}
+
 /// Підпис великими літерами з міжлітерним інтервалом `em` (як `text-transform:uppercase; letter-spacing` у вебі).
 pub(crate) fn spaced(ui: &egui::Ui, text: &str, size: f32, color: Color32, em: f32) -> std::sync::Arc<egui::Galley> {
     spaced_w(ui, text, size, 400, color, em)
@@ -537,24 +552,43 @@ impl App {
             0 => self.st.is_open(),
             _ => self.st.file.is_some(),
         };
-        let hide = mini_icon(ui, pos2(h.right() - 20.0, h.center().y), "minus", &format!("lh-hide{win}")).on_hover_text("Сховати колонку");
+        // значки «⋮» і «—» видно, коли вказівник над карткою (як `.ph .ico` у вебі), а ще поки відкрито пошук чи меню чи є що сказати (крапка на ⋮)
+        let q_empty = match win {
+            0 => self.win_q[0].is_empty(),
+            1 => self.st.search.is_empty(),
+            2 => self.win_q[1].is_empty(),
+            _ => true,
+        };
+        let searching = searchable && (self.win_search[win] || !q_empty);
+        let pop_id = ui.make_persistent_id(format!("lh-pop{win}"));
+        let show = ui.rect_contains_pointer(ui.max_rect()) || searching || ui.memory(|m| m.is_popup_open(pop_id));
+        let hide_r = Rect::from_center_size(pos2(h.right() - 20.0, h.center().y), vec2(24.0, 24.0));
+        let hide = ui.interact(hide_r, ui.id().with(format!("lh-hide{win}")), Sense::click()).on_hover_text("Сховати колонку");
+        hide.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Сховати колонку"));
+        if show {
+            if hide.hovered() {
+                ui.painter().rect_filled(hide_r, CornerRadius::same(8), GHOST_HOVER);
+            }
+            icons::paint(ui, Rect::from_center_size(hide_r.center(), vec2(14.0, 14.0)), "minus", if hide.hovered() { TEXT } else { MUTE });
+        }
         let hide_clicked = hide.clicked();
         let mut left_edge = h.right() - 32.0;
         if searchable {
             let c = pos2(h.right() - 20.0 - 26.0, h.center().y);
             let r = Rect::from_center_size(c, vec2(24.0, 24.0));
             let resp = ui.interact(r, ui.id().with(("lh-menu", win)), Sense::click());
-            if resp.hovered() {
-                ui.painter().rect_filled(r, CornerRadius::same(8), GHOST_HOVER);
+            if show {
+                if resp.hovered() {
+                    ui.painter().rect_filled(r, CornerRadius::same(8), GHOST_HOVER);
+                }
+                icons::paint(ui, Rect::from_center_size(c, vec2(14.0, 14.0)), "dots", if resp.hovered() { TEXT } else { MUTE });
+                if !q_empty {
+                    ui.painter().circle_filled(pos2(r.right() - 3.0, r.top() + 5.0), 3.0, accent());
+                }
             }
-            icons::paint(ui, Rect::from_center_size(c, vec2(14.0, 14.0)), "dots", if resp.hovered() { TEXT } else { MUTE });
             let resp = resp.on_hover_text("Пошук у цьому вікні");
             resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("Меню вікна «{title}»: пошук")));
-            let has_q = match win {
-                0 => !self.win_q[0].is_empty(),
-                1 => !self.st.search.is_empty(),
-                _ => !self.win_q[1].is_empty(),
-            };
+            let has_q = !q_empty;
             let mut act = 0u8;
             pop(ui, &resp, &format!("lh-pop{win}"), |ui| {
                 if mi(ui, "Знайти", true).clicked() {
@@ -582,13 +616,6 @@ impl App {
             }
             left_edge = c.x - 18.0;
         }
-        let q_empty = match win {
-            0 => self.win_q[0].is_empty(),
-            1 => self.st.search.is_empty(),
-            2 => self.win_q[1].is_empty(),
-            _ => true,
-        };
-        let searching = searchable && (self.win_search[win] || !q_empty);
         if searching {
             // поле пошуку стоїть у заголовку після назви: лупа, текст, ✕
             let x0 = h.left() + 10.0 + tw + 10.0;
@@ -753,11 +780,9 @@ impl App {
     pub(crate) fn right_panel(&mut self, ctx: &egui::Context) {
         let edit = self.focus && !self.scene_mode;
         let mi = usize::from(edit);
-        // «Картинки» — лише в режимі таблиці; у «Редагуванні» картинки стоять мініатюрами під оригіналом
-        let nsec = if edit { 3 } else { 4 };
-        if !edit {
-            self.auto_pictures(ctx, mi);
-        }
+        // «Картинки» є в обох режимах: у таблиці — велике прев'ю з мініатюрами, у «Редагуванні» — плитки по три з бейджем типу
+        let nsec = 4;
+        self.auto_pictures(ctx, mi);
         egui::SidePanel::right("rightcol").exact_width(ctx.data(|d| d.get_temp::<(f32, f32)>(egui::Id::new("panel-w"))).unwrap_or((306.0, 396.0)).1).resizable(false).show_separator_line(false).frame(egui::Frame::new()).show(ctx, |ui| {
             let full = ui.max_rect();
             // смужка значків
@@ -794,7 +819,14 @@ impl App {
                 card_lr(0, 0).outer_margin(egui::Margin::ZERO).show(&mut cui, |ui| {
                     ui.set_min_height(each - 2.0);
                     ui.set_max_height(each - 2.0);
-                    let title = ["Активність", "Пов’язане", "Обговорення", "Картинки"][*sec];
+                    let mut title = ["Активність", "Пов’язане", "Обговорення", "Картинки"][*sec].to_string();
+                    if *sec == 3 && edit {
+                        let n = self.st.row.zip(self.st.file).map_or(0, |(r, f)| self.st.pics_of(f, r).len());
+                        if n > 0 {
+                            title = format!("{title} · {n}");
+                        }
+                    }
+                    let title = title.as_str();
                     ui.spacing_mut().item_spacing.y = 0.0; // після заголовка одразу тіло (у вебі проміжків між ними немає)
                     let (h, _) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::hover());
                     ui.painter().rect_filled(h, card_top(), PANEL);
@@ -804,13 +836,14 @@ impl App {
                     if ui.rect_contains_pointer(h) && mini_icon(ui, pos2(h.right() - 20.0, h.center().y), "minus", &format!("sec-x{sec}")).on_hover_text("Сховати розділ").clicked() {
                         self.right_secs[mi][*sec] = false;
                     }
-                    if *sec == 3 {
+                    if *sec == 3 && !edit {
                         self.pictures_header_buttons(ui, h);
                     }
                     match *sec {
                         0 => self.activity_body(ui),
                         1 => self.related_body(ui),
                         2 => self.comments_body(ui),
+                        _ if edit => self.pictures_grid(ui),
                         _ => self.pictures_body(ui),
                     }
                 });
@@ -1249,13 +1282,8 @@ impl App {
         egui::ScrollArea::vertical().id_salt("relscroll").auto_shrink([false; 2]).show(ui, |ui| {
             egui::Frame::new().inner_margin(egui::Margin { left: 14, right: 14, top: 6, bottom: 12 }).show(ui, |ui| {
                 ui.spacing_mut().item_spacing.y = 8.0;
-                for i in if self.scene_mode { Vec::new() } else { self.st.issues(f, r, &self.draft) } {
-                    ui.horizontal_wrapped(|ui| {
-                        let (d, _) = ui.allocate_exact_size(vec2(10.0, 14.0), Sense::hover());
-                        ui.painter().circle_filled(d.center(), 4.0, if i.severity == transly_core::qa::Severity::Bad { BAD } else { WARN });
-                        ui.label(RichText::new(&i.message).color(TEXT));
-                    });
-                }
+                let iss = if self.scene_mode || self.focus { Vec::new() } else { self.st.issues(f, r, &self.draft) };
+                qa_banners(ui, &iss);
                 for m in self.st.tm_matches(f, r) {
                     // `.thc.mem`: сітка «стовпчик 12 + 1fr», проміжки 12/6, поля 7×10, рамка 1, радіус 8; крапка 9 кольору `#7d828b` по центру першого блока,
                     // підказка й кнопка вирівняні по тексту (відступ 24)
@@ -2242,54 +2270,6 @@ impl App {
         Some(ctx.load_texture(key, color, egui::TextureOptions::NEAREST))
     }
 
-    /// Картинки рядка в «Редагуванні» (старий вигляд): мініатюри рядком під оригіналом, назва — у підказці.
-    fn pics_ui(&mut self, ui: &mut egui::Ui, f: usize, r: usize) {
-        let pics = self.st.pics_of(f, r);
-        if pics.is_empty() {
-            return;
-        }
-        let ctx = ui.ctx().clone();
-        let mut shown: Vec<(egui::TextureHandle, String, egui::Vec2)> = Vec::new();
-        for p in &pics {
-            let Some(t) = self.pic_texture(&ctx, p) else { continue };
-            let sz = t.size_vec2();
-            let size = match p {
-                Pic::Icon { .. } => sz,
-                Pic::Face { .. } => vec2(72.0, 72.0),
-                _ => {
-                    let k = (96.0 / sz.y).min(1.0);
-                    sz * k
-                }
-            };
-            let label = match p {
-                Pic::Icon { label, .. } | Pic::Face { label, .. } | Pic::Enemy { label, .. } | Pic::Picture { label, .. } => label.clone(),
-            };
-            shown.push((t, label, size));
-        }
-        if shown.is_empty() {
-            return;
-        }
-        ui.add_space(8.0);
-        let mut open: Option<usize> = None;
-        ui.horizontal_wrapped(|ui| {
-            ui.spacing_mut().item_spacing = vec2(10.0, 6.0);
-            for (i, (t, label, size)) in shown.into_iter().enumerate() {
-                let mut resp = ui.add(egui::Image::new(&t).fit_to_exact_size(size).sense(Sense::click()));
-                if !label.is_empty() {
-                    resp = resp.on_hover_text(label);
-                }
-                if resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
-                    open = Some(i);
-                }
-            }
-        });
-        if let Some(i) = open {
-            // клік по мініатюрі відкриває її на весь екран (той самий перегляд, що й у таблиці)
-            self.pic_sel = i;
-            self.pic_view = Some(crate::pictures::PicView { idx: i, zoom: 0.0, bg: 0 });
-        }
-    }
-
     /// «Внески» під полем: по картці на кожен надісланий переклад рядка (найновіші першими): автор, текст, голоси «+» і «−»,
     /// галочка (переклад іде в рядок і рядок вичитано) і кошик (зняти внесок з картки).
     fn contributions_ui(&mut self, ui: &mut egui::Ui, f: usize, r: usize) {
@@ -2306,7 +2286,9 @@ impl App {
             card_head_x(ui, "Внески", Some(&list.len().to_string()), MUTE, 12.0, 10.0);
             let n = list.len();
             for (i, (v, t)) in list.iter().enumerate() {
-                let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), 66.0), Sense::hover());
+                // текст внеску переноситься в ширину картки, рядок росте за ним (раніше він обривався за краєм картки)
+                let tg = ui.painter().layout(v.text.clone(), ip(13.5), TEXT, (ui.available_width() - 46.0 - 14.0).max(60.0));
+                let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), (40.0 + tg.size().y + 14.0).max(66.0)), Sense::hover());
                 if i + 1 < n {
                     ui.painter().hline(row.x_range(), row.bottom(), Stroke::new(1.0_f32, LINE));
                 }
@@ -2336,7 +2318,7 @@ impl App {
                     ui.painter().rect(pill, CornerRadius::same(5), Color32::from_rgb(0x34, 0x36, 0x3b), Stroke::new(1.0_f32, if color == OK { over_color(BG, OK, 0.55) } else { accent_ring() }), egui::StrokeKind::Inside);
                     ui.painter().galley(pos2(pill.left() + 8.0, pill.center().y - g.size().y / 2.0), g, ink);
                 }
-                ui.painter().text(pos2(row.left() + 46.0, row.top() + 48.0), Align2::LEFT_CENTER, &v.text, ip(13.5), TEXT);
+                ui.painter().galley(pos2(row.left() + 46.0, row.top() + 40.0), tg, TEXT);
                 // кнопки справа: кошик, галочка, «−», «+» (28 px, рамка)
                 let mut rx = row.right() - 14.0;
                 let id = v.id.clone();
@@ -2435,7 +2417,6 @@ impl App {
                     let lr = ui.label(job);
                     src_at = Some((lr.rect.min, galley));
                 });
-                self.pics_ui(ui, f, r);
                 for (lang, text) in self.st.references_of(f, r) {
                     ui.add_space(10.0);
                     let g = spaced(ui, &format!("Довідка · {lang}"), 12.0, MUTE, 0.04);
@@ -2609,12 +2590,10 @@ impl App {
                     });
                 }
                 self.contributions_ui(ui, f, r);
-                for i in self.st.issues(f, r, &self.draft) {
-                    ui.horizontal_wrapped(|ui| {
-                        let (d, _) = ui.allocate_exact_size(vec2(10.0, 14.0), Sense::hover());
-                        ui.painter().circle_filled(d.center(), 4.0, if i.severity == transly_core::qa::Severity::Bad { BAD } else { WARN });
-                        ui.label(RichText::new(&i.message).color(TEXT));
-                    });
+                let iss = self.st.issues(f, r, &self.draft);
+                if !iss.is_empty() {
+                    ui.add_space(16.0);
+                    qa_banners(ui, &iss);
                 }
             });
         });

@@ -201,6 +201,57 @@ impl App {
         }
     }
 
+    /// Розділ «Картинки» у «Редагуванні»: плитки по три в ряд (шахівниця, картинка, кольоровий бейдж типу в куті), підказка внизу; клік відкриває на весь екран.
+    pub(crate) fn pictures_grid(&mut self, ui: &mut egui::Ui) {
+        let ctx = ui.ctx().clone();
+        if self.st.row.is_none() {
+            empty_note(ui, "Оберіть рядок");
+            return;
+        }
+        let items = self.current_pics(&ctx);
+        if items.is_empty() {
+            empty_note(ui, "У цього рядка немає картинок");
+            return;
+        }
+        let mut open: Option<usize> = None;
+        egui::ScrollArea::vertical().id_salt("picgrid").auto_shrink([false; 2]).show(ui, |ui| {
+            egui::Frame::new().inner_margin(egui::Margin::same(12)).show(ui, |ui| {
+                ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
+                let gap = 8.0_f32;
+                let w = ((ui.available_width() - 2.0 * gap) / 3.0).floor();
+                let h = (w * 0.86).round();
+                for chunk in items.chunks(3).enumerate() {
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = gap;
+                        for (j, (p, t)) in chunk.1.iter().enumerate() {
+                            let i = chunk.0 * 3 + j;
+                            let (r, resp) = ui.allocate_exact_size(vec2(w, h), Sense::click());
+                            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("Відкрити: {}", pic_title(p))));
+                            let resp = resp.on_hover_text(pic_title(p)).on_hover_cursor(egui::CursorIcon::PointingHand);
+                            paint_checker(ui.painter(), r, 8.0);
+                            paint_tex(&ui.painter().with_clip_rect(r), r.shrink2(vec2(6.0, 8.0)).translate(vec2(0.0, 4.0)), t);
+                            ui.painter().rect_stroke(r, CornerRadius::same(6), Stroke::new(1.0_f32, if resp.hovered() { kind_color(p) } else { LINE }), StrokeKind::Inside);
+                            let col = kind_color(p);
+                            let bg = ui.painter().layout_no_wrap(kind_name(p).to_uppercase(), ipw(9.0, 700), Color32::from_rgb(0x12, 0x13, 0x0f));
+                            let bb = Rect::from_min_size(r.min + vec2(1.0, 1.0), bg.size() + vec2(10.0, 4.0));
+                            ui.painter().rect_filled(bb, CornerRadius { nw: 5, ne: 0, sw: 0, se: 6 }, col);
+                            ui.painter().galley(bb.min + vec2(5.0, 2.0), bg, Color32::PLACEHOLDER);
+                            if resp.clicked() {
+                                open = Some(i);
+                            }
+                        }
+                    });
+                }
+                ui.add_space(4.0);
+                ui.label(RichText::new("Клік по плитці відкриває велике прев’ю.").font(ip(12.0)).color(MUTE));
+            });
+        });
+        if let Some(i) = open {
+            self.pic_sel = i;
+            self.pic_view = Some(PicView { idx: i, zoom: 0.0, bg: 0 });
+        }
+    }
+
     /// Повноекранний перегляд: стрілки й ←/→ листають картинки рядка, «+», «−», колесо, ×1 ×2 ×4 ×8 міняють масштаб, «Вмістити», фон, Esc закриває.
     pub(crate) fn pic_viewer(&mut self, ctx: &egui::Context) {
         let Some(mut v) = self.pic_view else { return };

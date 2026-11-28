@@ -773,8 +773,7 @@ impl App {
     fn frame(&mut self, ctx: &egui::Context) {
         theme::sync_weights(ctx);
         // ширини колонок цього кадру: закрита колонка не займає місця, і полотно розтягується
-        let edit_mode = self.focus && !self.scene_mode;
-        let right_open = self.right_secs[usize::from(edit_mode)].iter().take(if edit_mode { 3 } else { 4 }).any(|b| *b);
+        let right_open = self.right_secs[usize::from(self.focus && !self.scene_mode)].iter().any(|b| *b);
         self.panel_w = layout::panel_widths(ctx.screen_rect().width(), self.left_open, right_open);
         ctx.data_mut(|d| d.insert_temp(egui::Id::new("panel-w"), self.panel_w));
         self.focus_ring(ctx);
@@ -5867,6 +5866,14 @@ mod ui_tests {
         h.state_mut().st.switch_file(items_f);
         h.state_mut().st.row = Some(0);
         shot(&mut h, "l5-table-pics");
+        // «Редагування»: внесок із довгим текстом і зауваження про довжину
+        h.state_mut().focus = true;
+        h.state_mut().left_both = false;
+        h.state_mut().rail = 1;
+        h.state_mut().st.row = Some(1);
+        let long_uk = "Шовкова камізелька, шита на міру. Вона ідеально вам пасує. Попри звичайний вигляд, добре захищає від вітру, дощу й холоду, а також від випадкових ударів дрібних ворогів. Шовкова камізелька, шита на міру. Вона ідеально вам пасує. Попри звичайний вигляд, добре захищає від вітру, дощу й холоду.";
+        let _ = h.state_mut().st.submit(items_f, 1, long_uk);
+        shot(&mut h, "l6-edit-qa");
     }
 
     /// Огляд розміток на довгих текстах і вузькому вікні: `TRANSLY_SHOTS=<тека> cargo test -p transly-app layout_audit_shots -- --ignored`.

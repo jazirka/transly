@@ -308,8 +308,12 @@ pub(crate) fn warn_banner(ui: &mut egui::Ui, bad: bool, head: &str, text: &str) 
     let tg = ui.painter().layout(text.to_string(), ip(12.5), TEXT, w - 28.0 - 22.0 - 12.0 - 3.0);
     let h = 12.0 + hg.size().y + tg.size().y + 12.0;
     let (r, _) = ui.allocate_exact_size(vec2(w, h.max(46.0)), Sense::hover());
-    ui.painter().rect(r, CornerRadius::same(R3), bg, Stroke::new(1.0_f32, ring), StrokeKind::Inside);
-    ui.painter().rect_filled(Rect::from_min_size(r.min + vec2(1.0, R3 as f32 / 2.0), vec2(3.0, r.height() - R3 as f32)), CornerRadius::ZERO, dot);
+    // як `border-left: 3px` на скругленій рамці: смуга повторює кут, а не стирчить планкою всередині
+    let rad = R3;
+    ui.painter().rect_filled(r, CornerRadius::same(rad), ring);
+    ui.painter().with_clip_rect(Rect::from_min_max(r.min, pos2(r.left() + rad as f32 + 2.0, r.bottom()))).rect_filled(r, CornerRadius::same(rad), dot);
+    let inner = Rect::from_min_max(pos2(r.left() + 3.0, r.top() + 1.0), pos2(r.right() - 1.0, r.bottom() - 1.0));
+    ui.painter().rect_filled(inner, CornerRadius { nw: rad.saturating_sub(3).max(2), sw: rad.saturating_sub(3).max(2), ne: rad - 1, se: rad - 1 }, bg);
     let c = pos2(r.left() + 14.0 + 11.0, r.top() + 12.0 + 11.0);
     ui.painter().circle_filled(c, 11.0, dot);
     ui.painter().text(c, Align2::CENTER_CENTER, "!", ipw(14.0, 800), Color32::from_rgb(0x1b, 0x1c, 0x1f));

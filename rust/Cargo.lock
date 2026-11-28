@@ -5746,6 +5746,7 @@ dependencies = [
 name = "transly-core"
 version = "0.1.0"
 dependencies = [
+ "aho-corasick",
  "crc32fast",
  "fancy-regex",
  "flate2",

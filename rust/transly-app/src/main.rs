@@ -5183,6 +5183,11 @@ mod ui_tests {
     }
 
     /// Вимір на великому проєкті (100 тис. рядків): скільки забирають сповіщення й пошук конструкцій. `cargo test -p transly-app --release big_inbox -- --ignored --nocapture`.
+    /// Резидентна пам'ять процесу (КБ→МБ) зі `/proc/self/status`; поза Linux повертає 0.
+    fn rss_mb() -> f32 {
+        std::fs::read_to_string("/proc/self/status").ok().and_then(|t| t.lines().find(|l| l.starts_with("VmRSS:")).and_then(|l| l.split_whitespace().nth(1).and_then(|n| n.parse::<f32>().ok()))).map_or(0.0, |kb| kb / 1024.0)
+    }
+
     #[test]
     #[ignore]
     fn big_inbox_timing() {
@@ -5196,17 +5201,20 @@ mod ui_tests {
         let t = std::time::Instant::now();
         app.st.open_game(&data).unwrap();
         println!("  відкрито: {} рядків за {:.2} с", app.st.row_count(0), t.elapsed().as_secs_f32());
+        println!("  ПАМ'ЯТЬ після відкриття: {:.0} МБ", rss_mb());
         let t = std::time::Instant::now();
         for r in (0..app.st.row_count(0)).step_by(3) {
             app.st.edit(0, r, "Переклад рядка");
         }
         println!("  3-й кожен рядок переведено за {:.2} с", t.elapsed().as_secs_f32());
+        println!("  ПАМ'ЯТЬ після переведення: {:.0} МБ", rss_mb());
         let t = std::time::Instant::now();
         let mut steps = 0;
         while app.st.inbox_step(std::time::Duration::from_millis(6)).is_some() {
             steps += 1;
         }
         println!("  сповіщення: {steps} кадрів по 6 мс, разом {:.2} с, пунктів {}", t.elapsed().as_secs_f32(), app.st.inbox.items.len());
+        println!("  ПАМ'ЯТЬ після сповіщень: {:.0} МБ", rss_mb());
         let t = std::time::Instant::now();
         let mut n = 0;
         loop {
@@ -5219,10 +5227,12 @@ mod ui_tests {
             std::thread::sleep(std::time::Duration::from_millis(20));
         }
         println!("  фоновий пошук конструкцій: {:.2} с ({n} опитувань)", t.elapsed().as_secs_f32());
+        println!("  ПАМ'ЯТЬ після пошуку конструкцій: {:.0} МБ", rss_mb());
         // що рахується щокадру, поки вибрано рядок: «Пов'язане» питає про двійників рядка (індекс будується раз, далі береться з кешу)
         let t = std::time::Instant::now();
         let _ = app.st.link_info(0, 10);
         let first = t.elapsed().as_secs_f32() * 1000.0;
+        println!("  ПАМ'ЯТЬ після індексу однакових (link_info): {:.0} МБ", rss_mb());
         let t = std::time::Instant::now();
         for _ in 0..100 {
             let _ = app.st.link_info(0, 10);
@@ -5237,6 +5247,7 @@ mod ui_tests {
                     let _ = $e;
                 }
                 let ms = t.elapsed().as_secs_f32() * 200.0;
+                println!("  ПАМ'ЯТЬ після {}: {:.0} МБ", $name, rss_mb());
                 if ms > 0.5 {
                     println!("  щокадру {}: {ms:.1} мс", $name);
                 }
@@ -5273,6 +5284,7 @@ mod ui_tests {
             cost!("groups_view", s.groups_view());
             cost!("qa_keep", s.qa_keep());
         }
+        println!("  ПАМ'ЯТЬ після перекладу 33 тис. рядків і фонових пошуків: {:.0} МБ", rss_mb());
         // кадр інтерфейсу на цьому проєкті: таблиця, редагування, праві розділи й ліва панель глосарія
         app.st.row = Some(500);
         let mut h = harness(app);
@@ -5319,6 +5331,7 @@ mod ui_tests {
         h.state_mut().rail = 0;
         h.state_mut().focus = true;
         frame(&mut h, "редагування");
+        println!("  ПАМ'ЯТЬ після кадрів інтерфейсу: {:.0} МБ", rss_mb());
         // вікна поверх великого проєкту: що додає діалог і сторінки налаштувань до кадру
         h.state_mut().focus = false;
         h.state_mut().build_win = Some(h.state().st.build_defaults());

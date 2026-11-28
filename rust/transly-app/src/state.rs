@@ -275,7 +275,6 @@ pub struct AppState {
     pub file: Option<usize>,
     pub row: Option<usize>,
     /// Відкриті вкладки-файли (номери), у порядку відкриття.
-    pub tabs: Vec<usize>,
     /// Коли проєкт востаннє збережено (мс від 1970).
     pub saved_ms: Option<i64>,
     /// Коли проєкт востаннє збирали в гру і скільки рядків у збірці (з налаштувань проєкту).
@@ -286,7 +285,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { build_prev: Default::default(), qa_view_cache: Default::default(), undo_count: 0, db_cache: std::cell::RefCell::new(None), names_cache: std::cell::RefCell::new(None), usage_cache: Default::default(), links_cache: std::cell::RefCell::new(None), link_index: std::cell::RefCell::new(None), relay: RelayCfg::load(), relay_rx: None, speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, rows_filter: None, inbox: Inbox::load(), row_memo: RowMemo::load(), frame_caches: Default::default(), ghost_budget: std::cell::Cell::new(0), ghost_more: std::cell::Cell::new(false), mine_cache: Default::default(), auto_cache: Default::default(), dismissed: Dismissed::load(), scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: Default::default(), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, tabs: vec![], saved_ms: None, session_start: now_ms(), session_edits: 0 }
+        AppState { build_prev: Default::default(), qa_view_cache: Default::default(), undo_count: 0, db_cache: std::cell::RefCell::new(None), names_cache: std::cell::RefCell::new(None), usage_cache: Default::default(), links_cache: std::cell::RefCell::new(None), link_index: std::cell::RefCell::new(None), relay: RelayCfg::load(), relay_rx: None, speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, rows_filter: None, inbox: Inbox::load(), row_memo: RowMemo::load(), frame_caches: Default::default(), ghost_budget: std::cell::Cell::new(0), ghost_more: std::cell::Cell::new(false), mine_cache: Default::default(), auto_cache: Default::default(), dismissed: Dismissed::load(), scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: Default::default(), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, saved_ms: None, session_start: now_ms(), session_edits: 0 }
     }
 }
 
@@ -780,7 +779,6 @@ impl AppState {
         *self.link_index.borrow_mut() = None;
         *self.links_cache.borrow_mut() = None;
         self.file = cur.and_then(|n| self.views.iter().position(|v| v.name == n)).or(if self.views.is_empty() { None } else { Some(0) });
-        self.tabs.retain(|t| *t < self.views.len());
         self.row = None;
         *self.scene_cache.borrow_mut() = (usize::MAX, None);
         *self.names_cache.borrow_mut() = None;
@@ -881,7 +879,6 @@ impl AppState {
         self.project = Some(project);
         self.dir = Some(dir.to_path_buf());
         self.file = if n > 0 { Some(0) } else { None };
-        self.tabs = self.file.into_iter().collect();
         self.session_start = now_ms();
         self.session_edits = 0;
         self.saved_ms = std::fs::metadata(&path).and_then(|m| m.modified()).ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as i64);
@@ -3429,26 +3426,6 @@ impl AppState {
         self.unit(f, r).map_or("", |u| u.kind.label())
     }
 
-    /// Вкладки відкритих файлів: поточний файл завжди серед них.
-    pub fn sync_tabs(&mut self) {
-        self.tabs.retain(|f| *f < self.views.len());
-        if let Some(f) = self.file {
-            if !self.tabs.contains(&f) {
-                self.tabs.push(f);
-            }
-        }
-    }
-
-    /// Закриває вкладку; якщо вона була поточною, відкривається сусідня.
-    pub fn close_tab(&mut self, f: usize) {
-        let Some(at) = self.tabs.iter().position(|t| *t == f) else { return };
-        self.tabs.remove(at);
-        if self.file == Some(f) {
-            self.file = self.tabs.get(at).or_else(|| at.checked_sub(1).and_then(|i| self.tabs.get(i))).copied();
-            self.row = None;
-        }
-    }
-
     /// Запускає гру як є: збирає переклад із чернетками й стартує програму гри (без переходу до сцени).
     pub fn play_game(&mut self) -> Result<String, String> {
         let exe = self.game_exe().ok_or("Спершу оберіть програму гри")?;
@@ -4456,25 +4433,6 @@ menu.quit=Quit game
         assert_eq!(w, "gold\nhp\nmp");
         s.set_qa_keep("any", "");
         assert_eq!(s.qa_keep(), ("any".to_string(), String::new()));
-        let _ = std::fs::remove_dir_all(&base);
-    }
-
-    #[test]
-    fn file_tabs_open_and_close() {
-        let base = std::env::temp_dir().join(format!("transly-app-tabs-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&base);
-        let data = game(&base);
-        std::fs::write(data.join("Items.json"), r#"[null,{"id":1,"name":"Potion","description":"Heals","note":""}]"#).unwrap();
-        let mut s = AppState::default();
-        s.open_game(&data).unwrap();
-        assert_eq!(s.tabs.len(), 1);
-        s.file = Some(1);
-        s.sync_tabs();
-        assert_eq!(s.tabs, vec![0, 1]);
-        s.close_tab(1);
-        assert_eq!((s.tabs.clone(), s.file), (vec![0], Some(0)));
-        s.close_tab(0);
-        assert_eq!(s.file, None);
         let _ = std::fs::remove_dir_all(&base);
     }
 

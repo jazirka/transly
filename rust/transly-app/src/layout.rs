@@ -1110,12 +1110,11 @@ impl App {
         egui::CentralPanel::default().frame(card_lr(6, 0)).show(ctx, |ui| {
             ctx.data_mut(|d| d.insert_temp(egui::Id::new("pane-centre"), ui.max_rect()));
             ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
-            self.st.sync_tabs();
             let Some(f) = self.st.file else {
-                ui.centered_and_justified(|ui| ui.label(RichText::new(if self.st.is_open() { "Усі вкладки закрито: виберіть файл зі списку ліворуч" } else { "Відкрийте папку гри: кнопка «Відкрити гру…»" }).color(MUTE)));
+                ui.centered_and_justified(|ui| ui.label(RichText::new(if self.st.is_open() { "Виберіть файл зі списку ліворуч" } else { "Відкрийте папку гри: кнопка «Відкрити гру…»" }).color(MUTE)));
                 return;
             };
-            self.tabs_bar(ui, f);
+            self.file_header(ui, f);
             if self.focus && !self.scene_mode {
                 self.edit_center(ui, f);
                 return;
@@ -1279,64 +1278,26 @@ impl App {
         }
     }
 
-    /// Вкладки: висота 34, вкладка 33, ширина = текст + 69; вибрана — таблетка кольору теми.
-    pub(crate) fn tabs_bar(&mut self, ui: &mut egui::Ui, f: usize) {
-        let (tabs, _) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::hover());
-        ui.painter().rect_filled(tabs, card_top(), PANEL);
-        ui.painter().hline(tabs.x_range(), tabs.bottom() - 0.5, Stroke::new(1.0_f32, LINE));
+    /// Заголовок полотна: висота 34, як заголовки бічних карток («ФАЙЛИ ГРИ», «ПОВ'ЯЗАНЕ»): значок типу файлу, назва поточного файлу й кількість рядків. Вкладок немає
+    /// (за рішенням власника: файли відкриваються лише зі списку ліворуч).
+    pub(crate) fn file_header(&mut self, ui: &mut egui::Ui, f: usize) {
+        let (hd, _) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::hover());
+        ui.painter().rect_filled(hd, card_top(), PANEL);
+        ui.painter().hline(hd.x_range(), hd.bottom() - 0.5, Stroke::new(1.0_f32, LINE));
         let names = self.st.file_names();
-        let mut x = tabs.left();
-        let (mut pick, mut close): (Option<usize>, Option<usize>) = (None, None);
-        for t in self.st.tabs.clone() {
-            let Some(tn) = names.get(t) else { continue };
-            let map = self.st.map_title(t);
-            let stem = map.clone().unwrap_or_else(|| tn.trim_end_matches(".json").to_string());
-            let galley = ui.painter().layout_no_wrap(stem, ip(12.5), TEXT);
-            let on = t == f;
-            let tw = galley.size().x + 69.0 + if map.is_some() { 8.0 } else { 0.0 };
-            let rect = Rect::from_min_size(pos2(x, tabs.top()), vec2(tw, 33.0));
-            let resp = ui.interact(rect, ui.id().with(("tab", t)), Sense::click());
-            resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, format!("Вкладка {tn}")));
-            if on {
-                let top = CornerRadius { nw: 8, ne: 8, sw: 0, se: 0 };
-                let (fill, ring) = self.chosen(Pane::Centre);
-                ui.painter().rect_filled(rect, top, fill);
-                ui.painter().rect_stroke(rect, top, Stroke::new(1.0_f32, ring), StrokeKind::Inside);
-            } else if resp.hovered() {
-                ui.painter().rect_filled(rect, CornerRadius::same(8), GHOST_HOVER);
-            }
-            let chip = Rect::from_min_size(pos2(rect.left() + 9.0, rect.center().y - 8.0), vec2(if map.is_some() { 28.0 } else { 20.0 }, 16.0));
-            let (badge, bg, fg, bf) = if map.is_some() { ("MAP", Color32::from_rgb(0x23, 0x3a, 0x2e), Color32::from_rgb(0x7f, 0xd0, 0x8a), 9.0) } else { ("{}", Color32::from_rgb(0x3b, 0x35, 0x24), Color32::from_rgb(0xe5, 0xc0, 0x6a), 12.0) };
-            ui.painter().rect_filled(chip, CornerRadius::same(R1), bg);
-            ui.painter().text(chip.center(), Align2::CENTER_CENTER, badge, mp(bf), fg);
-            ui.painter().galley(pos2(chip.right() + 5.0, rect.center().y - galley.size().y / 2.0), galley.clone(), if on { Color32::WHITE } else { MUTE });
-            let cx = Rect::from_center_size(pos2(rect.right() - 17.0, rect.center().y), vec2(24.0, 24.0));
-            let cr = ui.interact(cx, ui.id().with(("tabx", t)), Sense::click());
-            if cr.hovered() {
-                ui.painter().rect_filled(cx, CornerRadius::same(R1), GHOST_HOVER);
-            }
-            if on || resp.hovered() || cr.hovered() {
-                icons::paint(ui, Rect::from_center_size(cx.center(), vec2(11.0, 11.0)), "close", if on || cr.hovered() { TEXT } else { MUTE });
-            }
-            if cr.clicked() {
-                close = Some(t);
-            } else if resp.clicked() {
-                pick = Some(t);
-            }
-            x += tw;
-        }
-        if let Some(t) = pick {
-            if self.st.file != Some(t) {
-                self.st.switch_file(t);
-                self.draft_for = None;
-                self.cell_edit = None;
-            }
-        }
-        if let Some(t) = close {
-            self.st.close_tab(t);
-            self.draft_for = None;
-            self.cell_edit = None;
-        }
+        let Some(tn) = names.get(f) else { return };
+        let map = self.st.map_title(f);
+        let stem = map.clone().unwrap_or_else(|| tn.trim_end_matches(".json").to_string());
+        let chip = Rect::from_min_size(pos2(hd.left() + 12.0, hd.center().y - 8.0), vec2(if map.is_some() { 28.0 } else { 20.0 }, 16.0));
+        let (badge, bg, fg, bf) = if map.is_some() { ("MAP", Color32::from_rgb(0x23, 0x3a, 0x2e), Color32::from_rgb(0x7f, 0xd0, 0x8a), 9.0) } else { ("{}", Color32::from_rgb(0x3a, 0x33, 0x23), Color32::from_rgb(0xe5, 0xa0, 0x4b), 11.0) };
+        ui.painter().rect_filled(chip, CornerRadius::same(R1), bg);
+        ui.painter().text(chip.center(), Align2::CENTER_CENTER, badge, mp(bf), fg);
+        let g = ui.painter().layout_no_wrap(stem, ipw(13.0, 500), TEXT);
+        let tx = chip.right() + 8.0;
+        ui.painter().galley(pos2(tx, hd.center().y - g.size().y / 2.0), g.clone(), TEXT);
+        let rows = self.st.row_count(f);
+        let rg = ui.painter().layout_no_wrap(format!("{} {}", fmt_n(rows), transly_core::plural::plural_form(rows as i64, ["рядок", "рядки", "рядків"])), ip(12.0), MUTE);
+        ui.painter().galley(pos2(tx + g.size().x + 12.0, hd.center().y - rg.size().y / 2.0), rg, MUTE);
     }
 
     /// Рядок фільтрів: пошук 200×24, «Ще» (статуси), праворуч «Мовець» і «Довжина».

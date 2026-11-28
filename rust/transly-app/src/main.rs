@@ -5997,6 +5997,11 @@ mod ui_tests {
         let long_uk = "Шовкова камізелька, шита на міру. Вона ідеально вам пасує. Попри звичайний вигляд, добре захищає від вітру, дощу й холоду, а також від випадкових ударів дрібних ворогів. Шовкова камізелька, шита на міру. Вона ідеально вам пасує. Попри звичайний вигляд, добре захищає від вітру, дощу й холоду.";
         let _ = h.state_mut().st.submit(items_f, 1, long_uk);
         shot(&mut h, "l6-edit-qa");
+        h.state_mut().focus = false;
+        h.state_mut().rail = 0;
+        h.state_mut().win_search[0] = true;
+        h.state_mut().right_secs = [[true, true, true, true]; 2];
+        shot(&mut h, "l7-headers");
     }
 
     /// Знімок сповіщень: `TRANSLY_SHOTS=<тека> cargo test -p transly-app toast_shot -- --ignored`.

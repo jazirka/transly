@@ -204,7 +204,7 @@ fn card_head_x(ui: &mut egui::Ui, title: &str, sub: Option<&str>, sub_col: Color
     let (h, _) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::hover());
     ui.painter().rect_filled(h, card_top(), PANEL);
     ui.painter().hline(h.x_range(), h.bottom(), Stroke::new(1.0_f32, LINE));
-    let g = spaced(ui, title, 12.0, MUTE, 0.06);
+    let g = head_title(ui, title);
     let tw = g.size().x;
     ui.painter().galley(pos2(h.left() + pad, h.center().y - g.size().y / 2.0), g, MUTE);
     if let Some(s) = sub {
@@ -243,6 +243,28 @@ pub(crate) fn dashed_round_rect(painter: &egui::Painter, rect: Rect, radius: f32
     arc(&mut pts, pos2(rect.left() + r, rect.bottom() - r), std::f32::consts::FRAC_PI_2);
     pts.push(pts[0]);
     painter.extend(egui::Shape::dashed_line(&pts, stroke, 5.0, 4.0));
+}
+
+/// Назва в заголовку будь-якої картки (ліві, праві, «Внески»): великі літери 12, вага 600, інтервал .06 — одна для всіх.
+pub(crate) fn head_title(ui: &egui::Ui, title: &str) -> std::sync::Arc<egui::Galley> {
+    spaced_w(ui, title, 12.0, 600, MUTE, 0.06)
+}
+
+/// Поле пошуку, одне на весь застосунок (заголовки карток і фільтр таблиці): висота 24, радіус 8, лупа 12 зліва, текст 12,5, «✕» справа, коли щось набрано.
+/// `hint` — те, що видно в порожньому полі, `label` — назва для доступності.
+pub(crate) fn search_field(ui: &mut egui::Ui, rect: Rect, text: &mut String, hint: &str, label: &str, id: &str) -> egui::Response {
+    ui.painter().rect_filled(rect, CornerRadius::same(8), BG);
+    ui.painter().rect_stroke(rect, CornerRadius::same(8), Stroke::new(1.0_f32, LINE), StrokeKind::Inside);
+    icons::paint(ui, Rect::from_center_size(pos2(rect.left() + 15.0, rect.center().y), vec2(12.0, 12.0)), "search", MUTE);
+    let clear_w = if text.is_empty() { 0.0 } else { 22.0 };
+    let inner_rect = Rect::from_min_max(pos2(rect.left() + 27.0, rect.top() + 2.0), pos2((rect.right() - 6.0 - clear_w).max(rect.left() + 40.0), rect.bottom() - 2.0));
+    let mut inner = ui.new_child(egui::UiBuilder::new().max_rect(inner_rect));
+    let resp = inner.add(egui::TextEdit::singleline(text).hint_text(hint).frame(false).desired_width(inner_rect.width()).font(ip(12.5)));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::TextEdit, true, label));
+    if !text.is_empty() && mini_icon(ui, pos2(rect.right() - 13.0, rect.center().y), "close", id).on_hover_text("Очистити пошук").clicked() {
+        text.clear();
+    }
+    resp
 }
 
 /// Підпис великими літерами з міжлітерним інтервалом `em` (як `text-transform:uppercase; letter-spacing` у вебі).
@@ -562,7 +584,7 @@ impl App {
         let (h, _) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::hover());
         ui.painter().rect_filled(h, card_top(), PANEL);
         ui.painter().hline(h.x_range(), h.bottom(), Stroke::new(1.0_f32, LINE));
-        let g = spaced(ui, title, 12.0, MUTE, 0.06);
+        let g = head_title(ui, title);
         let tw = g.size().x;
         ui.painter().galley(pos2(h.left() + 10.0, h.center().y - g.size().y / 2.0), g, MUTE);
         // кнопки праворуч: «—» і ⋮ (пошук є в усіх, крім «Пов’язаного», де лише «—»)
@@ -599,7 +621,11 @@ impl App {
                 if resp.hovered() {
                     ui.painter().rect_filled(r, CornerRadius::same(8), GHOST_HOVER);
                 }
-                icons::paint(ui, Rect::from_center_size(c, vec2(14.0, 14.0)), "dots", if resp.hovered() { TEXT } else { MUTE });
+                // три крапки суцільними колами того ж кольору й ваги, що й «—» (тонкі штрихи-крапки малювались блідіше)
+                let ink = if resp.hovered() { TEXT } else { MUTE };
+                for dy in [-4.5_f32, 0.0, 4.5] {
+                    ui.painter().circle_filled(c + vec2(0.0, dy), 1.4, ink);
+                }
                 if !q_empty {
                     ui.painter().circle_filled(pos2(r.right() - 3.0, r.top() + 5.0), 3.0, accent());
                 }
@@ -635,28 +661,22 @@ impl App {
             left_edge = c.x - 18.0;
         }
         if searching {
-            // поле пошуку стоїть у заголовку після назви: лупа, текст, ✕
+            // поле пошуку стоїть у заголовку після назви; те саме поле, що й фільтр таблиці
             let x0 = h.left() + 10.0 + tw + 10.0;
             let fin = Rect::from_min_max(pos2(x0, h.top() + 5.0), pos2((left_edge).max(x0 + 60.0), h.bottom() - 5.0));
-            ui.painter().rect_filled(fin, CornerRadius::same(R1), BG);
-            ui.painter().rect_stroke(fin, CornerRadius::same(R1), Stroke::new(1.0_f32, LINE), StrokeKind::Inside);
-            icons::paint(ui, Rect::from_center_size(pos2(fin.left() + 12.0, fin.center().y), vec2(12.0, 12.0)), "search", MUTE);
-            let hint = ["Пошук у файлах гри", "Пошук рядків", "Пошук сцен"][win];
-            let mut inner = ui.new_child(egui::UiBuilder::new().max_rect(Rect::from_min_max(pos2(fin.left() + 22.0, fin.top() + 2.0), pos2(fin.right() - 22.0, fin.bottom() - 2.0))));
+            let (hint, label) = [("Пошук", "Пошук у файлах гри"), ("Пошук", "Пошук рядків"), ("Пошук", "Пошук сцен")][win];
             let q: &mut String = match win {
                 0 => &mut self.win_q[0],
                 1 => &mut self.st.search,
                 _ => &mut self.win_q[1],
             };
-            let resp = inner.add(egui::TextEdit::singleline(q).hint_text(hint).frame(false).desired_width(fin.width() - 44.0).font(ip(12.5)));
-            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::TextEdit, true, hint));
+            let resp = search_field(ui, fin, q, hint, label, &format!("lh-x{win}"));
             let esc = resp.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Escape));
             if self.win_focus == Some(win) {
                 resp.request_focus();
                 self.win_focus = None;
             }
-            let clear = !q.is_empty() && mini_icon(ui, pos2(fin.right() - 12.0, fin.center().y), "close", &format!("lh-x{win}")).on_hover_text("Очистити пошук").clicked();
-            if esc || clear {
+            if esc {
                 self.clear_win_search(win);
             }
         } else if let Some(s) = sub {
@@ -849,7 +869,7 @@ impl App {
                     let (h, _) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::hover());
                     ui.painter().rect_filled(h, card_top(), PANEL);
                     ui.painter().hline(h.x_range(), h.bottom(), Stroke::new(1.0_f32, LINE));
-                    let g = spaced_w(ui, title, 11.0, 600, MUTE, 0.04);
+                    let g = head_title(ui, title);
                     ui.painter().galley(pos2(h.left() + 14.0, h.center().y - g.size().y / 2.0), g, MUTE);
                     if ui.rect_contains_pointer(h) && mini_icon(ui, pos2(h.right() - 20.0, h.center().y), "minus", &format!("sec-x{sec}")).on_hover_text("Сховати розділ").clicked() {
                         self.right_secs[mi][*sec] = false;
@@ -1623,7 +1643,12 @@ impl App {
         let Some(tn) = names.get(f) else { return };
         let map = self.st.map_title(f);
         let stem = map.clone().unwrap_or_else(|| tn.trim_end_matches(".json").to_string());
-        let chip = Rect::from_min_size(pos2(hd.left() + 12.0, hd.center().y - 8.0), vec2(if map.is_some() { 28.0 } else { 20.0 }, 16.0));
+        // назва режиму, як назви інших карток («ФАЙЛИ ГРИ», «АКТИВНІСТЬ»): «ТАБЛИЦЯ», «РЕДАГУВАННЯ», «СЦЕНА», далі файл
+        let mode = if self.scene_mode { "Сцена" } else if self.focus { "Редагування" } else { "Таблиця" };
+        let tg = head_title(ui, mode);
+        let title_w = tg.size().x;
+        ui.painter().galley(pos2(hd.left() + 10.0, hd.center().y - tg.size().y / 2.0), tg, MUTE);
+        let chip = Rect::from_min_size(pos2(hd.left() + 10.0 + title_w + 12.0, hd.center().y - 8.0), vec2(if map.is_some() { 28.0 } else { 20.0 }, 16.0));
         let (badge, bg, fg, bf) = if map.is_some() { ("MAP", Color32::from_rgb(0x23, 0x3a, 0x2e), Color32::from_rgb(0x7f, 0xd0, 0x8a), 9.0) } else { ("{}", Color32::from_rgb(0x3a, 0x33, 0x23), Color32::from_rgb(0xe5, 0xa0, 0x4b), 11.0) };
         ui.painter().rect_filled(chip, CornerRadius::same(R1), bg);
         ui.painter().text(chip.center(), Align2::CENTER_CENTER, badge, mp(bf), fg);
@@ -1640,11 +1665,7 @@ impl App {
         let (fr, _) = ui.allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::hover());
         ui.painter().rect_filled(fr, CornerRadius::ZERO, FILTERS_BG);
         let fin = Rect::from_min_size(pos2(fr.left() + 10.0, fr.top() + 6.0), vec2(200.0, 24.0));
-        ui.painter().rect_filled(fin, CornerRadius::same(R1), BG);
-        ui.painter().rect_stroke(fin, CornerRadius::same(R1), Stroke::new(1.0_f32, LINE), StrokeKind::Inside);
-        icons::paint(ui, Rect::from_center_size(pos2(fin.left() + 15.0, fin.center().y), vec2(12.0, 12.0)), "search", MUTE);
-        let mut inner = ui.new_child(egui::UiBuilder::new().max_rect(Rect::from_min_size(pos2(fin.left() + 27.0, fin.top() + 2.0), vec2(168.0, 20.0))));
-        inner.add(egui::TextEdit::singleline(&mut self.st.search).hint_text("Фільтр у цьому файлі").frame(false).desired_width(164.0).font(ip(12.5)));
+        search_field(ui, fin, &mut self.st.search, "Фільтр у цьому файлі", "Фільтр у цьому файлі", "fr-x");
         // чип з випадним списком
         let chip = |ui: &mut egui::Ui, x: f32, text: &str, on: bool| -> (egui::Response, f32) {
             let g = ui.painter().layout_no_wrap(text.to_string(), ip(12.0), TEXT);

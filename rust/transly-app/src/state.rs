@@ -1109,6 +1109,12 @@ impl AppState {
         self.vis.borrow().rows.binary_search(&r).ok()
     }
 
+    /// Видимі рядки файлу одним зрізом (за зростанням номерів): для проходу по всіх, без звернення до кешу на кожен рядок.
+    pub fn with_visible<R>(&self, f: usize, g: impl FnOnce(&[usize]) -> R) -> R {
+        self.refresh_visible(f);
+        g(&self.vis.borrow().rows)
+    }
+
     pub fn visible_at(&self, f: usize, i: usize) -> Option<usize> {
         self.refresh_visible(f);
         self.vis.borrow().rows.get(i).copied()

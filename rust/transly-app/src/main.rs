@@ -133,6 +133,10 @@ struct App {
     pic_inline: bool,
     /// Ліва колонка: «Файли» разом із «Рядками» чи «Сценами» (файли зверху), частка висоти верхньої картки.
     left_both: bool,
+    /// Висоти рядків таблиці (за номером рядка файлу; 0 — ще не виміряно), для якого файлу й ширини вони виміряні, і накопичені висоти за видимими рядками.
+    grid_h: Vec<f32>,
+    grid_h_key: (usize, u32, bool),
+    grid_pre: Vec<f32>,
     left_split: f32,
     /// Пошук у «Файлах» і «Сценах» (у «Рядках» — `st.search`), який із трьох пошуків відкрито й де треба поставити курсор.
     win_q: [String; 2],
@@ -293,7 +297,7 @@ fn game_job(text: &str, size: f32, actor_name: &dyn Fn(usize) -> Option<String>)
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, app_set: None, find_count: None, nav_proj: stshell::StNav::new("look"), nav_app: stshell::StNav::new("general"), reset_arm: None, esc_at: None, imp_terms: String::new(), imp_tm: String::new(), fill_win: None, links_win: None, chrome_own: winchrome::own_chrome_chosen(), find_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_draft: None, mine_win: false, auto_added: Vec::new(), guard_off: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false, false], [false, true, false, false]], pic_sel: 0, pic_inline: false, left_both: false, left_split: 0.4, win_q: Default::default(), win_search: [false; 3], win_focus: None, pic_view: None, pics_auto: Default::default(), comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, app_set: None, find_count: None, nav_proj: stshell::StNav::new("look"), nav_app: stshell::StNav::new("general"), reset_arm: None, esc_at: None, imp_terms: String::new(), imp_tm: String::new(), fill_win: None, links_win: None, chrome_own: winchrome::own_chrome_chosen(), find_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_draft: None, mine_win: false, auto_added: Vec::new(), guard_off: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false, false], [false, true, false, false]], pic_sel: 0, pic_inline: false, left_both: false, grid_h: Vec::new(), grid_h_key: (usize::MAX, 0, false), grid_pre: Vec::new(), left_split: 0.4, win_q: Default::default(), win_search: [false; 3], win_focus: None, pic_view: None, pics_auto: Default::default(), comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
     }
 }
 
@@ -4473,6 +4477,42 @@ mod ui_tests {
         assert_eq!(h.state().pane, Pane::Files);
     }
 
+    /// Довгий текст у таблиці переноситься, а рядок росте (було: фіксовані 36 px і обірваний текст); короткі рядки лишаються по 36, висоти запам'ятовуються.
+    #[test]
+    fn long_text_wraps_and_the_row_grows() {
+        let base = std::env::temp_dir().join(format!("transly-app-wrap-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = base.join("MyGame").join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        let long = "The old village elder, who had lived there for more than eighty winters, slowly took his heavy woollen cloak off and carefully placed it over the back of the wooden chair beside the fire";
+        std::fs::write(data.join("Items.json"), format!(r#"[null,{{"id":1,"name":"Sword","description":"{long}","note":""}},{{"id":2,"name":"Axe","description":"Short","note":""}}]"#)).unwrap();
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.st.file = Some(0);
+        app.st.row = Some(0);
+        let mut h = harness(app);
+        h.run();
+        h.run();
+        h.run();
+        let hs = h.state().grid_h.clone();
+        // рядки файлу: 0 — name, 1 — description першого, 2 — name, 3 — description другого
+        let ds: Vec<usize> = (0..hs.len()).filter(|i| h.state().st.source_of(0, *i) == long).collect();
+        assert_eq!(ds.len(), 1, "довгий рядок знайдено");
+        assert!(hs[ds[0]] >= 36.0 + 4.0 * 14.0, "довгий текст зайняв кілька рядків: {}", hs[ds[0]]);
+        let short = (0..hs.len()).find(|i| h.state().st.source_of(0, *i) == "Short").unwrap();
+        assert_eq!(hs[short], 36.0, "короткий рядок лишився висотою 36");
+        // накопичені висоти сходяться з виміряними
+        let pre = &h.state().grid_pre;
+        let total = h.state().st.visible_len(0);
+        let want: f32 = (0..total).map(|i| hs[h.state().st.visible_at(0, i).unwrap()]).sum();
+        assert!((pre[total] - want).abs() < 0.5, "{} проти {}", pre[total], want);
+        // знайти рядок за висотою
+        assert_eq!(layout::row_at_y(pre, 0.0), 0);
+        assert_eq!(layout::row_at_y(pre, pre[2] + 1.0), 2);
+        assert_eq!(layout::row_at_y(pre, 1.0e9), total - 1);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
     /// Файли можна тримати разом із рядками (чи зі сценами): дві картки з однаковими заголовками; кнопки смужки вмикають і вимикають вікна по одному.
     #[test]
     fn files_share_the_left_column_with_rows_or_scenes() {
@@ -4894,11 +4934,13 @@ mod ui_tests {
     #[test]
     fn the_table_follows_the_selected_row_and_a_file_reopens_where_it_was_left() {
         // чистий розрахунок: у вікні 360 (10 рядків по 36) зі зсувом 720 видно рядки 20–29
-        assert_eq!(layout::scroll_to_row(25, 720.0, 360.0), None, "рядок у вікні");
-        assert_eq!(layout::scroll_to_row(30, 720.0, 360.0), Some(31.0 * 36.0 - 360.0), "поруч знизу — рівно до краю");
-        assert_eq!(layout::scroll_to_row(19, 720.0, 360.0), Some(19.0 * 36.0), "поруч зверху — рівно до краю");
-        assert_eq!(layout::scroll_to_row(500, 720.0, 360.0), Some(497.0 * 36.0), "далеко — три рядки від верху");
-        assert_eq!(layout::scroll_to_row(1, 7200.0, 360.0), Some(0.0));
+        let span = |p: usize| (p as f32 * 36.0, (p + 1) as f32 * 36.0);
+        let to = |p: usize, off: f32, vh: f32| layout::scroll_to_span(span(p).0, span(p).1, off, vh);
+        assert_eq!(to(25, 720.0, 360.0), None, "рядок у вікні");
+        assert_eq!(to(30, 720.0, 360.0), Some(31.0 * 36.0 - 360.0), "поруч знизу — рівно до краю");
+        assert_eq!(to(19, 720.0, 360.0), Some(19.0 * 36.0), "поруч зверху — рівно до краю");
+        assert_eq!(to(500, 720.0, 360.0), Some(497.0 * 36.0), "далеко — три рядки від верху");
+        assert_eq!(to(1, 7200.0, 360.0), Some(0.0));
         // у застосунку: файл на 200 рядків, F8-перехід на 150-й рядок
         let base = std::env::temp_dir().join(format!("transly-ui-follow-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&base);

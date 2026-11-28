@@ -52,10 +52,9 @@ const DRAG_MIN: f32 = 6.0;
 /// Біля верхнього й нижнього краю таблиці вона листається сама: чим ближче до краю, тим швидше (зона 48, крок 6 + до 30).
 const DRAG_ZONE: f32 = 48.0;
 
-/// Куди прокрутити таблицю, щоб рядок `p` (місце серед видимих) було видно: `None`, коли його вже видно в вікні висотою `vh` зі зсувом `off`.
-/// Рядок поруч — мінімальний зсув до краю, далекий (більше сторінки) — три рядки від верху.
-pub(crate) fn scroll_to_row(p: usize, off: f32, vh: f32) -> Option<f32> {
-    let (top, bottom) = (p as f32 * ROW_H, (p + 1) as f32 * ROW_H);
+/// Куди прокрутити таблицю, щоб рядок, що займає `top..bottom` (пікселі від початку вмісту), було видно в вікні висотою `vh` зі зсувом `off`: `None`, коли його вже видно.
+/// Рядок поруч — мінімальний зсув до краю, далекий (більше сторінки) — три рядки (`ROW_H`) від верху.
+pub(crate) fn scroll_to_span(top: f32, bottom: f32, off: f32, vh: f32) -> Option<f32> {
     if top >= off && bottom <= off + vh {
         return None;
     }
@@ -69,6 +68,25 @@ pub(crate) fn scroll_to_row(p: usize, off: f32, vh: f32) -> Option<f32> {
         bottom - vh
     })
 }
+
+/// Перший рядок (місце серед видимих), що сягає нижче за `y`, за накопиченими висотами `pre` (`pre[i]` — верх рядка `i`, останній елемент — висота всього вмісту).
+pub(crate) fn row_at_y(pre: &[f32], y: f32) -> usize {
+    let n = pre.len().saturating_sub(1);
+    if n == 0 {
+        return 0;
+    }
+    pre.partition_point(|p| *p <= y).saturating_sub(1).min(n - 1)
+}
+
+/// Висота рядка таблиці: мінімум `ROW_H`, а довший текст переноситься й збільшує її на кожен додатковий рядок. `lh` — висота одного рядка тексту,
+/// `content` — висота найвищого з перенесених текстів, `editing` — висота поля правки (з полями), коли рядок редагується.
+pub(crate) fn grid_row_height(lh: f32, content: f32, editing: Option<f32>) -> f32 {
+    let capped = content.min(lh * GRID_MAX_LINES);
+    (ROW_H - lh + capped).max(editing.unwrap_or(0.0)).max(ROW_H)
+}
+
+/// Найбільше рядків тексту в клітинці таблиці: далі текст обрізається (повний — у «Редагуванні»).
+const GRID_MAX_LINES: f32 = 12.0;
 
 /// Куди прокрутити таблицю, поки вказівник біля краю: `dy` — зсув від краю всередину зони (від'ємний — угору).
 pub(crate) fn drag_scroll_step(pointer_y: f32, top: f32, bottom: f32) -> Option<f32> {
@@ -1785,26 +1803,84 @@ impl App {
             let mut commit: Option<bool> = None; // Some(true) — зберегти й далі, Some(false) — скасувати
             let mut begin: Option<usize> = None;
             let list_h = ui.available_height();
+            // висоти рядків: текст переноситься, тож рядок росте. Висоту виміряно для рядків, що вже малювали (кеш за номером рядка файлу), решта — `ROW_H`;
+            // накопичені висоти за видимими рядками дають зсув кожного з них і висоту всього вмісту
+            let nrows = self.st.row_count(f);
+            let hkey = (f, w.to_bits(), who);
+            if self.grid_h_key != hkey || self.grid_h.len() != nrows {
+                self.grid_h.clear();
+                self.grid_h.resize(nrows, 0.0);
+                self.grid_h_key = hkey;
+            }
+            let mut pre = std::mem::take(&mut self.grid_pre);
+            pre.clear();
+            pre.reserve(total + 1);
+            let mut acc = 0.0_f32;
+            pre.push(0.0);
+            let heights = &self.grid_h;
+            self.st.with_visible(f, |rows| {
+                for r in rows {
+                    acc += heights.get(*r).copied().filter(|h| *h > 0.0).unwrap_or(ROW_H);
+                    pre.push(acc);
+                }
+            });
             // рядок, вибраний не мишею (F8, пошук, сповіщення, стрілки, перехід між файлами), мусить бути видно: таблиця прокручується до нього
             if self.grid_seen != (f, self.st.row) {
                 self.grid_seen = (f, self.st.row);
                 if let (None, Some(p)) = (&self.drag_sel, self.st.row.and_then(|r| self.st.visible_pos(f, r))) {
                     let off = egui::scroll_area::State::load(ui.ctx(), ui.id().with(egui::Id::new(("gridscroll", f)))).map_or(0.0, |s| s.offset.y);
-                    self.grid_scroll = scroll_to_row(p, off, list_h).or(self.grid_scroll);
+                    self.grid_scroll = scroll_to_span(pre[p], pre[p + 1], off, list_h).or(self.grid_scroll);
                 }
             }
             let mut area = egui::ScrollArea::vertical().id_salt(("gridscroll", f)).auto_shrink([false; 2]).max_height(list_h);
             if let Some(off) = self.grid_scroll.take() {
                 area = area.vertical_scroll_offset(off.max(0.0));
             }
-            let area_out = area.show_rows(ui, ROW_H, total, |ui, range| {
+            let mut remeasured = false;
+            let area_out = area.show_viewport(ui, |ui, vp| {
                 ui.spacing_mut().item_spacing.y = 0.0;
-                for i in range {
+                let origin = ui.cursor().min;
+                ui.set_min_height(pre[total]);
+                let font = ip(12.5);
+                let lh = ui.fonts(|fo| fo.row_height(&font));
+                let first = row_at_y(&pre, vp.min.y);
+                let mut y = pre[first.min(total)];
+                for i in first..total {
+                    if y >= vp.max.y {
+                        break;
+                    }
                     let Some(r) = self.st.visible_at(f, i) else { continue };
-                    let (rect, resp) = ui.allocate_exact_size(vec2(w, ROW_H), Sense::click());
                     let sel = self.st.row == Some(r);
                     let (src, tgt, st) = self.st.row_view(f, r);
                     let ghost = if tgt.is_empty() && editing != Some((f, r)) { self.st.ghost_of(f, r) } else { None };
+                    // тексти клітинок переносяться за шириною колонки (8 px полів з боків); висота рядка — за найвищим із них
+                    let src_flat = src.replace('\n', " ");
+                    let gsrc = ui.fonts(|fo| fo.layout(src_flat.clone(), font.clone(), SRC_TEXT, src_w - 16.0));
+                    let is_edit = editing == Some((f, r));
+                    let (gtgt, edit_h) = if is_edit {
+                        let gd = ui.fonts(|fo| fo.layout(self.draft.clone(), font.clone(), TEXT, tr_w - 16.0));
+                        let eh = gd.size().y + 12.0;
+                        (None, Some(eh))
+                    } else if let Some(g) = &ghost {
+                        let mut job = egui::text::LayoutJob::default();
+                        job.append(&g.text.replace('\n', " "), 0.0, egui::TextFormat { font_id: font.clone(), color: GHOST_INK, italics: true, ..Default::default() });
+                        job.append(&g.label(&self.st.file_names()[f]), 0.0, egui::TextFormat { font_id: mp(11.0), color: accent_text().gamma_multiply(0.85), ..Default::default() });
+                        job.sections[1].leading_space = 8.0;
+                        job.wrap.max_width = tr_w - 16.0;
+                        (Some(ui.fonts(|fo| fo.layout_job(job))), None)
+                    } else {
+                        let (t, c) = if tgt.is_empty() { ("—".to_string(), DIM) } else { (tgt.replace('\n', " "), TEXT) };
+                        (Some(ui.fonts(|fo| fo.layout(t, font.clone(), c, tr_w - 16.0))), None)
+                    };
+                    let content = gsrc.size().y.max(gtgt.as_ref().map_or(0.0, |g| g.size().y));
+                    let h = grid_row_height(lh, content, edit_h);
+                    if (self.grid_h[r] - h).abs() > 0.01 {
+                        self.grid_h[r] = h;
+                        remeasured = true;
+                    }
+                    let rect = Rect::from_min_size(pos2(origin.x, origin.y + y), vec2(w, h));
+                    y += h;
+                    let resp = ui.interact(rect, ui.id().with(("grow", r)), Sense::click());
                     resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, sel, match &ghost { Some(g) => format!("{src} — примара: {}", g.text), None => format!("{src} — {tgt}") }));
                     let body = Rect::from_min_max(rect.min, pos2(rect.right(), rect.bottom() - 1.0));
                     if sel {
@@ -1818,8 +1894,9 @@ impl App {
                     for k in [1usize, 2, 4, 5, 6] {
                         ui.painter().vline(rect.left() + xs[k], rect.top()..=(rect.bottom() - 1.0), Stroke::new(1.0_f32, LINE_SOFT));
                     }
-                    let col = |k: usize, wd: f32| Rect::from_min_size(pos2(rect.left() + xs[k], rect.top()), vec2(wd, ROW_H - 1.0));
+                    let col = |k: usize, wd: f32| Rect::from_min_size(pos2(rect.left() + xs[k], rect.top()), vec2(wd, h - 1.0));
                     let mid = rect.top() + 15.0;
+                    let text_top = mid - lh / 2.0;
                     // номер і стан
                     let ck_c = pos2(rect.left() + xs[0] + num_w / 2.0, rect.top() + 13.0);
                     let is_checked = self.checked.1.contains(&r);
@@ -1876,9 +1953,9 @@ impl App {
                         let name = self.st.speaker_of_row(f, r);
                         ui.painter().with_clip_rect(col(3, who_w)).text(pos2(rect.left() + xs[3] + 8.0, mid), Align2::LEFT_CENTER, name, ip(12.5), VIOLET);
                     }
-                    ui.painter().with_clip_rect(col(4, src_w)).text(pos2(rect.left() + xs[4] + 8.0, mid), Align2::LEFT_CENTER, src.replace('\n', " "), ip(12.5), SRC_TEXT);
+                    ui.painter().with_clip_rect(col(4, src_w)).galley(pos2(rect.left() + xs[4] + 8.0, text_top), gsrc, SRC_TEXT);
                     let tcell = col(5, tr_w);
-                    if editing == Some((f, r)) {
+                    if is_edit {
                         ui.painter().rect_filled(tcell, CornerRadius::ZERO, BG);
                         ui.painter().rect_stroke(tcell, CornerRadius::ZERO, Stroke::new(1.0_f32, accent()), StrokeKind::Inside);
                         let mut cui = ui.new_child(egui::UiBuilder::new().max_rect(tcell.shrink2(vec2(6.0, 2.0))));
@@ -1896,17 +1973,9 @@ impl App {
                             commit = Some(false);
                         }
                     } else {
-                        if let Some(g) = &ghost {
-                            // примара: сірий курсив і короткий підпис, звідки вона (як рядок 1, пам'ять 82 %)
-                            let mut job = egui::text::LayoutJob::default();
-                            job.append(&g.text.replace('\n', " "), 0.0, egui::TextFormat { font_id: ip(12.5), color: GHOST_INK, italics: true, ..Default::default() });
-                            job.append(&g.label(&self.st.file_names()[f]), 0.0, egui::TextFormat { font_id: mp(11.0), color: accent_text().gamma_multiply(0.85), ..Default::default() });
-                            job.sections[1].leading_space = 8.0;
-                            let gg = ui.fonts(|fo| fo.layout_job(job));
-                            ui.painter().with_clip_rect(tcell).galley(pos2(tcell.left() + 8.0, mid - gg.size().y / 2.0), gg, GHOST_INK);
-                        } else {
-                            let (t, c) = if tgt.is_empty() { ("—".to_string(), DIM) } else { (tgt.replace('\n', " "), TEXT) };
-                            ui.painter().with_clip_rect(tcell).text(pos2(tcell.left() + 8.0, mid), Align2::LEFT_CENTER, t, ip(12.5), c);
+                        if let Some(gg) = gtgt {
+                            let ink = if ghost.is_some() { GHOST_INK } else if tgt.is_empty() { DIM } else { TEXT };
+                            ui.painter().with_clip_rect(tcell).galley(pos2(tcell.left() + 8.0, text_top), gg, ink);
                         }
                         if sel {
                             ui.painter().rect_stroke(tcell, CornerRadius::ZERO, Stroke::new(1.0_f32, accent()), StrokeKind::Inside);
@@ -1925,6 +1994,10 @@ impl App {
                     }
                 }
             });
+            if remeasured {
+                ui.ctx().request_repaint();
+            }
+            // (накопичені висоти потрібні ще протягуванню нижче)
             // протягування по номерах: рядки від опорного до того, що під вказівником, виділено (разом із тим, що було, коли тримали Ctrl чи Shift); біля краю таблиця листається сама
             if let Some(mut d) = self.drag_sel.take() {
                 let (down, pos) = ui.input(|i| (i.pointer.primary_down(), i.pointer.latest_pos()));
@@ -1932,7 +2005,7 @@ impl App {
                     d.moved |= (p.y - d.start_y).abs() >= DRAG_MIN;
                     if d.moved && total > 0 {
                         let inner = area_out.inner_rect;
-                        let at = (((p.y - inner.top() + area_out.state.offset.y) / ROW_H).floor().max(0.0) as usize).min(total - 1);
+                        let at = row_at_y(&pre, p.y - inner.top() + area_out.state.offset.y).min(total - 1);
                         let mut rows = d.base.clone();
                         rows.extend((d.anchor.min(at)..=d.anchor.max(at)).filter_map(|k| self.st.visible_at(f, k)));
                         self.checked.1 = rows;
@@ -1945,6 +2018,7 @@ impl App {
                     ui.ctx().request_repaint();
                 }
             }
+            self.grid_pre = pre;
             if let Some(r) = begin {
                 self.st.row = Some(r);
                 self.draft = self.st.target_of(f, r);

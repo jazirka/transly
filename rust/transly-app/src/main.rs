@@ -94,7 +94,6 @@ struct App {
     /// Власний заголовок вікна (кнопки в застосунку) чи системний.
     chrome_own: bool,
     find_win: Option<(String, String, bool, bool)>,
-    plugins_win: bool,
     settings: Option<state::SettingsView>,
     btab: usize,
     bottom_open: bool,
@@ -280,7 +279,7 @@ fn game_job(text: &str, size: f32, actor_name: &dyn Fn(usize) -> Option<String>)
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, app_set: None, find_count: None, nav_proj: stshell::StNav::new("look"), nav_app: stshell::StNav::new("general"), reset_arm: None, esc_at: None, imp_terms: String::new(), imp_tm: String::new(), fill_win: None, links_win: None, chrome_own: winchrome::own_chrome_chosen(), find_win: None, plugins_win: false, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_draft: None, mine_win: false, auto_added: Vec::new(), guard_off: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, app_set: None, find_count: None, nav_proj: stshell::StNav::new("look"), nav_app: stshell::StNav::new("general"), reset_arm: None, esc_at: None, imp_terms: String::new(), imp_tm: String::new(), fill_win: None, links_win: None, chrome_own: winchrome::own_chrome_chosen(), find_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_draft: None, mine_win: false, auto_added: Vec::new(), guard_off: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
     }
 }
 
@@ -563,6 +562,95 @@ fn danger_page(ui: &mut egui::Ui, armed: bool) -> bool {
     b.clicked()
 }
 
+/// Що натиснули на сторінці «Розширення».
+#[derive(Default)]
+struct ExtOut {
+    install: Option<std::path::PathBuf>,
+    toggle: Option<String>,
+    remove: Option<String>,
+    gloss: Option<(String, String)>,
+    run: Option<Vec<transly_core::commands::ReplaceStep>>,
+}
+
+/// Сторінка «Розширення» (загальні налаштування): картки встановлених плагінів із станом, «Вимкнути/Увімкнути» й «Видалити», встановлення з теки чи файлу, глосарії й команди плагінів.
+fn extensions_page(ui: &mut egui::Ui, rows: &[plugins::PluginRow], glossaries: &[(String, String, String)], cmds: &[transly_core::commands::PluginCommand], out: &mut ExtOut) {
+    stshell::sub(ui, &format!("Встановлені · {}", rows.len()), glossaries.is_empty() && !cmds.iter().any(|c| c.action == "replace"), |ui| {
+        for r in rows {
+            egui::Frame::new().fill(Color32::from_rgb(0x2b, 0x2d, 0x33)).corner_radius(CornerRadius::same(R2)).inner_margin(egui::Margin::symmetric(10, 8)).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.horizontal(|ui| {
+                    // значок 34: дві літери назви на тлі кольору теми
+                    let (ic, _) = ui.allocate_exact_size(vec2(34.0, 34.0), Sense::hover());
+                    ui.painter().rect_filled(ic, CornerRadius::same(R2), theme::over(BG, accent(), 0.22));
+                    let initials: String = r.name.split_whitespace().filter_map(|w| w.chars().next()).take(2).collect::<String>().to_uppercase();
+                    ui.painter().text(ic.center(), Align2::CENTER_CENTER, initials, ipw(12.5, 600), accent());
+                    ui.vertical(|ui| {
+                        ui.spacing_mut().item_spacing.y = 2.0;
+                        let (txt, col) = match r.state {
+                            "enabled" => ("працює", OK),
+                            "disabled" => ("вимкнено", MUTE),
+                            "incompatible" => ("несумісний", WARN),
+                            "missing-dependency" => ("бракує залежності", WARN),
+                            _ => ("помилка", BAD),
+                        };
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new(&r.name).font(ipw(12.5, 500)).color(TEXT));
+                            ui.label(RichText::new(txt).size(11.0).color(col));
+                        });
+                        ui.label(RichText::new(format!("{}{} · {}", r.id, if r.builtin { " · вбудований" } else { "" }, r.version)).size(11.0).color(MUTE));
+                        if let Some(w) = &r.reason {
+                            ui.label(RichText::new(w).size(11.0).color(WARN));
+                        }
+                    });
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if !r.builtin && plain_button(ui, "Видалити").clicked() {
+                            out.remove = Some(r.id.clone());
+                        }
+                        if plain_button(ui, if r.enabled { "Вимкнути" } else { "Увімкнути" }).clicked() {
+                            out.toggle = Some(r.id.clone());
+                        }
+                    });
+                });
+            });
+        }
+        stshell::acts(ui, |ui| {
+            if plain_button(ui, "Встановити з теки…").clicked() {
+                out.install = rfd::FileDialog::new().set_title("Тека плагіна (з transly-plugin.json)").pick_folder();
+            }
+            if plain_button(ui, "Встановити з файлу…").clicked() {
+                out.install = rfd::FileDialog::new().add_filter("Пакет плагіна", &["zip", "transly-plugin"]).pick_file();
+            }
+        });
+    });
+    if !glossaries.is_empty() {
+        let last = !cmds.iter().any(|c| c.action == "replace");
+        stshell::sub(ui, "Глосарії плагінів", last, |ui| {
+            for (pid, gid, title) in glossaries {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(title).color(TEXT));
+                    ui.label(RichText::new(pid).size(11.0).color(MUTE));
+                    if plain_button(ui, "Додати терміни").clicked() {
+                        out.gloss = Some((pid.clone(), gid.clone()));
+                    }
+                });
+            }
+        });
+    }
+    if cmds.iter().any(|c| c.action == "replace") {
+        stshell::sub(ui, "Команди плагінів", true, |ui| {
+            for c in cmds.iter().filter(|c| c.action == "replace") {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(&c.title).color(TEXT));
+                    ui.label(RichText::new(&c.plugin_name).size(11.0).color(MUTE));
+                    if plain_button(ui, "Виконати").clicked() {
+                        out.run = c.steps.clone();
+                    }
+                });
+            }
+        });
+    }
+}
+
 fn label_caps(ui: &mut egui::Ui, text: &str) {
     ui.label(RichText::new(text.to_uppercase()).size(10.5).color(MUTE));
 }
@@ -593,7 +681,6 @@ impl App {
         self.keys_win
             || self.activity_win
             || self.qar_win
-            || self.plugins_win
             || self.upd.win
             || self.tsync_win.is_some()
             || self.wrap_win.is_some()
@@ -717,7 +804,6 @@ impl App {
         self.relay_auto();
         self.plug_window(ctx);
         self.update_window(ctx);
-        self.plugins_window(ctx);
         self.find_window(ctx);
         self.fill_window(ctx);
         self.links_window(ctx);
@@ -1329,7 +1415,7 @@ impl App {
                 self.spk_win = Some(self.st.speaker_candidates());
                 ui.close_menu();
             }
-            if mi(ui, "Плагіни…", true).clicked() {
+            if mi(ui, "Розширення…", true).clicked() {
                 self.act_plugins();
                 ui.close_menu();
             }
@@ -1483,9 +1569,10 @@ impl App {
         self.nav_app.cur = "server";
     }
 
+    /// «Плагіни…»: сторінка «Розширення» загальних налаштувань.
     fn act_plugins(&mut self) {
-            self.plugins_win = true;
-        
+        self.app_set = self.st.settings_view();
+        self.nav_app.cur = "ext";
     }
 
     fn act_settings(&mut self) {
@@ -1683,7 +1770,7 @@ impl App {
 
     /// Дерево сторінок «Налаштувань»: те, що стосується застосунку й вас, а не окремого проєкту.
     const APP_PAGES: &'static [stshell::Group] = &[
-        ("Застосунок", &[("general", "Загальні", "sliders"), ("look", "Вигляд", "scene"), ("update", "Оновлення застосунку", "refresh")]),
+        ("Застосунок", &[("general", "Загальні", "sliders"), ("look", "Вигляд", "scene"), ("ext", "Розширення", "plug"), ("update", "Оновлення застосунку", "refresh")]),
         ("Синхронізація", &[("server", "Власний сервер", "server")]),
     ];
 
@@ -2175,6 +2262,8 @@ impl App {
         let dirty = saved.as_ref().is_some_and(|s| s.general_differs(&v)) || relay_differs(&relay, &self.st.relay);
         let syncing = self.st.syncing();
         let relay_last = self.st.relay.last;
+        let (ext_rows, ext_gloss, ext_cmds) = (self.st.host.rows(), self.st.host.glossaries(), self.st.host.commands());
+        let mut ext = ExtOut::default();
         let version = {
             let id = transly_platform::selfupdate::build_id();
             if id == "dev" { "локальна".to_string() } else { id.chars().take(7).collect() }
@@ -2216,6 +2305,7 @@ impl App {
                     }
                     stshell::hint(ui, "Запасний варіант: якщо власного заголовка не видно або його кнопки не працюють. Застосовується одразу.");
                 }
+                "ext" => extensions_page(ui, &ext_rows, &ext_gloss, &ext_cmds, &mut ext),
                 "update" => {
                     stshell::hint(ui, &format!("Версія збірки: {version}"));
                     stshell::acts(ui, |ui| {
@@ -2278,6 +2368,7 @@ impl App {
         if sysbar {
             self.toggle_chrome(ctx);
         }
+        self.apply_extensions(ext);
         // синхронізація зі своїм сервером не закриває вікно: налаштування записуються, і обмін починається
         if go == Some("relay-sync") {
             go = None;
@@ -2318,6 +2409,36 @@ impl App {
             }
             self.app_set = Some(v);
             self.relay_draft = Some(relay);
+        }
+    }
+
+    /// Те, що натиснули на сторінці «Розширення»: встановити, увімкнути чи вимкнути, видалити, додати терміни, виконати команду.
+    fn apply_extensions(&mut self, o: ExtOut) {
+        if let Some(p) = o.install {
+            self.message = match self.st.host.install(&p) {
+                Ok(id) => format!("Встановлено: {id}"),
+                Err(e) => e,
+            };
+        }
+        if let Some(id) = o.toggle {
+            let on = !self.st.host.rows().iter().any(|r| r.id == id && r.enabled);
+            self.st.host.set_enabled(&id, on);
+        }
+        if let Some(id) = o.remove {
+            self.message = match self.st.host.remove(&id) {
+                Ok(()) => "Плагін видалено".into(),
+                Err(e) => e,
+            };
+        }
+        if let Some((pid, gid)) = o.gloss {
+            self.message = self.st.import_plugin_glossary(&pid, &gid);
+        }
+        if let Some(steps) = o.run {
+            self.message = match self.st.run_replace(&steps, true) {
+                Ok(0) => "Команда нічого не змінила".into(),
+                Ok(n) => format!("Команда змінила рядків: {n}"),
+                Err(e) => e,
+            };
         }
     }
 
@@ -2536,120 +2657,6 @@ impl App {
             self.plug_win = None;
         } else {
             self.plug_win = Some(chosen);
-        }
-    }
-
-    fn plugins_window(&mut self, ctx: &egui::Context) {
-        if !self.plugins_win {
-            return;
-        }
-        let mut open = true;
-        let mut action: Option<(String, u8)> = None; // 0 вимкнути/увімкнути, 1 видалити
-        let mut run: Option<Vec<transly_core::commands::ReplaceStep>> = None;
-        let mut gloss: Option<(String, String)> = None;
-        dlg("Плагіни").open(&mut open).collapsible(false).default_width(560.0).show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                if primary_button(ui, "Встановити з теки…").clicked() {
-                    if let Some(p) = rfd::FileDialog::new().set_title("Тека плагіна (з transly-plugin.json)").pick_folder() {
-                        self.message = match self.st.host.install(&p) {
-                            Ok(id) => format!("Встановлено: {id}"),
-                            Err(e) => e,
-                        };
-                    }
-                }
-                if plain_button(ui, "Встановити з файлу…").clicked() {
-                    if let Some(p) = rfd::FileDialog::new().add_filter("Пакет плагіна", &["zip", "transly-plugin"]).pick_file() {
-                        self.message = match self.st.host.install(&p) {
-                            Ok(id) => format!("Встановлено: {id}"),
-                            Err(e) => e,
-                        };
-                    }
-                }
-            });
-            ui.add_space(8.0);
-            for r in self.st.host.rows() {
-                egui::Frame::new().fill(PANEL2).corner_radius(CornerRadius::same(R2)).inner_margin(egui::Margin::symmetric(10, 7)).show(ui, |ui| {
-                    ui.set_width(ui.available_width());
-                    ui.horizontal(|ui| {
-                        let mut on = r.enabled;
-                        if stshell::check(ui, &mut on, "").changed() {
-                            action = Some((r.id.clone(), 0));
-                        }
-                        ui.vertical(|ui| {
-                            ui.label(RichText::new(format!("{}  {}", r.name, r.version)).color(TEXT));
-                            let (txt, col) = match r.state {
-                                "enabled" => ("працює", OK),
-                                "disabled" => ("вимкнено", MUTE),
-                                "incompatible" => ("несумісний", WARN),
-                                "missing-dependency" => ("бракує залежності", WARN),
-                                _ => ("помилка", BAD),
-                            };
-                            ui.label(RichText::new(format!("{}{}{}", r.id, if r.builtin { " · вбудований" } else { "" }, "")).size(11.0).color(MUTE));
-                            ui.label(RichText::new(match &r.reason { Some(w) => format!("{txt}: {w}"), None => txt.to_string() }).size(11.0).color(col));
-                        });
-                        if !r.builtin {
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if plain_button(ui, "Видалити").clicked() {
-                                    action = Some((r.id.clone(), 1));
-                                }
-                            });
-                        }
-                    });
-                });
-                ui.add_space(4.0);
-            }
-            let gl = self.st.host.glossaries();
-            if !gl.is_empty() {
-                ui.add_space(6.0);
-                label_caps(ui, "Глосарії плагінів");
-                for (pid, gid, title) in &gl {
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new(title).color(TEXT));
-                        ui.label(RichText::new(pid).size(11.0).color(MUTE));
-                        if plain_button(ui, "Додати терміни").clicked() {
-                            gloss = Some((pid.clone(), gid.clone()));
-                        }
-                    });
-                }
-            }
-            let cmds = self.st.host.commands();
-            if !cmds.is_empty() {
-                ui.add_space(6.0);
-                label_caps(ui, "Команди плагінів");
-                for c in cmds.iter().filter(|c| c.action == "replace") {
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new(&c.title).color(TEXT));
-                        ui.label(RichText::new(&c.plugin_name).size(11.0).color(MUTE));
-                        if plain_button(ui, "Виконати").clicked() {
-                            run = c.steps.clone();
-                        }
-                    });
-                }
-            }
-        });
-        if let Some((id, kind)) = action {
-            if kind == 0 {
-                let on = !self.st.host.rows().iter().any(|r| r.id == id && r.enabled);
-                self.st.host.set_enabled(&id, on);
-            } else {
-                self.message = match self.st.host.remove(&id) {
-                    Ok(()) => "Плагін видалено".into(),
-                    Err(e) => e,
-                };
-            }
-        }
-        if let Some((pid, gid)) = gloss {
-            self.message = self.st.import_plugin_glossary(&pid, &gid);
-        }
-        if let Some(steps) = run {
-            self.message = match self.st.run_replace(&steps, true) {
-                Ok(0) => "Команда нічого не змінила".into(),
-                Ok(n) => format!("Команда змінила рядків: {n}"),
-                Err(e) => e,
-            };
-        }
-        if !open {
-            self.plugins_win = false;
         }
     }
 
@@ -4134,7 +4141,7 @@ mod ui_tests {
         h.run();
         h.get_by_label("Налаштування");
         h.get_by_label("Пошук налаштувань");
-        for page in ["Загальні", "Вигляд", "Оновлення застосунку", "Власний сервер"] {
+        for page in ["Загальні", "Вигляд", "Розширення", "Оновлення застосунку", "Власний сервер"] {
             h.get_by_label(page);
         }
         for page in ["Правила QA", "Імпорт глосарію", "GitHub", "Небезпечна зона", "Гра і мови", "Папка гри"] {
@@ -4160,6 +4167,31 @@ mod ui_tests {
         press(&mut h, egui::Modifiers::NONE, egui::Key::Escape);
         h.run();
         assert!(h.state().app_set.is_none());
+    }
+
+    /// Сторінка «Розширення»: вбудовані плагіни видно з назвою, станом і кнопкою «Вимкнути»; вимкнення й увімкнення працює, вбудований не видаляється.
+    #[test]
+    fn the_extensions_page_lists_and_toggles_plugins() {
+        let data = game("ext");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.app_set = app.st.settings_view();
+        app.nav_app.cur = "ext";
+        let rows = app.st.host.rows();
+        assert!(rows.iter().any(|r| r.builtin), "є вбудовані плагіни");
+        let first = rows.iter().find(|r| r.builtin && r.enabled).expect("увімкнений вбудований").id.clone();
+        let mut h = harness(app);
+        h.run();
+        h.run();
+        h.get_by_label("Встановити з теки…");
+        h.get_by_label("Встановити з файлу…");
+        assert!(h.query_by_label("Видалити").is_none(), "вбудований не видаляється");
+        h.get_all_by_label("Вимкнути").next().expect("кнопка «Вимкнути»").click();
+        h.run();
+        assert!(h.state().st.host.rows().iter().any(|r| !r.enabled), "один із плагінів вимкнено");
+        h.get_all_by_label("Увімкнути").next().expect("кнопка «Увімкнути»").click();
+        h.run();
+        assert!(h.state().st.host.rows().iter().any(|r| r.id == first && r.enabled || r.id != first));
     }
 
     /// Групи дерева складаються й розкриваються кліком по заголовку, в обох вікнах однаково; сторінки мають піктограми.
@@ -5235,9 +5267,10 @@ mod ui_tests {
         h.state_mut().mine_win = true;
         frame(&mut h, "діалог «Конструкції»");
         h.state_mut().mine_win = false;
-        h.state_mut().plugins_win = true;
-        frame(&mut h, "діалог «Плагіни»");
-        h.state_mut().plugins_win = false;
+        h.state_mut().app_set = h.state().st.settings_view();
+        h.state_mut().nav_app.cur = "ext";
+        frame(&mut h, "сторінка «Розширення»");
+        h.state_mut().app_set = None;
         h.state_mut().keys_win = true;
         frame(&mut h, "діалог «Гарячі клавіші»");
         h.state_mut().keys_win = false;
@@ -5498,9 +5531,10 @@ mod ui_tests {
             shot(&mut h, n);
         }
         h.state_mut().settings = None;
-        h.state_mut().plugins_win = true;
-        shot(&mut h, "d14-plugins");
-        h.state_mut().plugins_win = false;
+        h.state_mut().app_set = h.state().st.settings_view();
+        h.state_mut().nav_app.cur = "ext";
+        shot(&mut h, "d14-extensions");
+        h.state_mut().app_set = None;
         h.state_mut().wrap_win = Some((h.state().st.wrap_settings(), "Мандрівник дістався перекладацького містечка наприкінці осені.".into(), false));
         shot(&mut h, "d17-wrap");
         h.state_mut().wrap_win = None;

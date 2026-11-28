@@ -286,7 +286,7 @@ pub struct AppState {
 
 impl Default for AppState {
     fn default() -> Self {
-        let file = std::env::temp_dir().join("transly-picked-folders.json");
+        let file = local_file("picked-folders.json").unwrap_or_else(|| std::env::temp_dir().join("transly-picked-folders.json"));
         AppState { pics_files: Default::default(), build_prev: Default::default(), qa_view_cache: Default::default(), undo_count: 0, db_cache: std::cell::RefCell::new(None), names_cache: std::cell::RefCell::new(None), usage_cache: Default::default(), links_cache: std::cell::RefCell::new(None), link_index: std::cell::RefCell::new(None), relay: RelayCfg::load(), relay_rx: None, speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, rows_filter: None, inbox: Inbox::load(), row_memo: RowMemo::load(), frame_caches: Default::default(), ghost_budget: std::cell::Cell::new(0), ghost_more: std::cell::Cell::new(false), mine_cache: Default::default(), auto_cache: Default::default(), dismissed: Dismissed::load(), scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: Default::default(), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, saved_ms: None, session_start: now_ms(), session_edits: 0 }
     }
 }
@@ -299,6 +299,24 @@ fn project_path(dir: &Path, name: &str) -> PathBuf {
 /// Файл у теці даних програми (`%LOCALAPPDATA%/Transly`); у тестах її немає.
 pub(crate) fn local_file(name: &str) -> Option<PathBuf> {
     plugins_dir().and_then(|p| p.parent().map(|d| d.join(name)))
+}
+
+/// Остання відкрита гра (тека) з файлу `path`; `None`, коли файлу немає чи теки вже нема.
+pub(crate) fn read_last_game(path: &Path) -> Option<PathBuf> {
+    let t = std::fs::read_to_string(path).ok()?;
+    let p = PathBuf::from(t.trim());
+    p.is_dir().then_some(p)
+}
+
+/// Запам'ятати теку гри, щоб після перезапуску (зокрема після оновлення) вона відкрилась сама.
+pub(crate) fn write_last_game(path: &Path, dir: &Path) {
+    let _ = std::fs::create_dir_all(path.parent().unwrap_or(Path::new(".")));
+    let _ = std::fs::write(path, dir.to_string_lossy().as_bytes());
+}
+
+/// Остання відкрита гра в теці даних програми (у тестах її немає).
+pub(crate) fn last_game() -> Option<PathBuf> {
+    read_last_game(&local_file("last-game.txt")?)
 }
 
 /// Тека установлених плагінів у теці даних користувача.
@@ -882,6 +900,9 @@ impl AppState {
         *self.links_cache.borrow_mut() = None;
         self.project = Some(project);
         self.dir = Some(dir.to_path_buf());
+        if let Some(p) = local_file("last-game.txt") {
+            write_last_game(&p, dir);
+        }
         self.file = if n > 0 { Some(0) } else { None };
         self.session_start = now_ms();
         self.session_edits = 0;
@@ -4465,6 +4486,22 @@ menu.quit=Quit game
         assert_eq!(w, "gold\nhp\nmp");
         s.set_qa_keep("any", "");
         assert_eq!(s.qa_keep(), ("any".to_string(), String::new()));
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// Остання гра запам'ятовується файлом і повертається, поки тека є.
+    #[test]
+    fn the_last_game_is_remembered_between_launches() {
+        let base = std::env::temp_dir().join(format!("transly-app-lastgame-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let game = base.join("MyGame");
+        std::fs::create_dir_all(&game).unwrap();
+        let file = base.join("data").join("last-game.txt");
+        assert_eq!(read_last_game(&file), None, "файлу ще немає");
+        write_last_game(&file, &game);
+        assert_eq!(read_last_game(&file), Some(game.clone()));
+        std::fs::remove_dir_all(&game).unwrap();
+        assert_eq!(read_last_game(&file), None, "теки вже нема: не відкриваємо");
         let _ = std::fs::remove_dir_all(&base);
     }
 

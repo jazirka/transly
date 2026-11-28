@@ -13,6 +13,7 @@ mod layout;
 mod links_dialog;
 mod pictures;
 mod plugins;
+mod secret;
 mod state;
 mod theme;
 mod winchrome;
@@ -30,13 +31,17 @@ fn main() -> eframe::Result {
     eframe::run_native("Transly", opts, Box::new(|cc| {
         theme::apply(&cc.egui_ctx);
         let mut app = App::default();
-        // `transly-app <тека гри>`: відкрити гру одразу
-        if let Some(dir) = std::env::args_os().nth(1).map(std::path::PathBuf::from).filter(|d| d.is_dir()) {
+        // `transly-app <тека гри>`: відкрити гру одразу; без аргумента відкривається остання гра (так оновлення програми не змушує обирати теку знову)
+        let dir = std::env::args_os().nth(1).map(std::path::PathBuf::from).filter(|d| d.is_dir()).or_else(state::last_game);
+        if let Some(dir) = dir {
             app.message = match app.st.open_game(&dir) {
                 Ok(n) => format!("Відкрито: {n} файлів із текстом"),
                 Err(e) => e,
             };
         }
+        // токен GitHub — зі сховища облікових даних Windows
+        app.token = secret::load_token();
+        app.token_stored = app.token.clone();
         Ok(Box::new(app))
     }))
 }
@@ -167,6 +172,8 @@ struct App {
     hist_for: Option<(usize, usize)>,
     closed_open: bool,
     token: String,
+    /// Токен, що вже лежить у сховищі облікових даних (щоб писати лише зміни).
+    token_stored: String,
 }
 
 /// Відповіді потоків оновлення.
@@ -297,7 +304,7 @@ fn game_job(text: &str, size: f32, actor_name: &dyn Fn(usize) -> Option<String>)
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, app_set: None, find_count: None, nav_proj: stshell::StNav::new("look"), nav_app: stshell::StNav::new("general"), reset_arm: None, esc_at: None, imp_terms: String::new(), imp_tm: String::new(), fill_win: None, links_win: None, chrome_own: winchrome::own_chrome_chosen(), find_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_draft: None, mine_win: false, auto_added: Vec::new(), guard_off: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false, false], [false, true, false, false]], pic_sel: 0, pic_inline: false, left_both: false, grid_h: Vec::new(), grid_h_key: (usize::MAX, 0, false), grid_pre: Vec::new(), left_split: 0.4, win_q: Default::default(), win_search: [false; 3], win_focus: None, pic_view: None, pics_auto: Default::default(), comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, app_set: None, find_count: None, nav_proj: stshell::StNav::new("look"), nav_app: stshell::StNav::new("general"), reset_arm: None, esc_at: None, imp_terms: String::new(), imp_tm: String::new(), fill_win: None, links_win: None, chrome_own: winchrome::own_chrome_chosen(), find_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_draft: None, mine_win: false, auto_added: Vec::new(), guard_off: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false, false], [false, true, false, false]], pic_sel: 0, pic_inline: false, left_both: false, grid_h: Vec::new(), grid_h_key: (usize::MAX, 0, false), grid_pre: Vec::new(), left_split: 0.4, win_q: Default::default(), win_search: [false; 3], win_focus: None, pic_view: None, pics_auto: Default::default(), comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new(), token_stored: String::new() }
     }
 }
 
@@ -851,6 +858,11 @@ impl App {
         self.search_window(ctx);
         self.mine_window(ctx);
         self.toast_ui(ctx);
+        // токен записується у сховище, коли його перестали набирати
+        if self.token != self.token_stored && !ctx.wants_keyboard_input() {
+            secret::save_token(&self.token);
+            self.token_stored = self.token.clone();
+        }
         if let Some(msg) = self.st.finish_sync() {
             self.message = msg;
         }
@@ -2161,7 +2173,7 @@ impl App {
                     });
                 }
                 "github" => {
-                    stshell::warn_banner(ui, false, "Токен лишається тільки на цьому пристрої", "Дайте йому доступ лише до репозиторію з перекладом (право «Contents: Read and write»). Він не потрапляє у файл проєкту й не зберігається: його треба вводити в кожному сеансі.");
+                    stshell::warn_banner(ui, false, "Токен лишається тільки на цьому пристрої", "Дайте йому доступ лише до репозиторію з перекладом (право «Contents: Read and write»). Він не потрапляє у файл проєкту: лежить у сховищі облікових даних Windows і переживає оновлення програми.");
                     stshell::hint(ui, "Переклад зберігається у вашому репозиторії GitHub (краще приватному) звичайними файлами, а історія комітів показує, що й коли змінилося. Створіть репозиторій із файлом README, потім токен: GitHub → Settings → Developer settings → Fine-grained tokens.");
                     stshell::grid_row(ui, "Репозиторій (власник/назва)", |ui| {
                         let w = ui.available_width();

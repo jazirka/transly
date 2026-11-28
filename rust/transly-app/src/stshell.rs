@@ -299,21 +299,27 @@ pub(crate) fn acts(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
     });
 }
 
+/// Тло смуги `.st-warn`: заливка, рамка 1 і смуга зліва 3, що йде за заокругленням кута (як `border-left` на скругленій рамці). `tint` — колір смуги й рамки.
+pub(crate) fn banner_box(ui: &mut egui::Ui, tint: Color32, w: f32, h: f32) -> Rect {
+    // непрозорі кольори (прозорі різні бекенди змішують по-різному): заливка 13–14 % і кільце 60 % поверх фону сторінки
+    let (bg, ring) = (theme::over(BG, tint, 0.14), theme::over(BG, tint, 0.60));
+    let (r, _) = ui.allocate_exact_size(vec2(w, h), Sense::hover());
+    let rad = R3;
+    ui.painter().rect_filled(r, CornerRadius::same(rad), ring);
+    ui.painter().with_clip_rect(Rect::from_min_max(r.min, pos2(r.left() + rad as f32 + 2.0, r.bottom()))).rect_filled(r, CornerRadius::same(rad), tint);
+    let inner = Rect::from_min_max(pos2(r.left() + 3.0, r.top() + 1.0), pos2(r.right() - 1.0, r.bottom() - 1.0));
+    ui.painter().rect_filled(inner, CornerRadius { nw: rad.saturating_sub(3).max(2), sw: rad.saturating_sub(3).max(2), ne: rad - 1, se: rad - 1 }, bg);
+    r
+}
+
 /// Смуга-попередження `.st-warn`: значок 22 («!»), жирний перший рядок і текст; `bad` — червона, інакше жовта.
 pub(crate) fn warn_banner(ui: &mut egui::Ui, bad: bool, head: &str, text: &str) {
-    // непрозорі кольори (прозорі різні бекенди змішують по-різному): заливка 13–14 % і кільце 60 % поверх фону сторінки
-    let (bg, ring, dot) = if bad { (theme::over(BG, BAD, 0.13), theme::over(BG, BAD, 0.60), BAD) } else { (theme::over(BG, WARN, 0.14), theme::over(BG, WARN, 0.60), WARN) };
+    let dot = if bad { BAD } else { WARN };
     let w = ui.available_width();
     let hg = ui.painter().layout(head.to_string(), ipw(12.5, 700), Color32::WHITE, w - 28.0 - 22.0 - 12.0 - 3.0);
     let tg = ui.painter().layout(text.to_string(), ip(12.5), TEXT, w - 28.0 - 22.0 - 12.0 - 3.0);
     let h = 12.0 + hg.size().y + tg.size().y + 12.0;
-    let (r, _) = ui.allocate_exact_size(vec2(w, h.max(46.0)), Sense::hover());
-    // як `border-left: 3px` на скругленій рамці: смуга повторює кут, а не стирчить планкою всередині
-    let rad = R3;
-    ui.painter().rect_filled(r, CornerRadius::same(rad), ring);
-    ui.painter().with_clip_rect(Rect::from_min_max(r.min, pos2(r.left() + rad as f32 + 2.0, r.bottom()))).rect_filled(r, CornerRadius::same(rad), dot);
-    let inner = Rect::from_min_max(pos2(r.left() + 3.0, r.top() + 1.0), pos2(r.right() - 1.0, r.bottom() - 1.0));
-    ui.painter().rect_filled(inner, CornerRadius { nw: rad.saturating_sub(3).max(2), sw: rad.saturating_sub(3).max(2), ne: rad - 1, se: rad - 1 }, bg);
+    let r = banner_box(ui, dot, w, h.max(46.0));
     let c = pos2(r.left() + 14.0 + 11.0, r.top() + 12.0 + 11.0);
     ui.painter().circle_filled(c, 11.0, dot);
     ui.painter().text(c, Align2::CENTER_CENTER, "!", ipw(14.0, 800), Color32::from_rgb(0x1b, 0x1c, 0x1f));

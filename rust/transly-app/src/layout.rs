@@ -1290,26 +1290,30 @@ impl App {
                     egui::Frame::new().fill(PANEL2).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(CornerRadius::same(8)).inner_margin(egui::Margin::symmetric(10, 7)).show(ui, |ui| {
                         ui.set_width(ui.available_width() - 6.0); // у вебі `.thc{margin-right:6px}`
                         ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
-                        let left = ui.cursor().left();
-                        let block = ui.horizontal_top(|ui| {
-                            ui.add_space(24.0);
-                            ui.vertical(|ui| {
-                                ui.spacing_mut().item_spacing = vec2(8.0, 2.0);
-                                ui.horizontal(|ui| {
-                                    let g = ui.painter().layout_no_wrap(m.t.clone(), mp(13.0), TEXT);
-                                    let (tr, _) = ui.allocate_exact_size(vec2(g.size().x, 22.0), Sense::hover());
-                                    ui.painter().galley(pos2(tr.left(), tr.center().y - g.size().y / 2.0), g, TEXT);
-                                    ui.add_space(8.0 - ui.spacing().item_spacing.x);
-                                    let g = ui.painter().layout_no_wrap(format!("пам’ять {}%", m.score), mp(12.0), accent_text());
-                                    let (pr, _) = ui.allocate_exact_size(vec2(g.size().x + 16.0, 22.0), Sense::hover());
-                                    ui.painter().rect(pr, CornerRadius::same(5), Color32::from_rgb(0x34, 0x36, 0x3b), Stroke::new(1.0_f32, accent_ring()), StrokeKind::Inside);
-                                    ui.painter().galley(pos2(pr.left() + 8.0, pr.center().y - g.size().y / 2.0), g, accent_text());
-                                });
-                                ui.label(RichText::new(format!("«{}» · {}", m.s, m.src.trim_end_matches(".json"))).font(mp(10.5)).color(MUTE));
-                            });
-                        });
-                        let c = pos2(left + 4.5, block.response.rect.center().y);
-                        ui.painter().circle_filled(c, 4.5, Color32::from_rgb(0x7d, 0x82, 0x8b));
+                        // текст, позначка й підказка переносяться в ширину картки (`.thc-t{flex-wrap:wrap}`): довгий переклад не виходить за край
+                        let avail = ui.available_width();
+                        let wcol = (avail - 24.0).max(60.0);
+                        let short = |s: &str, n: usize| -> String {
+                            let flat = s.replace('\n', " ");
+                            if flat.chars().count() > n { format!("{}…", flat.chars().take(n).collect::<String>()) } else { flat }
+                        };
+                        let gt = ui.painter().layout(short(&m.t, 140), mp(13.0), TEXT, wcol);
+                        let gp = ui.painter().layout_no_wrap(format!("пам’ять {}%", m.score), mp(12.0), accent_text());
+                        let pill_w = gp.size().x + 16.0;
+                        let inline = gt.rows.len() == 1 && gt.size().x + 8.0 + pill_w <= wcol;
+                        let gh = ui.painter().layout(format!("«{}» · {}", short(&m.s, 70), m.src.trim_end_matches(".json")), mp(10.5), MUTE, wcol);
+                        let line_h = 22.0_f32;
+                        let text_h = if inline { line_h.max(gt.size().y) } else { gt.size().y + 2.0 + line_h };
+                        let (blk, _) = ui.allocate_exact_size(vec2(avail, text_h + 2.0 + gh.size().y), Sense::hover());
+                        let tx = blk.left() + 24.0;
+                        let t_top = if inline { blk.top() + (text_h - gt.size().y) / 2.0 } else { blk.top() };
+                        let t_w = gt.size().x;
+                        ui.painter().galley(pos2(tx, t_top), gt, TEXT);
+                        let pill = if inline { Rect::from_min_size(pos2(tx + t_w + 8.0, blk.top() + (text_h - line_h) / 2.0), vec2(pill_w, line_h)) } else { Rect::from_min_size(pos2(tx, blk.top() + text_h - line_h), vec2(pill_w, line_h)) };
+                        ui.painter().rect(pill, CornerRadius::same(5), Color32::from_rgb(0x34, 0x36, 0x3b), Stroke::new(1.0_f32, accent_ring()), StrokeKind::Inside);
+                        ui.painter().galley(pos2(pill.left() + 8.0, pill.center().y - gp.size().y / 2.0), gp, accent_text());
+                        ui.painter().galley(pos2(tx, blk.top() + text_h + 2.0), gh, MUTE);
+                        ui.painter().circle_filled(pos2(blk.left() + 4.5, blk.center().y), 4.5, Color32::from_rgb(0x7d, 0x82, 0x8b));
                         ui.add_space(12.0);
                         ui.horizontal(|ui| {
                             ui.add_space(24.0);
@@ -1326,7 +1330,8 @@ impl App {
                 self.strands_ui(ui, f, r);
                 if let Some((o, fl, up, ed)) = self.st.link_info(f, r) {
                     ui.label(RichText::new(format!("Ще {o} з таким самим оригіналом: порожніх {fl}, старіших {up}, змінених вручну {ed}")).size(11.0).color(MUTE));
-                    ui.horizontal(|ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing.y = 6.0;
                         if fl + up > 0 && plain_button(ui, "Заповнити копії").clicked() {
                             let n = self.st.apply_links(f, r, false);
                             self.message = format!("Скопійовано в рядки (чернетки): {n}");
@@ -2535,13 +2540,23 @@ impl App {
                 if let Some(g) = &ghost {
                     ui.add_space(8.0);
                     let mut take = false;
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = 8.0;
-                        ui.label(RichText::new(format!("Примара · {}", g.label(&self.st.file_names()[f]))).font(mp(11.5)).color(accent_text().gamma_multiply(0.9)));
-                        if plain_button(ui, "Прийняти (Tab у полі)").clicked() {
-                            take = true;
-                        }
-                    });
+                    // смуга кольору теми, як попередження: «Примара · пам’ять 88 %» і кнопка «Прийняти» з підказкою про Tab
+                    let w = ui.available_width();
+                    let r = crate::stshell::banner_box(ui, accent(), w, 44.0);
+                    let head = ui.painter().layout_no_wrap(format!("Примара · {}", g.label(&self.st.file_names()[f])), ipw(12.5, 600), TEXT);
+                    ui.painter().galley(pos2(r.left() + 16.0, r.center().y - head.size().y / 2.0), head, TEXT);
+                    let bt = ui.painter().layout_no_wrap("Прийняти".to_string(), ip(12.5), TEXT);
+                    let kb = ui.painter().layout_no_wrap("Tab".to_string(), mp(11.0), MUTE);
+                    let bw = bt.size().x + kb.size().x + 36.0;
+                    let br = Rect::from_min_size(pos2(r.right() - 10.0 - bw, r.center().y - 14.0), vec2(bw, 28.0));
+                    let resp = ui.interact(br, ui.id().with("ghost-take"), Sense::click());
+                    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Прийняти (Tab у полі)"));
+                    ui.painter().rect(br, CornerRadius::same(8), if resp.hovered() { BTN_HOVER } else { BTN }, Stroke::new(1.0_f32, LINE), StrokeKind::Inside);
+                    ui.painter().galley(pos2(br.left() + 12.0, br.center().y - bt.size().y / 2.0), bt.clone(), TEXT);
+                    ui.painter().galley(pos2(br.left() + 12.0 + bt.size().x + 8.0, br.center().y - kb.size().y / 2.0), kb, MUTE);
+                    if resp.on_hover_text("Вставити примару в поле (те саме робить Tab у полі)").clicked() {
+                        take = true;
+                    }
                     if take {
                         self.draft = g.text.clone();
                     }

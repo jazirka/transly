@@ -75,7 +75,7 @@ fn paint_tex(painter: &egui::Painter, rect: Rect, t: &egui::TextureHandle) {
     painter.image(t.id(), r, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
 }
 
-/// Мініатюра в таблиці: темна плитка з єдиною рамкою кольору типу.
+/// Мініатюра в таблиці (вона ж прапорець вибору рядка): темна квадратна плитка з єдиною рамкою кольору типу.
 pub(crate) fn paint_table_thumb(ui: &egui::Ui, rect: Rect, t: &egui::TextureHandle, color: Color32) {
     ui.painter().rect(rect, CornerRadius::same(5), Color32::from_rgb(0x17, 0x18, 0x1a), Stroke::new(1.5_f32, color), StrokeKind::Inside);
     paint_tex(&ui.painter().with_clip_rect(rect.shrink(2.0)), rect.shrink(3.0), t);

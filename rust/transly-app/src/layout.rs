@@ -1428,7 +1428,7 @@ impl App {
             let who = self.st.file_has_speakers(f);
             // таблиця зсунута до лівого краю полотна; 12 px звільнених полів (було по 6 з боків) — в останню колонку «К-сть зн.»: ширини клітинок з інтерактивною частиною не змінились
             let pics_col = self.st.file_has_pics(f);
-            let (num_w, st_w, key_w, who_w, len_w) = (34.0_f32, if pics_col { 22.0_f32 + 34.0 } else { 22.0_f32 }, 110.0_f32, if who { 120.0 } else { 0.0 }, 78.0_f32 + 12.0);
+            let (num_w, st_w, key_w, who_w, len_w) = (34.0_f32, 22.0_f32, 110.0_f32, if who { 120.0 } else { 0.0 }, 78.0_f32 + 12.0);
             let flex = w - num_w - st_w - key_w - who_w - len_w;
             let (src_w, tr_w) = (flex * 0.474, flex * 0.526);
             let xs = {
@@ -1572,12 +1572,26 @@ impl App {
                     let is_checked = self.checked.1.contains(&r);
                     // вся клітинка номера — і прапорець, і початок протягування (клацання без руху перемикає рядок)
                     let ck_resp = (resp.hovered() || sel || is_checked || !self.checked.1.is_empty()).then(|| ui.interact(col(0, num_w), ui.id().with(("rowck", r)), Sense::click()));
-                    match &ck_resp {
-                        Some(cr) => {
+                    // у файлах із картинками світлина рядка сама є прапорцем (як аватар у поштових клієнтах): квадратна мініатюра в кольоровій рамці, при наведенні чи виборі в її куті стоїть
+                    // квадратний прапорець, а клітинка ловить клацання й протягування так само, як клітинка з номером (рядок без картинки лишає номер)
+                    let ctx2 = ui.ctx().clone();
+                    let pic = if pics_col { self.pics_with_textures(&ctx2, f, r).into_iter().next() } else { None };
+                    match (&ck_resp, &pic) {
+                        (Some(cr), Some((p, t))) => {
+                            cr.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, is_checked, format!("Вибрати рядок {}", r + 1)));
+                            let tr = Rect::from_center_size(pos2(rect.left() + xs[0] + num_w / 2.0, rect.top() + 17.5), vec2(26.0, 26.0));
+                            pictures::paint_table_thumb(ui, tr, t, App::pic_kind_color(p));
+                            paint_check(ui, tr.left_top() + vec2(5.0, 5.0), is_checked, cr.hovered());
+                        }
+                        (None, Some((p, t))) => {
+                            let tr = Rect::from_center_size(pos2(rect.left() + xs[0] + num_w / 2.0, rect.top() + 17.5), vec2(26.0, 26.0));
+                            pictures::paint_table_thumb(ui, tr, t, App::pic_kind_color(p));
+                        }
+                        (Some(cr), None) => {
                             cr.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, is_checked, format!("Вибрати рядок {}", r + 1)));
                             paint_check(ui, ck_c, is_checked, cr.hovered());
                         }
-                        None => {
+                        (None, None) => {
                             ui.painter().text(ck_c, Align2::CENTER_CENTER, format!("{}", r + 1), mp(12.0), DIM);
                         }
                     }
@@ -1603,14 +1617,6 @@ impl App {
                         ui.painter().extend(egui::Shape::dotted_line(&ring, accent_text(), 3.0, 0.7));
                     } else {
                         paint_state(ui, pos2(rect.left() + xs[1] + 11.0, rect.top() + 17.0), st, bad_rows.contains(&r));
-                    }
-                    if pics_col {
-                        // мініатюра першої картинки рядка (24 px, одна рамка кольору типу); клік по рядку показує всі в розділі «Картинки»
-                        let ctx2 = ui.ctx().clone();
-                        if let Some((p, t)) = self.pics_with_textures(&ctx2, f, r).into_iter().next() {
-                            let tr = Rect::from_center_size(pos2(rect.left() + xs[1] + 22.0 + 17.0, rect.top() + 18.0), vec2(26.0, 24.0));
-                            pictures::paint_table_thumb(ui, tr, &t, App::pic_kind_color(&p));
-                        }
                     }
                     ui.painter().with_clip_rect(col(2, key_w)).text(pos2(rect.left() + xs[2] + 8.0, rect.top() + 20.0), Align2::LEFT_CENTER, short_key(&self.st.key_of(f, r)), mp(12.0), MUTE);
                     if who {

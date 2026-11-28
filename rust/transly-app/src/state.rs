@@ -3452,6 +3452,15 @@ impl AppState {
     }
 
     /// Сцени файлу: (назва, перший рядок, скільки рядків).
+    /// Чи є у файлі сцени (кнопка «Сцени файлу» й картка показуються лише тоді).
+    pub fn has_scenes(&self, f: usize) -> bool {
+        let Some(v) = self.views.get(f) else { return false };
+        if self.scene_cache.borrow().0 != f {
+            *self.scene_cache.borrow_mut() = (f, transly_core::scene::build_scene_index(&v.units));
+        }
+        self.scene_cache.borrow().1.as_ref().is_some_and(|i| !i.scenes.is_empty())
+    }
+
     pub fn scenes_list(&self, f: usize) -> Vec<(String, usize, usize)> {
         let Some(v) = self.views.get(f) else { return vec![] };
         if self.scene_cache.borrow().0 != f {

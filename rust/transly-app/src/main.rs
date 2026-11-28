@@ -131,6 +131,13 @@ struct App {
     /// Розділ «Картинки»: вибрана плитка, збільшення на місці (×2) і повноекранний перегляд.
     pic_sel: usize,
     pic_inline: bool,
+    /// Ліва колонка: «Файли» разом із «Рядками» чи «Сценами» (файли зверху), частка висоти верхньої картки.
+    left_both: bool,
+    left_split: f32,
+    /// Пошук у «Файлах» і «Сценах» (у «Рядках» — `st.search`), який із трьох пошуків відкрито й де треба поставити курсор.
+    win_q: [String; 2],
+    win_search: [bool; 3],
+    win_focus: Option<usize>,
     pic_view: Option<pictures::PicView>,
     /// Файли й режими (таблиця чи редагування), для яких розділ «Картинки» уже вмикався сам (раз за сеанс), щоб не вмикати його знову після того, як його сховали.
     pics_auto: std::collections::HashSet<(usize, usize)>,
@@ -286,7 +293,7 @@ fn game_job(text: &str, size: f32, actor_name: &dyn Fn(usize) -> Option<String>)
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, app_set: None, find_count: None, nav_proj: stshell::StNav::new("look"), nav_app: stshell::StNav::new("general"), reset_arm: None, esc_at: None, imp_terms: String::new(), imp_tm: String::new(), fill_win: None, links_win: None, chrome_own: winchrome::own_chrome_chosen(), find_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_draft: None, mine_win: false, auto_added: Vec::new(), guard_off: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false, false], [false, true, false, false]], pic_sel: 0, pic_inline: false, pic_view: None, pics_auto: Default::default(), comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, app_set: None, find_count: None, nav_proj: stshell::StNav::new("look"), nav_app: stshell::StNav::new("general"), reset_arm: None, esc_at: None, imp_terms: String::new(), imp_tm: String::new(), fill_win: None, links_win: None, chrome_own: winchrome::own_chrome_chosen(), find_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_draft: None, mine_win: false, auto_added: Vec::new(), guard_off: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false, false], [false, true, false, false]], pic_sel: 0, pic_inline: false, left_both: false, left_split: 0.4, win_q: Default::default(), win_search: [false; 3], win_focus: None, pic_view: None, pics_auto: Default::default(), comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
     }
 }
 
@@ -744,7 +751,7 @@ impl App {
                 let rect_of = |name: &str| ctx.data(|d| d.get_temp::<Rect>(egui::Id::new(name)));
                 let c = resp.rect.center();
                 if rect_of("pane-left").is_some_and(|r| r.contains(c)) {
-                    self.pane = pane_of_rail(self.rail);
+                    self.pane = self.left_pane_at(ctx, c);
                 } else if rect_of("pane-right").is_some_and(|r| r.contains(c)) {
                     self.pane = Pane::Right;
                 } else if rect_of("pane-centre").is_some_and(|r| r.contains(c)) {
@@ -762,7 +769,8 @@ impl App {
     fn frame(&mut self, ctx: &egui::Context) {
         theme::sync_weights(ctx);
         // ширини колонок цього кадру: закрита колонка не займає місця, і полотно розтягується
-        let right_open = self.right_secs[usize::from(self.focus && !self.scene_mode)].iter().any(|b| *b);
+        let edit_mode = self.focus && !self.scene_mode;
+        let right_open = self.right_secs[usize::from(edit_mode)].iter().take(if edit_mode { 3 } else { 4 }).any(|b| *b);
         self.panel_w = layout::panel_widths(ctx.screen_rect().width(), self.left_open, right_open);
         ctx.data_mut(|d| d.insert_temp(egui::Id::new("panel-w"), self.panel_w));
         self.focus_ring(ctx);
@@ -770,7 +778,7 @@ impl App {
         if let Some(p) = ctx.input(|i| if i.pointer.any_pressed() { i.pointer.interact_pos() } else { None }) {
             let rect_of = |name: &str| ctx.data(|d| d.get_temp::<Rect>(egui::Id::new(name)));
             if rect_of("pane-left").is_some_and(|r| r.contains(p)) {
-                self.pane = pane_of_rail(self.rail);
+                self.pane = self.left_pane_at(ctx, p);
             } else if rect_of("pane-right").is_some_and(|r| r.contains(p)) {
                 self.pane = Pane::Right;
             } else if rect_of("pane-centre").is_some_and(|r| r.contains(p)) {
@@ -851,12 +859,7 @@ impl App {
         }
         self.strip(ctx);
         if self.left_open {
-            if self.focus || self.scene_mode {
-                // «Редагування» й «Сцена»: рядки чи сцени ліворуч, редактор посередині
-                self.rows_panel(ctx);
-            } else {
-                self.left_panel(ctx);
-            }
+            self.left_panel(ctx);
         }
         self.right_panel(ctx);
         self.editor(ctx);
@@ -4459,10 +4462,127 @@ mod ui_tests {
         assert_eq!(h.state().pane, Pane::Right);
         click(&mut h, 650.0, 600.0);
         assert_eq!(h.state().pane, Pane::Centre);
-        // кнопка смужки «Файли гри» вмикає вікно файлів
+        // кнопка смужки «Файли гри» додає вікно файлів до рядків (як `split` у вебі), і працюємо в ньому
         h.get_by_label("Панель: Файли гри").click();
         h.run();
-        assert_eq!((h.state().rail, h.state().pane), (0, Pane::Files));
+        assert_eq!((h.state().left_both, h.state().pane), (true, Pane::Files));
+        // клік по нижній картці (рядки) вмикає її, по верхній — файли
+        click(&mut h, 150.0, 700.0);
+        assert_eq!(h.state().pane, Pane::Rows);
+        click(&mut h, 150.0, 200.0);
+        assert_eq!(h.state().pane, Pane::Files);
+    }
+
+    /// Файли можна тримати разом із рядками (чи зі сценами): дві картки з однаковими заголовками; кнопки смужки вмикають і вимикають вікна по одному.
+    #[test]
+    fn files_share_the_left_column_with_rows_or_scenes() {
+        let data = game("leftboth");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.st.row = Some(0);
+        let mut h = harness(app);
+        h.state_mut().focus = true;
+        h.state_mut().rail = 1;
+        h.run();
+        h.run();
+        assert!(!h.state().left_both, "спершу одне вікно");
+        h.get_by_label("Панель: Файли гри").click();
+        h.run();
+        h.run();
+        assert!(h.state().left_both && h.state().left_is_both());
+        // обидві картки мають заголовок із меню
+        assert_eq!(h.get_all_by_label("Меню вікна «Файли гри»: пошук").count(), 1);
+        assert_eq!(h.get_all_by_label("Меню вікна «Рядки»: пошук").count(), 1);
+        // повторний клік по «Рядки» лишає самі файли, по «Файли» — самі рядки
+        h.get_by_label("Панель: Рядки файлу").click();
+        h.run();
+        h.run();
+        assert_eq!((h.state().left_both, h.state().rail), (false, 0));
+        h.get_by_label("Панель: Рядки файлу").click();
+        h.run();
+        h.run();
+        assert!(h.state().left_both, "знову разом");
+        h.get_by_label("Панель: Файли гри").click();
+        h.run();
+        h.run();
+        assert_eq!((h.state().left_both, h.state().rail), (false, 1));
+        // таблиця не має рядків ліворуч: колонка там одна
+        h.state_mut().focus = false;
+        h.state_mut().left_both = true;
+        h.run();
+        h.run();
+        assert!(!h.state().left_both && h.state().rail == 0, "у таблиці розділ рядків не потрібен");
+    }
+
+    /// Кнопка «Сцени файлу» є лише для файлу, де сцени є; з файлу без сцен колонка повертається до рядків.
+    #[test]
+    fn the_scenes_button_is_only_for_files_with_scenes() {
+        let base = std::env::temp_dir().join(format!("transly-app-scbtn-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = base.join("MyGame").join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        let cmd = |code: i64, p: &str| format!(r#"{{"code":{code},"indent":0,"parameters":[{p}]}}"#);
+        let page = format!(r#"{{"conditions":{{}},"list":[{},{},{}],"trigger":0}}"#, cmd(101, r#""",0,0,2"#), cmd(401, r#""One line""#), cmd(0, ""));
+        std::fs::write(data.join("Map001.json"), format!(r#"{{"displayName":"T","events":[null,{{"id":1,"name":"EV1","x":1,"y":1,"pages":[{page}]}}]}}"#)).unwrap();
+        std::fs::write(data.join("Items.json"), r#"[null,{"id":1,"name":"Sword","description":"Sharp","note":""}]"#).unwrap();
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        let map = app.st.file_names().iter().position(|n| n == "Map001.json").unwrap();
+        let items = app.st.file_names().iter().position(|n| n == "Items.json").unwrap();
+        app.st.switch_file(map);
+        app.st.row = Some(0);
+        assert!(app.st.has_scenes(map), "у мапі є сцена: {:?}", app.st.scenes_list(map));
+        assert_eq!(app.st.file, Some(map));
+        let mut h = harness(app);
+        h.state_mut().focus = true;
+        h.state_mut().rail = 1;
+        h.run();
+        h.run();
+        assert_eq!(h.get_all_by_label("Панель: Сцени файлу").count(), 1, "у мапі сцени є");
+        h.state_mut().st.switch_file(items);
+        h.state_mut().st.row = Some(0);
+        h.run();
+        h.run();
+        assert_eq!(h.query_all_by_label("Панель: Сцени файлу").count(), 0, "у предметів сцен немає");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// Пошук є в кожного вікна лівої колонки: у файлах — за назвою, у рядках — за текстом (те саме поле, що фільтр таблиці), у сценах — за назвою.
+    #[test]
+    fn every_left_window_has_a_search() {
+        let data = game("leftsearch");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.st.row = Some(0);
+        let mut h = harness(app);
+        h.state_mut().focus = true;
+        h.state_mut().rail = 1;
+        h.run();
+        h.run();
+        h.get_by_label("Меню вікна «Рядки»: пошук").click();
+        h.run();
+        h.get_by_label("Знайти").click();
+        h.run();
+        h.run();
+        assert!(h.state().win_search[1], "поле пошуку рядків відкрито");
+        h.get_by_label("Пошук рядків").type_text("zzzz-no-such-text");
+        h.run();
+        h.run();
+        assert_eq!(h.state().st.search, "zzzz-no-such-text", "рядки шукають тим самим полем, що й таблиця");
+        assert_eq!(h.state().st.visible_len(0), 0);
+        h.state_mut().clear_win_search(1);
+        h.run();
+        assert!(h.state().st.visible_len(0) > 0 && !h.state().win_search[1]);
+        // файли
+        h.state_mut().rail = 0;
+        h.state_mut().win_search[0] = true;
+        h.run();
+        h.run();
+        h.get_by_label("Пошук у файлах гри").type_text("zzzz-no-file");
+        h.run();
+        h.run();
+        assert_eq!(h.state().win_q[0], "zzzz-no-file");
+        assert!(h.query_by_label("Тека data").is_none(), "жодного файлу за таким пошуком");
     }
 
     /// Закрита колонка не лишає порожнього місця: полотно розтягується. Права — коли всі її розділи вимкнено, ліва — клік по активній кнопці смужки.
@@ -5646,6 +5766,65 @@ mod ui_tests {
         shot(&mut h, "p3-inline");
         h.state_mut().pic_view = Some(pictures::PicView { idx: 1, zoom: 0.0, bg: 0 });
         shot(&mut h, "p4-fullscreen");
+    }
+
+    /// Знімки лівої колонки (файли разом із рядками й сценами, пошук) і «Картинок» у редагуванні: `TRANSLY_SHOTS=<тека> cargo test -p transly-app left_shots -- --ignored`.
+    #[test]
+    #[ignore]
+    fn left_shots() {
+        let Some(out) = std::env::var_os("TRANSLY_SHOTS").map(std::path::PathBuf::from) else { return };
+        std::fs::create_dir_all(&out).unwrap();
+        let base = std::env::temp_dir().join(format!("transly-ui-leftshot-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let root = base.join("MyGame");
+        let data = root.join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        std::fs::create_dir_all(root.join("img").join("system")).unwrap();
+        let long = "The old village elder, who had lived there for more than eighty winters, slowly took his heavy woollen cloak off and carefully placed it over the back of the wooden chair beside the fire";
+        let items: Vec<String> = (1..=14).map(|i| format!(r#"{{"id":{i},"name":"Item {i}","description":"{long} ({i})","iconIndex":{},"note":""}}"#, i * 2)).collect();
+        std::fs::write(data.join("Items.json"), format!("[null,{}]", items.join(","))).unwrap();
+        let mut icons = image::RgbaImage::from_pixel(512, 64, image::Rgba([0, 0, 0, 0]));
+        for n in 0..32u32 {
+            for y in 4..28 {
+                for x in 4..28 {
+                    icons.put_pixel((n % 16) * 32 + x, (n / 16) * 32 + y, image::Rgba([(60 + n * 6) as u8, 180 - n as u8 * 3, 90 + n as u8 * 4, 255]));
+                }
+            }
+        }
+        icons.save(root.join("img").join("system").join("IconSet.png")).unwrap();
+        let list: Vec<String> = (0..4).flat_map(|i| vec![format!(r#"{{"code":101,"indent":0,"parameters":["",0,0,2,"Elder {i}"]}}"#), format!(r#"{{"code":401,"indent":0,"parameters":["Hello {i}"]}}"#)]).collect();
+        let ev = |id: i64| format!(r#"{{"id":{id},"name":"EV{id}","x":1,"y":1,"pages":[{{"conditions":{{}},"list":[{},{{"code":0,"indent":0,"parameters":[]}}]}}]}}"#, list.join(","));
+        std::fs::write(data.join("Map001.json"), format!(r#"{{"displayName":"Village","events":[null,{},{}]}}"#, ev(1), ev(2))).unwrap();
+        let mut app = App::default();
+        app.st.open_game(&root).unwrap();
+        let items_f = app.st.file_names().iter().position(|n| n == "Items.json").unwrap();
+        let map_f = app.st.file_names().iter().position(|n| n == "Map001.json").unwrap();
+        app.st.switch_file(items_f);
+        app.st.row = Some(0);
+        let mut h = harness(app);
+        let shot = |h: &mut Harness<'static, App>, n: &str| {
+            h.run();
+            h.run();
+            h.render().unwrap().save(out.join(format!("{n}.png"))).unwrap();
+        };
+        h.state_mut().focus = true;
+        h.state_mut().rail = 1;
+        shot(&mut h, "l1-edit-pics");
+        h.state_mut().left_both = true;
+        shot(&mut h, "l2-files-rows");
+        h.state_mut().win_search[1] = true;
+        h.state_mut().st.search = "elder".into();
+        shot(&mut h, "l3-rows-search");
+        h.state_mut().st.search.clear();
+        h.state_mut().win_search[1] = false;
+        h.state_mut().st.switch_file(map_f);
+        h.state_mut().st.row = Some(0);
+        h.state_mut().rail = 2;
+        shot(&mut h, "l4-files-scenes");
+        h.state_mut().focus = false;
+        h.state_mut().st.switch_file(items_f);
+        h.state_mut().st.row = Some(0);
+        shot(&mut h, "l5-table-pics");
     }
 
     /// Огляд розміток на довгих текстах і вузькому вікні: `TRANSLY_SHOTS=<тека> cargo test -p transly-app layout_audit_shots -- --ignored`.

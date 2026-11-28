@@ -181,12 +181,7 @@ fn thread_chip(ui: &mut egui::Ui, dot: Color32, en: &str, uk: &str, pending: boo
     resp
 }
 
-/// Заголовок картки (`.ph`): великі літери 12 і, за потреби, підпис (назва файлу). Кнопок у ньому немає: ⋮ і «—» зі знімка нічого не робили.
-fn card_head(ui: &mut egui::Ui, title: &str, sub: Option<&str>) {
-    card_head_x(ui, title, sub, TEXT, 10.0, 7.3); // `.lt-f`: пробіл + margin-left 4
-}
-
-/// Те саме з кольором підпису й лівим відступом: у `.ph` (панелі) — 10 і підпис кольору тексту (`.lt-f`), у `.thr>.lbl` (картка «Внески») — 12 і приглушений лічильник.
+/// Заголовок картки: великі літери 12 і, за потреби, підпис; колір підпису й лівий відступ: у `.ph` (панелі) — 10 і підпис кольору тексту (`.lt-f`), у `.thr>.lbl` (картка «Внески») — 12 і приглушений лічильник.
 fn card_head_x(ui: &mut egui::Ui, title: &str, sub: Option<&str>, sub_col: Color32, pad: f32, gap: f32) {
     let (h, _) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::hover());
     ui.painter().rect_filled(h, card_top(), PANEL);
@@ -288,19 +283,14 @@ pub(crate) fn paint_check(ui: &egui::Ui, c: egui::Pos2, on: bool, hover: bool) {
     }
 }
 
-/// Ліва колонка 306 (картка 300 + проміжок 6): картку малюємо самі, бо рамка панелі egui додає до ширини поля й рамку й обрізає її праворуч.
-fn left_card(ctx: &egui::Context, id: &'static str, add: impl FnOnce(&mut egui::Ui)) {
-    egui::SidePanel::left(id).exact_width(ctx.data(|d| d.get_temp::<(f32, f32)>(egui::Id::new("panel-w"))).unwrap_or((306.0, 396.0)).0).resizable(false).show_separator_line(false).frame(egui::Frame::new()).show(ctx, |ui| {
-        let full = ui.max_rect();
-        let rect = Rect::from_min_max(pos2(full.left() + 6.0, full.top()), pos2(full.right(), full.bottom() - 6.0));
-        let mut cui = ui.new_child(egui::UiBuilder::new().max_rect(rect));
-        ctx.data_mut(|d| d.insert_temp(egui::Id::new("pane-left"), rect));
-        card_lr(0, 0).outer_margin(egui::Margin::ZERO).show(&mut cui, |ui| {
-            ui.set_min_height(rect.height() - 2.0);
-            ui.set_max_height(rect.height() - 2.0);
-            ui.spacing_mut().item_spacing.y = 0.0;
-            add(ui);
-        });
+/// Картка лівої колонки в заданому прямокутнику: рамку малюємо самі, бо рамка панелі egui додає до ширини поля й рамку й обрізає її праворуч.
+fn card_in(ui: &mut egui::Ui, rect: Rect, add: impl FnOnce(&mut egui::Ui)) {
+    let mut cui = ui.new_child(egui::UiBuilder::new().max_rect(rect));
+    card_lr(0, 0).outer_margin(egui::Margin::ZERO).show(&mut cui, |ui| {
+        ui.set_min_height(rect.height() - 2.0);
+        ui.set_max_height(rect.height() - 2.0);
+        ui.spacing_mut().item_spacing.y = 0.0;
+        add(ui);
     });
 }
 
@@ -318,13 +308,96 @@ impl App {
     }
 
     // ------------------------------------------------------------------ смужка значків
+    /// Ліва колонка показує одне вікно (файли, рядки, сцени чи «Пов’язане») або два: файли зверху, а під ними рядки чи сцени (як `split` у вебі).
+    pub(crate) fn left_is_both(&self) -> bool {
+        self.left_open && self.left_both && self.rail != 3 && (self.focus || self.scene_mode)
+    }
+
+    /// Друге вікно, коли їх два: сцени (у режимі «Сцена» чи коли вибрано їх) або рядки.
+    pub(crate) fn left_second(&self) -> usize {
+        if self.scene_mode || self.rail == 2 {
+            2
+        } else {
+            1
+        }
+    }
+
+    /// Що з вікон є в цьому режимі: таблиця — це вже рядки, тож лише файли й «Пов’язане»; «Редагування» має ще рядки, а сцени — лише для файлу, де вони є.
+    fn fit_left(&mut self) {
+        let table = !self.focus && !self.scene_mode;
+        if table {
+            self.left_both = false;
+            if self.rail == 1 || self.rail == 2 {
+                self.rail = 0;
+            }
+        } else if self.scene_mode {
+            if self.rail == 1 {
+                self.rail = 2;
+            }
+        } else if self.rail == 2 && !self.st.file.is_some_and(|f| self.st.has_scenes(f)) {
+            self.rail = 1;
+        }
+    }
+
+    /// Клік по кнопці смужки перемикає своє вікно (правила веба): файли ділять колонку з рядками чи сценами, «Пов’язане» займає її всю.
+    pub(crate) fn strip_click(&mut self, want: usize) {
+        let cur = self.rail;
+        let both = self.left_is_both();
+        let second = self.left_second();
+        let only = |s: &mut Self, x: usize| {
+            s.left_open = true;
+            s.left_both = false;
+            s.rail = x;
+        };
+        if want == 3 || cur == 3 {
+            if self.left_open && cur == want {
+                self.left_open = false;
+            } else {
+                only(self, want);
+            }
+            self.left_both = false;
+        } else if !self.left_open {
+            only(self, want);
+        } else if both {
+            if want == 0 {
+                only(self, second);
+            } else if want == second {
+                only(self, 0);
+            } else {
+                self.rail = want;
+            }
+        } else if cur == want {
+            self.left_open = false;
+        } else if cur == 0 {
+            self.left_both = true;
+            self.rail = if want == 2 { 2 } else { 0 };
+        } else if want == 0 {
+            self.left_both = true;
+        } else {
+            only(self, want);
+        }
+        self.pane = if self.left_open { pane_of_rail(self.rail) } else { Pane::Centre };
+        if self.left_open && self.left_is_both() && want == 0 {
+            self.pane = Pane::Files;
+        }
+    }
+
     pub(crate) fn strip(&mut self, ctx: &egui::Context) {
+        self.fit_left();
         let edit = self.focus && !self.scene_mode;
+        let has_sc = self.st.file.is_some_and(|f| self.st.has_scenes(f));
+        let both = self.left_is_both();
+        let second = self.left_second();
         egui::SidePanel::left("strip").exact_width(34.0).resizable(false).show_separator_line(false).frame(egui::Frame::new().fill(Color32::TRANSPARENT)).show(ctx, |ui| {
+            let sc = (2, "scene", "Сцени файлу");
             let groups: Vec<Vec<(usize, &str, &str)>> = if self.scene_mode {
-                vec![vec![(0, "files", "Файли гри")], vec![(2, "scene", "Сцени файлу")], vec![(3, "book", "Пов’язане: слова, конструкції, однакові рядки")]]
+                vec![vec![(0, "files", "Файли гри")], vec![sc], vec![(3, "book", "Пов’язане: слова, конструкції, однакові рядки")]]
             } else if edit {
-                vec![vec![(0, "files", "Файли гри")], vec![(1, "rows", "Рядки файлу"), (2, "scene", "Сцени файлу")], vec![(3, "book", "Пов’язане: слова, конструкції, однакові рядки")]]
+                let mut mid = vec![(1, "rows", "Рядки файлу")];
+                if has_sc {
+                    mid.push(sc);
+                }
+                vec![vec![(0, "files", "Файли гри")], mid, vec![(3, "book", "Пов’язане: слова, конструкції, однакові рядки")]]
             } else {
                 vec![vec![(0, "files", "Файли гри")], vec![(3, "book", "Пов’язане: слова, конструкції, однакові рядки")]]
             };
@@ -337,19 +410,12 @@ impl App {
                 }
                 for (idx, ic, tip) in g {
                     let r = Rect::from_min_size(pos2(x, y), vec2(28.0, 28.0));
-                    let on = self.left_open && (*idx == self.rail || (!edit && !self.scene_mode && *idx == 0 && self.rail != 3));
+                    let on = self.left_open && if both { *idx == 0 || *idx == second } else { *idx == self.rail };
                     let resp = rail_button(ui, r, ui.id().with(("strip", *idx)), ic, on, self.lit(pane_of_rail(*idx)), true);
                     resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, format!("Панель: {tip}")));
                     if resp.on_hover_text(*tip).clicked() {
-                        if on {
-                            // клік по активній кнопці ховає ліву колонку, і полотно розтягується (як у вебі)
-                            self.left_open = false;
-                            self.pane = Pane::Centre;
-                        } else {
-                            self.left_open = true;
-                            self.rail = *idx;
-                            self.pane = pane_of_rail(*idx);
-                        }
+                        // клік по активній кнопці ховає ліву колонку, і полотно розтягується (як у вебі)
+                        self.strip_click(*idx);
                     }
                     y += 34.0;
                 }
@@ -358,20 +424,196 @@ impl App {
     }
 
     // ------------------------------------------------------------------ ліва панель
-    /// Ліва картка в таблиці: файли (за замовчуванням) чи «Пов’язане»; у «Редагуванні» — рядки (див. `rows_panel`).
-    pub(crate) fn left_panel(&mut self, ctx: &egui::Context) {
-        left_card(ctx, "tree", |ui| {
-            let (title, sub) = match self.rail {
-                3 => ("Пов’язане", None),
-                _ => ("Файли гри", None),
-            };
-            card_head(ui, title, sub);
-            if self.rail == 3 {
-                self.glossary_panel(ui);
-                return;
+    /// Яке вікно колонки під вказівником: у режимі «разом» верхня картка — файли, нижня — рядки чи сцени.
+    pub(crate) fn left_pane_at(&self, ctx: &egui::Context, p: egui::Pos2) -> Pane {
+        if self.left_is_both() {
+            if ctx.data(|d| d.get_temp::<Rect>(egui::Id::new("pane-left-top"))).is_some_and(|r| r.contains(p)) {
+                return Pane::Files;
             }
-            self.tree_body(ui);
+            return pane_of_rail(self.left_second());
+        }
+        pane_of_rail(self.rail)
+    }
+
+    /// Ліва колонка: одна картка (файли, рядки, сцени, «Пов’язане») або дві («Файли й рядки», «Файли й сцени»), у кожної той самий заголовок
+    /// із пошуком, меню ⋮ і «—».
+    pub(crate) fn left_panel(&mut self, ctx: &egui::Context) {
+        let both = self.left_is_both();
+        let w = ctx.data(|d| d.get_temp::<(f32, f32)>(egui::Id::new("panel-w"))).unwrap_or((306.0, 396.0)).0;
+        egui::SidePanel::left("lcol").exact_width(w).resizable(false).show_separator_line(false).frame(egui::Frame::new()).show(ctx, |ui| {
+            let full = ui.max_rect();
+            let rect = Rect::from_min_max(pos2(full.left() + 6.0, full.top()), pos2(full.right(), full.bottom() - 6.0));
+            ctx.data_mut(|d| d.insert_temp(egui::Id::new("pane-left"), rect));
+            if both {
+                let gap = 6.0_f32;
+                let h = rect.height();
+                let top_h = (h * self.left_split).clamp(110.0, (h - gap - 110.0).max(110.0));
+                let top = Rect::from_min_size(rect.min, vec2(rect.width(), top_h));
+                let bot = Rect::from_min_max(pos2(rect.left(), top.bottom() + gap), rect.max);
+                ctx.data_mut(|d| d.insert_temp(egui::Id::new("pane-left-top"), top));
+                // роздільник між картками тягнеться вертикально (`#rz-y`)
+                let sp = Rect::from_min_max(pos2(rect.left(), top.bottom() - 2.0), pos2(rect.right(), bot.top() + 2.0));
+                let resp = ui.interact(sp, ui.id().with("lsplit"), Sense::drag());
+                if resp.hovered() || resp.dragged() {
+                    ctx.set_cursor_icon(egui::CursorIcon::ResizeVertical);
+                }
+                if resp.dragged() {
+                    self.left_split = ((top_h + resp.drag_delta().y) / h).clamp(0.1, 0.9);
+                }
+                card_in(ui, top, |ui| self.card_files(ui));
+                let second = self.left_second();
+                card_in(ui, bot, |ui| if second == 2 { self.card_scenes(ui) } else { self.card_rows(ui) });
+            } else {
+                ctx.data_mut(|d| d.remove::<Rect>(egui::Id::new("pane-left-top")));
+                let rail = self.rail;
+                card_in(ui, rect, |ui| match rail {
+                    3 => self.card_gloss(ui),
+                    2 => self.card_scenes(ui),
+                    1 => self.card_rows(ui),
+                    _ => self.card_files(ui),
+                });
+            }
         });
+    }
+
+    fn card_files(&mut self, ui: &mut egui::Ui) {
+        self.win_head(ui, 0, "Файли гри", None);
+        self.tree_body(ui);
+    }
+
+    fn file_stem(&self) -> String {
+        self.st.file.and_then(|f| self.st.file_names().get(f).cloned()).map(|n| n.trim_end_matches(".json").to_string()).unwrap_or_default()
+    }
+
+    fn card_rows(&mut self, ui: &mut egui::Ui) {
+        let name = self.file_stem();
+        self.win_head(ui, 1, "Рядки", Some(&name));
+        if let Some(f) = self.st.file {
+            self.rows_cards(ui, f);
+        }
+    }
+
+    fn card_scenes(&mut self, ui: &mut egui::Ui) {
+        let name = self.file_stem();
+        self.win_head(ui, 2, "Сцени", Some(&name));
+        if let Some(f) = self.st.file {
+            self.scenes_body(ui, f);
+        }
+    }
+
+    fn card_gloss(&mut self, ui: &mut egui::Ui) {
+        self.win_head(ui, 3, "Пов’язане", None);
+        self.glossary_panel(ui);
+    }
+
+    /// Заголовок картки лівої колонки (`.ph.card-ph`): назва (і файл), поле пошуку (коли відкрито чи щось набрано), меню ⋮ і «—» (сховати колонку).
+    fn win_head(&mut self, ui: &mut egui::Ui, win: usize, title: &str, sub: Option<&str>) {
+        let (h, _) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::hover());
+        ui.painter().rect_filled(h, card_top(), PANEL);
+        ui.painter().hline(h.x_range(), h.bottom(), Stroke::new(1.0_f32, LINE));
+        let g = spaced(ui, title, 12.0, MUTE, 0.06);
+        let tw = g.size().x;
+        ui.painter().galley(pos2(h.left() + 10.0, h.center().y - g.size().y / 2.0), g, MUTE);
+        // кнопки праворуч: «—» і ⋮ (пошук є в усіх, крім «Пов’язаного», де лише «—»)
+        let searchable = win < 3 && match win {
+            0 => self.st.is_open(),
+            _ => self.st.file.is_some(),
+        };
+        let hide = mini_icon(ui, pos2(h.right() - 20.0, h.center().y), "minus", &format!("lh-hide{win}")).on_hover_text("Сховати колонку");
+        let hide_clicked = hide.clicked();
+        let mut left_edge = h.right() - 32.0;
+        if searchable {
+            let c = pos2(h.right() - 20.0 - 26.0, h.center().y);
+            let r = Rect::from_center_size(c, vec2(24.0, 24.0));
+            let resp = ui.interact(r, ui.id().with(("lh-menu", win)), Sense::click());
+            if resp.hovered() {
+                ui.painter().rect_filled(r, CornerRadius::same(8), GHOST_HOVER);
+            }
+            icons::paint(ui, Rect::from_center_size(c, vec2(14.0, 14.0)), "dots", if resp.hovered() { TEXT } else { MUTE });
+            let resp = resp.on_hover_text("Пошук у цьому вікні");
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("Меню вікна «{title}»: пошук")));
+            let has_q = match win {
+                0 => !self.win_q[0].is_empty(),
+                1 => !self.st.search.is_empty(),
+                _ => !self.win_q[1].is_empty(),
+            };
+            let mut act = 0u8;
+            pop(ui, &resp, &format!("lh-pop{win}"), |ui| {
+                if mi(ui, "Знайти", true).clicked() {
+                    act = 1;
+                }
+                if mi(ui, "Скинути пошук", has_q || self.win_search[win]).clicked() {
+                    act = 2;
+                }
+                menu_sep(ui);
+                if mi(ui, "Сховати колонку", true).clicked() {
+                    act = 3;
+                }
+            });
+            match act {
+                1 => {
+                    self.win_search[win] = true;
+                    self.win_focus = Some(win);
+                }
+                2 => self.clear_win_search(win),
+                3 => {
+                    self.left_open = false;
+                    self.pane = Pane::Centre;
+                }
+                _ => {}
+            }
+            left_edge = c.x - 18.0;
+        }
+        let q_empty = match win {
+            0 => self.win_q[0].is_empty(),
+            1 => self.st.search.is_empty(),
+            2 => self.win_q[1].is_empty(),
+            _ => true,
+        };
+        let searching = searchable && (self.win_search[win] || !q_empty);
+        if searching {
+            // поле пошуку стоїть у заголовку після назви: лупа, текст, ✕
+            let x0 = h.left() + 10.0 + tw + 10.0;
+            let fin = Rect::from_min_max(pos2(x0, h.top() + 5.0), pos2((left_edge).max(x0 + 60.0), h.bottom() - 5.0));
+            ui.painter().rect_filled(fin, CornerRadius::same(R1), BG);
+            ui.painter().rect_stroke(fin, CornerRadius::same(R1), Stroke::new(1.0_f32, LINE), StrokeKind::Inside);
+            icons::paint(ui, Rect::from_center_size(pos2(fin.left() + 12.0, fin.center().y), vec2(12.0, 12.0)), "search", MUTE);
+            let hint = ["Пошук у файлах гри", "Пошук рядків", "Пошук сцен"][win];
+            let mut inner = ui.new_child(egui::UiBuilder::new().max_rect(Rect::from_min_max(pos2(fin.left() + 22.0, fin.top() + 2.0), pos2(fin.right() - 22.0, fin.bottom() - 2.0))));
+            let q: &mut String = match win {
+                0 => &mut self.win_q[0],
+                1 => &mut self.st.search,
+                _ => &mut self.win_q[1],
+            };
+            let resp = inner.add(egui::TextEdit::singleline(q).hint_text(hint).frame(false).desired_width(fin.width() - 44.0).font(ip(12.5)));
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::TextEdit, true, hint));
+            let esc = resp.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Escape));
+            if self.win_focus == Some(win) {
+                resp.request_focus();
+                self.win_focus = None;
+            }
+            let clear = !q.is_empty() && mini_icon(ui, pos2(fin.right() - 12.0, fin.center().y), "close", &format!("lh-x{win}")).on_hover_text("Очистити пошук").clicked();
+            if esc || clear {
+                self.clear_win_search(win);
+            }
+        } else if let Some(s) = sub {
+            let clip = Rect::from_min_max(pos2(h.left() + 10.0 + tw + 7.3, h.top()), pos2(left_edge, h.bottom()));
+            let fitted = fit_font(ui, s, clip.width(), ipw(12.0, 500));
+            ui.painter().with_clip_rect(clip).text(pos2(clip.left(), h.center().y), Align2::LEFT_CENTER, fitted, ipw(12.0, 500), TEXT);
+        }
+        if hide_clicked {
+            self.left_open = false;
+            self.pane = Pane::Centre;
+        }
+    }
+
+    pub(crate) fn clear_win_search(&mut self, win: usize) {
+        match win {
+            0 => self.win_q[0].clear(),
+            1 => self.st.search.clear(),
+            _ => self.win_q[1].clear(),
+        }
+        self.win_search[win] = false;
     }
 
     fn tree_body(&mut self, ui: &mut egui::Ui) {
@@ -389,17 +631,24 @@ impl App {
         };
         let folders = [("data", 0usize), ("maps", 1), ("Тексти", 2)];
         let has_data = (0..names.len()).any(|i| kind(&names[i]) == 0);
+        // пошук у файлах: за назвою файлу й назвою мапи; під час пошуку теки розгорнуті
+        let fq = self.win_q[0].trim().to_lowercase();
+        let hit: Vec<bool> = (0..names.len()).map(|i| fq.is_empty() || names[i].to_lowercase().contains(&fq) || self.st.map_title(i).is_some_and(|t| t.to_lowercase().contains(&fq))).collect();
+        if !fq.is_empty() && !hit.iter().any(|h| *h) {
+            empty_note(ui, "Нічого не знайдено");
+            return;
+        }
         egui::ScrollArea::vertical().id_salt("treescroll").auto_shrink([false; 2]).show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
             ui.add_space(12.0);
             for (title, k) in folders {
                 // як у старому: мапи лежать усередині data
                 let inset = if k == 1 && has_data { 20.0 } else { 6.0 };
-                let members: Vec<usize> = (0..names.len()).filter(|i| kind(&names[*i]) == k).collect();
+                let members: Vec<usize> = (0..names.len()).filter(|i| kind(&names[*i]) == k && hit[*i]).collect();
                 if members.is_empty() {
                     continue;
                 }
-                let open = !self.tree_closed.contains(&k);
+                let open = !self.tree_closed.contains(&k) || !fq.is_empty();
                 let w = ui.available_width() - 2.0 * inset;
                 let (hr, hresp) = ui.allocate_exact_size(vec2(w + 2.0 * inset, 24.0), Sense::click());
                 let hr = hr.shrink2(vec2(inset, 0.0));
@@ -486,13 +735,17 @@ impl App {
     pub(crate) fn right_panel(&mut self, ctx: &egui::Context) {
         let edit = self.focus && !self.scene_mode;
         let mi = usize::from(edit);
-        self.auto_pictures(ctx, mi);
+        // «Картинки» — лише в режимі таблиці; у «Редагуванні» картинки стоять мініатюрами під оригіналом
+        let nsec = if edit { 3 } else { 4 };
+        if !edit {
+            self.auto_pictures(ctx, mi);
+        }
         egui::SidePanel::right("rightcol").exact_width(ctx.data(|d| d.get_temp::<(f32, f32)>(egui::Id::new("panel-w"))).unwrap_or((306.0, 396.0)).1).resizable(false).show_separator_line(false).frame(egui::Frame::new()).show(ctx, |ui| {
             let full = ui.max_rect();
             // смужка значків
             let rx = full.right() - 34.0;
             let tips = [("history", "Активність у рядку: хто, коли й що змінював"), ("link", "Пов’язане: терміни, пам’ять, однакові рядки"), ("cmt", "Обговорення рядка"), ("image", "Картинки рядка: іконка, обличчя, ворог, картинка")];
-            for (i, (ic, tip)) in tips.iter().enumerate() {
+            for (i, (ic, tip)) in tips.iter().enumerate().take(nsec) {
                 let r = Rect::from_min_size(pos2(rx, full.top() + RAIL_TOP + i as f32 * 34.0), vec2(28.0, 28.0));
                 let on = self.right_secs[mi][i];
                 let resp = rail_button(ui, r, ui.id().with(("rrail", i)), ic, on, self.lit(Pane::Right), true);
@@ -501,7 +754,7 @@ impl App {
                     self.right_secs[mi][i] = !self.right_secs[mi][i];
                 }
             }
-            let on: Vec<usize> = (0..4).filter(|i| self.right_secs[mi][*i]).collect();
+            let on: Vec<usize> = (0..nsec).filter(|i| self.right_secs[mi][*i]).collect();
             if on.is_empty() {
                 return;
             }
@@ -1725,49 +1978,22 @@ impl App {
             }
         });
     }
-
-    // ------------------------------------------------------------------ «Редагування»
-    /// Ліва картка «Рядки»: заголовок із назвою файлу, рядки-картки, внизу сторінки по 50.
-    pub(crate) fn rows_panel(&mut self, ctx: &egui::Context) {
-        left_card(ctx, "rows", |ui| {
-            let name = self.st.file.and_then(|f| self.st.file_names().get(f).cloned()).map(|n| n.trim_end_matches(".json").to_string()).unwrap_or_default();
-            match self.rail {
-                2 => {
-                    card_head(ui, "Сцени", Some(&name));
-                }
-                3 => {
-                    card_head(ui, "Пов’язане", None);
-                    self.glossary_panel(ui);
-                    return;
-                }
-                0 => {
-                    card_head(ui, "Файли гри", None);
-                    self.tree_body(ui);
-                    return;
-                }
-                _ => {
-                    card_head(ui, "Рядки", Some(&name));
-                }
-            }
-            let Some(f) = self.st.file else { return };
-            if self.rail == 2 {
-                self.scenes_body(ui, f);
-            } else {
-                self.rows_cards(ui, f);
-            }
-        });
-    }
-
     fn scenes_body(&mut self, ui: &mut egui::Ui, f: usize) {
-        let list = self.st.scenes_list(f);
-        if list.is_empty() {
+        let all = self.st.scenes_list(f);
+        if all.is_empty() {
             empty_note(ui, "У цьому файлі немає сцен");
+            return;
+        }
+        let sq = self.win_q[1].trim().to_lowercase();
+        let list: Vec<(String, usize, usize)> = all.iter().filter(|x| sq.is_empty() || x.0.to_lowercase().contains(&sq)).cloned().collect();
+        if list.is_empty() {
+            empty_note(ui, "Нічого не знайдено");
             return;
         }
         let cur = self.st.row.and_then(|r| self.st.scene_view(f, r)).map(|v| v.title);
         // підсумок над списком (`.fh`: поля 8, висота 33,8 з лінією): «2 сцени · ще 1 рядок поза сценами»
         let plural_of = |n: usize, forms: [&str; 3]| transly_core::plural::plural(n as i64, forms);
-        let in_scenes: usize = list.iter().map(|x| x.2).sum();
+        let in_scenes: usize = all.iter().map(|x| x.2).sum();
         let loose = self.st.row_count(f).saturating_sub(in_scenes);
         let mut sum = plural_of(list.len(), ["сцена", "сцени", "сцен"]);
         if loose > 0 {
@@ -1942,6 +2168,54 @@ impl App {
         Some(ctx.load_texture(key, color, egui::TextureOptions::NEAREST))
     }
 
+    /// Картинки рядка в «Редагуванні» (старий вигляд): мініатюри рядком під оригіналом, назва — у підказці.
+    fn pics_ui(&mut self, ui: &mut egui::Ui, f: usize, r: usize) {
+        let pics = self.st.pics_of(f, r);
+        if pics.is_empty() {
+            return;
+        }
+        let ctx = ui.ctx().clone();
+        let mut shown: Vec<(egui::TextureHandle, String, egui::Vec2)> = Vec::new();
+        for p in &pics {
+            let Some(t) = self.pic_texture(&ctx, p) else { continue };
+            let sz = t.size_vec2();
+            let size = match p {
+                Pic::Icon { .. } => sz,
+                Pic::Face { .. } => vec2(72.0, 72.0),
+                _ => {
+                    let k = (96.0 / sz.y).min(1.0);
+                    sz * k
+                }
+            };
+            let label = match p {
+                Pic::Icon { label, .. } | Pic::Face { label, .. } | Pic::Enemy { label, .. } | Pic::Picture { label, .. } => label.clone(),
+            };
+            shown.push((t, label, size));
+        }
+        if shown.is_empty() {
+            return;
+        }
+        ui.add_space(8.0);
+        let mut open: Option<usize> = None;
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = vec2(10.0, 6.0);
+            for (i, (t, label, size)) in shown.into_iter().enumerate() {
+                let mut resp = ui.add(egui::Image::new(&t).fit_to_exact_size(size).sense(Sense::click()));
+                if !label.is_empty() {
+                    resp = resp.on_hover_text(label);
+                }
+                if resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+                    open = Some(i);
+                }
+            }
+        });
+        if let Some(i) = open {
+            // клік по мініатюрі відкриває її на весь екран (той самий перегляд, що й у таблиці)
+            self.pic_sel = i;
+            self.pic_view = Some(crate::pictures::PicView { idx: i, zoom: 0.0, bg: 0 });
+        }
+    }
+
     /// «Внески» під полем: по картці на кожен надісланий переклад рядка (найновіші першими): автор, текст, голоси «+» і «−»,
     /// галочка (переклад іде в рядок і рядок вичитано) і кошик (зняти внесок з картки).
     fn contributions_ui(&mut self, ui: &mut egui::Ui, f: usize, r: usize) {
@@ -2087,6 +2361,7 @@ impl App {
                     let lr = ui.label(job);
                     src_at = Some((lr.rect.min, galley));
                 });
+                self.pics_ui(ui, f, r);
                 for (lang, text) in self.st.references_of(f, r) {
                     ui.add_space(10.0);
                     let g = spaced(ui, &format!("Довідка · {lang}"), 12.0, MUTE, 0.04);

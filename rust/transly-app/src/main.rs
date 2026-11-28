@@ -46,6 +46,39 @@ fn main() -> eframe::Result {
     }))
 }
 
+/// Одне сповіщення: текст, скільки живе (с) і скільки вже, чи є в нього «Скасувати».
+#[derive(Clone, Debug)]
+struct ToastItem {
+    text: String,
+    age: f32,
+    life: f32,
+    undoable: bool,
+}
+
+/// Вид сповіщення за текстом: 2 — помилка, 1 — успіх, 0 — звичайне.
+fn toast_kind(text: &str) -> u8 {
+    let t = text.to_lowercase();
+    if t.contains("помилк") || t.contains("не вдалося") || t.starts_with("не ") || t.contains("не можна") || t.contains("відхилен") || t.contains("недоступн") {
+        2
+    } else if ["надіслано", "збережено", "автозбережено", "вичитано", "готово", "скопійовано", "прийнято", "записано", "додано", "скасовано", "оновлено", "синхронізовано"].iter().any(|p| t.starts_with(p)) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Перше речення жирним заголовком, решта — текстом: «Не вдалося надіслати: у рядку помилка» → («Не вдалося надіслати», «у рядку помилка»).
+fn toast_split(text: &str) -> (&str, &str) {
+    for sep in [". ", ": "] {
+        if let Some(p) = text.find(sep) {
+            if p > 0 && text[..p].chars().count() <= 60 {
+                return (&text[..p + usize::from(sep == ". ")], text[p + 2..].trim());
+            }
+        }
+    }
+    (text, "")
+}
+
 /// Що відрізняє підрахунок у «Знайти й замінити»: версія змін, запит, заміна, регістр, ціле слово.
 type FindKey = (u64, String, String, bool, bool);
 
@@ -120,7 +153,9 @@ struct App {
     /// Рядки, де перекладач вибрав «Лишити так» для підказки узгодженості (до закриття застосунку): (файл, рядок, слово).
     guard_off: std::collections::HashSet<(usize, usize, String)>,
     /// Сповіщення внизу: (текст, коли з'явилось, чи можна скасувати); останнє показане повідомлення й лічильник скасувань.
-    toast: Option<(String, std::time::Instant, bool)>,
+    /// Сповіщення стопкою внизу зліва (найновіше внизу) і чи вказівник над якимось із них (тоді час не йде).
+    toasts: Vec<ToastItem>,
+    toast_hover: bool,
     toast_seen: (String, u64),
     /// «Пошук скрізь»: (запит, вибраний результат); None — закрито.
     search_win: Option<(String, usize)>,
@@ -304,7 +339,7 @@ fn game_job(text: &str, size: f32, actor_name: &dyn Fn(usize) -> Option<String>)
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, app_set: None, find_count: None, nav_proj: stshell::StNav::new("look"), nav_app: stshell::StNav::new("general"), reset_arm: None, esc_at: None, imp_terms: String::new(), imp_tm: String::new(), fill_win: None, links_win: None, chrome_own: winchrome::own_chrome_chosen(), find_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_draft: None, mine_win: false, auto_added: Vec::new(), guard_off: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false, false], [false, true, false, false]], pic_sel: 0, pic_inline: false, left_both: false, grid_h: Vec::new(), grid_h_key: (usize::MAX, 0, false), grid_pre: Vec::new(), left_split: 0.4, win_q: Default::default(), win_search: [false; 3], win_focus: None, pic_view: None, pics_auto: Default::default(), comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new(), token_stored: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, app_set: None, find_count: None, nav_proj: stshell::StNav::new("look"), nav_app: stshell::StNav::new("general"), reset_arm: None, esc_at: None, imp_terms: String::new(), imp_tm: String::new(), fill_win: None, links_win: None, chrome_own: winchrome::own_chrome_chosen(), find_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_draft: None, mine_win: false, auto_added: Vec::new(), guard_off: Default::default(), toasts: Vec::new(), toast_hover: false, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false, false], [false, true, false, false]], pic_sel: 0, pic_inline: false, left_both: false, grid_h: Vec::new(), grid_h_key: (usize::MAX, 0, false), grid_pre: Vec::new(), left_split: 0.4, win_q: Default::default(), win_search: [false; 3], win_focus: None, pic_view: None, pics_auto: Default::default(), comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new(), token_stored: String::new() }
     }
 }
 
@@ -1253,43 +1288,119 @@ impl App {
         }
     }
 
-    /// Сповіщення внизу посередині на 6 с: нове повідомлення; після масової дії з кнопкою «Скасувати».
+    /// Сповіщення стопкою внизу зліва (смуга типу, значок, перше речення жирним, дії під текстом, лінія часу): нове повідомлення; після масової дії з «Скасувати».
+    /// Живе 6 с (помилка 10 с); поки вказівник над ним, час не йде.
     fn toast_ui(&mut self, ctx: &egui::Context) {
         let undo_now = self.st.undo_count;
         if (self.message.as_str(), undo_now) != (self.toast_seen.0.as_str(), self.toast_seen.1) {
             let undoable = undo_now != self.toast_seen.1;
             if !self.message.is_empty() {
-                self.toast = Some((self.message.clone(), std::time::Instant::now(), undoable));
+                let kind = toast_kind(&self.message);
+                // «Скасувати» лише в найновішого
+                for t in &mut self.toasts {
+                    t.undoable = false;
+                }
+                if let Some(same) = self.toasts.iter_mut().find(|t| t.text == self.message) {
+                    same.age = 0.0;
+                    same.undoable = undoable;
+                } else {
+                    self.toasts.push(ToastItem { text: self.message.clone(), age: 0.0, life: if kind == 2 { 10.0 } else { 6.0 }, undoable });
+                    if self.toasts.len() > 3 {
+                        self.toasts.remove(0);
+                    }
+                }
             }
             self.toast_seen = (self.message.clone(), undo_now);
         }
-        let Some((text, since, undoable)) = self.toast.clone() else { return };
-        if since.elapsed().as_secs() >= 6 {
-            self.toast = None;
+        if !self.toast_hover {
+            let dt = ctx.input(|i| i.stable_dt).min(0.25);
+            for t in &mut self.toasts {
+                t.age += dt;
+            }
+        }
+        self.toasts.retain(|t| t.age < t.life);
+        if self.toasts.is_empty() {
+            self.toast_hover = false;
             return;
         }
-        ctx.request_repaint_after(std::time::Duration::from_millis(500));
+        // лінія часу рухається плавно; у тестах — рідко, щоб кадри доходили до спокою
+        ctx.request_repaint_after(std::time::Duration::from_millis(if cfg!(test) { 500 } else { 50 }));
         let mut undo = false;
-        let mut close = false;
-        egui::Area::new(egui::Id::new("toast")).anchor(Align2::CENTER_BOTTOM, vec2(0.0, -48.0)).order(egui::Order::Foreground).show(ctx, |ui| {
-            egui::Frame::new().fill(PANEL).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(CornerRadius::same(10)).inner_margin(egui::Margin::symmetric(14, 9)).show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new(&text).color(TEXT));
-                    if undoable && plain_button(ui, "Скасувати").clicked() {
+        let mut close: Option<usize> = None;
+        let mut hover = false;
+        let items = self.toasts.clone();
+        egui::Area::new(egui::Id::new("toast")).anchor(Align2::LEFT_BOTTOM, vec2(12.0, -36.0)).order(egui::Order::Foreground).show(ctx, |ui| {
+            ui.spacing_mut().item_spacing.y = 8.0;
+            for (i, t) in items.iter().enumerate() {
+                let kind = toast_kind(&t.text);
+                let (head, rest) = toast_split(&t.text);
+                let tint = match kind {
+                    2 => BAD,
+                    1 => OK,
+                    _ => accent(),
+                };
+                let w = 360.0_f32;
+                let tw = w - 14.0 - 22.0 - 12.0 - 34.0;
+                let hg = ui.painter().layout(head.to_string(), ipw(12.5, 700), Color32::WHITE, tw);
+                let bg = (!rest.is_empty()).then(|| ui.painter().layout(rest.to_string(), ip(12.5), TEXT, tw));
+                let act_h = if t.undoable { 26.0 } else { 0.0 };
+                let h = (11.0 + hg.size().y + bg.as_ref().map_or(0.0, |g| 3.0 + g.size().y) + act_h + 13.0).max(46.0);
+                let r = crate::stshell::banner_box(ui, tint, w, h);
+                if ui.rect_contains_pointer(r) {
+                    hover = true;
+                }
+                let c = pos2(r.left() + 14.0 + 11.0, r.top() + 11.0 + 11.0);
+                ui.painter().circle_filled(c, 11.0, tint);
+                ui.painter().text(c, Align2::CENTER_CENTER, ["i", "✓", "!"][kind as usize], ipw(13.0, 800), Color32::from_rgb(0x16, 0x17, 0x18));
+                let x = r.left() + 14.0 + 22.0 + 12.0;
+                let mut y = r.top() + 11.0;
+                ui.painter().galley(pos2(x, y), hg.clone(), Color32::WHITE);
+                y += hg.size().y;
+                if let Some(g) = bg {
+                    y += 3.0;
+                    ui.painter().galley(pos2(x, y), g.clone(), TEXT);
+                    y += g.size().y;
+                }
+                if t.undoable {
+                    let g = ui.painter().layout_no_wrap("Скасувати".to_string(), ipw(12.5, 600), accent_text());
+                    let br = Rect::from_min_size(pos2(x, y + 4.0), vec2(g.size().x + 8.0, 22.0));
+                    let resp = ui.interact(br, ui.id().with(("toast-undo", i)), Sense::click());
+                    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Скасувати"));
+                    ui.painter().galley(pos2(br.left() + 4.0, br.center().y - g.size().y / 2.0), g.clone(), accent_text());
+                    if resp.hovered() {
+                        ui.painter().hline((br.left() + 4.0)..=(br.left() + 4.0 + g.size().x), br.center().y + g.size().y / 2.0, Stroke::new(1.0_f32, accent_text()));
+                    }
+                    if resp.clicked() {
                         undo = true;
                     }
-                    if plain_button(ui, "x").clicked() {
-                        close = true;
-                    }
-                });
-            });
+                }
+                let xr = Rect::from_center_size(pos2(r.right() - 8.0 - 11.0, r.top() + 11.0 + 11.0), vec2(22.0, 22.0));
+                let xresp = ui.interact(xr, ui.id().with(("toast-x", i)), Sense::click());
+                xresp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Закрити сповіщення"));
+                if xresp.hovered() {
+                    ui.painter().rect_filled(xr, CornerRadius::same(6), GHOST_HOVER);
+                }
+                icons::paint(ui, Rect::from_center_size(xr.center(), vec2(11.0, 11.0)), "close", if xresp.hovered() { TEXT } else { MUTE });
+                if xresp.clicked() {
+                    close = Some(i);
+                }
+                // лінія часу: скільки лишилось до зникнення
+                let track = Rect::from_min_max(pos2(r.left() + 3.0, r.bottom() - 3.0), pos2(r.right() - 6.0, r.bottom() - 1.0));
+                let left = (1.0 - t.age / t.life).clamp(0.0, 1.0);
+                ui.painter().rect_filled(track, CornerRadius::same(1), theme::over(theme::over(BG, tint, 0.14), Color32::WHITE, 0.08));
+                ui.painter().rect_filled(Rect::from_min_size(track.min, vec2(track.width() * left, track.height())), CornerRadius::same(1), theme::over(theme::over(BG, tint, 0.14), Color32::WHITE, 0.40));
+            }
         });
+        self.toast_hover = hover;
         if undo {
             self.message = self.st.undo_last();
             self.toast_seen = (self.message.clone(), self.st.undo_count);
-            self.toast = Some((self.message.clone(), std::time::Instant::now(), false));
-        } else if close {
-            self.toast = None;
+            for t in &mut self.toasts {
+                t.undoable = false;
+            }
+            self.toasts.push(ToastItem { text: self.message.clone(), age: 0.0, life: 6.0, undoable: false });
+        } else if let Some(i) = close {
+            self.toasts.remove(i);
         }
     }
 
@@ -5886,6 +5997,30 @@ mod ui_tests {
         let long_uk = "Шовкова камізелька, шита на міру. Вона ідеально вам пасує. Попри звичайний вигляд, добре захищає від вітру, дощу й холоду, а також від випадкових ударів дрібних ворогів. Шовкова камізелька, шита на міру. Вона ідеально вам пасує. Попри звичайний вигляд, добре захищає від вітру, дощу й холоду.";
         let _ = h.state_mut().st.submit(items_f, 1, long_uk);
         shot(&mut h, "l6-edit-qa");
+    }
+
+    /// Знімок сповіщень: `TRANSLY_SHOTS=<тека> cargo test -p transly-app toast_shot -- --ignored`.
+    #[test]
+    #[ignore]
+    fn toast_shot() {
+        let Some(out) = std::env::var_os("TRANSLY_SHOTS").map(std::path::PathBuf::from) else { return };
+        std::fs::create_dir_all(&out).unwrap();
+        let data = game("toastshot");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.st.row = Some(0);
+        let mut h = harness(app);
+        h.run();
+        for (text, undo) in [("Не вдалося надіслати: у рядку є помилка QA, бракує керівного коду \\C[2].", false), ("Автозаповнено 3 рядки як чернетки з позначкою «авто»", true), ("Надіслано", false)] {
+            h.state_mut().message = text.into();
+            if undo {
+                h.state_mut().st.undo_count += 1;
+            }
+            h.run();
+        }
+        h.run();
+        h.run();
+        h.render().unwrap().save(out.join("t1-toasts.png")).unwrap();
     }
 
     /// Огляд розміток на довгих текстах і вузькому вікні: `TRANSLY_SHOTS=<тека> cargo test -p transly-app layout_audit_shots -- --ignored`.

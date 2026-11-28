@@ -227,6 +227,24 @@ pub(crate) fn qa_banners(ui: &mut egui::Ui, issues: &[transly_core::qa::Issue]) 
     }
 }
 
+/// Пунктирна рамка зі скругленими кутами (для примар): контур розбито на точки й пущено штрихами.
+pub(crate) fn dashed_round_rect(painter: &egui::Painter, rect: Rect, radius: f32, stroke: Stroke) {
+    let r = radius.min(rect.width() / 2.0).min(rect.height() / 2.0);
+    let mut pts: Vec<egui::Pos2> = Vec::new();
+    let arc = |pts: &mut Vec<egui::Pos2>, c: egui::Pos2, a0: f32| {
+        for i in 0..=6 {
+            let a = a0 + i as f32 / 6.0 * std::f32::consts::FRAC_PI_2;
+            pts.push(c + vec2(r * a.cos(), r * a.sin()));
+        }
+    };
+    arc(&mut pts, pos2(rect.left() + r, rect.top() + r), std::f32::consts::PI);
+    arc(&mut pts, pos2(rect.right() - r, rect.top() + r), std::f32::consts::PI * 1.5);
+    arc(&mut pts, pos2(rect.right() - r, rect.bottom() - r), 0.0);
+    arc(&mut pts, pos2(rect.left() + r, rect.bottom() - r), std::f32::consts::FRAC_PI_2);
+    pts.push(pts[0]);
+    painter.extend(egui::Shape::dashed_line(&pts, stroke, 5.0, 4.0));
+}
+
 /// Підпис великими літерами з міжлітерним інтервалом `em` (як `text-transform:uppercase; letter-spacing` у вебі).
 pub(crate) fn spaced(ui: &egui::Ui, text: &str, size: f32, color: Color32, em: f32) -> std::sync::Arc<egui::Galley> {
     spaced_w(ui, text, size, 400, color, em)
@@ -1897,8 +1915,6 @@ impl App {
                     } else if let Some(g) = &ghost {
                         let mut job = egui::text::LayoutJob::default();
                         job.append(&g.text.replace('\n', " "), 0.0, egui::TextFormat { font_id: font.clone(), color: GHOST_INK, italics: true, ..Default::default() });
-                        job.append(&g.label(&self.st.file_names()[f]), 0.0, egui::TextFormat { font_id: mp(11.0), color: accent_text().gamma_multiply(0.85), ..Default::default() });
-                        job.sections[1].leading_space = 8.0;
                         job.wrap.max_width = tr_w - 16.0;
                         (Some(ui.fonts(|fo| fo.layout_job(job))), None)
                     } else {
@@ -2009,6 +2025,13 @@ impl App {
                         if let Some(gg) = gtgt {
                             let ink = if ghost.is_some() { GHOST_INK } else if tgt.is_empty() { DIM } else { TEXT };
                             ui.painter().with_clip_rect(tcell).galley(pos2(tcell.left() + 8.0, text_top), gg, ink);
+                        }
+                        if let Some(g) = &ghost {
+                            // примара: пунктирна смуга зліва клітинки, звідки вона — у підказці
+                            let ring = theme::over(BG, accent(), 0.75);
+                            ui.painter().extend(egui::Shape::dashed_line(&[pos2(tcell.left() + 1.5, tcell.top() + 2.0), pos2(tcell.left() + 1.5, tcell.bottom() - 2.0)], Stroke::new(2.0_f32, ring), 4.0, 3.0));
+                            let hint = format!("Примара · {} (Tab у полі, щоб прийняти)", g.label(&self.st.file_names()[f]));
+                            ui.interact(tcell, ui.id().with(("ghost-tip", r)), Sense::hover()).on_hover_text(hint);
                         }
                         if sel {
                             ui.painter().rect_stroke(tcell, CornerRadius::ZERO, Stroke::new(1.0_f32, accent()), StrokeKind::Inside);
@@ -2448,7 +2471,8 @@ impl App {
                 let ghost = if self.draft.trim().is_empty() { self.st.ghost_of(f, r) } else { None };
                 // поле перекладу: рамка 12, нижня панель 49
                 let mut dst_at: Option<(egui::Pos2, std::sync::Arc<egui::Galley>)> = None;
-                let frame = egui::Frame::new().fill(BG).stroke(Stroke::new(1.0_f32, CARD_LINE)).corner_radius(CornerRadius::same(CARD_R));
+                // примара: поле стає пунктирною «пропозицією» (рамку малюємо штрихами після поля)
+                let frame = egui::Frame::new().fill(BG).stroke(if ghost.is_some() { Stroke::NONE } else { Stroke::new(1.0_f32, CARD_LINE) }).corner_radius(CornerRadius::same(CARD_R));
                 let out = frame.show(ui, |ui| {
                     ui.set_width(ui.available_width());
                     let mut lay = |ui: &egui::Ui, text: &str, wrap: f32| {
@@ -2473,16 +2497,52 @@ impl App {
                         }
                     }
                     let (bar, _) = ui.allocate_exact_size(vec2(ui.available_width(), 49.0), Sense::hover());
-                    ui.painter().rect_filled(bar, CornerRadius { nw: 0, ne: 0, sw: CARD_R - 1, se: CARD_R - 1 }, PANEL);
-                    ui.painter().hline(bar.x_range(), bar.top(), Stroke::new(1.0_f32, LINE));
-                    let tr = Rect::from_center_size(pos2(bar.left() + 22.0, bar.center().y), vec2(28.0, 28.0));
-                    let tresp = ui.interact(tr, ui.id().with("clear"), Sense::click());
-                    if tresp.hovered() {
-                        ui.painter().rect_filled(tr, CornerRadius::same(8), GHOST_HOVER);
+                    let ring = theme::over(BG, accent(), 0.60);
+                    let bar_fill = if ghost.is_some() { theme::over(BG, accent(), 0.12) } else { PANEL };
+                    ui.painter().rect_filled(bar, CornerRadius { nw: 0, ne: 0, sw: CARD_R - 1, se: CARD_R - 1 }, bar_fill);
+                    if ghost.is_some() {
+                        ui.painter().extend(egui::Shape::dashed_line(&[bar.left_top(), bar.right_top()], Stroke::new(1.0_f32, ring), 5.0, 4.0));
+                    } else {
+                        ui.painter().hline(bar.x_range(), bar.top(), Stroke::new(1.0_f32, LINE));
                     }
-                    icons::paint(ui, Rect::from_center_size(tr.center(), vec2(15.0, 15.0)), "trash", if tresp.hovered() { TEXT } else { MUTE });
-                    if tresp.on_hover_text("Очистити переклад").clicked() {
-                        self.draft.clear();
+                    let tr = Rect::from_center_size(pos2(bar.left() + 22.0, bar.center().y), vec2(28.0, 28.0));
+                    let mut take = false;
+                    if let Some(g) = &ghost {
+                        // нижня панель примари: пунктирна крапка, «Примара · як рядок 2» і кнопка «Прийняти» з клавішею Tab
+                        let c = pos2(bar.left() + 20.0, bar.center().y);
+                        let cr: Vec<egui::Pos2> = (0..=24).map(|i| { let a = i as f32 / 24.0 * std::f32::consts::TAU; c + vec2(4.5 * a.cos(), 4.5 * a.sin()) }).collect();
+                        ui.painter().extend(egui::Shape::dotted_line(&cr, accent_text(), 3.0, 0.7));
+                        let tag = ui.painter().layout_no_wrap(format!("Примара · {}", g.label(&self.st.file_names()[f])), ipw(12.5, 500), accent_text());
+                        ui.painter().galley(pos2(bar.left() + 34.0, bar.center().y - tag.size().y / 2.0), tag, accent_text());
+                        let bt = ui.painter().layout_no_wrap("Прийняти".to_string(), ipw(12.5, 600), Color32::WHITE);
+                        let kb = ui.painter().layout_no_wrap("Tab".to_string(), mp(10.5), Color32::from_rgb(0xd6, 0xf3, 0xef));
+                        let bw = bt.size().x + kb.size().x + 12.0 + 12.0 + 12.0 + 8.0;
+                        let right_edge = bar.right() - 90.0 - 8.0;
+                        let br = Rect::from_min_size(pos2(right_edge - bw, bar.center().y - 14.0), vec2(bw, 28.0));
+                        let bresp = ui.interact(br, ui.id().with("ghost-take"), Sense::click());
+                        bresp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Прийняти примару"));
+                        ui.painter().rect_filled(br, CornerRadius::same(8), if bresp.hovered() { accent_hover() } else { accent_solid() });
+                        ui.painter().galley(pos2(br.left() + 12.0, br.center().y - bt.size().y / 2.0), bt.clone(), Color32::WHITE);
+                        let kr = Rect::from_min_size(pos2(br.left() + 12.0 + bt.size().x + 8.0, br.center().y - 9.0), vec2(kb.size().x + 12.0, 18.0));
+                        ui.painter().rect_filled(kr, CornerRadius::same(5), over_color(accent_solid(), Color32::BLACK, 0.35));
+                        ui.painter().galley(pos2(kr.left() + 6.0, kr.center().y - kb.size().y / 2.0), kb, Color32::WHITE);
+                        if bresp.on_hover_text("Вставити примару в поле (те саме робить Tab у полі)").clicked() {
+                            take = true;
+                        }
+                    } else {
+                        let tresp = ui.interact(tr, ui.id().with("clear"), Sense::click());
+                        if tresp.hovered() {
+                            ui.painter().rect_filled(tr, CornerRadius::same(8), GHOST_HOVER);
+                        }
+                        icons::paint(ui, Rect::from_center_size(tr.center(), vec2(15.0, 15.0)), "trash", if tresp.hovered() { TEXT } else { MUTE });
+                        if tresp.on_hover_text("Очистити переклад").clicked() {
+                            self.draft.clear();
+                        }
+                    }
+                    if take {
+                        if let Some(g) = &ghost {
+                            self.draft = g.text.clone();
+                        }
                     }
                     // лічильник стовпчиком у рамці 40×35 (`#cnt2`): довжина перекладу (13, колір стану), риска 20×1, оригінал (12)
                     let (n, o) = (self.draft.chars().count(), src.chars().count());
@@ -2511,6 +2571,9 @@ impl App {
                     }
                     focused
                 });
+                if ghost.is_some() {
+                    dashed_round_rect(ui.painter(), out.response.rect.shrink(0.75), CARD_R as f32, Stroke::new(1.5_f32, theme::over(BG, accent(), 0.75)));
+                }
                 if out.inner {
                     ui.painter().rect_stroke(out.response.rect, CornerRadius::same(CARD_R), Stroke::new(1.0_f32, accent()), StrokeKind::Inside);
                 }
@@ -2537,30 +2600,7 @@ impl App {
                         }
                     }
                 }
-                if let Some(g) = &ghost {
-                    ui.add_space(8.0);
-                    let mut take = false;
-                    // смуга кольору теми, як попередження: «Примара · пам’ять 88 %» і кнопка «Прийняти» з підказкою про Tab
-                    let w = ui.available_width();
-                    let r = crate::stshell::banner_box(ui, accent(), w, 44.0);
-                    let head = ui.painter().layout_no_wrap(format!("Примара · {}", g.label(&self.st.file_names()[f])), ipw(12.5, 600), TEXT);
-                    ui.painter().galley(pos2(r.left() + 16.0, r.center().y - head.size().y / 2.0), head, TEXT);
-                    let bt = ui.painter().layout_no_wrap("Прийняти".to_string(), ip(12.5), TEXT);
-                    let kb = ui.painter().layout_no_wrap("Tab".to_string(), mp(11.0), MUTE);
-                    let bw = bt.size().x + kb.size().x + 36.0;
-                    let br = Rect::from_min_size(pos2(r.right() - 10.0 - bw, r.center().y - 14.0), vec2(bw, 28.0));
-                    let resp = ui.interact(br, ui.id().with("ghost-take"), Sense::click());
-                    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Прийняти (Tab у полі)"));
-                    ui.painter().rect(br, CornerRadius::same(8), if resp.hovered() { BTN_HOVER } else { BTN }, Stroke::new(1.0_f32, LINE), StrokeKind::Inside);
-                    ui.painter().galley(pos2(br.left() + 12.0, br.center().y - bt.size().y / 2.0), bt.clone(), TEXT);
-                    ui.painter().galley(pos2(br.left() + 12.0 + bt.size().x + 8.0, br.center().y - kb.size().y / 2.0), kb, MUTE);
-                    if resp.on_hover_text("Вставити примару в поле (те саме робить Tab у полі)").clicked() {
-                        take = true;
-                    }
-                    if take {
-                        self.draft = g.text.clone();
-                    }
-                }
+
                 // сторож узгодженості: слово зазвичай перекладено певним словом, а тут його немає (під полем, не блокує нічого)
                 if !self.draft.trim().is_empty() && (!out.inner || st != RowStatus::Untranslated) {
                     let mut seen = std::collections::HashSet::new();

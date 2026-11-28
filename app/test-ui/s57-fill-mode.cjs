@@ -76,8 +76,14 @@ const stored = () => new Promise(r => { const o = indexedDB.open('transly', 3); 
   await page.locator('#fb-range').fill('85'); await sleep(300); await page.keyboard.press('Escape'); await page.mouse.click(800, 800); await sleep(200);
 
   // the keys on selected rows
-  const bb = await page.locator('#grid .gr .ln').nth(0).boundingBox(), bb2 = await page.locator('#grid .gr .ln').last().boundingBox();
-  await page.mouse.move(bb.x + 6, bb.y + 8); await page.mouse.down(); await page.mouse.move(bb2.x + 6, bb2.y + 8, { steps: 5 }); await page.mouse.up(); await sleep(200);
+  // the drag must really have selected: wait for the bar of the selection, and press again if a slow machine dropped the first one
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await page.locator('#grid .gr .ln').nth(0).waitFor({ state: 'visible' }); await sleep(300);
+    const bb = await page.locator('#grid .gr .ln').nth(0).boundingBox(), bb2 = await page.locator('#grid .gr .ln').last().boundingBox();
+    await page.mouse.move(bb.x + 6, bb.y + 8); await page.mouse.down(); await page.mouse.move(bb2.x + 6, bb2.y + 8, { steps: 10 }); await page.mouse.up();
+    if (await page.locator('#bb-clear').waitFor({ state: 'visible', timeout: 1500 }).then(() => true, () => false)) break;
+  }
+  await sleep(200);
   await page.evaluate(() => (document.activeElement)?.blur?.()); await sleep(100);
   const c0 = await cnt();
   await page.keyboard.press('-'); await sleep(400);

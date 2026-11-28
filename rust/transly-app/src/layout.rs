@@ -486,11 +486,12 @@ impl App {
     pub(crate) fn right_panel(&mut self, ctx: &egui::Context) {
         let edit = self.focus && !self.scene_mode;
         let mi = usize::from(edit);
+        self.auto_pictures(ctx, mi);
         egui::SidePanel::right("rightcol").exact_width(ctx.data(|d| d.get_temp::<(f32, f32)>(egui::Id::new("panel-w"))).unwrap_or((306.0, 396.0)).1).resizable(false).show_separator_line(false).frame(egui::Frame::new()).show(ctx, |ui| {
             let full = ui.max_rect();
             // смужка значків
             let rx = full.right() - 34.0;
-            let tips = [("history", "Активність у рядку: хто, коли й що змінював"), ("link", "Пов’язане: терміни, пам’ять, однакові рядки"), ("cmt", "Обговорення рядка")];
+            let tips = [("history", "Активність у рядку: хто, коли й що змінював"), ("link", "Пов’язане: терміни, пам’ять, однакові рядки"), ("cmt", "Обговорення рядка"), ("image", "Картинки рядка: іконка, обличчя, ворог, картинка")];
             for (i, (ic, tip)) in tips.iter().enumerate() {
                 let r = Rect::from_min_size(pos2(rx, full.top() + RAIL_TOP + i as f32 * 34.0), vec2(28.0, 28.0));
                 let on = self.right_secs[mi][i];
@@ -500,7 +501,7 @@ impl App {
                     self.right_secs[mi][i] = !self.right_secs[mi][i];
                 }
             }
-            let on: Vec<usize> = (0..3).filter(|i| self.right_secs[mi][*i]).collect();
+            let on: Vec<usize> = (0..4).filter(|i| self.right_secs[mi][*i]).collect();
             if on.is_empty() {
                 return;
             }
@@ -509,7 +510,7 @@ impl App {
             let gap = 6.0;
             // висоти розділів: кожен має свій мінімум (в «Обговоренні» знизу поле на 114, над ним лишається місце для гілок), решта ділиться порівну;
             // коли всі три не вміщаються, мінімуми стискаються разом (раніше всі отримували порівну й «Обговорення» стискалось до заголовка й поля)
-            let mins = [150.0_f32, 150.0, 260.0];
+            let mins = [150.0_f32, 150.0, 260.0, 210.0];
             let avail = area.height() - gap * (on.len() as f32 - 1.0);
             let need: f32 = on.iter().map(|s| mins[*s]).sum();
             let heights: Vec<f32> = on.iter().map(|s| if need <= avail { mins[*s] + (avail - need) / on.len() as f32 } else { mins[*s] * avail / need }).collect();
@@ -522,7 +523,7 @@ impl App {
                 card_lr(0, 0).outer_margin(egui::Margin::ZERO).show(&mut cui, |ui| {
                     ui.set_min_height(each - 2.0);
                     ui.set_max_height(each - 2.0);
-                    let title = ["Активність", "Пов’язане", "Обговорення"][*sec];
+                    let title = ["Активність", "Пов’язане", "Обговорення", "Картинки"][*sec];
                     ui.spacing_mut().item_spacing.y = 0.0; // після заголовка одразу тіло (у вебі проміжків між ними немає)
                     let (h, _) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::hover());
                     ui.painter().rect_filled(h, card_top(), PANEL);
@@ -532,10 +533,14 @@ impl App {
                     if ui.rect_contains_pointer(h) && mini_icon(ui, pos2(h.right() - 20.0, h.center().y), "minus", &format!("sec-x{sec}")).on_hover_text("Сховати розділ").clicked() {
                         self.right_secs[mi][*sec] = false;
                     }
+                    if *sec == 3 {
+                        self.pictures_header_buttons(ui, h);
+                    }
                     match *sec {
                         0 => self.activity_body(ui),
                         1 => self.related_body(ui),
-                        _ => self.comments_body(ui),
+                        2 => self.comments_body(ui),
+                        _ => self.pictures_body(ui),
                     }
                 });
             }
@@ -1422,7 +1427,8 @@ impl App {
             let w = ui.available_width();
             let who = self.st.file_has_speakers(f);
             // таблиця зсунута до лівого краю полотна; 12 px звільнених полів (було по 6 з боків) — в останню колонку «К-сть зн.»: ширини клітинок з інтерактивною частиною не змінились
-            let (num_w, st_w, key_w, who_w, len_w) = (34.0_f32, 22.0_f32, 110.0_f32, if who { 120.0 } else { 0.0 }, 78.0_f32 + 12.0);
+            let pics_col = self.st.file_has_pics(f);
+            let (num_w, st_w, key_w, who_w, len_w) = (34.0_f32, if pics_col { 22.0_f32 + 34.0 } else { 22.0_f32 }, 110.0_f32, if who { 120.0 } else { 0.0 }, 78.0_f32 + 12.0);
             let flex = w - num_w - st_w - key_w - who_w - len_w;
             let (src_w, tr_w) = (flex * 0.474, flex * 0.526);
             let xs = {
@@ -1592,11 +1598,19 @@ impl App {
                     }
                     if ghost.is_some() {
                         // примара: порожній пунктирний круг замість суцільного
-                        let c = pos2(rect.left() + xs[1] + st_w / 2.0, rect.top() + 17.0);
+                        let c = pos2(rect.left() + xs[1] + 11.0, rect.top() + 17.0);
                         let ring: Vec<egui::Pos2> = (0..=24).map(|i| { let a = i as f32 / 24.0 * std::f32::consts::TAU; c + vec2(4.5 * a.cos(), 4.5 * a.sin()) }).collect();
                         ui.painter().extend(egui::Shape::dotted_line(&ring, accent_text(), 3.0, 0.7));
                     } else {
-                        paint_state(ui, pos2(rect.left() + xs[1] + st_w / 2.0, rect.top() + 17.0), st, bad_rows.contains(&r));
+                        paint_state(ui, pos2(rect.left() + xs[1] + 11.0, rect.top() + 17.0), st, bad_rows.contains(&r));
+                    }
+                    if pics_col {
+                        // мініатюра першої картинки рядка (24 px, одна рамка кольору типу); клік по рядку показує всі в розділі «Картинки»
+                        let ctx2 = ui.ctx().clone();
+                        if let Some((p, t)) = self.pics_with_textures(&ctx2, f, r).into_iter().next() {
+                            let tr = Rect::from_center_size(pos2(rect.left() + xs[1] + 22.0 + 17.0, rect.top() + 18.0), vec2(26.0, 24.0));
+                            pictures::paint_table_thumb(ui, tr, &t, App::pic_kind_color(&p));
+                        }
                     }
                     ui.painter().with_clip_rect(col(2, key_w)).text(pos2(rect.left() + xs[2] + 8.0, rect.top() + 20.0), Align2::LEFT_CENTER, short_key(&self.st.key_of(f, r)), mp(12.0), MUTE);
                     if who {
@@ -1876,7 +1890,7 @@ impl App {
     }
 
     /// Картинка гри як текстура (з кешу). `None`, коли в теці гри такого файлу немає.
-    fn pic_texture(&mut self, ctx: &egui::Context, pic: &Pic) -> Option<egui::TextureHandle> {
+    pub(crate) fn pic_texture(&mut self, ctx: &egui::Context, pic: &Pic) -> Option<egui::TextureHandle> {
         let key = match pic {
             Pic::Icon { n, .. } => format!("icon:{n}"),
             Pic::Face { name, index, .. } => format!("face:{name}:{index}"),
@@ -1920,45 +1934,6 @@ impl App {
             }
         };
         Some(ctx.load_texture(key, color, egui::TextureOptions::NEAREST))
-    }
-
-    /// Картинки до рядка над полем перекладу: піктограма, обличчя, ворог (як у старому застосунку; ≤ 96 у висоту, обличчя 72).
-    fn pics_ui(&mut self, ui: &mut egui::Ui, f: usize, r: usize) {
-        let pics = self.st.pics_of(f, r);
-        if pics.is_empty() {
-            return;
-        }
-        let ctx = ui.ctx().clone();
-        let mut shown: Vec<(egui::TextureHandle, String, egui::Vec2)> = Vec::new();
-        for p in &pics {
-            let Some(t) = self.pic_texture(&ctx, p) else { continue };
-            let sz = t.size_vec2();
-            let size = match p {
-                Pic::Icon { .. } => sz,
-                Pic::Face { .. } => vec2(72.0, 72.0),
-                _ => {
-                    let k = (96.0 / sz.y).min(1.0);
-                    sz * k
-                }
-            };
-            let label = match p {
-                Pic::Icon { label, .. } | Pic::Face { label, .. } | Pic::Enemy { label, .. } | Pic::Picture { label, .. } => label.clone(),
-            };
-            shown.push((t, label, size));
-        }
-        if shown.is_empty() {
-            return;
-        }
-        ui.add_space(8.0);
-        ui.horizontal_wrapped(|ui| {
-            ui.spacing_mut().item_spacing = vec2(10.0, 6.0);
-            for (t, label, size) in shown {
-                let resp = ui.add(egui::Image::new(&t).fit_to_exact_size(size));
-                if !label.is_empty() {
-                    resp.on_hover_text(label);
-                }
-            }
-        });
     }
 
     /// «Внески» під полем: по картці на кожен надісланий переклад рядка (найновіші першими): автор, текст, голоси «+» і «−»,
@@ -2106,7 +2081,6 @@ impl App {
                     let lr = ui.label(job);
                     src_at = Some((lr.rect.min, galley));
                 });
-                self.pics_ui(ui, f, r);
                 for (lang, text) in self.st.references_of(f, r) {
                     ui.add_space(10.0);
                     let g = spaced(ui, &format!("Довідка · {lang}"), 12.0, MUTE, 0.04);

@@ -11,6 +11,7 @@ mod icons;
 mod stshell;
 mod layout;
 mod links_dialog;
+mod pictures;
 mod plugins;
 mod state;
 mod theme;
@@ -126,7 +127,13 @@ struct App {
     cell_edit: Option<(usize, usize)>,
     cell_focus: bool,
     /// Розділи правої колонки (Активність, Пов’язане, Обговорення) окремо для таблиці й «Редагування».
-    right_secs: [[bool; 3]; 2],
+    right_secs: [[bool; 4]; 2],
+    /// Розділ «Картинки»: вибрана плитка, збільшення на місці (×2) і повноекранний перегляд.
+    pic_sel: usize,
+    pic_inline: bool,
+    pic_view: Option<pictures::PicView>,
+    /// Файли й режими (таблиця чи редагування), для яких розділ «Картинки» уже вмикався сам (раз за сеанс), щоб не вмикати його знову після того, як його сховали.
+    pics_auto: std::collections::HashSet<(usize, usize)>,
     comment: String,
     /// Робоче вікно: остання панель, куди клацнули (спершу центр).
     pane: Pane,
@@ -279,7 +286,7 @@ fn game_job(text: &str, size: f32, actor_name: &dyn Fn(usize) -> Option<String>)
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, app_set: None, find_count: None, nav_proj: stshell::StNav::new("look"), nav_app: stshell::StNav::new("general"), reset_arm: None, esc_at: None, imp_terms: String::new(), imp_tm: String::new(), fill_win: None, links_win: None, chrome_own: winchrome::own_chrome_chosen(), find_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_draft: None, mine_win: false, auto_added: Vec::new(), guard_off: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, app_set: None, find_count: None, nav_proj: stshell::StNav::new("look"), nav_app: stshell::StNav::new("general"), reset_arm: None, esc_at: None, imp_terms: String::new(), imp_tm: String::new(), fill_win: None, links_win: None, chrome_own: winchrome::own_chrome_chosen(), find_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_draft: None, mine_win: false, auto_added: Vec::new(), guard_off: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false, false], [false, true, false, false]], pic_sel: 0, pic_inline: false, pic_view: None, pics_auto: Default::default(), comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
     }
 }
 
@@ -708,6 +715,7 @@ impl App {
             || self.plug_win.is_some()
             || self.mine_win
             || self.search_win.is_some()
+            || self.pic_view.is_some()
     }
 
     /// Вікно «світиться» (вибране в ньому кольору теми): воно робоче й ніякого діалогу відкрито немає.
@@ -813,6 +821,7 @@ impl App {
         self.plug_window(ctx);
         self.update_window(ctx);
         self.find_window(ctx);
+        self.pic_viewer(ctx);
         self.fill_window(ctx);
         self.links_window(ctx);
         self.build_window(ctx);
@@ -3987,6 +3996,66 @@ mod ui_tests {
         assert!(h.state().pic_tex.get("picture:potion_big").is_some_and(|t| t.is_none()));
     }
 
+    /// Картинки рядка: розділ «Картинки» справа вмикається сам, коли вибрано рядок із картинками; плитки-мініатюри перемикають прев'ю, у таблиці є колонка мініатюр,
+    /// «⤢» відкриває повний екран, де стрілки листають, «+»/«−»/×N міняють масштаб, а Esc закриває.
+    #[test]
+    fn the_pictures_section_shows_the_row_pictures_and_opens_full_screen() {
+        let base = std::env::temp_dir().join(format!("transly-ui-picsec-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let root = base.join("MyGame");
+        let data = root.join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        std::fs::create_dir_all(root.join("img").join("system")).unwrap();
+        std::fs::create_dir_all(root.join("img").join("pictures")).unwrap();
+        std::fs::write(data.join("Items.json"), r#"[null,{"id":1,"name":"Potion","description":"Heals","iconIndex":5,"note":"<Picture: big>"},{"id":2,"name":"Stick","description":"A stick","iconIndex":0,"note":""}]"#).unwrap();
+        image::RgbaImage::from_pixel(512, 64, image::Rgba([200, 30, 30, 255])).save(root.join("img").join("system").join("IconSet.png")).unwrap();
+        image::RgbaImage::from_pixel(96, 54, image::Rgba([30, 120, 200, 255])).save(root.join("img").join("pictures").join("big.png")).unwrap();
+        let mut app = App::default();
+        app.st.open_game(&root).unwrap();
+        let fi = app.st.file_names().iter().position(|n| n == "Items.json").unwrap();
+        let potion = (0..app.st.row_count(fi)).find(|r| app.st.source_of(fi, *r) == "Potion").unwrap();
+        let stick = (0..app.st.row_count(fi)).find(|r| app.st.source_of(fi, *r) == "Stick").unwrap();
+        assert!(app.st.file_has_pics(fi), "довідник предметів має мініатюри");
+        app.st.file = Some(fi);
+        app.st.row = Some(potion);
+        let mut h = harness(app);
+        h.run();
+        h.run();
+        // розділ увімкнувся сам і показує дві картинки: іконку й картинку з нотатки
+        assert!(h.state().right_secs[0][3], "розділ «Картинки» ввімкнено автоматично");
+        h.get_by_label("Права панель: Картинки рядка: іконка, обличчя, ворог, картинка");
+        h.get_by_label("Показати: Іконка 5 · Potion");
+        h.get_by_label("Показати: Картинка · big");
+        h.get_by_label_contains("Іконка 5");
+        h.get_by_label("Відкрити картинку на весь екран");
+        // друга плитка змінює вибране прев'ю
+        h.get_by_label("Показати: Іконка 5 · Potion").click();
+        h.run();
+        assert_eq!(h.state().pic_sel, 1, "картинка з нотатки йде першою, іконка другою");
+        // повний екран: перегляд відкрито, стрілки листають, масштаб змінюється, Esc закриває
+        h.get_by_label("Відкрити картинку на весь екран").click();
+        h.run();
+        h.run();
+        assert!(h.state().pic_view.is_some(), "перегляд відкрито");
+        h.get_by_label("Наступна картинка").click();
+        h.run();
+        assert_eq!(h.state().pic_view.map(|v| v.idx), Some(0), "стрілка перейшла до першої");
+        h.get_by_label("×4").click();
+        h.run();
+        assert!((h.state().pic_view.unwrap().zoom - 4.0).abs() < 0.001);
+        h.get_by_label("Вмістити").click();
+        h.run();
+        assert!(h.state().pic_view.unwrap().zoom <= 0.0);
+        press(&mut h, egui::Modifiers::NONE, egui::Key::Escape);
+        h.run();
+        assert!(h.state().pic_view.is_none(), "Esc закрив перегляд");
+        // рядок без картинок: розділ це пояснює
+        h.state_mut().st.row = Some(stick);
+        h.run();
+        h.run();
+        assert!(h.state().st.pics_of(fi, stick).is_empty());
+    }
+
     #[test]
     fn message_codes_are_shown_the_way_the_game_window_shows_them() {
         let who = |n: usize| (n == 1).then(|| "Гарольд".to_string());
@@ -4404,7 +4473,7 @@ mod ui_tests {
         h.run();
         let centre = |h: &Harness<'static, App>| h.ctx.data(|d| d.get_temp::<Rect>(egui::Id::new("pane-centre"))).unwrap().width();
         let w0 = centre(&h);
-        h.state_mut().right_secs = [[false; 3]; 2];
+        h.state_mut().right_secs = [[false; 4]; 2];
         h.run();
         h.run();
         let w1 = centre(&h);
@@ -5503,6 +5572,65 @@ mod ui_tests {
         }
     }
 
+    /// Знімки розділу «Картинки», мініатюр у таблиці й повного екрана: `TRANSLY_SHOTS=<тека> cargo test -p transly-app pictures_shots -- --ignored`.
+    #[test]
+    #[ignore]
+    fn pictures_shots() {
+        let Some(out) = std::env::var_os("TRANSLY_SHOTS").map(std::path::PathBuf::from) else { return };
+        std::fs::create_dir_all(&out).unwrap();
+        let base = std::env::temp_dir().join(format!("transly-ui-picshot-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let root = base.join("MyGame");
+        let data = root.join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        std::fs::create_dir_all(root.join("img").join("system")).unwrap();
+        std::fs::create_dir_all(root.join("img").join("pictures")).unwrap();
+        std::fs::create_dir_all(root.join("img").join("faces")).unwrap();
+        let items: Vec<String> = (1..=8).map(|i| format!(r#"{{"id":{i},"name":"Item {i}","description":"Description of item {i}","iconIndex":{},"note":"{}"}}"#, i * 3, if i == 1 { "<Picture: big>" } else { "" })).collect();
+        std::fs::write(data.join("Items.json"), format!("[null,{}]", items.join(","))).unwrap();
+        // піксельна «таблиця іконок» 16×16 по 32 px із візерунком, щоб масштаб було видно
+        let mut icons = image::RgbaImage::from_pixel(512, 64, image::Rgba([0, 0, 0, 0]));
+        for n in 0..32u32 {
+            for y in 0..32 {
+                for x in 0..32 {
+                    let on = ((x / 4 + y / 4) % 2 == 0) && (4..28).contains(&x) && (4..28).contains(&y);
+                    if on {
+                        icons.put_pixel((n % 16) * 32 + x, (n / 16) * 32 + y, image::Rgba([(60 + n * 6) as u8, 180 - n as u8 * 3, 90 + n as u8 * 4, 255]));
+                    }
+                }
+            }
+        }
+        icons.save(root.join("img").join("system").join("IconSet.png")).unwrap();
+        let mut big = image::RgbaImage::from_pixel(96, 54, image::Rgba([40, 90, 160, 255]));
+        for y in 20..54 {
+            for x in 10..80 {
+                if (x + y) % 9 < 4 {
+                    big.put_pixel(x, y, image::Rgba([90, 170, 90, 255]));
+                }
+            }
+        }
+        big.save(root.join("img").join("pictures").join("big.png")).unwrap();
+        let mut app = App::default();
+        app.st.open_game(&root).unwrap();
+        app.st.file = Some(0);
+        app.st.row = Some(0);
+        let mut h = harness(app);
+        let shot = |h: &mut Harness<'static, App>, n: &str| {
+            h.run();
+            h.run();
+            h.render().unwrap().save(out.join(format!("{n}.png"))).unwrap();
+        };
+        shot(&mut h, "p1-table");
+        h.state_mut().focus = true;
+        h.state_mut().rail = 1;
+        shot(&mut h, "p2-edit");
+        h.state_mut().pic_sel = 1;
+        h.state_mut().pic_inline = true;
+        shot(&mut h, "p3-inline");
+        h.state_mut().pic_view = Some(pictures::PicView { idx: 1, zoom: 0.0, bg: 0 });
+        shot(&mut h, "p4-fullscreen");
+    }
+
     /// Огляд розміток на довгих текстах і вузькому вікні: `TRANSLY_SHOTS=<тека> cargo test -p transly-app layout_audit_shots -- --ignored`.
     #[test]
     #[ignore]
@@ -5523,7 +5651,7 @@ mod ui_tests {
             app.st.open_game(&data).unwrap();
             app.st.file = Some(0);
             app.st.row = Some(2);
-            app.right_secs = [[true, true, true], [true, true, true]];
+            app.right_secs = [[true, true, true, true], [true, true, true, true]];
             let mut h = Harness::builder().with_size(egui::vec2(w, h)).build_state(|ctx, app: &mut App| {
                 theme::apply(ctx);
                 app.frame(ctx);
@@ -5835,9 +5963,9 @@ mod ui_tests {
         shot(&mut h, "06-edit-scenes");
         h.state_mut().rail = 3;
         shot(&mut h, "07-edit-related");
-        h.state_mut().right_secs = [[true, false, false]; 2];
+        h.state_mut().right_secs = [[true, false, false, false]; 2];
         shot(&mut h, "08-right-activity");
-        h.state_mut().right_secs = [[false, false, true]; 2];
+        h.state_mut().right_secs = [[false, false, true, false]; 2];
         shot(&mut h, "09-right-comments");
         // той самий рядок із записами історії й гілкою обговорення (щоб видно було самі стрічки, а не порожні стани)
         {
@@ -5850,9 +5978,9 @@ mod ui_tests {
             st.reply(f, r, &root, "Перевірив: тон підходить, лишаю як є.");
             st.comment(f, r, "Друге питання про рід.");
         }
-        h.state_mut().right_secs = [[true, false, false]; 2];
+        h.state_mut().right_secs = [[true, false, false, false]; 2];
         shot(&mut h, "08b-right-activity-filled");
-        h.state_mut().right_secs = [[false, false, true]; 2];
+        h.state_mut().right_secs = [[false, false, true, false]; 2];
         shot(&mut h, "09b-right-comments-filled");
         // меню: головне (гамбургер), вкладене «Файл» і «Дії» — клік по координатах
         let click_at = |h: &mut Harness<'static, App>, x: f32, y: f32| {
@@ -5881,10 +6009,10 @@ mod ui_tests {
         press(&mut h, egui::Modifiers::NONE, egui::Key::Escape);
         h.run();
         // обидві бічні колонки закрито: полотно займає все місце
-        h.state_mut().right_secs = [[false; 3]; 2];
+        h.state_mut().right_secs = [[false; 4]; 2];
         h.state_mut().left_open = false;
         shot(&mut h, "22-columns-closed");
-        h.state_mut().right_secs = [[false, true, false]; 2];
+        h.state_mut().right_secs = [[false, true, false, false]; 2];
         h.state_mut().left_open = true;
         // клавіатурне кільце фокусу: кілька Tab у таблиці
         for _ in 0..4 {
@@ -5942,16 +6070,16 @@ mod ui_tests {
             h.state_mut().cm_editing = Some(id);
             h.state_mut().cm_edit_text = "Чи не краще «Селюк»?".into();
         }
-        h.state_mut().right_secs = [[false, false, true]; 2];
+        h.state_mut().right_secs = [[false, false, true, false]; 2];
         shot(&mut h, "09c-comment-edit");
         h.state_mut().cm_editing = None;
-        h.state_mut().right_secs = [[true, false, false]; 2];
+        h.state_mut().right_secs = [[true, false, false, false]; 2];
         h.state_mut().hist_for = Some((h.state().st.file.unwrap_or(0), h.state().st.row.unwrap_or(0)));
         h.state_mut().hist_cmp.insert(0);
         h.state_mut().hist_cmp.insert(1);
         shot(&mut h, "08c-activity-compare");
         h.state_mut().hist_cmp.clear();
-        h.state_mut().right_secs = [[false, true, false]; 2];
+        h.state_mut().right_secs = [[false, true, false, false]; 2];
         h.state_mut().focus = false;
         h.state_mut().st.file = Some(map);
         h.state_mut().st.row = Some(1);

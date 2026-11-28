@@ -46,6 +46,8 @@ fn body(name: &str) -> (&'static str, bool) {
         "left" => ("<path d='M10 3.5L5.5 8l4.5 4.5'/>", false),
         "right" => ("<path d='M6 3.5L10.5 8 6 12.5'/>", false),
         "json" => ("<path d='M6 3H5a1 1 0 0 0-1 1v2.2a1 1 0 0 1-1 1 1 1 0 0 1 1 1V11a1 1 0 0 0 1 1h1M10 3h1a1 1 0 0 1 1 1v2.2a1 1 0 0 0 1 1 1 1 0 0 0-1 1V11a1 1 0 0 1-1 1h-1'/>", false),
+        "image" => ("<rect x='2.5' y='3.5' width='11' height='9' rx='1.5'/><circle cx='6' cy='7' r='1'/><path d='M3 12l3.5-3.5 2.5 2.5 2-2 2.5 3'/>", false),
+        "expand" => ("<path d='M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5L9 7M2.5 13.5L7 9'/>", false),
         "plug" => ("<path d='M6 2.5v3M10 2.5v3M4.5 5.5h7V8a3.5 3.5 0 0 1-7 0zM8 11.5V14'/>", false),
         "globe" => ("<circle cx='8' cy='8' r='5.5'/><path d='M2.5 8h11M8 2.5c2 2 2 9 0 11M8 2.5c-2 2-2 9 0 11'/>", false),
         "server" => ("<rect x='2.5' y='3' width='11' height='4' rx='1'/><rect x='2.5' y='9' width='11' height='4' rx='1'/><path d='M5 5h.01M5 11h.01'/>", false),

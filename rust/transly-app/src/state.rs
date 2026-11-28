@@ -213,6 +213,8 @@ type BuildPrev = Option<(u64, [bool; 3], Result<(usize, usize, usize), String>)>
 pub type QaRuleRow = (String, String, String, String, usize, usize);
 
 pub struct AppState {
+    /// Чи має файл картинки гри (мініатюри в таблиці): рахується раз на файл.
+    pics_files: std::cell::RefCell<std::collections::HashMap<usize, bool>>,
     build_prev: std::cell::RefCell<BuildPrev>,
     qa_view_cache: std::cell::RefCell<Option<(u64, usize, Vec<QaRuleRow>)>>,
     /// Фільтр «Мовець» і «Довжина» (0 усі, 1 далеко від оригіналу, 2 довші, 3 коротші).
@@ -285,7 +287,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let file = std::env::temp_dir().join("transly-picked-folders.json");
-        AppState { build_prev: Default::default(), qa_view_cache: Default::default(), undo_count: 0, db_cache: std::cell::RefCell::new(None), names_cache: std::cell::RefCell::new(None), usage_cache: Default::default(), links_cache: std::cell::RefCell::new(None), link_index: std::cell::RefCell::new(None), relay: RelayCfg::load(), relay_rx: None, speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, rows_filter: None, inbox: Inbox::load(), row_memo: RowMemo::load(), frame_caches: Default::default(), ghost_budget: std::cell::Cell::new(0), ghost_more: std::cell::Cell::new(false), mine_cache: Default::default(), auto_cache: Default::default(), dismissed: Dismissed::load(), scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: Default::default(), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, saved_ms: None, session_start: now_ms(), session_edits: 0 }
+        AppState { pics_files: Default::default(), build_prev: Default::default(), qa_view_cache: Default::default(), undo_count: 0, db_cache: std::cell::RefCell::new(None), names_cache: std::cell::RefCell::new(None), usage_cache: Default::default(), links_cache: std::cell::RefCell::new(None), link_index: std::cell::RefCell::new(None), relay: RelayCfg::load(), relay_rx: None, speaker_filter: None, len_filter: 0, speakers_cache: std::cell::RefCell::new((u64::MAX, 0, false)), tm_cache: std::cell::RefCell::new(None), last_term_change: None, auto_limit: std::cell::RefCell::new(None), group_filter: None, rows_filter: None, inbox: Inbox::load(), row_memo: RowMemo::load(), frame_caches: Default::default(), ghost_budget: std::cell::Cell::new(0), ghost_more: std::cell::Cell::new(false), mine_cache: Default::default(), auto_cache: Default::default(), dismissed: Dismissed::load(), scene_cache: std::cell::RefCell::new((usize::MAX, None)), undo: Default::default(), host: PluginHost::open(plugins_dir()), sync_state: FilesState::default(), sync_rx: None, last_note: String::new(), qa_cache: Default::default(), game_raw: vec![], dirty: false, filter: Filter::All, search: String::new(), rev: 0, vis: Default::default(), roots: Roots::default(), picked: Picked::open(file), project: None, views: vec![], dir: None, file: None, row: None, saved_ms: None, session_start: now_ms(), session_edits: 0 }
     }
 }
 
@@ -782,6 +784,7 @@ impl AppState {
         self.row = None;
         *self.scene_cache.borrow_mut() = (usize::MAX, None);
         *self.names_cache.borrow_mut() = None;
+        self.pics_files.borrow_mut().clear();
         *self.db_cache.borrow_mut() = None;
         *self.auto_limit.borrow_mut() = None;
         self.rev += 1;
@@ -853,6 +856,7 @@ impl AppState {
         self.last_note = format!("{auto_note}{unreadable}");
         *self.scene_cache.borrow_mut() = (usize::MAX, None);
         *self.names_cache.borrow_mut() = None;
+        self.pics_files.borrow_mut().clear();
         *self.auto_limit.borrow_mut() = None;
         let old_snap: Option<indexmap::IndexMap<String, Vec<Unit>>> = project.snapshot.as_ref().and_then(|v| serde_json::from_value(v.clone()).ok());
         if old_snap.is_some() {
@@ -2069,6 +2073,18 @@ impl AppState {
     }
 
     /// Картинки до рядка з файлів самої гри: піктограма предмета, обличчя персонажа чи репліки, вороги, `<Picture: назва>` у примітці.
+    /// Чи мають рядки файлу картинки гри (довідник з іконками, обличчями чи ворогами, або репліки з лицем): тоді в таблиці є колонка мініатюр.
+    pub fn file_has_pics(&self, f: usize) -> bool {
+        if let Some(b) = self.pics_files.borrow().get(&f) {
+            return *b;
+        }
+        let Some(v) = self.views.get(f) else { return false };
+        let file = v.name.rsplit('/').next().unwrap_or(&v.name);
+        let b = ["Items.json", "Weapons.json", "Armors.json", "Skills.json", "States.json", "Actors.json", "Enemies.json"].contains(&file) || v.units.iter().any(|u| u.face.is_some());
+        self.pics_files.borrow_mut().insert(f, b);
+        b
+    }
+
     pub fn pics_of(&self, f: usize, r: usize) -> Vec<Pic> {
         let Some(u) = self.unit(f, r) else { return Vec::new() };
         let mut out: Vec<Pic> = Vec::new();
@@ -2094,7 +2110,8 @@ impl AppState {
         let Some(row) = cache.as_ref().and_then(|(_, j)| j.as_array()).and_then(|a| a.get(idx)).and_then(|v| v.as_object()) else { return out };
         let label = row.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
         if let Some(note) = row.get("note").and_then(|v| v.as_str()) {
-            let re = regex::Regex::new(r"(?i)<\s*Picture\s*:\s*([^<>]+?)\s*>").expect("візерунок");
+            static PIC_TAG: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+            let re = PIC_TAG.get_or_init(|| regex::Regex::new(r"(?i)<\s*Picture\s*:\s*([^<>]+?)\s*>").expect("візерунок"));
             for m in re.captures_iter(note) {
                 let name = m[1].to_string();
                 if name.contains(['\\', '/']) || name.contains("..") || out.len() >= 4 {

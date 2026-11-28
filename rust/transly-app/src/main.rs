@@ -95,7 +95,6 @@ struct App {
     chrome_own: bool,
     find_win: Option<(String, String, bool, bool)>,
     plugins_win: bool,
-    sync_win: Option<(transly_platform::github::GithubSettings, String)>,
     settings: Option<state::SettingsView>,
     btab: usize,
     bottom_open: bool,
@@ -107,7 +106,8 @@ struct App {
     plug_win: Option<std::collections::BTreeSet<String>>,
     upd: UpdUi,
     /// Вікно реле-синхронізації: правка адреси, пароля й періоду.
-    relay_win: Option<state::RelayCfg>,
+    /// Чернетка налаштувань реле у вікні «Налаштування» (сторінка «Власний сервер»).
+    relay_draft: Option<state::RelayCfg>,
     /// Вікно «Конструкції»: знайдені пропозиції; відкладені («Не зараз») пам'ятаються до кінця сеансу.
     mine_win: bool,
     /// Слова, додані кнопкою «Додати всі певні» в автословнику: «Скасувати» прибирає саме їх.
@@ -280,7 +280,7 @@ fn game_job(text: &str, size: f32, actor_name: &dyn Fn(usize) -> Option<String>)
 
 impl Default for App {
     fn default() -> Self {
-        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, app_set: None, find_count: None, nav_proj: stshell::StNav::new("look"), nav_app: stshell::StNav::new("general"), reset_arm: None, esc_at: None, imp_terms: String::new(), imp_tm: String::new(), fill_win: None, links_win: None, chrome_own: winchrome::own_chrome_chosen(), find_win: None, plugins_win: false, sync_win: None, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_win: None, mine_win: false, auto_added: Vec::new(), guard_off: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
+        App { st: AppState::default(), last_save: std::time::Instant::now(), draft: String::new(), draft_for: None, message: String::new(), gl_query: String::new(), gl_show: 0, gl_form: None, gl_del: None, gl_mem_asked: false, rows_scroll_to: None, drag_sel: None, sel_last: None, grid_scroll: None, grid_seen: (usize::MAX, None), keys_win: false, rail: 0, run_cfg: 0, tree_closed: Default::default(), scene_mode: false, keep_edit: None, activity_win: false, tsync_win: None, wrap_win: None, qar_win: false, br_win: None, merge_win: None, rename_win: None, groups_win: None, ref_win: None, spk_win: None, import_win: None, build_win: None, app_set: None, find_count: None, nav_proj: stshell::StNav::new("look"), nav_app: stshell::StNav::new("general"), reset_arm: None, esc_at: None, imp_terms: String::new(), imp_tm: String::new(), fill_win: None, links_win: None, chrome_own: winchrome::own_chrome_chosen(), find_win: None, plugins_win: false, settings: None, btab: 0, bottom_open: false, focus: false, was_edit: 0, pic_tex: Default::default(), plug_win: None, upd: UpdUi::default(), relay_draft: None, mine_win: false, auto_added: Vec::new(), guard_off: Default::default(), toast: None, toast_seen: (String::new(), 0), search_win: None, checked: (0, Default::default()), scene_draft: None, cell_edit: None, cell_focus: false, right_secs: [[false, true, false], [false, true, false]], comment: String::new(), pane: Pane::Centre, left_open: true, panel_w: (306.0, 396.0), kb_nav: false, last_focus: None, reply_to: None, reply_text: String::new(), del_confirm: None, cm_editing: None, cm_edit_text: String::new(), hist_cmp: Default::default(), hist_for: None, closed_open: false, token: String::new() }
     }
 }
 
@@ -608,11 +608,9 @@ impl App {
             || self.fill_win.is_some()
             || self.links_win.is_some()
             || self.find_win.is_some()
-            || self.sync_win.is_some()
             || self.settings.is_some()
             || self.app_set.is_some()
             || self.plug_win.is_some()
-            || self.relay_win.is_some()
             || self.mine_win
             || self.search_win.is_some()
     }
@@ -716,8 +714,6 @@ impl App {
         self.bottom(ctx);
         self.settings_window(ctx);
         self.app_settings_window(ctx);
-        self.sync_window(ctx);
-        self.relay_window(ctx);
         self.relay_auto();
         self.plug_window(ctx);
         self.update_window(ctx);
@@ -1289,7 +1285,7 @@ impl App {
                 ui.close_menu();
             }
             if mi(ui, if self.st.syncing() { "Синхронізація триває…" } else { "Синхронізація через реле…" }, self.st.is_open()).clicked() {
-                self.relay_win = Some(self.st.relay.clone());
+                self.act_relay();
                 ui.close_menu();
             }
             if mi(ui, "Оновлення…", true).clicked() {
@@ -1475,8 +1471,16 @@ impl App {
         
     }
 
+    /// «Синхронізація через GitHub…»: сторінка «GitHub» налаштувань проєкту.
     fn act_sync(&mut self) {
- self.sync_win = Some((self.st.github_settings(), self.token.clone()));
+        self.settings = self.st.settings_view();
+        self.nav_proj.cur = "github";
+    }
+
+    /// «Синхронізація через реле…»: сторінка «Власний сервер» загальних налаштувань.
+    fn act_relay(&mut self) {
+        self.app_set = self.st.settings_view();
+        self.nav_app.cur = "server";
     }
 
     fn act_plugins(&mut self) {
@@ -1696,6 +1700,10 @@ impl App {
             base.source_lang = v.source_lang.clone();
             base.target_lang = v.target_lang.clone();
             base.line_limit = v.line_limit;
+            base.gh_repo = v.gh_repo.clone();
+            base.gh_branch = v.gh_branch.clone();
+            base.gh_dir = v.gh_dir.clone();
+            base.gh_originals = v.gh_originals;
             self.st.apply_settings(&base);
         }
     }
@@ -1725,8 +1733,6 @@ impl App {
             "ref" => self.ref_win = Some(String::new()),
             "qa" => self.qar_win = true,
             "wrap" => self.wrap_win = Some((self.st.wrap_settings(), "Мандрівник дістався перекладацького містечка наприкінці осені, і там на нього чекав старий друг, якого він не бачив багато років.".into(), false)),
-            "github" => self.act_sync(),
-            "relay" => self.relay_win = Some(self.st.relay.clone()),
             "branches" => self.br_win = Some(String::new()),
             "save" => self.message = self.st.save_project().map(|p| format!("Збережено: {p}")).unwrap_or_else(|e| e),
             "open" => {
@@ -1765,6 +1771,8 @@ impl App {
         let branches: Vec<(String, usize, bool, String)> = self.st.branches_view().into_iter().map(|(n, r, c)| { let from = self.st.branch_from(&n); (n, r, c, from) }).collect();
         let folder = self.st.dir.as_ref().map(|d| d.to_string_lossy().to_string()).unwrap_or_default();
         let refs = self.st.reference_langs();
+        let syncing = self.st.syncing();
+        let mut token = std::mem::take(&mut self.token);
         let mut nav = std::mem::replace(&mut self.nav_proj, stshell::StNav::new("look"));
         let (mut apply, mut save, mut cancel) = (false, false, false);
         let mut branch_act: Option<(String, u8)> = None;
@@ -2043,13 +2051,34 @@ impl App {
                     });
                 }
                 "github" => {
-                    stshell::warn_banner(ui, false, "Токен лишається тільки на цьому пристрої", "Дайте йому доступ лише до репозиторію з перекладом (право «Contents: Read and write»). Він не потрапляє у файл проєкту.");
+                    stshell::warn_banner(ui, false, "Токен лишається тільки на цьому пристрої", "Дайте йому доступ лише до репозиторію з перекладом (право «Contents: Read and write»). Він не потрапляє у файл проєкту й не зберігається: його треба вводити в кожному сеансі.");
                     stshell::hint(ui, "Переклад зберігається у вашому репозиторії GitHub (краще приватному) звичайними файлами, а історія комітів показує, що й коли змінилося. Створіть репозиторій із файлом README, потім токен: GitHub → Settings → Developer settings → Fine-grained tokens.");
+                    stshell::grid_row(ui, "Репозиторій (власник/назва)", |ui| {
+                        let w = ui.available_width();
+                        let r = stshell::input(ui, &mut v.gh_repo, "ivan/my-translation", w);
+                        r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::TextEdit, true, "Репозиторій GitHub"));
+                    });
+                    stshell::grid_row(ui, "Токен доступу", |ui| {
+                        let w = ui.available_width();
+                        let r = stshell::input_ex(ui, &mut token, "", w, true);
+                        r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::TextEdit, true, "Токен GitHub"));
+                    });
+                    stshell::grid_row(ui, "Гілка (необов’язково)", |ui| {
+                        let w = ui.available_width();
+                        stshell::input(ui, &mut v.gh_branch, "основна гілка репозиторію", w);
+                    });
+                    stshell::grid_row(ui, "Папка в репозиторії (необов’язково)", |ui| {
+                        let w = ui.available_width();
+                        stshell::input(ui, &mut v.gh_dir, "корінь репозиторію", w);
+                    });
+                    stshell::check(ui, &mut v.gh_originals, "Зберігати в репозиторії оригінальні рядки гри (лише для приватного; без них пристрій без гри, наприклад телефон, не покаже оригінал)");
                     stshell::acts(ui, |ui| {
-                        if plain_button(ui, "Налаштування GitHub…").clicked() {
-                            go = Some("github");
+                        let b = ui.add_enabled(!syncing, egui::Button::new(RichText::new("Синхронізувати з GitHub зараз").color(Color32::WHITE)).fill(accent_solid()).stroke(Stroke::NONE).min_size(vec2(0.0, 28.0)));
+                        if b.clicked() {
+                            go = Some("gh-sync");
                         }
                     });
+                    stshell::hint(ui, if syncing { "Синхронізація триває…" } else { "Зміни полів застосуються перед синхронізацією." });
                 }
                 _ => {
                     if danger_page(ui, armed) {
@@ -2070,6 +2099,7 @@ impl App {
             },
         );
         self.nav_proj = nav;
+        self.token = token;
         self.imp_terms = imp_terms;
         self.imp_tm = imp_tm;
         if import_terms {
@@ -2091,6 +2121,15 @@ impl App {
         }
         if new_branch {
             self.br_win = Some(String::new());
+        }
+        // синхронізація з GitHub не закриває вікно: зміни полів застосовуються, і синхронізація починається
+        if go == Some("gh-sync") {
+            go = None;
+            self.apply_project(&v);
+            self.message = match self.st.start_sync(self.token.clone()) {
+                Ok(()) => "Синхронізація почалась…".into(),
+                Err(e) => e,
+            };
         }
         // кнопки сторінок, що відкривають окремі вікна: це вікно на цей час закривається (як `away` у вебі), зміни спершу застосовуються
         if let Some(g) = go {
@@ -2131,7 +2170,11 @@ impl App {
     fn app_settings_window(&mut self, ctx: &egui::Context) {
         let Some(mut v) = self.app_set.clone() else { return };
         let saved = self.st.settings_view();
-        let dirty = saved.as_ref().is_some_and(|s| s.general_differs(&v));
+        let mut relay = self.relay_draft.take().unwrap_or_else(|| self.st.relay.clone());
+        let relay_differs = |r: &state::RelayCfg, o: &state::RelayCfg| (&r.url, &r.passphrase, r.every_min) != (&o.url, &o.passphrase, o.every_min);
+        let dirty = saved.as_ref().is_some_and(|s| s.general_differs(&v)) || relay_differs(&relay, &self.st.relay);
+        let syncing = self.st.syncing();
+        let relay_last = self.st.relay.last;
         let version = {
             let id = transly_platform::selfupdate::build_id();
             if id == "dev" { "локальна".to_string() } else { id.chars().take(7).collect() }
@@ -2183,12 +2226,40 @@ impl App {
                 }
                 _ => {
                     stshell::warn_banner(ui, false, "Для адреси в інтернеті потрібен https", "Дані шифруються паролем на пристроях: сервер лише передає їх і забуває. Адреса в домашній мережі може бути й http.");
-                    stshell::hint(ui, "Власний сервер для обміну між вашими пристроями: адреса, пароль і період. Він не залежить від проєкту.");
+                    stshell::grid_row(ui, "Адреса сервера", |ui| {
+                        let w = ui.available_width();
+                        let r = stshell::input(ui, &mut relay.url, "https://sync.example.com", w);
+                        r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::TextEdit, true, "Адреса сервера"));
+                    });
+                    if let Some(p) = transly_platform::relay::url_problem(&relay.url).filter(|_| !relay.url.trim().is_empty()) {
+                        ui.label(RichText::new(p).size(12.0).color(WARN));
+                    }
+                    stshell::grid_row(ui, "Пароль синхронізації (однаковий на всіх пристроях)", |ui| {
+                        let w = ui.available_width();
+                        let r = stshell::input_ex(ui, &mut relay.passphrase, "", w, true);
+                        r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::TextEdit, true, "Пароль синхронізації"));
+                    });
+                    stshell::grid_row(ui, "Автоматично", |ui| {
+                        let name = |m: u32| match m {
+                            0 => "Лише за кліком".to_string(),
+                            m if m % 60 == 0 => format!("Що {} год", m / 60),
+                            m => format!("Що {m} хв"),
+                        };
+                        egui::ComboBox::from_id_salt("relay-every").width(ui.available_width() - 8.0).selected_text(name(relay.every_min)).show_ui(ui, |ui| {
+                            for m in [0u32, 30, 180, 360] {
+                                ui.selectable_value(&mut relay.every_min, m, name(m));
+                            }
+                        });
+                    });
                     stshell::acts(ui, |ui| {
-                        if plain_button(ui, "Налаштування сервера…").clicked() {
-                            go = Some("relay");
+                        let b = ui.add_enabled(relay.configured() && !syncing, egui::Button::new(RichText::new("Синхронізувати зараз").color(Color32::WHITE)).fill(accent_solid()).stroke(Stroke::NONE).min_size(vec2(0.0, 28.0)));
+                        if b.clicked() {
+                            go = Some("relay-sync");
                         }
                     });
+                    let last = if relay_last > 0 { chrono::DateTime::from_timestamp_millis(relay_last).map_or(String::new(), |d| format!("Остання синхронізація: {}", d.with_timezone(&chrono::Local).format("%d.%m.%Y %H:%M"))) } else { "Ще не синхронізовано".to_string() };
+                    stshell::hint(ui, &if syncing { "Синхронізація триває…".to_string() } else { last });
+                    stshell::hint(ui, "Той самий пароль на кожному пристрої дає ту саму «кімнату». Пароль не передається, лише шифрує дані (щонайменше 8 символів). Адреса й пароль лишаються на цьому пристрої, у файл проєкту не потрапляють.");
                 }
             },
             |ui| {
@@ -2207,78 +2278,56 @@ impl App {
         if sysbar {
             self.toggle_chrome(ctx);
         }
+        // синхронізація зі своїм сервером не закриває вікно: налаштування записуються, і обмін починається
+        if go == Some("relay-sync") {
+            go = None;
+            self.apply_relay(&relay);
+            self.message = match self.st.start_relay_sync() {
+                Ok(()) => "Синхронізація почалась…".into(),
+                Err(e) => e,
+            };
+        }
         // кнопки сторінок, що відкривають окремі вікна: це вікно на цей час закривається (як `away` у вебі), зміни спершу застосовуються
         if let Some(g) = go {
             if dirty {
                 self.apply_general(&v);
+                self.apply_relay(&relay);
             }
             self.app_set = None;
+            self.relay_draft = None;
             self.settings_go(g);
             return;
         }
         if save || apply {
             self.apply_general(&v);
+            self.apply_relay(&relay);
             if apply {
                 self.message = "Збережено".into();
             }
         }
         if save || cancel {
             self.app_set = None;
+            self.relay_draft = None;
         } else if esc && (!dirty || esc_armed) {
             self.app_set = None;
+            self.relay_draft = None;
             self.esc_at = None;
         } else {
             if esc {
                 self.esc_at = Some(std::time::Instant::now());
             }
             self.app_set = Some(v);
+            self.relay_draft = Some(relay);
         }
     }
 
-    fn sync_window(&mut self, ctx: &egui::Context) {
-        let Some((mut cfg, mut token)) = self.sync_win.clone() else { return };
-        let mut open = true;
-        let (mut go, mut cancel) = (false, false);
-        dlg("Синхронізація через GitHub").open(&mut open).collapsible(false).resizable(false).default_width(440.0).show(ctx, |ui| {
-            egui::Grid::new("sync_grid").num_columns(2).spacing([14.0, 10.0]).show(ui, |ui| {
-                ui.label("Репозиторій (власник/назва)");
-                ui.text_edit_singleline(&mut cfg.repo);
-                ui.end_row();
-                ui.label("Гілка (порожньо — типова)");
-                ui.text_edit_singleline(&mut cfg.branch);
-                ui.end_row();
-                ui.label("Тека в репозиторії");
-                ui.text_edit_singleline(&mut cfg.dir);
-                ui.end_row();
-                ui.label("Токен GitHub");
-                ui.add(egui::TextEdit::singleline(&mut token).password(true));
-                ui.end_row();
-                ui.label("Зберігати оригінали (лише приватний)");
-                stshell::check(ui, &mut cfg.originals, "");
-                ui.end_row();
-            });
-            ui.label(RichText::new("Токен не зберігається: його треба вводити в кожному сеансі.").size(11.0).color(MUTE));
-            dlg_footer(ui, |ui| {
-                if primary_button(ui, "Синхронізувати").clicked() {
-                    go = true;
-                }
-                if plain_button(ui, "Закрити").clicked() {
-                    cancel = true;
-                }
-            });
-        });
-        if go {
-            self.st.set_github_settings(&cfg);
-            self.token = token.clone();
-            self.message = match self.st.start_sync(token) {
-                Ok(()) => "Синхронізація почалась…".into(),
-                Err(e) => e,
-            };
-            self.sync_win = None;
-        } else if cancel || !open {
-            self.sync_win = None;
-        } else {
-            self.sync_win = Some((cfg, token));
+    /// Записує налаштування власного сервера (лежать окремо від проєкту, у теці даних програми).
+    fn apply_relay(&mut self, cfg: &state::RelayCfg) {
+        let mut cfg = cfg.clone();
+        cfg.last = self.st.relay.last;
+        if cfg != self.st.relay {
+            self.st.relay = cfg;
+            self.st.relay.save();
         }
     }
 
@@ -2293,55 +2342,6 @@ impl App {
                 self.message = e;
                 self.st.relay.every_min = 0;
             }
-        }
-    }
-
-    /// «Синхронізація через реле»: власне сховище між вашими пристроями; усе шифрується паролем, реле бачить лише байти.
-    fn relay_window(&mut self, ctx: &egui::Context) {
-        let Some(mut cfg) = self.relay_win.clone() else { return };
-        let mut open = true;
-        let (mut go, mut save) = (false, false);
-        dlg("Синхронізація через реле").open(&mut open).collapsible(false).resizable(false).default_width(460.0).show(ctx, |ui| {
-            egui::Grid::new("relay_grid").num_columns(2).spacing([14.0, 10.0]).show(ui, |ui| {
-                ui.label("Адреса сервера");
-                ui.add(egui::TextEdit::singleline(&mut cfg.url).hint_text("https://…").desired_width(280.0));
-                ui.end_row();
-                ui.label("Пароль синхронізації");
-                ui.add(egui::TextEdit::singleline(&mut cfg.passphrase).password(true).desired_width(280.0));
-                ui.end_row();
-                ui.label("Само, раз на (хв, 0 — вручну)");
-                ui.add(egui::DragValue::new(&mut cfg.every_min).range(0..=1440));
-                ui.end_row();
-            });
-            if let Some(p) = transly_platform::relay::url_problem(&cfg.url).filter(|_| !cfg.url.trim().is_empty()) {
-                ui.label(RichText::new(p).color(WARN));
-            }
-            ui.label(RichText::new("Той самий пароль на кожному пристрої дає ту саму «кімнату». Пароль не передається, лише шифрує дані (щонайменше 8 символів). Адреса й пароль лишаються на цьому пристрої, у файл проєкту не потрапляють.").size(11.0).color(MUTE));
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                if ui.add_enabled(cfg.configured() && !self.st.syncing(), egui::Button::new(RichText::new("Синхронізувати").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 28.0))).clicked() {
-                    go = true;
-                }
-                if plain_button(ui, "Зберегти").clicked() {
-                    save = true;
-                }
-            });
-        });
-        if go || save {
-            cfg.last = self.st.relay.last;
-            self.st.relay = cfg.clone();
-            self.st.relay.save();
-            if go {
-                self.message = match self.st.start_relay_sync() {
-                    Ok(()) => "Синхронізація почалась…".into(),
-                    Err(e) => e,
-                };
-            }
-            self.relay_win = None;
-        } else if !open {
-            self.relay_win = None;
-        } else {
-            self.relay_win = Some(cfg);
         }
     }
 
@@ -3715,21 +3715,58 @@ mod ui_tests {
     }
 
     #[test]
-    fn the_relay_window_saves_the_settings_and_refuses_a_bad_address() {
+    fn the_server_page_saves_the_settings_and_refuses_a_bad_address() {
         let data = game("relay");
         let mut app = App::default();
         app.st.open_game(&data).unwrap();
-        app.relay_win = Some(state::RelayCfg { url: "not a url".into(), passphrase: "correct horse battery".into(), every_min: 0, last: 0 });
+        app.app_set = app.st.settings_view();
+        app.nav_app.cur = "server";
+        app.relay_draft = Some(state::RelayCfg { url: "not a url".into(), passphrase: "correct horse battery".into(), every_min: 30, last: 0 });
         let mut h = harness(app);
         h.run();
-        h.get_by_label("Зберегти").click();
         h.run();
-        assert!(h.state().relay_win.is_none());
+        assert!(h.get_all_by_label("Адреса сервера").count() >= 1 && h.get_all_by_label("Пароль синхронізації").count() >= 1, "поля є на сторінці");
+        // нова чернетка ще не записана
+        assert_ne!(h.state().st.relay.passphrase, "correct horse battery");
+        h.get_all_by_label("Зберегти").last().unwrap().click();
+        h.run();
+        assert!(h.state().app_set.is_none() && h.state().relay_draft.is_none());
         assert_eq!(h.state().st.relay.passphrase, "correct horse battery");
+        assert_eq!(h.state().st.relay.every_min, 30);
         assert!(!h.state().st.relay.configured(), "адреса не схожа на адресу");
         assert_eq!(h.state_mut().st.start_relay_sync().unwrap_err(), "Адреса сервера має починатися з https:// (для власної мережі можна http://)");
         h.state_mut().st.relay.url = "https://relay.example".into();
         assert!(h.state().st.relay.configured());
+    }
+
+    /// Сторінка «GitHub» налаштувань проєкту: поля прямо на сторінці, «Зберегти» пише їх у проєкт, токен нікуди не пишеться, а синхронізація без токена пояснює, чого бракує.
+    #[test]
+    fn the_github_page_keeps_its_fields_in_the_project_and_the_token_in_the_session() {
+        let data = game("ghpage");
+        let mut app = App::default();
+        app.st.open_game(&data).unwrap();
+        app.settings = app.st.settings_view();
+        app.nav_proj.cur = "github";
+        let mut h = harness(app);
+        h.run();
+        h.run();
+        h.get_by_label("Репозиторій GitHub").click();
+        h.get_by_label("Репозиторій GitHub").type_text("ivan/my-translation");
+        h.run();
+        h.get_by_label("Токен GitHub").click();
+        h.get_by_label("Токен GitHub").type_text("ghp_secret");
+        h.run();
+        assert_eq!(h.state().token, "ghp_secret", "токен лише в пам'яті сеансу");
+        // синхронізація спершу застосовує поля, а відмову пояснює (мережі в тесті немає, токена теж)
+        h.state_mut().token.clear();
+        h.get_by_label("Синхронізувати з GitHub зараз").click();
+        h.run();
+        assert_eq!(h.state().st.settings_view().unwrap().gh_repo, "ivan/my-translation", "поля застосовано перед синхронізацією");
+        assert_eq!(h.state().message, "Вкажіть токен GitHub");
+        assert!(h.state().settings.is_some(), "вікно лишилось відкритим");
+        // токена в проєкті немає
+        let p = serde_json::to_string(&h.state().st.project.as_ref().unwrap().settings).unwrap();
+        assert!(!p.contains("ghp_secret"));
     }
 
     /// Проєкт для сповіщень: «Герой» без керівних кодів (помилка QA), «Маг» — чернетка з коментарем Олі.
@@ -5464,12 +5501,6 @@ mod ui_tests {
         h.state_mut().plugins_win = true;
         shot(&mut h, "d14-plugins");
         h.state_mut().plugins_win = false;
-        h.state_mut().sync_win = Some((h.state().st.github_settings(), String::new()));
-        shot(&mut h, "d15-sync");
-        h.state_mut().sync_win = None;
-        h.state_mut().relay_win = Some(h.state().st.relay.clone());
-        shot(&mut h, "d16-relay");
-        h.state_mut().relay_win = None;
         h.state_mut().wrap_win = Some((h.state().st.wrap_settings(), "Мандрівник дістався перекладацького містечка наприкінці осені.".into(), false));
         shot(&mut h, "d17-wrap");
         h.state_mut().wrap_win = None;

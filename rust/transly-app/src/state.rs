@@ -63,6 +63,11 @@ pub struct SettingsView {
     /// Назва папки гри й назва, якою гра себе називає: лише для показу.
     pub folder_name: String,
     pub game_title: String,
+    /// Синхронізація з GitHub (сторінка «GitHub» налаштувань проєкту): репозиторій, гілка, тека, чи тримати оригінали. Токен не зберігається ніде.
+    pub gh_repo: String,
+    pub gh_branch: String,
+    pub gh_dir: String,
+    pub gh_originals: bool,
 }
 
 impl SettingsView {
@@ -70,6 +75,7 @@ impl SettingsView {
     pub fn project_differs(&self, o: &SettingsView) -> bool {
         (&self.name_from, &self.title, &self.icon_text, self.hue, self.tolerance_pct.to_bits(), self.block_errors, &self.link_mode, &self.source_lang, &self.target_lang, self.line_limit.to_bits())
             != (&o.name_from, &o.title, &o.icon_text, o.hue, o.tolerance_pct.to_bits(), o.block_errors, &o.link_mode, &o.source_lang, &o.target_lang, o.line_limit.to_bits())
+            || (&self.gh_repo, &self.gh_branch, &self.gh_dir, self.gh_originals) != (&o.gh_repo, &o.gh_branch, &o.gh_dir, o.gh_originals)
     }
 
     /// Чи відрізняються загальні налаштування («Ваше ім'я»).
@@ -1595,6 +1601,10 @@ impl AppState {
             hue: get("hue").and_then(|v| v.as_f64()).map(|h| h.round().clamp(0.0, 359.0) as u32),
             folder_name: get("folderName").and_then(|v| v.as_str()).unwrap_or("").trim().to_string(),
             game_title: transly_core::projname::game_title_of(p.snapshot.as_ref()),
+            gh_repo: get("githubRepo").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            gh_branch: get("githubBranch").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            gh_dir: get("githubDir").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            gh_originals: get("githubOriginals").and_then(|v| v.as_bool()).unwrap_or(false),
         })
     }
 
@@ -1609,6 +1619,10 @@ impl AppState {
         p.settings.insert("propagate".into(), serde_json::json!(v.link_mode != "off"));
         p.settings.insert("linkMode".into(), serde_json::json!(v.link_mode));
         p.settings.insert("lineLimit".into(), serde_json::json!(v.line_limit));
+        p.settings.insert("githubRepo".into(), serde_json::json!(v.gh_repo));
+        p.settings.insert("githubBranch".into(), serde_json::json!(v.gh_branch));
+        p.settings.insert("githubDir".into(), serde_json::json!(v.gh_dir));
+        p.settings.insert("githubOriginals".into(), serde_json::json!(v.gh_originals));
         // вигляд: назва (звідки), значок і колір; порожнє й типове не пишеться (як у вебі: `delete st.nameFrom`, `st.title`, `st.iconText`, `st.hue`)
         if v.name_from == "folder" {
             p.settings.remove("nameFrom");
@@ -1666,16 +1680,6 @@ impl AppState {
     pub fn github_settings(&self) -> GithubSettings {
         let get = |k: &str| self.project.as_ref().and_then(|p| p.settings.get(k)).and_then(|v| v.as_str()).unwrap_or("").to_string();
         GithubSettings { repo: get("githubRepo"), branch: get("githubBranch"), dir: get("githubDir"), originals: self.project.as_ref().and_then(|p| p.settings.get("githubOriginals")).and_then(|v| v.as_bool()).unwrap_or(false) }
-    }
-
-    pub fn set_github_settings(&mut self, g: &GithubSettings) {
-        if let Some(p) = self.project.as_mut() {
-            p.settings.insert("githubRepo".into(), serde_json::json!(g.repo));
-            p.settings.insert("githubBranch".into(), serde_json::json!(g.branch));
-            p.settings.insert("githubDir".into(), serde_json::json!(g.dir));
-            p.settings.insert("githubOriginals".into(), serde_json::json!(g.originals));
-            self.dirty = true;
-        }
     }
 
     /// Починає синхронізацію в окремому потоці (мережа не блокує вікно). Результат забирає `finish_sync`.

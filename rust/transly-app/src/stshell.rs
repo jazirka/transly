@@ -332,10 +332,15 @@ pub(crate) fn bar_button(ui: &mut egui::Ui, text: &str, primary: bool, enabled: 
 
 /// Поле вводу `.adlg .grid input`: заввишки 30, відступи 8, фон `--bg`, рамка `--line`, радіус 8.
 pub(crate) fn input(ui: &mut egui::Ui, text: &mut String, hint: &str, width: f32) -> egui::Response {
+    input_ex(ui, text, hint, width, false)
+}
+
+/// Те саме, але з приховуванням набраного (пароль, токен).
+pub(crate) fn input_ex(ui: &mut egui::Ui, text: &mut String, hint: &str, width: f32, password: bool) -> egui::Response {
     ui.scope(|ui| {
         ui.visuals_mut().extreme_bg_color = BG;
         let w = if width > 0.0 { width } else { ui.available_width() };
-        ui.add(egui::TextEdit::singleline(text).hint_text(hint).desired_width(w).min_size(vec2(w, 30.0)).vertical_align(egui::Align::Center).margin(egui::Margin::symmetric(8, 0)).font(ip(12.5)))
+        ui.add(egui::TextEdit::singleline(text).password(password).hint_text(hint).desired_width(w).min_size(vec2(w, 30.0)).vertical_align(egui::Align::Center).margin(egui::Margin::symmetric(8, 0)).font(ip(12.5)))
     })
     .inner
 }

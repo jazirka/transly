@@ -586,7 +586,6 @@ impl App {
         ui.painter().hline(h.x_range(), h.bottom(), Stroke::new(1.0_f32, LINE));
         let g = head_title(ui, title);
         let tw = g.size().x;
-        ui.painter().galley(pos2(h.left() + 10.0, h.center().y - g.size().y / 2.0), g, MUTE);
         // кнопки праворуч: «—» і ⋮ (пошук є в усіх, крім «Пов’язаного», де лише «—»)
         let searchable = win < 3 && match win {
             0 => self.st.is_open(),
@@ -661,8 +660,8 @@ impl App {
             left_edge = c.x - 18.0;
         }
         if searching {
-            // поле пошуку стоїть у заголовку після назви; те саме поле, що й фільтр таблиці
-            let x0 = h.left() + 10.0 + tw + 10.0;
+            // поле пошуку накриває назву картки й бере все місце до кнопок; те саме поле, що й фільтр таблиці
+            let x0 = h.left() + 8.0;
             let fin = Rect::from_min_max(pos2(x0, h.top() + 5.0), pos2((left_edge).max(x0 + 60.0), h.bottom() - 5.0));
             let (hint, label) = [("Пошук", "Пошук у файлах гри"), ("Пошук", "Пошук рядків"), ("Пошук", "Пошук сцен")][win];
             let q: &mut String = match win {
@@ -679,10 +678,13 @@ impl App {
             if esc {
                 self.clear_win_search(win);
             }
-        } else if let Some(s) = sub {
-            let clip = Rect::from_min_max(pos2(h.left() + 10.0 + tw + 7.3, h.top()), pos2(left_edge, h.bottom()));
-            let fitted = fit_font(ui, s, clip.width(), ipw(12.0, 500));
-            ui.painter().with_clip_rect(clip).text(pos2(clip.left(), h.center().y), Align2::LEFT_CENTER, fitted, ipw(12.0, 500), TEXT);
+        } else {
+            ui.painter().galley(pos2(h.left() + 10.0, h.center().y - g.size().y / 2.0), g, MUTE);
+            if let Some(s) = sub {
+                let clip = Rect::from_min_max(pos2(h.left() + 10.0 + tw + 7.3, h.top()), pos2(left_edge, h.bottom()));
+                let fitted = fit_font(ui, s, clip.width(), ipw(12.0, 500));
+                ui.painter().with_clip_rect(clip).text(pos2(clip.left(), h.center().y), Align2::LEFT_CENTER, fitted, ipw(12.0, 500), TEXT);
+            }
         }
         if hide_clicked {
             self.left_open = false;

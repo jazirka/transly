@@ -507,9 +507,17 @@ impl App {
             let area = Rect::from_min_max(pos2(full.left() + 6.0, full.top()), pos2(rx - 6.0, full.bottom() - 6.0));
             ctx.data_mut(|d| d.insert_temp(egui::Id::new("pane-right"), area));
             let gap = 6.0;
-            let each = (area.height() - gap * (on.len() as f32 - 1.0)) / on.len() as f32;
+            // висоти розділів: кожен має свій мінімум (в «Обговоренні» знизу поле на 114, над ним лишається місце для гілок), решта ділиться порівну;
+            // коли всі три не вміщаються, мінімуми стискаються разом (раніше всі отримували порівну й «Обговорення» стискалось до заголовка й поля)
+            let mins = [150.0_f32, 150.0, 260.0];
+            let avail = area.height() - gap * (on.len() as f32 - 1.0);
+            let need: f32 = on.iter().map(|s| mins[*s]).sum();
+            let heights: Vec<f32> = on.iter().map(|s| if need <= avail { mins[*s] + (avail - need) / on.len() as f32 } else { mins[*s] * avail / need }).collect();
+            let mut top_y = area.top();
             for (n, sec) in on.iter().enumerate() {
-                let rect = Rect::from_min_size(pos2(area.left(), area.top() + n as f32 * (each + gap)), vec2(area.width(), each));
+                let each = heights[n];
+                let rect = Rect::from_min_size(pos2(area.left(), top_y), vec2(area.width(), each));
+                top_y += each + gap;
                 let mut cui = ui.new_child(egui::UiBuilder::new().max_rect(rect));
                 card_lr(0, 0).outer_margin(egui::Margin::ZERO).show(&mut cui, |ui| {
                     ui.set_min_height(each - 2.0);
@@ -1834,8 +1842,10 @@ impl App {
                 ui.painter().text(pos2(card.right() - 8.0, top), Align2::RIGHT_CENTER, short_key(&self.st.key_of(f, r)), mp(12.0), MUTE);
                 let clip = Rect::from_min_max(pos2(tx, card.top()), pos2(card.right() - 8.0, card.bottom()));
                 let p = ui.painter().with_clip_rect(clip);
-                p.text(pos2(tx, top + 18.15), Align2::LEFT_CENTER, src.replace('\n', " / "), ip(12.5), SRC_TEXT);
-                let (t, c) = if tgt.is_empty() { ("—".to_string(), MUTE) } else { (tgt.replace('\n', " / "), MUTE) };
+                // довгий текст закінчується «…», а не обривається посеред слова
+                let sline = fit_font(ui, &src.replace('\n', " / "), clip.width(), ip(12.5));
+                p.text(pos2(tx, top + 18.15), Align2::LEFT_CENTER, sline, ip(12.5), SRC_TEXT);
+                let (t, c) = if tgt.is_empty() { ("—".to_string(), MUTE) } else { (fit_font(ui, &tgt.replace('\n', " / "), clip.width(), ip(12.5)), MUTE) };
                 p.text(pos2(tx, top + 35.65), Align2::LEFT_CENTER, t, ip(12.5), c);
                 if resp.clicked() {
                     self.st.row = Some(r);
@@ -2061,15 +2071,6 @@ impl App {
                 ui.spacing_mut().item_spacing.y = 0.0;
                 // шлях і стан (висота 24)
                 let (cr, _) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::hover());
-                let crumb = format!("{name} › {} › {}", src.replace('\n', " ").chars().take(36).collect::<String>(), short_key(&self.st.key_of(f, r)));
-                let g = ui.painter().layout_no_wrap(crumb, mp(12.0), MUTE);
-                let gw = g.size().x;
-                ui.painter().galley(pos2(cr.left(), cr.center().y - g.size().y / 2.0), g, MUTE);
-                let kind = self.st.kind_label(f, r);
-                if !kind.is_empty() {
-                    ui.painter().vline(cr.left() + gw + 12.0, (cr.center().y - 7.0)..=(cr.center().y + 7.0), Stroke::new(1.0_f32, Color32::from_rgb(0x52, 0x56, 0x5e)));
-                    ui.painter().text(pos2(cr.left() + gw + 24.0, cr.center().y), Align2::LEFT_CENTER, kind, ip(12.0), MUTE);
-                }
                 let label = match st {
                     RowStatus::Untranslated => "Без перекладу",
                     RowStatus::Draft => "Чернетка",
@@ -2078,6 +2079,18 @@ impl App {
                 };
                 let lg = ui.painter().layout_no_wrap(label.to_string(), ip(12.0), MUTE);
                 let pr = Rect::from_min_max(pos2(cr.right() - (lg.size().x + 36.0), cr.top()), cr.right_bottom());
+                // шлях і тип рядка стискаються, щоб не налізти на позначку стану праворуч (раніше довгий оригінал заходив під неї)
+                let kind = self.st.kind_label(f, r);
+                let kind_w = if kind.is_empty() { 0.0 } else { ui.painter().layout_no_wrap(kind.to_string(), ip(12.0), MUTE).size().x + 24.0 };
+                let room = (pr.left() - cr.left() - 14.0 - kind_w).max(40.0);
+                let crumb = format!("{name} › {} › {}", src.replace('\n', " "), short_key(&self.st.key_of(f, r)));
+                let g = ui.painter().layout_no_wrap(fit_font(ui, &crumb, room, mp(12.0)), mp(12.0), MUTE);
+                let gw = g.size().x;
+                ui.painter().galley(pos2(cr.left(), cr.center().y - g.size().y / 2.0), g, MUTE);
+                if !kind.is_empty() {
+                    ui.painter().vline(cr.left() + gw + 12.0, (cr.center().y - 7.0)..=(cr.center().y + 7.0), Stroke::new(1.0_f32, Color32::from_rgb(0x52, 0x56, 0x5e)));
+                    ui.painter().text(pos2(cr.left() + gw + 24.0, cr.center().y), Align2::LEFT_CENTER, kind, ip(12.0), MUTE);
+                }
                 ui.painter().rect_stroke(pr, CornerRadius::same(12), Stroke::new(1.0_f32, LINE), StrokeKind::Inside);
                 paint_state(ui, pos2(pr.left() + 15.0, pr.center().y), st, false);
                 ui.painter().galley(pos2(pr.left() + 27.0, pr.center().y - lg.size().y / 2.0), lg, MUTE);

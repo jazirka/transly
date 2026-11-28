@@ -361,19 +361,27 @@ fn fmt_n(n: usize) -> String {
 
 /// Текст, скорочений з «…» до ширини `max_w` (шрифт верхньої панелі 13), щоб таблетки не виштовхували перемикач режимів.
 fn fit_text(ui: &egui::Ui, text: &str, max_w: f32) -> String {
-    let width = |s: &str| ui.painter().layout_no_wrap(s.to_string(), ip(13.0), TEXT).size().x;
+    fit_font(ui, text, max_w, ip(13.0))
+}
+
+/// Скорочує текст до ширини `max_w` з «…» (бінарним пошуком по довжині: рядки бувають у сотні знаків).
+fn fit_font(ui: &egui::Ui, text: &str, max_w: f32, font: FontId) -> String {
+    let width = |s: &str| ui.painter().layout_no_wrap(s.to_string(), font.clone(), TEXT).size().x;
     if width(text) <= max_w {
         return text.to_string();
     }
-    let mut chars: Vec<char> = text.chars().collect();
-    while chars.len() > 1 {
-        chars.pop();
-        let s: String = chars.iter().collect::<String>() + "…";
+    let chars: Vec<char> = text.chars().collect();
+    let (mut lo, mut hi) = (0usize, chars.len());
+    while lo < hi {
+        let mid = (lo + hi).div_ceil(2);
+        let s: String = chars[..mid].iter().collect::<String>() + "…";
         if width(&s) <= max_w {
-            return s;
+            lo = mid;
+        } else {
+            hi = mid - 1;
         }
     }
-    "…".to_string()
+    chars[..lo].iter().collect::<String>() + "…"
 }
 
 /// Таблетка верхньої панелі: аватар з літерами проєкту чи піктограма, назва, стрілка; рамка — для головної дії.
@@ -5492,6 +5500,53 @@ mod ui_tests {
             let c = pos2((b.x0 + b.x1) as f32 / 2.0, (b.y0 + b.y1) as f32 / 2.0);
             let top = h.ctx.layer_id_at(c).expect("шар під вказівником");
             assert_eq!(top.order, egui::Order::Tooltip, "{label}: над підложкою діалогу, а шар {top:?}");
+        }
+    }
+
+    /// Огляд розміток на довгих текстах і вузькому вікні: `TRANSLY_SHOTS=<тека> cargo test -p transly-app layout_audit_shots -- --ignored`.
+    #[test]
+    #[ignore]
+    fn layout_audit_shots() {
+        let Some(out) = std::env::var_os("TRANSLY_SHOTS").map(std::path::PathBuf::from) else { return };
+        std::fs::create_dir_all(&out).unwrap();
+        let base = std::env::temp_dir().join(format!("transly-ui-audit-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let data = base.join("A Very Long Game Folder Name For Testing").join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        let long = "The old village elder, who had lived there for more than eighty winters, slowly took his heavy woollen cloak off and carefully placed it over the back of the wooden chair beside the fire";
+        let items: Vec<String> = (1..=14).map(|i| format!(r#"{{"id":{i},"name":"Extraordinarily long item name number {i} of the royal armoury","description":"{long} ({i})","note":""}}"#)).collect();
+        std::fs::write(data.join("Items.json"), format!("[null,{}]", items.join(","))).unwrap();
+        let list: Vec<String> = (0..6).flat_map(|i| vec![format!(r#"{{"code":101,"indent":0,"parameters":["",0,0,2,"The Long Named Village Elder {i}"]}}"#), format!(r#"{{"code":401,"indent":0,"parameters":["{long} {i}"]}}"#)]).collect();
+        std::fs::write(data.join("Map001.json"), format!(r#"{{"displayName":"The Extremely Long Display Name Of The Map","events":[null,{{"id":1,"name":"elder","x":1,"y":1,"pages":[{{"conditions":{{}},"list":[{},{{"code":0,"indent":0,"parameters":[]}}]}}]}}]}}"#, list.join(","))).unwrap();
+        for (w, h, tag) in [(1360.0, 800.0, "wide"), (1000.0, 600.0, "small")] {
+            let mut app = App::default();
+            app.st.open_game(&data).unwrap();
+            app.st.file = Some(0);
+            app.st.row = Some(2);
+            app.right_secs = [[true, true, true], [true, true, true]];
+            let mut h = Harness::builder().with_size(egui::vec2(w, h)).build_state(|ctx, app: &mut App| {
+                theme::apply(ctx);
+                app.frame(ctx);
+            }, app);
+            let shot = |h: &mut Harness<'static, App>, n: &str| {
+                h.run();
+                h.run();
+                h.render().unwrap().save(out.join(format!("{tag}-{n}.png"))).unwrap();
+            };
+            shot(&mut h, "1-table");
+            h.state_mut().focus = true;
+            h.state_mut().rail = 1;
+            shot(&mut h, "2-edit-rows");
+            h.state_mut().rail = 2;
+            shot(&mut h, "3-edit-scenes");
+            h.state_mut().rail = 3;
+            shot(&mut h, "4-edit-related");
+            let map = h.state().st.file_names().iter().position(|n| n.starts_with("Map001")).unwrap_or(1);
+            h.state_mut().st.file = Some(map);
+            h.state_mut().st.row = Some(1);
+            h.state_mut().scene_mode = true;
+            h.state_mut().rail = 2;
+            shot(&mut h, "5-scene");
         }
     }
 

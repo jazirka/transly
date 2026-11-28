@@ -2116,7 +2116,7 @@ impl App {
                         }
                     });
                     stshell::hint(ui, "Або вставте рядки «англійською, табуляція, українською»:");
-                    ui.add(egui::TextEdit::multiline(&mut imp_terms).desired_rows(4).desired_width(ui.available_width()));
+                    stshell::textarea(ui, &mut imp_terms, 4);
                     stshell::acts(ui, |ui| {
                         if ui.add_enabled(!imp_terms.trim().is_empty(), egui::Button::new("Імпортувати вставлені терміни").min_size(vec2(0.0, 28.0))).clicked() {
                             import_terms = true;
@@ -2125,7 +2125,7 @@ impl App {
                 }
                 "tm" => {
                     stshell::hint(ui, "Рядки «оригінал, табуляція, переклад».");
-                    ui.add(egui::TextEdit::multiline(&mut imp_tm).desired_rows(7).desired_width(ui.available_width()));
+                    stshell::textarea(ui, &mut imp_tm, 7);
                     stshell::acts(ui, |ui| {
                         if plain_button(ui, "Завантажити з файлу…").clicked() {
                             if let Some(p) = rfd::FileDialog::new().add_filter("Текст і таблиці", &["txt", "tsv", "csv"]).pick_file() {
@@ -2808,8 +2808,8 @@ impl App {
         let (mut go, mut close) = (false, false);
         dlg("Імпорт").open(&mut open).collapsible(false).default_width(520.0).show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.selectable_value(&mut kind, 0, "Пам’ять перекладів");
-                ui.selectable_value(&mut kind, 1, "Глосарій із таблиці");
+                stshell::chip_val(ui, &mut kind, 0, "Пам’ять перекладів");
+                stshell::chip_val(ui, &mut kind, 1, "Глосарій із таблиці");
             });
             ui.add_space(6.0);
             ui.label(RichText::new(if kind == 0 { "Рядки «оригінал, табуляція, переклад». Пари потраплять у підказки вкладки «Пам’ять»." } else { "CSV, TSV чи HTML-таблиця (підходить експорт Google Sheets): колонка «Оригінал» і «Переклад» (можна кілька), «Опис», «Розділ»." }).size(11.5).color(MUTE));
@@ -2818,7 +2818,7 @@ impl App {
                     text = std::fs::read_to_string(p).unwrap_or_default();
                 }
             }
-            ui.add(egui::TextEdit::multiline(&mut text).desired_rows(10).desired_width(f32::INFINITY));
+            stshell::textarea(ui, &mut text, 10);
             dlg_footer(ui, |ui| {
                 if ui.add_enabled(!text.trim().is_empty(), egui::Button::new(RichText::new("Імпортувати").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 28.0))).clicked() {
                     go = true;
@@ -2860,7 +2860,7 @@ impl App {
                                 ui.label(RichText::new(&c.sample).size(11.0).color(MUTE));
                             });
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                ui.add(egui::TextEdit::singleline(name).hint_text("ім'я").desired_width(160.0));
+                                stshell::input(ui, name, "ім'я", 160.0);
                             });
                         });
                         ui.separator();
@@ -2894,7 +2894,7 @@ impl App {
             ui.add_space(6.0);
             ui.horizontal(|ui| {
                 ui.label("Код мови");
-                ui.add(egui::TextEdit::singleline(&mut lang).hint_text("ru").desired_width(80.0));
+                stshell::input(ui, &mut lang, "ru", 80.0);
             });
             dlg_footer(ui, |ui| {
                 if ui.add_enabled(!lang.trim().is_empty(), egui::Button::new(RichText::new("Обрати папку…").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 28.0))).clicked() {
@@ -2958,7 +2958,7 @@ impl App {
             }
             ui.add_space(6.0);
             ui.horizontal(|ui| {
-                ui.add(egui::TextEdit::singleline(&mut name).hint_text("Назва нової групи").desired_width(220.0));
+                stshell::input(ui, &mut name, "Назва нової групи", 220.0);
                 if ui.add_enabled(!name.trim().is_empty(), egui::Button::new(RichText::new("Створити").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 28.0))).clicked() {
                     create = true;
                 }
@@ -3028,7 +3028,7 @@ impl App {
             }
             ui.add_space(6.0);
             ui.horizontal(|ui| {
-                ui.add(egui::TextEdit::singleline(&mut name).hint_text("Назва нової гілки").desired_width(220.0));
+                stshell::input(ui, &mut name, "Назва нової гілки", 220.0);
                 if ui.add_enabled(!name.trim().is_empty(), egui::Button::new(RichText::new("Створити з поточної").color(Color32::WHITE)).fill(accent_solid()).min_size(vec2(0.0, 28.0))).clicked() {
                     create = true;
                 }
@@ -3082,11 +3082,11 @@ impl App {
             ui.horizontal(|ui| {
                 ui.label("Апостроф");
                 for (v, label) in [("any", "будь-який правильний"), ("’", "лише ’"), ("ʼ", "лише ʼ"), ("'", "лише '")] {
-                    ui.selectable_value(&mut apo, v.to_string(), label);
+                    stshell::chip_val(ui, &mut apo, v.to_string(), label);
                 }
             });
             ui.label(RichText::new("Латинські слова, які дозволено лишати в українському тексті (по слову в рядку):").size(11.5).color(MUTE));
-            ui.add(egui::TextEdit::multiline(&mut words).desired_rows(2).desired_width(f32::INFINITY));
+            stshell::textarea(ui, &mut words, 2);
             ui.add_space(6.0);
             egui::ScrollArea::vertical().show(ui, |ui| {
                 for (id, title, explain, level, rows, fixable) in self.st.qa_rules_view(f) {
@@ -3135,32 +3135,32 @@ impl App {
             ui.label(RichText::new("Вікно повідомлення в грі не переносить рядки саме. Тут обираєте, хто це робить і як. Довжина перекладу ніколи не обмежується, це лише рекомендації. Ширину задає «Налаштування проєкту → Правила QA → Найдовший рядок».").size(11.5).color(MUTE));
             ui.add_space(6.0);
             label_caps(ui, "Коли переносити");
-            ui.radio_value(&mut w.mode, WrapMode::Build, "Під час збірки й запуску гри (рекомендовано)");
-            ui.radio_value(&mut w.mode, WrapMode::Text, "У тексті, коли надсилаю рядок");
-            ui.radio_value(&mut w.mode, WrapMode::Off, "Не переносити (лише попереджати)");
+            stshell::radio_val(ui, &mut w.mode, WrapMode::Build, "Під час збірки й запуску гри (рекомендовано)");
+            stshell::radio_val(ui, &mut w.mode, WrapMode::Text, "У тексті, коли надсилаю рядок");
+            stshell::radio_val(ui, &mut w.mode, WrapMode::Off, "Не переносити (лише попереджати)");
             ui.add_space(6.0);
             label_caps(ui, "Переніс слів");
             ui.horizontal(|ui| {
-                ui.selectable_value(&mut w.hyphen, HyphenMode::Off, "не переносити слова");
-                ui.selectable_value(&mut w.hyphen, HyphenMode::Needed, "лише коли треба");
-                ui.selectable_value(&mut w.hyphen, HyphenMode::Fill, "коли краще заповнює");
+                stshell::chip_val(ui, &mut w.hyphen, HyphenMode::Off, "не переносити слова");
+                stshell::chip_val(ui, &mut w.hyphen, HyphenMode::Needed, "лише коли треба");
+                stshell::chip_val(ui, &mut w.hyphen, HyphenMode::Fill, "коли краще заповнює");
             });
             ui.horizontal(|ui| {
                 ui.label("Літер до / після переносу");
-                ui.add(egui::DragValue::new(&mut w.min_left).range(1..=6));
-                ui.add(egui::DragValue::new(&mut w.min_right).range(1..=6));
+                stshell::number(ui, egui::DragValue::new(&mut w.min_left).range(1..=6), 72.0);
+                stshell::number(ui, egui::DragValue::new(&mut w.min_right).range(1..=6), 72.0);
             });
             ui.add_space(6.0);
             label_caps(ui, "Розриви, які поставили ви");
-            ui.radio_value(&mut w.keep, WrapKeep::Long, "Зберігати, переносити лише задовгі (рекомендовано)");
-            ui.radio_value(&mut w.keep, WrapKeep::Reflow, "Збирати текст заново завжди");
+            stshell::radio_val(ui, &mut w.keep, WrapKeep::Long, "Зберігати, переносити лише задовгі (рекомендовано)");
+            stshell::radio_val(ui, &mut w.keep, WrapKeep::Reflow, "Збирати текст заново завжди");
             ui.horizontal(|ui| {
                 ui.label("Попереджати, коли рядків більше, ніж (0 — вимкнено)");
-                ui.add(egui::DragValue::new(&mut w.max_lines).range(0..=12));
+                stshell::number(ui, egui::DragValue::new(&mut w.max_lines).range(0..=12), 72.0);
             });
             ui.add_space(6.0);
             label_caps(ui, "Приклад");
-            ui.add(egui::TextEdit::multiline(&mut sample).desired_rows(3).desired_width(f32::INFINITY));
+            stshell::textarea(ui, &mut sample, 3);
             stshell::check(ui, &mut face, "Поруч портрет персонажа");
             let (shown, n) = self.st.wrap_preview(&sample, face);
             ui.label(RichText::new(shown).monospace().color(TEXT));
@@ -3223,7 +3223,7 @@ impl App {
         let mut open = true;
         let (mut go, mut close) = (false, false);
         dlg("Назва гілки").open(&mut open).collapsible(false).resizable(false).show(ctx, |ui| {
-            ui.add(egui::TextEdit::singleline(&mut to).desired_width(260.0));
+            stshell::input(ui, &mut to, "", 260.0);
             dlg_footer(ui, |ui| {
                 if primary_button(ui, "Перейменувати").clicked() {
                     go = true;

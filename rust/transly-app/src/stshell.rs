@@ -361,7 +361,24 @@ pub(crate) fn check(ui: &mut egui::Ui, on: &mut bool, label: &str) -> egui::Resp
 
 /// Перемикач-радіо: коло 16; вибране — кольору теми з білою точкою. Повертає відповідь; `clicked()` — коли вибрано.
 pub(crate) fn radio(ui: &mut egui::Ui, current: &mut String, value: &str, label: &str, sub: Option<RichText>, enabled: bool) -> egui::Response {
-    let on = current == value;
+    let resp = radio_draw(ui, current == value, label, sub, enabled);
+    if enabled && resp.clicked() {
+        *current = value.to_string();
+    }
+    resp
+}
+
+/// Радіо для будь-якого типу (перелічення режимів): вибирає `value`, коли натиснуто.
+pub(crate) fn radio_val<T: PartialEq + Clone>(ui: &mut egui::Ui, current: &mut T, value: T, label: &str) -> egui::Response {
+    let resp = radio_draw(ui, *current == value, label, None, true);
+    if resp.clicked() {
+        *current = value;
+    }
+    resp
+}
+
+/// Малює радіо (без зміни значення).
+fn radio_draw(ui: &mut egui::Ui, on: bool, label: &str, sub: Option<RichText>, enabled: bool) -> egui::Response {
     let g = ui.painter().layout(label.to_string(), ip(12.5), if enabled { TEXT } else { DIM }, ui.available_width() - 24.0);
     let sg = sub.map(|t| ui.painter().layout_job(egui::text::LayoutJob::simple(t.text().to_string(), ip(12.0), MUTE, ui.available_width() - 24.0)));
     let h = g.size().y + sg.as_ref().map_or(0.0, |s| s.size().y);
@@ -378,10 +395,34 @@ pub(crate) fn radio(ui: &mut egui::Ui, current: &mut String, value: &str, label:
     if let Some(sg) = sg {
         ui.painter().galley(pos2(r.left() + 24.0, r.top() + g.size().y), sg, MUTE);
     }
-    if enabled && resp.clicked() {
-        *current = value.to_string();
+    resp
+}
+
+/// Фішка-перемикач `.chip`: висота 24, радіус 12; вибрана — тло й рамка кольору теми. Для вибору одного з кількох варіантів у рядку.
+pub(crate) fn chip_val<T: PartialEq + Clone>(ui: &mut egui::Ui, current: &mut T, value: T, label: &str) -> egui::Response {
+    let on = *current == value;
+    let g = ui.painter().layout_no_wrap(label.to_string(), ip(12.0), if on { Color32::WHITE } else { MUTE });
+    let (r, resp) = ui.allocate_exact_size(vec2(g.size().x + 20.0, 24.0), Sense::click());
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, label));
+    if on {
+        ui.painter().rect(r, CornerRadius::same(12), theme::over(BG, accent(), 0.22), Stroke::new(1.0_f32, theme::over(BG, accent(), 0.70)), StrokeKind::Inside);
+    } else {
+        ui.painter().rect(r, CornerRadius::same(12), if resp.hovered() { theme::over(BG, Color32::WHITE, 0.07) } else { Color32::TRANSPARENT }, Stroke::new(1.0_f32, Color32::from_rgb(0x4a, 0x4d, 0x54)), StrokeKind::Inside);
+    }
+    ui.painter().galley(pos2(r.left() + 10.0, r.center().y - g.size().y / 2.0), g, Color32::PLACEHOLDER);
+    if resp.clicked() {
+        *current = value;
     }
     resp
+}
+
+/// Багаторядкове поле, як `.adlg textarea`: фон `--bg`, рамка `--line`, відступи 8.
+pub(crate) fn textarea(ui: &mut egui::Ui, text: &mut String, rows: usize) -> egui::Response {
+    ui.scope(|ui| {
+        ui.visuals_mut().extreme_bg_color = BG;
+        ui.add(egui::TextEdit::multiline(text).desired_rows(rows).desired_width(f32::INFINITY).margin(egui::Margin::same(8)).font(mp(12.0)))
+    })
+    .inner
 }
 
 /// Повзунок відтінку `.theme-set input[type=range]`: доріжка 10 з веселкою, повзунок 18 (біле коло в кільці фону й кільце кольору теми). `0..=359`.
